@@ -142,29 +142,55 @@ public static class CombatHudAuthoring
         return Mathf.Pow((x - cx) / rx, 2f) + Mathf.Pow((y - cy) / ry, 2f) <= 1f;
     }
 
-    /// <summary>sprite를 Source Image로 연결한 최초 발소리 마커 프리팹을 생성하거나 기존 프리팹을 반환한다.</summary>
+    /// <summary>sprite를 쓰는 최초 마커를 생성하거나 기존 마커에 원호만 추가해 저장한다. 기존 아이콘 이미지는 유지한다.</summary>
     private static CombatFootstepMarker EnsureMarkerPrefab(Sprite sprite)
     {
         GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(MARKER_PATH);
-        if (existing != null)
-            return existing.GetComponent<CombatFootstepMarker>();
-        GameObject root = new GameObject("CombatFootstepMarker", typeof(RectTransform));
+        GameObject root = existing != null ? PrefabUtility.LoadPrefabContents(MARKER_PATH)
+            : new GameObject("CombatFootstepMarker", typeof(RectTransform));
         try
         {
             RectTransform rect = (RectTransform)root.transform;
-            rect.sizeDelta = Vector2.one * 32f;
-            UnityEngine.UI.Image image = root.AddComponent<UnityEngine.UI.Image>();
-            image.sprite = sprite;
-            image.preserveAspect = true;
-            image.raycastTarget = false;
-            CombatFootstepMarker marker = root.AddComponent<CombatFootstepMarker>();
+            UnityEngine.UI.Image image = root.GetComponent<UnityEngine.UI.Image>();
+            CombatFootstepMarker marker = root.GetComponent<CombatFootstepMarker>();
+            if (existing == null)
+            {
+                rect.sizeDelta = Vector2.one * 32f;
+                image = root.AddComponent<UnityEngine.UI.Image>();
+                image.sprite = sprite;
+                image.preserveAspect = true;
+                image.raycastTarget = false;
+                marker = root.AddComponent<CombatFootstepMarker>();
+            }
+            Transform existingArc = root.transform.Find("DirectionArc");
+            DefenseDirectionMarker arc;
+            if (existingArc == null)
+            {
+                RectTransform arcRect = CreateRect("DirectionArc", rect,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                arcRect.anchoredPosition = new Vector2(0f, -310f);
+                arcRect.sizeDelta = Vector2.one * 620f;
+                arc = arcRect.gameObject.AddComponent<DefenseDirectionMarker>();
+                arc.Configure(286f, 1f, 4f, 18f);
+                arc.raycastTarget = false;
+                arc.enabled = false;
+                SerializedObject arcSettings = new SerializedObject(arc);
+                arcSettings.FindProperty("_showIcon").boolValue = false;
+                arcSettings.ApplyModifiedPropertiesWithoutUndo();
+            }
+            else
+                arc = existingArc.GetComponent<DefenseDirectionMarker>();
             SetReference(marker, "_rect", rect);
             SetReference(marker, "_icon", image);
+            SetReference(marker, "_arc", arc);
             return PrefabUtility.SaveAsPrefabAsset(root, MARKER_PATH).GetComponent<CombatFootstepMarker>();
         }
         finally
         {
-            UnityEngine.Object.DestroyImmediate(root);
+            if (existing != null)
+                PrefabUtility.UnloadPrefabContents(root);
+            else
+                UnityEngine.Object.DestroyImmediate(root);
         }
     }
 

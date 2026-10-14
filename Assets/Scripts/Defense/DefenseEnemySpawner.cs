@@ -108,11 +108,17 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     void OnDestroy()
     {
         foreach (BambooThrower thrower in _allThrowers)
+        {
             if (thrower != null)
-                thrower.Health.Died -= HandleThrowerDied;
+                thrower.Despawned -= HandleThrowerDespawned;
+        }
+
         foreach (MeleeUnit unit in _meleeByHealth.Values)
+        {
             if (unit.Health != null)
                 unit.Health.Died -= HandleMeleeDied;
+        }
+
         EnemyKilled = null;
     }
 
@@ -252,14 +258,32 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         return nearest != null;
     }
 
-    /// <summary>투척수 프리팹을 비활성 상태로 생성하고 사망 사건을 구독해 반환한다.</summary>
+    /// <summary>
+    /// 투척수 프리팹을 비활성 상태로 생성하고 디스폰 사건을 구독한다.
+    /// 생성한 투척수를 전체 목록에 보관하고 반환한다.
+    /// </summary>
     private BambooThrower CreateThrower()
     {
         BambooThrower thrower = Instantiate(_throwerPrefab, transform.position, Quaternion.identity, _unitRoot);
+
         thrower.gameObject.SetActive(false);
-        thrower.Health.Died += HandleThrowerDied;
+        thrower.Despawned += HandleThrowerDespawned;
         _allThrowers.Add(thrower);
+
         return thrower;
+    }
+
+    /// <summary>
+    /// 디스폰한 thrower를 활성 목록에서 제거하고 재사용 풀에 반환한다.
+    /// 다음 보충 스폰 시각을 갱신하며 처치 수는 증가시키지 않는다.
+    /// </summary>
+    private void HandleThrowerDespawned(BambooThrower thrower)
+    {
+        if (!_activeThrowers.Remove(thrower))
+            return;
+
+        _idleThrowers.Push(thrower);
+        _nextThrowerSpawnAt = Mathf.Max(_nextThrowerSpawnAt, Time.time + _throwerSpawnInterval);
     }
 
     /// <summary>근접 적 프리팹을 비활성 상태로 생성하고 구성 요소와 사망 사건 구독을 등록해 반환한다.</summary>
@@ -271,18 +295,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         _meleeByHealth.Add(unit.Health, unit);
         unit.Health.Died += HandleMeleeDied;
         return unit;
-    }
-
-    /// <summary>health의 투척수 사망을 처치 수에 더하고 다음 재사용을 위해 대기 목록으로 옮긴다.</summary>
-    private void HandleThrowerDied(EnemyHealth health)
-    {
-        BambooThrower thrower = health.GetComponent<BambooThrower>();
-        if (!_activeThrowers.Remove(thrower))
-            return;
-        EnemyKilled?.Invoke();
-        _idleThrowers.Push(thrower);
-        _nextThrowerSpawnAt = Mathf.Max(_nextThrowerSpawnAt, Time.time + _throwerSpawnInterval);
-    }
+    }     
 
     /// <summary>health의 근접 적 사망을 처치 수에 더하고 다음 재사용을 위해 대기 목록으로 옮긴다.</summary>
     private void HandleMeleeDied(EnemyHealth health)
