@@ -57,10 +57,8 @@ public static class BambooDefenseSceneBuilder
         EnsureFolder(ASSET_FOLDER);
         Material bamboo = LoadOrCreateMaterial("Bamboo", new Color(0.35f, 0.45f, 0.3f, 1f));
         Material ground = LoadOrCreateMaterial("Ground", new Color(0.2f, 0.18f, 0.15f, 1f));
-        Material wave = LoadOrCreateMaterial("SwordWave", Color.white);
         Material body = LoadOrCreateMaterial("ThrowerBody", new Color(0.3f, 0.05f, 0.05f, 1f));
-        DefenseSwordWave wavePrefab = LoadOrCreateWavePrefab(wave);
-        DefenseShuriken shurikenPrefab = LoadOrCreateShurikenPrefab(wavePrefab);
+        DefenseShuriken shurikenPrefab = LoadOrCreateShurikenPrefab();
         LoadOrCreateThrowerPrefab(shurikenPrefab, body);
         LoadOrCreateMeleePrefab();
         AssetDatabase.SaveAssets();
@@ -105,28 +103,11 @@ public static class BambooDefenseSceneBuilder
         return material;
     }
 
-    /// <summary>wave 머티리얼을 쓰는 초승달 검기 프리팹을 찾거나 생성해 반환한다. 인지와 무관한 흰 윤곽선으로 표시한다.</summary>
-    private static DefenseSwordWave LoadOrCreateWavePrefab(Material wave)
-    {
-        string path = $"{ASSET_FOLDER}/DefenseSwordWave.prefab";
-        GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        if (existing != null)
-            return existing.GetComponent<DefenseSwordWave>();
-        GameObject root = new GameObject("DefenseSwordWave", typeof(MeshFilter), typeof(MeshRenderer));
-        MeshRenderer renderer = root.GetComponent<MeshRenderer>();
-        renderer.sharedMaterial = wave;
-        renderer.shadowCastingMode = ShadowCastingMode.Off;
-        root.AddComponent<DefenseSwordWave>();
-        OutlineVFX outline = root.AddComponent<OutlineVFX>();
-        SetField(outline, "_ignorePerception", true);
-        return SavePrefab(root, path).GetComponent<DefenseSwordWave>();
-    }
-
     /// <summary>
     /// 기존 Shuriken3의 모델과 회전을 재사용해 두 배 크기의 빨간 실루엣 수리검 프리팹을 찾거나 생성해 반환한다.
-    /// 기존 투사체·인지 숨김 컴포넌트는 복제본에서만 제거하고 wavePrefab을 패링·회피 검기로 연결한다.
+    /// 기존 투사체·인지 숨김 컴포넌트는 복제본에서만 제거한다.
     /// </summary>
-    private static DefenseShuriken LoadOrCreateShurikenPrefab(DefenseSwordWave wavePrefab)
+    private static DefenseShuriken LoadOrCreateShurikenPrefab()
     {
         string path = $"{ASSET_FOLDER}/DefenseShuriken.prefab";
         GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -139,8 +120,7 @@ public static class BambooDefenseSceneBuilder
         root.transform.Find("Model").localScale *= SHURIKEN_SCALE;
         Object.DestroyImmediate(root.GetComponent<ShurikenPerceptionEffect>());
         Object.DestroyImmediate(root.GetComponent<EnemyProjectile>());
-        DefenseShuriken shuriken = root.AddComponent<DefenseShuriken>();
-        SetField(shuriken, "_wavePrefab", wavePrefab);
+        root.AddComponent<DefenseShuriken>();
         SetField(root.AddComponent<OutlineLayer>(), "_kind", (int)OutlineLayerKind.Threat);
         return SavePrefab(root, path).GetComponent<DefenseShuriken>();
     }

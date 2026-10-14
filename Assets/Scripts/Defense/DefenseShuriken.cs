@@ -6,12 +6,14 @@ using BlindBlade.Combat.Contracts;
 
 /// <summary>
 /// 투척수가 던진 수리검의 예측 조준 비행과 플레이어 적중을 처리한다.
-/// 정확한 패링 또는 근접 회피면 투척 위치로 관통 검기를 발사하고 일반 가드면 수리검만 소멸한다.
+/// 접촉은 회피 중에도 플레이어 방어 판정에 그대로 전달한다. 일반 패링이면 가장 가까운 근접 적에게 반사하고,
+/// 퍼펙트 패링·가드·회피면 수리검만 소멸한다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class DefenseShuriken : MonoBehaviour
 {
     private const string PATTERN_ID = "DefenseShuriken";
+    private const string REFLECT_PATTERN_ID = "DefenseShurikenReflect";
 
     [Header("비행")]
     [SerializeField, Min(0.1f)] private float _speed = 13f;
@@ -26,7 +28,6 @@ public sealed class DefenseShuriken : MonoBehaviour
     private BambooDefenseDirector _director;
     private float _damage;
     private Vector3 _direction;
-    private Vector3 _returnPoint;
     private float _elapsed;
     private bool _flying;
     private int _attackId;
@@ -44,10 +45,13 @@ public sealed class DefenseShuriken : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("플레이어와 이 거리 안에서는 유도를 멈추고 직진해 패링·회피 타이밍을 유지한다.")]
     private float _homingStopDistance = 4f;
 
-    [Header("패링·회피 검기")]
-    [SerializeField] private DefenseSwordWave _wavePrefab;
-    [SerializeField, Min(0f), Tooltip("플레이어가 회피 중일 때 이 거리 안의 수리검을 검기로 되돌린다.")]
-    private float _dodgeCounterRadius = 3f;
+    [Header("일반 패링 반사")]
+    [SerializeField, Min(1f), Tooltip("일반 패링으로 반사한 수리검의 속도 배율. 원래 비행 속도에 곱한다.")]
+    private float _reflectSpeedMultiplier = 2f;
+    private GameObject _reflectOwner;
+    private EnemyHealth _reflectTarget;
+    private Collider _reflectTargetCollider;
+    private bool _reflected;
 
     public event Action<DefenseShuriken> Released;
     public bool IsFlying => _flying;
@@ -56,6 +60,11 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     void Update()
     {
+        if (_reflected)
+        {
+            UpdateReflected();
+            return;
+        }
         if (!_flying)
             return;
 
@@ -66,14 +75,7 @@ public sealed class DefenseShuriken : MonoBehaviour
             return;
         }
 
-        Vector3 toTarget = _targetMotor.ViewOrigin - transform.position;
-        if (_targetMotor.IsDodging && toTarget.sqrMagnitude <= _dodgeCounterRadius * _dodgeCounterRadius)
-        {
-            LaunchWave(_target);
-            Release();
-            return;
-        }
-        SteerTowardsTarget(toTarget.magnitude);
+        SteerTowardsTarget(Vector3.Distance(_targetMotor.ViewOrigin, transform.position));
 
         int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts,
             _collisionMask, QueryTriggerInteraction.Ignore);
@@ -116,10 +118,10 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// instigator, target, damage, direction, returnPoint, director를 설정하고 수리검 비행을 시작한다.
+    /// instigator, target, damage, direction, director를 설정하고 수리검 비행을 시작한다.
     /// 활성 전투 세션에서 공격 ID와 투사체 ID를 발급받아 비행 상태에 저장한다.
     /// </summary>
-    public void Launch(GameObject instigator, PlayerHealth target, float damage, Vector3 direction, Vector3 returnPoint,
+    public void Launch(GameObject instigator, PlayerHealth target, float damage, Vector3 direction,
         BambooDefenseDirector director)
     {
         _instigator = instigator;
@@ -128,7 +130,6 @@ public sealed class DefenseShuriken : MonoBehaviour
         _director = director;
         _damage = damage;
         _direction = direction.normalized;
-        _returnPoint = returnPoint;
         CombatSessionRuntime session = CombatSessionRuntime.Active;
         _attackId = session.AllocateAttackId();
         _projectileId = session.AllocateProjectileId();
@@ -196,7 +197,8 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     /// <summary>
     /// collider의 point에 공격 ID와 Projectile 종류를 붙여 A의 단일 방어 판정에 전달한다.
-    /// 완벽한 패링이면 검기를 발사하고 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
+    /// 일반 패링이면 반사 비행으로 바꾸고, 그 외 결과나 반사할 적이 없으면 수리검을 소멸한다.
+    /// 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
     /// </summary>
     private void ProcessHit(Collider collider, Vector3 point)
     {
@@ -209,8 +211,8 @@ public sealed class DefenseShuriken : MonoBehaviour
             if (resolver != null)
             {
                 DefenseResolution resolution = resolver.ResolveIncomingAttack(context);
-                if (resolution.Outcome == DefenseOutcome.PerfectParry)
-                    LaunchWave(player);
+                if (resolution.Outcome == DefenseOutcome.NormalParry && TryReflect(player.gameObject))
+                    return;
             }
             else
                 player.TakeDamage(context);
@@ -219,16 +221,108 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// player의 시점 위치에서 투척 위치 방향으로 관통 검기를 생성한다. 정확한 패링과 근접 회피에서 사용한다.
-    /// 검기는 플레이어 소유로 적 피해를 적용하며 수리검의 비행 상태는 변경하지 않는다.
+    /// 현재 위치에서 가장 가까운 생존 근접 적을 찾아 owner 소유의 반사 비행으로 바꾸고 true를 반환한다.
+    /// 적대 비행은 이 순간 끝나므로 Released를 한 번 알리며, 대상이 없으면 아무것도 바꾸지 않고 false를 반환한다.
     /// </summary>
-    private void LaunchWave(PlayerHealth player)
+    private bool TryReflect(GameObject owner)
     {
-        Vector3 origin = _targetMotor.ViewOrigin;
-        Vector3 direction = _returnPoint - origin;
-        if (direction.sqrMagnitude < 0.0001f)
-            direction = -_direction;
-        DefenseSwordWave wave = Instantiate(_wavePrefab, origin, Quaternion.LookRotation(direction.normalized));
-        wave.Launch(player.gameObject, origin, direction.normalized);
+        if (!_director.TryFindNearestMelee(transform.position, out EnemyHealth target))
+            return false;
+
+        _reflectOwner = owner;
+        _reflectTarget = target;
+        _reflectTargetCollider = target.CreateCombatTarget().HitCollider;
+        _elapsed = 0f;
+        AimAtReflectTarget();
+        // 반사 뒤에는 적대 투사체가 아니므로 투척 예산·방향 표시·강화 공격 제거 대상에서 빠진다.
+        _flying = false;
+        _reflected = true;
+        Released?.Invoke(this);
+        return true;
+    }
+
+    /// <summary>
+    /// 반사 수리검을 반사 속도로 대상 근접 적에게 유도해 이동한다. 대상이 죽으면 마지막 방향으로 직진한다.
+    /// 경로에서 처음 닿은 생존 적에게 남은 체력 전체의 플레이어 소유 피해를 주고, 적이나 지형에 닿거나 수명이 끝나면 파괴된다.
+    /// </summary>
+    private void UpdateReflected()
+    {
+        _elapsed += Time.deltaTime;
+        if (_elapsed >= _lifetime)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        if (_reflectTarget != null && _reflectTarget.IsAlive)
+            AimAtReflectTarget();
+
+        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts,
+            _collisionMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < overlaps; i++)
+        {
+            if (!CanHitReflected(_contacts[i]))
+                continue;
+            StrikeReflected(_contacts[i], _contacts[i].ClosestPoint(transform.position));
+            return;
+        }
+
+        float distance = _speed * _reflectSpeedMultiplier * Time.deltaTime;
+        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
+            distance, _collisionMask, QueryTriggerInteraction.Ignore);
+        int closest = -1;
+        float closestDistance = float.PositiveInfinity;
+        for (int i = 0; i < count; i++)
+        {
+            if (!CanHitReflected(_hits[i].collider) || _hits[i].distance >= closestDistance)
+                continue;
+            closest = i;
+            closestDistance = _hits[i].distance;
+        }
+
+        if (closest >= 0)
+        {
+            transform.position += _direction * closestDistance;
+            StrikeReflected(_hits[closest].collider, _hits[closest].point);
+            return;
+        }
+        transform.position += _direction * distance;
+    }
+
+    /// <summary>반사 대상 충돌체 중심으로 _direction과 수리검 회전을 바꾼다. 이미 중심에 있으면 방향을 유지한다.</summary>
+    private void AimAtReflectTarget()
+    {
+        Vector3 aim = _reflectTargetCollider.bounds.center - transform.position;
+        if (aim.sqrMagnitude < 0.0001f)
+            return;
+        _direction = aim.normalized;
+        transform.rotation = Quaternion.LookRotation(_direction);
+    }
+
+    /// <summary>
+    /// collider가 반사 수리검이 멈출 대상이면 true를 반환한다. 생존 적과 지형에서 멈추고
+    /// 자신·플레이어·죽은 적·적이 아닌 다른 피해 수신자는 통과한다.
+    /// </summary>
+    private bool CanHitReflected(Collider collider)
+    {
+        if (collider.transform.IsChildOf(transform) || collider.GetComponentInParent<PlayerHealth>() != null)
+            return false;
+        EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
+        if (enemy != null)
+            return enemy.IsAlive;
+        return collider.GetComponentInParent<IDamageable>() == null;
+    }
+
+    /// <summary>
+    /// collider가 생존 적이면 point에 남은 체력 전체의 PlayerOwned 피해를 한 번 적용한 뒤 수리검을 파괴한다.
+    /// 지형이면 피해 없이 파괴한다.
+    /// </summary>
+    private void StrikeReflected(Collider collider, Vector3 point)
+    {
+        EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
+        if (enemy != null)
+            enemy.TakeDamage(new DamageContext(Mathf.Max(enemy.CurrentHealth, 1f), _reflectOwner, point, _direction,
+                REFLECT_PATTERN_ID, _attackId, 1, IncomingAttackKind.PlayerOwned));
+        _reflected = false;
+        Destroy(gameObject);
     }
 }

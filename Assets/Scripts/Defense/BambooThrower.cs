@@ -141,7 +141,7 @@ public sealed class BambooThrower : MonoBehaviour
 
     /// <summary>
     /// 디렉터의 플레이어 이동 속도로 예측한 조준점에 수리검을 던지고 짧게 실루엣을 드러낸다.
-    /// 예약을 디렉터의 비행 수리검으로 넘기며 검기가 돌아올 몸 중심과 유도용 디렉터를 함께 전달한다.
+    /// 예약을 디렉터의 비행 수리검으로 넘기며 유도·반사 대상 조회용 디렉터를 함께 전달한다.
     /// </summary>
     private void Throw()
     {
@@ -152,7 +152,7 @@ public sealed class BambooThrower : MonoBehaviour
         FacePlayer();
         _shuriken = Instantiate(_shurikenPrefab, _muzzle.position, Quaternion.LookRotation(direction));
         _shuriken.Released += HandleShurikenReleased;
-        _shuriken.Launch(gameObject, player.GetComponent<PlayerHealth>(), _damage, direction, _body.bounds.center, _director);
+        _shuriken.Launch(gameObject, player.GetComponent<PlayerHealth>(), _damage, direction, _director);
         _reserved = false;
         _director.NotifyShurikenLaunched(_shuriken);
         if (_throwSound != SoundId.None)
