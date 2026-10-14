@@ -188,7 +188,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// </summary>
     private DefenseResolution ResolveDodge(DamageContext context, DefenseOutcome dodgeOutcome)
     {
-        DefenseResolution resolution = PublishResolution(context, dodgeOutcome, 0f, _dodgeId);
+        DefenseResolution resolution = PublishResolution(context, dodgeOutcome, 0f);
         if (dodgeOutcome != DefenseOutcome.DodgeAvoided || _perfectDodgeRewarded) return resolution;
         _perfectDodgeRewarded = true;
         PublishDodge(PlayerDodgeStage.PerfectDodge, context.AttackId);
@@ -244,16 +244,14 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     /// <summary>
     /// context의 AttackId·HitId·Point와 현재 게임 시간·실시간으로 outcome 판정 결과를 만들고 DefenseResolved로 발행한 뒤 반환한다.
-    /// 가드·패링 결과에는 Coordinator의 GuardInputId를 넣고, dodgeId는 회피 판정일 때만 전달하며 반격 무적은 0이다.
-    /// appliedDamage는 이번 판정에서 실제로 줄어든 체력이다.
+    /// 가드·패링 결과에는 Coordinator의 GuardInputId를 넣으며 appliedDamage는 이번 판정에서 실제로 줄어든 체력이다.
     /// </summary>
-    private DefenseResolution PublishResolution(DamageContext context, DefenseOutcome outcome, float appliedDamage,
-        int dodgeId = 0)
+    private DefenseResolution PublishResolution(DamageContext context, DefenseOutcome outcome, float appliedDamage)
     {
         bool defended = outcome == DefenseOutcome.Guard || outcome == DefenseOutcome.NormalParry
             || outcome == DefenseOutcome.PerfectParry;
         DefenseResolution resolution = new DefenseResolution(outcome, context.AttackId, context.HitId,
-            defended ? _combat.GuardInputId : 0, dodgeId, appliedDamage, context.Point,
+            defended ? _combat.GuardInputId : 0, appliedDamage, context.Point,
             Time.time, Time.realtimeSinceStartupAsDouble);
         _combat.Events.RaiseDefenseResolved(resolution);
         return resolution;

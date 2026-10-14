@@ -3,6 +3,8 @@ using System;
 using UnityEngine;
 using UnityEngine.Serialization;
 
+using BlindBlade.Combat.Contracts;
+
 
 public enum KatanaWeaponState { Sheathed, Drawn, Sheathing }
 public enum KatanaStage

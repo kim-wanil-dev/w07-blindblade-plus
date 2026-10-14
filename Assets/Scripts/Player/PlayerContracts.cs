@@ -75,21 +75,6 @@ public enum PlayerActionStage
     RequestRejected
 }
 
-/// <summary>
-/// 플레이어가 들어온 공격 1회에 대해 확정한 방어 결과.
-/// DodgeAvoided는 극한 회피 구간, Invulnerable은 그 밖의 회피 무적 구간의 접촉이다.
-/// </summary>
-public enum DefenseOutcome
-{
-    Hit,
-    Guard,
-    NormalParry,
-    PerfectParry,
-    DodgeAvoided,
-    Invulnerable,
-    Ignored
-}
-
 /// <summary>강화 공격 상태 사건의 단계.</summary>
 public enum PlayerEmpowerStage
 {
@@ -333,39 +318,6 @@ public struct PlayerActionEvent
         Outcome = outcome;
         TargetId = targetId;
         WorldPosition = worldPosition;
-    }
-}
-
-/// <summary>들어온 공격 1회의 방어 판정 결과. 공격 식별값은 DamageContext에서 그대로 복사한다.</summary>
-public readonly struct DefenseResolution
-{
-    public DefenseOutcome Outcome { get; }
-    public int AttackId { get; }
-    public int HitId { get; }
-    public int GuardInputId { get; }
-    public int DodgeId { get; }
-    public float AppliedDamage { get; }
-    public Vector3 ContactPoint { get; }
-    public float GameTime { get; }
-    public double RealTime { get; }
-
-    /// <summary>
-    /// outcome, attackId, hitId, guardInputId, dodgeId, appliedDamage, contactPoint와 판정 시각으로 방어 판정 결과를 만든다.
-    /// guardInputId는 방어에 쓰인 우클릭 입력, dodgeId는 극한 회피·무적 판정에 쓰인 회피이며 없으면 0이다.
-    /// appliedDamage는 실제로 줄어든 체력이다.
-    /// </summary>
-    public DefenseResolution(DefenseOutcome outcome, int attackId, int hitId, int guardInputId, int dodgeId,
-        float appliedDamage, Vector3 contactPoint, float gameTime, double realTime)
-    {
-        Outcome = outcome;
-        AttackId = attackId;
-        HitId = hitId;
-        GuardInputId = guardInputId;
-        DodgeId = dodgeId;
-        AppliedDamage = appliedDamage;
-        ContactPoint = contactPoint;
-        GameTime = gameTime;
-        RealTime = realTime;
     }
 }
 
