@@ -8,6 +8,7 @@ using UnityEngine;
 public sealed class EnemyHealth : MonoBehaviour, IDamageable
 {
     private static readonly Dictionary<string, EnemyHealth> _targets = new Dictionary<string, EnemyHealth>();
+    private static readonly Dictionary<string, int> _spawnGenerations = new Dictionary<string, int>();
 
     [Header("적 체력")]
     [SerializeField, Min(1f)] private float _maxHealth = 30f;
@@ -27,6 +28,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     private float _nextHitInterruptTime;
     private float _currentHealth;
     private bool _invulnerable;
+    private int _spawnGeneration;
 
     public float CurrentHealth => _currentHealth;
     public float MaxHealth => _maxHealth;
@@ -34,6 +36,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public bool IsInvulnerable => _invulnerable;
     public bool IsDashTargetable => _dashTargetable;
     public string TargetId => "Enemy_" + GetInstanceID();
+    public int SpawnGeneration => _spawnGeneration;
     public event Action<DamageContext> Damaged;
     public event Action<DamageContext> DamageBlocked;
     public event Action<float, float> HealthChanged;
@@ -49,6 +52,11 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     {
         _currentHealth = _maxHealth;
         _nextHitInterruptTime = 0f;
+        _spawnGenerations.TryGetValue(TargetId, out _spawnGeneration);
+        _spawnGeneration++;
+        if (_spawnGeneration <= 0)
+            _spawnGeneration = 1;
+        _spawnGenerations[TargetId] = _spawnGeneration;
         _targets[TargetId] = this;
     }
 
@@ -146,5 +154,6 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     private static void ResetRegistry()
     {
         _targets.Clear();
+        _spawnGenerations.Clear();
     }
 }

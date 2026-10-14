@@ -1,14 +1,6 @@
 using UnityEngine;
 
-/// <summary>피해를 만든 공격의 종류. 수신자는 Unknown이면 기존 방식으로 공격을 분류한다.</summary>
-public enum IncomingAttackKind
-{
-    Unknown,
-    Melee,
-    Charge,
-    Projectile,
-    PlayerOwned
-}
+using BlindBlade.Combat.Contracts;
 
 public readonly struct DamageContext
 {

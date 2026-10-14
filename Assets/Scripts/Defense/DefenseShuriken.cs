@@ -2,6 +2,8 @@ using System;
 
 using UnityEngine;
 
+using BlindBlade.Combat.Contracts;
+
 /// <summary>
 /// 투척수가 던진 수리검의 예측 조준 비행과 플레이어 적중을 처리한다.
 /// 정확한 패링 또는 근접 회피면 투척 위치로 관통 검기를 발사하고 일반 가드면 수리검만 소멸한다.
@@ -27,6 +29,8 @@ public sealed class DefenseShuriken : MonoBehaviour
     private Vector3 _returnPoint;
     private float _elapsed;
     private bool _flying;
+    private int _attackId;
+    private int _projectileId;
 
     [Header("예측 조준·유도")]
     [SerializeField, Min(0f), Tooltip("플레이어 시점보다 낮게 조준하는 높이(미터)")]
@@ -46,6 +50,9 @@ public sealed class DefenseShuriken : MonoBehaviour
     private float _dodgeCounterRadius = 3f;
 
     public event Action<DefenseShuriken> Released;
+    public bool IsFlying => _flying;
+    public int AttackId => _attackId;
+    public int ProjectileId => _projectileId;
 
     void Update()
     {
@@ -109,8 +116,8 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// instigator·target·damage·direction으로 피해 문맥과 비행 방향을 설정하고 비행을 시작한다.
-    /// returnPoint는 검기가 향할 투척 위치이며 director의 플레이어 속도로 비행 중 유도한다.
+    /// instigator, target, damage, direction, returnPoint, director를 설정하고 수리검 비행을 시작한다.
+    /// 활성 전투 세션에서 공격 ID와 투사체 ID를 발급받아 비행 상태에 저장한다.
     /// </summary>
     public void Launch(GameObject instigator, PlayerHealth target, float damage, Vector3 direction, Vector3 returnPoint,
         BambooDefenseDirector director)
@@ -122,6 +129,9 @@ public sealed class DefenseShuriken : MonoBehaviour
         _damage = damage;
         _direction = direction.normalized;
         _returnPoint = returnPoint;
+        CombatSessionRuntime session = CombatSessionRuntime.Active;
+        _attackId = session.AllocateAttackId();
+        _projectileId = session.AllocateProjectileId();
         _elapsed = 0f;
         _flying = true;
         transform.rotation = Quaternion.LookRotation(_direction);
@@ -185,18 +195,21 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// collider의 point에서 대상 플레이어의 전방 가드·패링을 먼저 검사하고 실패하면 피해를 적용한다.
-    /// 정확한 패링이면 자동 반격 대신 검기를 발사하며 지형 충돌을 포함한 모든 접촉에서 수리검을 반환한다.
+    /// collider의 point에 공격 ID와 Projectile 종류를 붙여 A의 단일 방어 판정에 전달한다.
+    /// 완벽한 패링이면 검기를 발사하고 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
     /// </summary>
     private void ProcessHit(Collider collider, Vector3 point)
     {
         PlayerHealth player = collider.GetComponentInParent<PlayerHealth>();
         if (player != null)
         {
-            DamageContext context = new DamageContext(_damage, _instigator, point, _direction, PATTERN_ID);
-            if (player is KatanaDamageReceiver katana && katana.TryDefendProjectile(context, out bool parried, false))
+            DamageContext context = new DamageContext(_damage, _instigator, point, _direction, PATTERN_ID,
+                _attackId, 1, IncomingAttackKind.Projectile);
+            IPlayerDefenseResolver resolver = player.GetComponent<IPlayerDefenseResolver>();
+            if (resolver != null)
             {
-                if (parried)
+                DefenseResolution resolution = resolver.ResolveIncomingAttack(context);
+                if (resolution.Outcome == DefenseOutcome.PerfectParry)
                     LaunchWave(player);
             }
             else

@@ -6603,8 +6603,29 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 5477092273469113479, guid: 92b8350f7dac642e0b97994d8218101d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 230596787}
   m_SourcePrefab: {fileID: 100100000, guid: 92b8350f7dac642e0b97994d8218101d, type: 3}
+--- !u!1 &230596786 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 5477092273469113479, guid: 92b8350f7dac642e0b97994d8218101d, type: 3}
+  m_PrefabInstance: {fileID: 230596785}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &230596787
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 230596786}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b02ba2816b599574598a99b05027598d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Combat.Contracts.CombatSessionRuntime
+  _defaultTimeScale: 1
 --- !u!1 &231236738
 GameObject:
   m_ObjectHideFlags: 0
@@ -26755,6 +26776,17 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
+--- !u!114 &876271890 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2388544270244161858, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
+  m_PrefabInstance: {fileID: 876271889}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a8c011625c63685459b8b6adb5ccc0df, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &876342403
 GameObject:
   m_ObjectHideFlags: 0
@@ -51967,6 +51999,14 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1968806060}
     m_Modifications:
+    - target: {fileID: 1012769593652945470, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: _provider
+      value: 
+      objectReference: {fileID: 1968806063}
+    - target: {fileID: 1138209146400131558, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AdditionalShaderChannelsFlag
+      value: 25
+      objectReference: {fileID: 0}
     - target: {fileID: 4215774086827740307, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -52007,11 +52047,23 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5429458185024076922, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
     - target: {fileID: 5749555584214531093, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_fontColor32.rgba
       value: 4292467161
       objectReference: {fileID: 0}
     - target: {fileID: 5749555584214531093, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_TextStyleHashCode
+      value: -1183493901
+      objectReference: {fileID: 0}
+    - target: {fileID: 6928124146991257903, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: _health
+      value: 
+      objectReference: {fileID: 876271890}
+    - target: {fileID: 6976752029855411220, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_TextStyleHashCode
       value: -1183493901
       objectReference: {fileID: 0}
@@ -56050,6 +56102,7 @@ GameObject:
   - component: {fileID: 1968806057}
   - component: {fileID: 1968806061}
   - component: {fileID: 1968806062}
+  - component: {fileID: 1968806063}
   m_Layer: 0
   m_Name: DefenseDirector
   m_TagString: Untagged
@@ -56154,6 +56207,7 @@ MonoBehaviour:
   _farDistance: 30
   _farScale: 0.8
   _nearScale: 3
+  _telegraphColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!114 &1968806062
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -56188,6 +56242,28 @@ MonoBehaviour:
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 30
+--- !u!114 &1968806063
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1968806056}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b07df9fafec985e4bb7b581b0e93f21c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CombatThreatPresentationProvider
+  _visibilityThreshold: 0
+  _nearDistance: 4
+  _farDistance: 30
+  _perceivedThreatColor: {r: 1, g: 1, b: 1, a: 1}
+  _concealedThreatColor: {r: 1, g: 0.55, b: 0.2, a: 1}
+  _perceivedThreatAlpha: 0.7
+  _concealedThreatAlpha: 1
+  _footstepLifetime: 2
+  _footstepFadeDuration: 0.5
+  _footstepRefreshInterval: 0.5
 --- !u!1 &1970433004
 GameObject:
   m_ObjectHideFlags: 0

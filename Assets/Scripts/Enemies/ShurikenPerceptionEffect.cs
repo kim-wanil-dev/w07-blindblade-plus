@@ -25,6 +25,7 @@ public sealed class ShurikenPerceptionEffect : MonoBehaviour
     private Renderer[] _modelRenderers;
     private bool[] _originalVisibility;
     private SensoryPerceptionMask _perception;
+    private CombatThreatPresentationProvider _presentationProvider;
     private Camera _playerCamera;
 
     void Awake()
@@ -46,10 +47,14 @@ public sealed class ShurikenPerceptionEffect : MonoBehaviour
         }
         if (_perception == null)
             _perception = Game.Instance.SensoryManager.GetComponent<SensoryPerceptionMask>();
+        if (_presentationProvider == null)
+            _presentationProvider = FindFirstObjectByType<CombatThreatPresentationProvider>();
         if (_playerCamera == null)
             _playerCamera = Game.Player.GetComponentInChildren<Camera>();
 
-        bool visible = _perception.GetVisibility(transform.position) > 0f;
+        float visibilityThreshold = _presentationProvider != null
+            ? _presentationProvider.VisibilityThreshold : 0f;
+        bool visible = _perception.GetVisibility(transform.position) > visibilityThreshold;
         SetModelVisible(visible);
         if (visible)
         {

@@ -4,6 +4,8 @@ using UnityEngine;
 
 using UnityEngine.SceneManagement;
 
+using BlindBlade.Combat.Contracts;
+
 public enum GameplayState { Initializing, Playing, GameOver, Restarting }
 
 /// <summary>게임 상태와 시간·커서 수명을 관리하고 입력 및 UI에 상태 변경을 알린다.</summary>
@@ -11,7 +13,6 @@ public sealed class GameStateManager : MonoBehaviour
 {
     private PlayerController _player;
     private string _scenePath;
-    private float _previousTimeScale;
     private CursorLockMode _previousCursorLock;
     private bool _previousCursorVisible;
     private bool _frozen;
@@ -44,16 +45,14 @@ public sealed class GameStateManager : MonoBehaviour
     public void RequestGameOver()
     {
         if (State != GameplayState.Playing) return;
-        _previousTimeScale = Time.timeScale;
         _previousCursorLock = Cursor.lockState;
         _previousCursorVisible = Cursor.visible;
         _frozen = true;
         ChangeState(GameplayState.GameOver);
         _player.SetDead();
-        _previousTimeScale = Time.timeScale;
         Managers.Sound.SetFootstepOnlyOwner(null);
         Managers.Sound.StopEffects();
-        Time.timeScale = 0f;
+        CombatSessionRuntime.Active.SetFrozen(true);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
@@ -79,11 +78,13 @@ public sealed class GameStateManager : MonoBehaviour
         StateChanged?.Invoke(state);
     }
 
-    /// <summary>게임오버 진입 전에 보관한 시간 배율과 커서 상태를 복구한다.</summary>
+    /// <summary>게임오버가 요청한 정지를 해제하고 진입 전에 보관한 커서 상태를 복구한다.</summary>
     private void RestoreTimeAndCursor()
     {
         if (!_frozen) return;
-        Time.timeScale = _previousTimeScale;
+        CombatSessionRuntime runtime = CombatSessionRuntime.Active;
+        if (runtime != null)
+            runtime.SetFrozen(false);
         Cursor.lockState = _previousCursorLock;
         Cursor.visible = _previousCursorVisible;
         _frozen = false;

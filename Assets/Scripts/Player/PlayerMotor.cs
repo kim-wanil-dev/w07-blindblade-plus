@@ -1,5 +1,8 @@
 using System;
+
 using UnityEngine;
+
+using BlindBlade.Combat.Contracts;
 
 public enum PlayerDashEndReason
 {
@@ -68,7 +71,8 @@ public sealed class PlayerMotor : MonoBehaviour
     [SerializeField, Min(0f)] private float _dashSlowMotionDuration = 0.12f;
     private bool _isDashSlowMotionActive;
     private float _dashSlowMotionElapsed;
-    private float _timeScaleBeforeDashSlowMotion;
+    private CombatSessionRuntime _timeController;
+    private CombatTimeToken _dashSlowMotionToken;
 
     [Header("짧은 회피")]
     [SerializeField, Min(0.1f)] private float _dodgeDistance = 2.4f;
@@ -763,27 +767,42 @@ private void TickDash(float deltaTime)
         return false;
     }
 
-    /// <summary>현재 시간 배율을 기억하고 대시 시작 전 짧은 슬로모션을 적용한다.</summary>
+    /// <summary>현재 세션에 대시 예고용 시간 요청을 등록하고 Inspector 설정 시간만큼 유지한다.</summary>
     private void BeginDashSlowMotion()
     {
         if (_dashSlowMotionDuration <= 0f || Time.timeScale <= 0f)
             return;
 
-        _timeScaleBeforeDashSlowMotion = Time.timeScale;
+        _timeController = CombatSessionRuntime.Active;
+        if (_timeController == null || !_timeController.IsInitialized)
+        {
+            _timeController = null;
+            return;
+        }
+
+        CombatTimeRequest request = new CombatTimeRequest(_timeController.Session,
+            "PlayerMotor.IaidoDash", CombatTimeReason.DashTelegraph, _dashSlowMotionScale);
+        _dashSlowMotionToken = _timeController.RequestSlowMotion(request);
+        if (!_dashSlowMotionToken.IsValid)
+        {
+            _timeController = null;
+            return;
+        }
         _dashSlowMotionElapsed = 0f;
         _isDashSlowMotionActive = true;
-        Time.timeScale = _timeScaleBeforeDashSlowMotion * _dashSlowMotionScale;
     }
 
-    /// <summary>대시 예고가 소유한 슬로모션을 종료하고 시작 전 시간 배율을 복구한다.</summary>
+    /// <summary>대시 예고의 시간 요청 토큰을 해제하고 남은 요청에 따른 배율을 유지한다.</summary>
     private void RestoreDashSlowMotion()
     {
         if (!_isDashSlowMotionActive)
             return;
 
-        if (Time.timeScale > 0f)
-            Time.timeScale = _timeScaleBeforeDashSlowMotion;
+        if (_timeController != null && _dashSlowMotionToken.IsValid)
+            _timeController.Release(_dashSlowMotionToken);
 
+        _timeController = null;
+        _dashSlowMotionToken = default;
         _isDashSlowMotionActive = false;
         _dashSlowMotionElapsed = 0f;
     }

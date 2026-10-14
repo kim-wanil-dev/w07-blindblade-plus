@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+
 using UnityEngine;
+
+using BlindBlade.Combat.Contracts;
 
 /// <summary>Player actions that can be observed by the game and presentation systems.</summary>
 public enum PlayerActionState

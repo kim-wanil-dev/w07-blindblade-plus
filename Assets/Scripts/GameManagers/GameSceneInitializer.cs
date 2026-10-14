@@ -2,6 +2,8 @@ using System.Collections.Generic;
 
 using UnityEngine;
 
+using BlindBlade.Combat.Contracts;
+
 
 /// <summary>씬 공통 구성을 생성하고 참조 연결 및 초기화 순서를 제어한다.</summary>
 [DefaultExecutionOrder(100)]
@@ -28,6 +30,7 @@ public sealed class GameSceneInitializer : MonoBehaviour
     private PlayerController _player;
     private PlayerInputCommandAdapter _legacyInput;
     private KatanaInputCommandAdapter _katanaInput;
+    private CombatSessionRuntime _combatSession;
     private bool _started;
 
     public bool SwordNoiseEnabled => _useSwordNoise;
@@ -58,8 +61,13 @@ public sealed class GameSceneInitializer : MonoBehaviour
             enabled = false;
             return;
         }
+        _combatSession = GetComponent<CombatSessionRuntime>();
+        if (_combatSession == null)
+            _combatSession = gameObject.AddComponent<CombatSessionRuntime>();
+        _combatSession.Initialize();
         if (!Game.Instance.InitializeSession())
         {
+            _combatSession.Shutdown();
             enabled = false;
             return;
         }
@@ -133,11 +141,14 @@ public sealed class GameSceneInitializer : MonoBehaviour
         {
             Game.Instance.ShutdownSession();
         }
+        if (_combatSession != null)
+            _combatSession.Shutdown();
         if (_memory != null) _memory.gameObject.SetActive(false);
         if (_memory != null) Destroy(_memory.gameObject);
         if (_round != null) Destroy(_round);
         if (_swordNoise != null) Destroy(_swordNoise);
         _state = null;
         _ui = null;
+        _combatSession = null;
     }
 }

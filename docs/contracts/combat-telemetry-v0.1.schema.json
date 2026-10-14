@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Combat telemetry record — D0 draft 0.1.0",
+  "description": "Draft envelope only. Event-specific payload requirements and the runtime writer are implemented in D5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "contractVersion", "configVersion", "sessionId", "sessionGeneration",
+    "eventSequence", "sourceId", "sourceSequence", "eventType", "occurredAt", "recordedAt",
+    "correlation", "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "0.1.0" },
+    "contractVersion": { "const": "0.2.0" },
+    "configVersion": { "type": "string", "minLength": 1 },
+    "sessionId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "sessionGeneration": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "eventSequence": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "sourceId": { "type": "string", "minLength": 1 },
+    "sourceSequence": { "type": "integer", "minimum": 1, "maximum": 9223372036854775807 },
+    "eventType": {
+      "enum": [
+        "session_started", "state_changed", "session_ended", "input_received", "input_accepted",
+        "input_rejected", "attack_contact", "defense_resolved", "damage_applied", "resource_changed",
+        "empowered_ready", "empowered_started", "empowered_ended", "extreme_dodge",
+        "projectile_lifecycle", "enemy_lifecycle", "footstep", "reveal_pulse", "time_scale_changed", "diagnostic"
+      ]
+    },
+    "occurredAt": { "$ref": "#/$defs/timestamp" },
+    "recordedAt": { "$ref": "#/$defs/timestamp" },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputId", "actionId", "attackId", "hitId", "projectileId", "dodgeId"],
+      "properties": {
+        "inputId": { "$ref": "#/$defs/optionalId" },
+        "actionId": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+        "attackId": { "$ref": "#/$defs/optionalId" },
+        "hitId": { "$ref": "#/$defs/optionalId" },
+        "projectileId": { "$ref": "#/$defs/optionalId" },
+        "dodgeId": { "$ref": "#/$defs/optionalId" }
+      }
+    },
+    "sourceEntity": { "$ref": "#/$defs/entity" },
+    "targetEntity": { "$ref": "#/$defs/entity" },
+    "payload": { "type": "object" }
+  },
+  "$defs": {
+    "optionalId": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+    "timestamp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["realtimeSeconds", "gameplaySeconds", "activeUnscaledSeconds"],
+      "properties": {
+        "realtimeSeconds": { "type": "number", "minimum": 0 },
+        "gameplaySeconds": { "type": "number", "minimum": 0 },
+        "activeUnscaledSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entityId", "spawnGeneration"],
+      "properties": {
+        "entityId": { "type": "string", "minLength": 1 },
+        "spawnGeneration": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      }
+    }
+  }
+}
