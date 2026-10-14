@@ -49,3 +49,6 @@ MonoBehaviour:
   _reflectedColor: {r: 1, g: 1, b: 1, a: 1}
   _fillOpacity: 0
   _viewportExitMargin: 0.02
+  _footstepHearingRadius: 20
+  _footstepLifetime: 0.8
+  _footstepFadeDuration: 0.3

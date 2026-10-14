@@ -29,9 +29,20 @@ namespace BlindBlade.Perception
         [SerializeField, Range(0f, 0.25f), Tooltip("화면 밖으로 이 비율만큼 더 벗어나면 방향 UI로 전환한다. 0.02는 폭·높이의 2%다.")]
         private float _viewportExitMargin = 0.02f;
 
+        [Header("발소리 청각 인지")]
+        [SerializeField, Min(0f), Tooltip("적의 현재 위치와 관측자 루트의 수평 거리로 판단하는 청각 범위다.")]
+        private float _footstepHearingRadius = 20f;
+        [SerializeField, Min(0.01f), Tooltip("새 발걸음에서 복사하는 게임 시간 기준 후보 총수명이다.")]
+        private float _footstepLifetime = 0.8f;
+        [SerializeField, Min(0f), Tooltip("새 발걸음에서 복사하는 총수명 끝부분의 게임 시간 페이드 길이다.")]
+        private float _footstepFadeDuration = 0.3f;
+
         public float ViewportExitMargin => _viewportExitMargin;
         public Color ReflectedColor => _reflectedColor;
         public float FillOpacity => _fillOpacity;
+        public float FootstepHearingRadius => _footstepHearingRadius;
+        public float FootstepLifetime => _footstepLifetime;
+        public float FootstepFadeDuration => _footstepFadeDuration;
 
         void OnValidate()
         {
@@ -43,6 +54,9 @@ namespace BlindBlade.Perception
             _farColorDistance = Mathf.Max(_nearColorDistance + 0.01f, _farColorDistance);
             _viewportExitMargin = Mathf.Clamp(_viewportExitMargin, 0f, 0.25f);
             _fillOpacity = Mathf.Clamp01(_fillOpacity);
+            _footstepHearingRadius = Mathf.Max(0f, _footstepHearingRadius);
+            _footstepLifetime = Mathf.Max(0.01f, _footstepLifetime);
+            _footstepFadeDuration = Mathf.Clamp(_footstepFadeDuration, 0f, _footstepLifetime);
         }
 
         /// <summary>

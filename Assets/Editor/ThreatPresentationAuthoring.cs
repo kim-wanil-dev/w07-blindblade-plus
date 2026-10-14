@@ -1,12 +1,15 @@
+using System;
 using System.IO;
 
 using UnityEngine;
 
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEngine.UI;
 
 using BlindBlade.Combat.Contracts;
 using BlindBlade.Perception;
+using BlindBlade.UI.CombatHud;
 
 /// <summary>C 전용 인지 설정·프리팹·작업 씬을 생성한다. 정식 게임 씬이나 프리팹을 저장하지 않는다.</summary>
 public static class ThreatPresentationAuthoring
@@ -17,6 +20,9 @@ public static class ThreatPresentationAuthoring
     private const string MELEE_PATH = ROOT_PATH + "/ThreatPreviewMelee.prefab";
     private const string PROJECTILE_PATH = ROOT_PATH + "/ThreatPreviewProjectile.prefab";
     private const string SURFACE_PATH = ROOT_PATH + "/ThreatPreviewSurface.mat";
+    private const string FOOTSTEP_MARKER_PATH = "Assets/Scenes/Defense/UI/CombatFootstepMarker.prefab";
+    private const int FOOTSTEP_HUD_SLOTS = 24;
+    private static CombatTimeToken _footstepPreviewTimeToken;
 
     /// <summary>
     /// 메뉴 또는 Unity CLI 입력 없이 C의 설정·전용 프리팹·작업 씬을 생성하고 연다.
@@ -104,7 +110,7 @@ public static class ThreatPresentationAuthoring
         renderers.GetArrayElementAtIndex(0).objectReferenceValue = root.GetComponent<Renderer>();
         data.ApplyModifiedPropertiesWithoutUndo();
         PrefabUtility.SaveAsPrefabAsset(root, path);
-        Object.DestroyImmediate(root);
+        UnityEngine.Object.DestroyImmediate(root);
     }
 
     /// <summary>
@@ -259,5 +265,155 @@ public static class ThreatPresentationAuthoring
         resolver.ResolveNow();
         Selection.activeGameObject = root;
         Debug.Log("C 공통 계약 미리보기 세션 시작: " + runtime.Session.SessionId);
+    }
+
+    /// <summary>편집 중인 C 전용 씬에 발소리 후보·D 전달 슬롯과 청각 경계 확인용 대상을 연결하고 저장한다.</summary>
+    [MenuItem("Tools/Perception/Add Footstep Candidate Preview")]
+    public static void AddFootstepCandidatePreview()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorSceneManager.GetActiveScene().path != SCENE_PATH)
+        {
+            Debug.LogWarning("Play를 종료하고 C Threat Sandbox 씬에서 발소리 미리보기를 추가하세요.");
+            return;
+        }
+        AddCommonContractPreview();
+        GameObject root = FindPreviewRoot("ThreatPresentation");
+        if (root == null)
+            return;
+        ThreatPresentationResolver resolver = root.GetComponent<ThreatPresentationResolver>();
+        EnemyFootstepCandidates candidates = root.GetComponent<EnemyFootstepCandidates>();
+        if (candidates == null)
+            candidates = Undo.AddComponent<EnemyFootstepCandidates>(root);
+        SerializedObject candidateData = new SerializedObject(candidates);
+        candidateData.FindProperty("_resolver").objectReferenceValue = resolver;
+        candidateData.FindProperty("_sessionRuntime").objectReferenceValue = root.GetComponent<CombatSessionRuntime>();
+        candidateData.ApplyModifiedProperties();
+        SerializedObject providerData = new SerializedObject(root.GetComponent<CombatThreatPresentationProvider>());
+        providerData.FindProperty("_footstepCandidateSource").objectReferenceValue = candidates;
+        providerData.ApplyModifiedProperties();
+        CreateRenderingTarget("Footstep_HearingEdge", new Vector3(0f, 1.6f, 19f), resolver);
+        CreateRenderingTarget("Footstep_OutsideHearing", new Vector3(0f, 1.6f, 21f), resolver);
+        CreateRenderingTarget("Footstep_Visible", new Vector3(-1f, 1.6f, 5f), resolver);
+        CreateRenderingTarget("Footstep_Offscreen", new Vector3(8f, 1.6f, -8f), resolver);
+        ConnectFootstepPreviewHud(root.GetComponent<CombatThreatPresentationProvider>());
+        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), SCENE_PATH);
+        Selection.activeGameObject = root;
+        Debug.Log("C 발소리 후보 연결 완료. Play 후 세션을 시작하고 Enemy Footstep Candidates Inspector에서 실제 후보를 발생시키세요.");
+    }
+
+    /// <summary>provider를 소비하는 C 전용 Overlay HUD와 D 마커 프리팹 24개를 연결한다. 기존 HUD·프리팹 에셋은 수정하지 않는다.</summary>
+    private static void ConnectFootstepPreviewHud(CombatThreatPresentationProvider provider)
+    {
+        GameObject markerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(FOOTSTEP_MARKER_PATH);
+        if (markerPrefab == null || markerPrefab.GetComponent<CombatFootstepMarker>() == null)
+            throw new InvalidOperationException("D 발소리 마커 프리팹을 확인하세요: " + FOOTSTEP_MARKER_PATH);
+        GameObject root = FindPreviewRoot("C_FootstepHudPreview");
+        if (root == null)
+        {
+            root = new GameObject("C_FootstepHudPreview", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+            Undo.RegisterCreatedObjectUndo(root, "C 발소리 HUD 미리보기 생성");
+            Canvas canvas = root.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 3;
+            CanvasScaler scaler = root.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+        }
+        if (root.GetComponent<Canvas>() == null)
+            throw new InvalidOperationException("C_FootstepHudPreview 이름의 기존 오브젝트가 Canvas가 아닙니다.");
+        Transform existing = root.transform.Find("FootstepMarkers");
+        RectTransform container;
+        if (existing == null)
+        {
+            GameObject markers = new GameObject("FootstepMarkers", typeof(RectTransform));
+            Undo.RegisterCreatedObjectUndo(markers, "C 발소리 HUD 컨테이너 생성");
+            container = markers.GetComponent<RectTransform>();
+            container.SetParent(root.transform, false);
+            container.anchorMin = Vector2.zero;
+            container.anchorMax = Vector2.one;
+            container.offsetMin = Vector2.zero;
+            container.offsetMax = Vector2.zero;
+        }
+        else
+            container = existing.GetComponent<RectTransform>();
+        if (container == null)
+            throw new InvalidOperationException("C 발소리 HUD의 FootstepMarkers가 RectTransform이 아닙니다.");
+        CombatFootstepHud hud = container.GetComponent<CombatFootstepHud>();
+        if (hud == null)
+            hud = Undo.AddComponent<CombatFootstepHud>(container.gameObject);
+        SerializedObject settings = new SerializedObject(hud);
+        settings.FindProperty("_provider").objectReferenceValue = provider;
+        settings.FindProperty("_container").objectReferenceValue = container;
+        SerializedProperty slots = settings.FindProperty("_markers");
+        slots.arraySize = FOOTSTEP_HUD_SLOTS;
+        for (int i = 0; i < FOOTSTEP_HUD_SLOTS; i++)
+        {
+            string name = "FootstepMarker_" + i.ToString("00");
+            Transform marker = container.Find(name);
+            if (marker == null)
+            {
+                GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(markerPrefab, container);
+                Undo.RegisterCreatedObjectUndo(instance, "C 발소리 HUD 마커 생성");
+                instance.name = name;
+                marker = instance.transform;
+            }
+            CombatFootstepMarker component = marker.GetComponent<CombatFootstepMarker>();
+            if (component == null)
+                throw new InvalidOperationException("C 발소리 HUD 마커 연결을 확인하세요: " + name);
+            slots.GetArrayElementAtIndex(i).objectReferenceValue = component;
+        }
+        settings.ApplyModifiedProperties();
+    }
+
+    /// <summary>C 전용 Play 세션에 0.1배 시간 요청을 등록해 짧은 게임 시간 후보를 수동 관찰할 수 있게 한다.</summary>
+    [MenuItem("Tools/Perception/Footstep Preview/Slow to 0.1")]
+    public static void SlowFootstepPreview()
+    {
+        CombatSessionRuntime runtime = GetFootstepPreviewRuntime();
+        if (runtime == null)
+            return;
+        runtime.Release(_footstepPreviewTimeToken);
+        _footstepPreviewTimeToken = runtime.RequestSlowMotion(new CombatTimeRequest(runtime.Session,
+            "C/FootstepPreview", CombatTimeReason.DashTelegraph, 0.1f));
+    }
+
+    /// <summary>C 전용 Play 세션의 후보 시간 관찰 요청만 해제해 다른 시간 요청과 합성된 기본 배율로 복귀한다.</summary>
+    [MenuItem("Tools/Perception/Footstep Preview/Restore Speed")]
+    public static void RestoreFootstepPreviewSpeed()
+    {
+        CombatSessionRuntime runtime = GetFootstepPreviewRuntime();
+        if (runtime == null)
+            return;
+        runtime.Release(_footstepPreviewTimeToken);
+        _footstepPreviewTimeToken = default;
+    }
+
+    /// <summary>C 전용 Play 세션에 명시적 정지를 요청한다. 후보의 게임 시간 수명과 D 공통 시계가 함께 정지한다.</summary>
+    [MenuItem("Tools/Perception/Footstep Preview/Freeze")]
+    public static void FreezeFootstepPreview()
+    {
+        GetFootstepPreviewRuntime()?.SetFrozen(true);
+    }
+
+    /// <summary>C 전용 Play 세션의 명시적 정지를 해제한다. 살아 있는 0.1배 관찰 요청은 유지한다.</summary>
+    [MenuItem("Tools/Perception/Footstep Preview/Resume")]
+    public static void ResumeFootstepPreview()
+    {
+        GetFootstepPreviewRuntime()?.SetFrozen(false);
+    }
+
+    /// <summary>현재 C 전용 Play 세션이 초기화됐으면 런타임을 반환하고 정식 게임이나 미초기화 상태이면 안내 후 null을 반환한다.</summary>
+    private static CombatSessionRuntime GetFootstepPreviewRuntime()
+    {
+        if (EditorApplication.isPlaying && EditorSceneManager.GetActiveScene().path == SCENE_PATH)
+        {
+            GameObject root = FindPreviewRoot("ThreatPresentation");
+            CombatSessionRuntime runtime = root != null ? root.GetComponent<CombatSessionRuntime>() : null;
+            if (runtime != null && runtime.IsInitialized)
+                return runtime;
+        }
+        Debug.LogWarning("C Threat Sandbox를 Play하고 Start C Contract Preview Session으로 먼저 세션을 시작하세요.");
+        return null;
     }
 }
