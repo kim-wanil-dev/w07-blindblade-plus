@@ -12,6 +12,7 @@ public sealed class KatanaMovementSway : MonoBehaviour
     [SerializeField] private PlayerMotor _motor;
     [SerializeField] private KatanaWeaponVisual _weapon;
     private PlayerController _player;
+    private PlayerClock _playerClock;
     private Transform _pivot;
     private Transform _rig;
     private Vector3 _previousPosition;
@@ -34,6 +35,7 @@ public sealed class KatanaMovementSway : MonoBehaviour
         if (_motor == null) _motor = GetComponent<PlayerMotor>();
         if (_weapon == null) _weapon = GetComponent<KatanaWeaponVisual>();
         _player = GetComponent<PlayerController>();
+        _playerClock = GetComponent<PlayerClock>();
         if (_weapon.Animator == null)
         {
             enabled = false;
@@ -56,14 +58,14 @@ public sealed class KatanaMovementSway : MonoBehaviour
     {
         Vector3 displacement = transform.position - _previousPosition;
         _previousPosition = transform.position;
-        if (_pivot == null || _player.IsPaused || Time.deltaTime <= 0f) return;
+        if (_pivot == null || _player.IsPaused || _playerClock.DeltaTime <= 0f) return;
         displacement.y = 0f;
         if (displacement.sqrMagnitude > TELEPORT_DISTANCE_SQUARED) displacement = Vector3.zero;
 
-        Vector3 target = CalculateOffset(displacement / Time.deltaTime);
+        Vector3 target = CalculateOffset(displacement / _playerClock.DeltaTime);
         float smoothTime = target.sqrMagnitude > 0.00000001f ? _followSmoothTime : _returnSmoothTime;
         _offset = Vector3.SmoothDamp(_offset, target, ref _offsetVelocity, smoothTime,
-            Mathf.Infinity, Time.deltaTime);
+            Mathf.Infinity, _playerClock.DeltaTime);
         _pivot.localPosition = _offset;
     }
 

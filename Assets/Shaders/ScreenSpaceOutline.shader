@@ -66,6 +66,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float _OutlineSoundFadeDuration;
             float _OutlineEdgeFade;
             float _OutlinePerceptionTime;
+            float4 _OutlinePulseRegion;
+            float _OutlinePulseVisibility;
             TEXTURE2D(_OutlineTerrainMemory);
             SAMPLER(sampler_OutlineTerrainMemory);
             float4 _OutlineMemoryBounds;
@@ -111,6 +113,9 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                         position, _OutlineSoundRegions[i].xyz, revealRadius) * timeVisibility;
                     visibility = max(visibility, soundVisibility);
                 }
+                // 퍼펙트 패링 파동은 반경과 투명도를 플레이어 쪽에서 실시간으로 직접 넘긴다.
+                visibility = max(visibility, RegionVisibility(
+                    position, _OutlinePulseRegion.xyz, _OutlinePulseRegion.w) * _OutlinePulseVisibility);
                 float memoryVisibility = 0.0;
                 if (includeMemory > 0.5 && _OutlineMemoryEnabled > 0.5)
                 {

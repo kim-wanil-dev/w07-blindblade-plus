@@ -14,6 +14,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     [SerializeField] private KatanaCombatCoordinator _combat;
     [SerializeField] private PlayerActionDriver _actionDriver;
     [SerializeField] private Animator _animator;
+    private PlayerClock _playerClock;
 
     [Header("Idle 애니메이션 교체")]
     [SerializeField, InspectorName("Idle AnimationClip")]
@@ -127,6 +128,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     {
         if (_combat == null) _combat = GetComponent<KatanaCombatCoordinator>();
         if (_actionDriver == null) _actionDriver = GetComponent<PlayerActionDriver>();
+        _playerClock = GetComponent<PlayerClock>();
         if (_animator == null) _animator = GetComponentInChildren<Animator>(true);
         if (_animator == null || _animator.runtimeAnimatorController == null)
         {
@@ -243,9 +245,10 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             foreach (Renderer renderer in _renderers) renderer.enabled = _showWeapon;
             _wasVisible = _showWeapon;
         }
-        _animator.speed = _combat.Player.IsPaused ? 0f : 1f;
+        // 불릿 타임 중에는 플레이어 시계 배율로 모션을 재생해 세계보다 덜 느리게 보이게 한다.
+        _animator.speed = _combat.Player.IsPaused ? 0f : _playerClock.Scale;
         if (_combat.Player.IsPaused) return;
-        float dt = Time.deltaTime;
+        float dt = _playerClock.DeltaTime;
         _elapsed += dt;
         _flash = Mathf.Max(0f, _flash - dt * 5f);
         if (_combat.Player.IsGuarding)
@@ -300,7 +303,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     {
         if (_poseBlendDuration > 0f)
         {
-            if (!_combat.Player.IsPaused) _poseBlendElapsed += Time.deltaTime;
+            if (!_combat.Player.IsPaused) _poseBlendElapsed += _playerClock.DeltaTime;
             float weight = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_poseBlendElapsed / _poseBlendDuration));
             for (int i = 0; i < _poseTargets.Length; i++)
             {
@@ -347,7 +350,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     {
         if (_attackDeflectionRemaining <= 0f) return;
         if (!_combat.Player.IsPaused)
-            _attackDeflectionRemaining = Mathf.Max(0f, _attackDeflectionRemaining - Time.deltaTime);
+            _attackDeflectionRemaining = Mathf.Max(0f, _attackDeflectionRemaining - _playerClock.DeltaTime);
         float progress = 1f - _attackDeflectionRemaining / _attackDeflectionDuration;
         float weight = progress < 0.15f ? progress / 0.15f
             : 1f - Mathf.SmoothStep(0f, 1f, (progress - 0.15f) / 0.85f);

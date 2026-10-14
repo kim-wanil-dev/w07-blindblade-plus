@@ -3,11 +3,15 @@ using System.Text;
 
 using UnityEngine;
 
+using BlindBlade.Combat.Contracts;
+
 
 /// <summary>기존 플레이어 로그를 보완하는 카타나 상태 표시다. 게임 판정은 변경하지 않는다.</summary>
 [DisallowMultipleComponent]
 public sealed class KatanaDebugOverlay : MonoBehaviour
 {
+    private const float HIT_AFTER_DODGE_LOG_RANGE = 1f;
+
     [Header("Debug switches")]
     [SerializeField] private bool _showOverlay = true;
     [SerializeField] private bool _logEvents = true;
@@ -26,6 +30,9 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
     private float _lastGuardStartTime;
     private int _lastDodgeId;
     private float _lastDodgeStartTime;
+    private bool _dodgeWindowActive;
+    private int _perfectDodgeCount;
+    private int _normalDodgeCount;
 
     private readonly Queue<string> _recent = new Queue<string>();
     private readonly StringBuilder _text = new StringBuilder(600);
@@ -51,6 +58,8 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         _combat.Events.DefenseResolved += HandleDefenseResolved;
         _combat.Events.DodgeChanged += HandleDodgeChanged;
         _combat.Events.RevealPulseRequested += HandleRevealPulse;
+        _combat.Events.StaminaChanged += HandleStaminaChanged;
+        _combat.Events.EmpowerChanged += HandleEmpowerChanged;
     }
 
     void OnDisable()
@@ -63,6 +72,8 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         _combat.Events.DefenseResolved -= HandleDefenseResolved;
         _combat.Events.DodgeChanged -= HandleDodgeChanged;
         _combat.Events.RevealPulseRequested -= HandleRevealPulse;
+        _combat.Events.StaminaChanged -= HandleStaminaChanged;
+        _combat.Events.EmpowerChanged -= HandleEmpowerChanged;
     }
 
     void OnGUI()
@@ -95,43 +106,107 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
     }
 
     /// <summary>
-    /// 우클릭 record가 가드를 실제로 시작했으면 그 InputId와 게임 시간을 저장한다.
+    /// 입력 record가 거부됐으면 종류와 거부 이유를 기록한다. 우클릭이 가드를 실제로 시작했으면 그 InputId와 게임 시간을 저장한다.
     /// 누르고 있는 우클릭의 재진입도 새 패링 창을 열므로 같은 방식으로 갱신한다. 게임 판정은 변경하지 않는다.
     /// </summary>
     private void HandleInputResolved(PlayerInputRecord record)
     {
+        if (record.Status == PlayerInputStatus.Rejected)
+            RecordCombat("입력 거부 " + record.Kind + " | " + record.RejectReason);
         if (record.Status != PlayerInputStatus.Started
             || (record.Kind != PlayerInputKind.GuardPress && record.Kind != PlayerInputKind.GuardHoldResume)) return;
         _lastGuardInputId = record.InputId;
         _lastGuardStartTime = record.GameTime;
     }
 
-    /// <summary>방어 판정 resolution의 결과와 피해, 가드 시작 또는 회피 시작 뒤 지난 시간을 기록한다. 게임 판정은 변경하지 않는다.</summary>
+    /// <summary>
+    /// 방어 판정 resolution의 결과와 퍼펙트·일반 회피 또는 반격 무적 구분, 피해, 가드 시작 또는 회피 시작 뒤 지난 시간을 기록한다.
+    /// 회피 판정 구간 중의 회피·무적 결과이면 _perfectDodgeCount 또는 _normalDodgeCount를 올린다. 회피 구간 밖 피격도 마지막 회피 시작 뒤 1초 안이면 지난 시간을 남긴다.
+    /// </summary>
     private void HandleDefenseResolved(DefenseResolution resolution)
     {
         string timing = "";
+        bool dodged = IsDodgeContact(resolution);
         if (resolution.GuardInputId != 0 && resolution.GuardInputId == _lastGuardInputId)
             timing = " | 가드 시작 후 " + (resolution.GameTime - _lastGuardStartTime).ToString("0.000") + "초";
-        else if (resolution.DodgeId != 0 && resolution.DodgeId == _lastDodgeId)
+        else if (dodged)
+        {
             timing = " | 회피 시작 후 " + (resolution.GameTime - _lastDodgeStartTime).ToString("0.000") + "초";
-        RecordCombat("판정 " + resolution.Outcome + " | 피해 " + resolution.AppliedDamage.ToString("0.#") + timing);
+            if (resolution.Outcome == DefenseOutcome.DodgeAvoided) _perfectDodgeCount++;
+            else _normalDodgeCount++;
+        }
+        else if (resolution.Outcome == DefenseOutcome.Hit && _lastDodgeId != 0
+            && resolution.GameTime - _lastDodgeStartTime < HIT_AFTER_DODGE_LOG_RANGE)
+            timing = " | 회피 #" + _lastDodgeId + " 시작 후 " + (resolution.GameTime - _lastDodgeStartTime).ToString("0.000") + "초(구간 밖)";
+        RecordCombat("판정 " + resolution.Outcome + GetOutcomeLabel(resolution.Outcome, dodged) + " | 피해 "
+            + resolution.AppliedDamage.ToString("0.#") + timing);
     }
 
-    /// <summary>회피 사건 dodgeEvent를 기록하고 Started이면 회피 ID와 시작 게임 시간을 저장한다.</summary>
+    /// <summary>
+    /// resolution이 회피 판정 구간(회피 Started 뒤 Ended 전)에 난 DodgeAvoided 또는 Invulnerable인지 반환한다.
+    /// 판정 수신기는 회피 구간을 반격 무적보다 먼저 보므로 이 구간의 무적은 회피 무적으로 본다.
+    /// </summary>
+    private bool IsDodgeContact(DefenseResolution resolution)
+    {
+        return _dodgeWindowActive && (resolution.Outcome == DefenseOutcome.DodgeAvoided
+            || resolution.Outcome == DefenseOutcome.Invulnerable);
+    }
+
+    /// <summary>
+    /// outcome과 회피 구간 접촉 여부 dodged로 읽기 쉬운 구분을 반환한다.
+    /// DodgeAvoided는 퍼펙트 회피, 회피 구간의 Invulnerable은 일반 회피, 그 밖의 Invulnerable은 반격·강화 공격 무적이며 그 외에는 빈 문자열이다.
+    /// </summary>
+    private static string GetOutcomeLabel(DefenseOutcome outcome, bool dodged)
+    {
+        if (outcome == DefenseOutcome.DodgeAvoided) return "(퍼펙트 회피)";
+        if (outcome != DefenseOutcome.Invulnerable) return "";
+        return dodged ? "(일반 회피)" : "(반격·강화 무적)";
+    }
+
+    /// <summary>
+    /// 회피 사건 dodgeEvent를 기록한다. Started이면 회피 ID와 시작 게임 시간을 저장하고 회피 횟수를 초기화하며 _dodgeWindowActive를 켠다.
+    /// Ended이면 _dodgeWindowActive를 끄고 그 회피에서 피한 퍼펙트·일반 회피 횟수를 함께 남긴다.
+    /// </summary>
     private void HandleDodgeChanged(PlayerDodgeEvent dodgeEvent)
     {
+        string summary = "";
         if (dodgeEvent.Stage == PlayerDodgeStage.Started)
         {
             _lastDodgeId = dodgeEvent.DodgeId;
             _lastDodgeStartTime = dodgeEvent.GameTime;
+            _dodgeWindowActive = true;
+            _perfectDodgeCount = 0;
+            _normalDodgeCount = 0;
         }
-        RecordCombat("회피 " + dodgeEvent.Stage + " #" + dodgeEvent.DodgeId);
+        else if (dodgeEvent.Stage == PlayerDodgeStage.Ended && dodgeEvent.DodgeId == _lastDodgeId)
+        {
+            _dodgeWindowActive = false;
+            summary = _perfectDodgeCount + _normalDodgeCount == 0 ? " | 피한 공격 없음"
+                : " | 퍼펙트 회피 " + _perfectDodgeCount + " · 일반 회피 " + _normalDodgeCount;
+        }
+        RecordCombat("회피 " + dodgeEvent.Stage + " #" + dodgeEvent.DodgeId + summary);
     }
 
     /// <summary>파동 요청 pulseEvent의 원인과 요청 ID를 기록한다.</summary>
     private void HandleRevealPulse(PlayerRevealPulseEvent pulseEvent)
     {
         RecordCombat("파동 요청 " + pulseEvent.Cause + " #" + pulseEvent.PulseId);
+    }
+
+    /// <summary>스태미너 사건 staminaEvent의 이유와 변화량, 변경 후 값과 관련 회피 ID를 기록한다. 게임 판정은 변경하지 않는다.</summary>
+    private void HandleStaminaChanged(PlayerStaminaEvent staminaEvent)
+    {
+        string dodge = staminaEvent.DodgeId != 0 ? " #" + staminaEvent.DodgeId : "";
+        RecordCombat("스태미너 " + staminaEvent.Reason + " " + staminaEvent.Delta.ToString("+0.#;-0.#;0")
+            + " → " + staminaEvent.Current.ToString("0.#") + "/" + staminaEvent.Max.ToString("0.#") + dodge);
+    }
+
+    /// <summary>강화 사건 empowerEvent의 단계와 강화 ID, 원인 공격, 끝난 이유를 기록한다. 게임 판정은 변경하지 않는다.</summary>
+    private void HandleEmpowerChanged(PlayerEmpowerEvent empowerEvent)
+    {
+        string reason = empowerEvent.Stage == PlayerEmpowerStage.Ended ? " | " + empowerEvent.EndReason : "";
+        RecordCombat("강화 " + empowerEvent.Stage + " #" + empowerEvent.EmpowerId + " | 원인 공격 "
+            + empowerEvent.SourceAttackId + reason);
     }
 
     /// <summary>전투 판정 text를 최근 목록에 추가하고 설정에 따라 [Combat] 로그를 한 번 남긴다.</summary>

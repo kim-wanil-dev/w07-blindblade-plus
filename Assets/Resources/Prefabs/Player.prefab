@@ -245,6 +245,12 @@ GameObject:
   - component: {fileID: 912000000120}
   - component: {fileID: 912000000122}
   - component: {fileID: 8878113820235699003}
+  - component: {fileID: 230128326510893174}
+  - component: {fileID: 306701406696307642}
+  - component: {fileID: 1235757311588725982}
+  - component: {fileID: 450846812853252160}
+  - component: {fileID: 505307292897056262}
+  - component: {fileID: 980745157811939617}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1327,3 +1333,112 @@ ParticleSystem:
   m_CorrespondingSourceObject: {fileID: 3437129320176675894, guid: 641ef78c43feafe4fbcf82c9b47f2227, type: 3}
   m_PrefabInstance: {fileID: 6350052290514714908}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &230128326510893174
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21f13ac15759d21659118b6645eda938, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _maxStamina: 100
+  _dodgeCost: 34
+  _guardCost: 0
+  _regenPerSecond: 20
+  _regenDelay: 1
+  _guardRegenMultiplier: 0.5
+--- !u!114 &306701406696307642
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88e1b84d94574f9e057daaacddd9c616, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _readyDuration: 5
+  _hitStopDuration: 0.08
+  _hitStopScale: 0.03
+  _worldTimeScale: 0.2
+  _playerTimeScale: 0.5
+--- !u!114 &1235757311588725982
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c629beb5114152d141117934b697f29, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &450846812853252160
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83cd9423b5624d523dd69578222640dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _cutAngle: 24
+  _cutSlashSize: 2400
+  _splitDistance: 70
+  _splitOpenDuration: 0.25
+  _splitHoldDuration: 1.2
+  _seamThickness: 4
+  _cutFlash: 0.55
+  _fovPunch: 10
+  _fovPunchDuration: 0.35
+  _pushInFov: 6
+  _splitCloseDuration: 0.08
+  _sheatheFlash: 0.4
+  _sheathePause: 0.3
+  _scatterCount: 48
+  _scatterLifetime: 1.2
+  _strikeAngle: 180
+  _strikeRadius: 50
+--- !u!114 &505307292897056262
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57c92456932bbdb8937513161d38dc34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _accentColor: {r: 1, g: 1, b: 1, a: 1}
+  _vignetteBlendTime: 0.25
+  _glintThickness: 4
+--- !u!114 &980745157811939617
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dc374dee9c58fa667d2c4802d7891ba3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _radius: 40
+  _expandDuration: 1
+  _fadeDuration: 0.8
+  _ringFadeDuration: 0.3
+  _glintDuration: 0.35
+  _readyVignette: 0.75

@@ -238,6 +238,27 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     }
 
     /// <summary>
+    /// position에서 수평 거리가 가장 가까운 생존 근접 적을 nearest로 출력하고 찾았는지 반환한다.
+    /// 활성 근접 적 목록만 읽으며 적 상태는 변경하지 않는다.
+    /// </summary>
+    internal bool TryFindNearestMelee(Vector3 position, out EnemyHealth nearest)
+    {
+        nearest = null;
+        float closest = float.PositiveInfinity;
+        foreach (MeleeUnit unit in _activeMelee)
+        {
+            if (!unit.Health.IsAlive)
+                continue;
+            float distance = HorizontalDistance(unit.Root.transform.position, position);
+            if (distance >= closest)
+                continue;
+            closest = distance;
+            nearest = unit.Health;
+        }
+        return nearest != null;
+    }
+
+    /// <summary>
     /// 투척수 프리팹을 비활성 상태로 생성하고 디스폰 사건을 구독한다.
     /// 생성한 투척수를 전체 목록에 보관하고 반환한다.
     /// </summary>

@@ -18,6 +18,8 @@ using UnityEngine;
         private static readonly int _soundFadeDurationId = Shader.PropertyToID("_OutlineSoundFadeDuration");
         private static readonly int _edgeFadeId = Shader.PropertyToID("_OutlineEdgeFade");
         private static readonly int _perceptionTimeId = Shader.PropertyToID("_OutlinePerceptionTime");
+        private static readonly int _pulseRegionId = Shader.PropertyToID("_OutlinePulseRegion");
+        private static readonly int _pulseVisibilityId = Shader.PropertyToID("_OutlinePulseVisibility");
 
         [Header("플레이어 주변 인지")]
         [SerializeField, Min(0f), Tooltip("관측자 주변을 상시 표시하는 반경(미터). 0이면 상시 표시하지 않는다.")]
@@ -42,6 +44,10 @@ using UnityEngine;
         private float _edgeFade = 0.75f;
         private SensoryManager _sensoryManager;
         private TerrainMemory _terrainMemory;
+
+        [Header("퍼펙트 패링 파동")]
+        private Vector4 _pulseRegion;
+        private float _pulseVisibility;
 
         void Awake()
         {
@@ -100,6 +106,23 @@ using UnityEngine;
         }
 
         /// <summary>
+        /// 퍼펙트 패링 파동 영역을 center와 radius(미터), visibility(0~1)로 바꾼다.
+        /// 확산과 페이드 시간은 호출하는 쪽이 매 프레임 계산하며 기존 소리 영역과 수명 규칙에는 영향을 주지 않는다.
+        /// </summary>
+        public void SetPulseRegion(Vector3 center, float radius, float visibility)
+        {
+            _pulseRegion = new Vector4(center.x, center.y, center.z, Mathf.Max(0f, radius));
+            _pulseVisibility = Mathf.Clamp01(visibility);
+        }
+
+        /// <summary>퍼펙트 패링 파동 영역을 지워 더 이상 표시하지 않는다.</summary>
+        public void ClearPulseRegion()
+        {
+            _pulseRegion = Vector4.zero;
+            _pulseVisibility = 0f;
+        }
+
+        /// <summary>
         /// position의 현재 인지 가시성을 셰이더와 같은 반경·확산·페이드 규칙으로 반환한다.
         /// 지형 기억은 포함하지 않으며 인지 매니저가 준비되지 않으면 0을 반환한다.
         /// </summary>
@@ -128,6 +151,8 @@ using UnityEngine;
                 visibility = Mathf.Max(visibility,
                     RegionVisibility(position, new Vector3(region.x, region.y, region.z), radius) * fade);
             }
+            visibility = Mathf.Max(visibility, RegionVisibility(position,
+                new Vector3(_pulseRegion.x, _pulseRegion.y, _pulseRegion.z), _pulseRegion.w) * _pulseVisibility);
             return visibility;
         }
 
@@ -231,6 +256,8 @@ using UnityEngine;
             Shader.SetGlobalFloat(_soundFadeDurationId, _soundFadeDuration);
             Shader.SetGlobalFloat(_edgeFadeId, _edgeFade);
             Shader.SetGlobalFloat(_perceptionTimeId, currentTime);
+            Shader.SetGlobalVector(_pulseRegionId, _pulseRegion);
+            Shader.SetGlobalFloat(_pulseVisibilityId, _pulseVisibility);
             Shader.SetGlobalInt(_soundCountId, _soundCount);
             if (_soundCount > 0)
             {
@@ -246,6 +273,7 @@ using UnityEngine;
         {
             _soundCount = 0;
             Shader.SetGlobalVector(_observerRegionId, Vector4.zero);
+            Shader.SetGlobalFloat(_pulseVisibilityId, 0f);
             Shader.SetGlobalInt(_soundCountId, 0);
         }
     }

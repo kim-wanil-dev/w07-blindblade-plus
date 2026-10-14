@@ -11,6 +11,7 @@ public sealed class PlayerActionDriver : MonoBehaviour
     [SerializeField] private PlayerAnimationEventRelay _animationEventRelay;
     private KatanaCombatCoordinator _combat;
     private KatanaWeaponVisual _weaponVisual;
+    private PlayerClock _playerClock;
 
     [Header("1타·발도 시간")]
     [SerializeField, Min(0f), InspectorName("적중 시각 (초)")]
@@ -76,6 +77,7 @@ public sealed class PlayerActionDriver : MonoBehaviour
         if (_animationEventRelay == null)
             _animationEventRelay = GetComponent<PlayerAnimationEventRelay>();
         _combat = GetComponent<KatanaCombatCoordinator>();
+        _playerClock = GetComponent<PlayerClock>();
         _weaponVisual = GetComponent<KatanaWeaponVisual>();
     }
 
@@ -112,7 +114,7 @@ public sealed class PlayerActionDriver : MonoBehaviour
         if (_endSent)
             return;
 
-        _elapsed += Time.deltaTime;
+        _elapsed += _playerClock.DeltaTime;
         AttackTimingProfile profile = state == PlayerActionState.NormalAttack
             ? _activeNormalAttackProfile : ResolveIaidoFinisherProfile();
         GetProfileTiming(profile, out float hitTime, out float actionDuration, out float strikeWindow);

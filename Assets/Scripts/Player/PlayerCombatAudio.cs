@@ -41,6 +41,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     private CombatSoundProfile _profile;
     private readonly List<PendingCue> _pendingCues = new List<PendingCue>();
     private float _cueClock;
+    private PlayerClock _playerClock;
     private float _lastDodgeCooldown;
     private float _nextEnemyAudioScan;
     private int _lastDashAction = -1;
@@ -52,6 +53,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         _health = GetComponent<PlayerHealth>();
         _timing = GetComponent<PlayerActionDriver>();
         _motor = GetComponent<PlayerMotor>();
+        _playerClock = GetComponent<PlayerClock>();
         _profile = Resources.Load<CombatSoundProfile>(CombatSoundProfile.RESOURCE_PATH);
         // 기존 씬의 적 피격음 override도 금속 접촉음으로 연결한다.
         if (_hitSound == SoundId.SwordHit) _hitSound = SoundId.SwordClash;
@@ -118,7 +120,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
             if (cooldown > _lastDodgeCooldown + 0.001f)
                 QueueCue(CombatSoundCue.Dodge, Vector3.zero, true);
             _lastDodgeCooldown = cooldown;
-            _cueClock += Time.deltaTime;
+            _cueClock += _playerClock.DeltaTime;
             UpdatePendingCues();
         }
         if (_pendingSwingAction < 0 || _player.IsPaused || Time.deltaTime <= 0f) return;

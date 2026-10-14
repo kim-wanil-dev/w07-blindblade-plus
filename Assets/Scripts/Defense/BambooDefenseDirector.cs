@@ -131,6 +131,12 @@ public sealed class BambooDefenseDirector : MonoBehaviour
         return _spawner.TryFindThrowerPosition(self, out position);
     }
 
+    /// <summary>position에서 가장 가까운 생존 근접 적을 스폰 담당자에게 요청하고 target과 성공 여부를 반환한다.</summary>
+    internal bool TryFindNearestMelee(Vector3 position, out EnemyHealth target)
+    {
+        return _spawner.TryFindNearestMelee(position, out target);
+    }
+
     /// <summary>스폰 담당자가 확정한 적 사망을 세션 처치 기록에 한 번 더한다.</summary>
     private void HandleEnemyKilled()
     {

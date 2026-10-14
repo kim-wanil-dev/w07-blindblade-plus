@@ -151,7 +151,7 @@ public sealed class BambooThrower : MonoBehaviour
     }
 
     /// <summary>
-    /// 플레이어의 예측 위치를 향해 수리검을 생성하고 발사한다.
+    /// 플레이어의 예측 위치를 향해 수리검을 생성하고 유도·반사 대상 조회용 디렉터와 함께 발사한다.
     /// 예약을 비행 집계로 넘기고 발사음과 실루엣을 표시한다.
     /// </summary>
     private void Throw()
@@ -164,7 +164,7 @@ public sealed class BambooThrower : MonoBehaviour
 
         DefenseShuriken shuriken = Instantiate(_shurikenPrefab, _muzzle.position, Quaternion.LookRotation(direction));
 
-        shuriken.Launch(gameObject, player.GetComponent<PlayerHealth>(), _damage, direction, _signalPoint.position, _director);
+        shuriken.Launch(gameObject, player.GetComponent<PlayerHealth>(), _damage, direction, _director);
 
         _reserved = false;
         _director.NotifyShurikenLaunched(shuriken);
