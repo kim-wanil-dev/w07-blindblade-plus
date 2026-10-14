@@ -12,6 +12,8 @@ namespace BlindBlade.Perception
         [SerializeField] private ThreatPresentationSettings _settings;
         [SerializeField] private Transform _observer;
         [SerializeField] private Camera _viewCamera;
+        [SerializeField, Tooltip("A가 갱신하는 보상 파동 마스크. 연결하면 거리 밖 근접 적도 파동 도달 시 공개한다.")]
+        private SensoryPerceptionMask _rewardPulseMask;
         private readonly List<ThreatPresentationTarget> _targets = new List<ThreatPresentationTarget>();
         private readonly List<ThreatPresentationSnapshot> _snapshots = new List<ThreatPresentationSnapshot>();
         private readonly Plane[] _cameraPlanes = new Plane[6];
@@ -22,6 +24,7 @@ namespace BlindBlade.Perception
         public Transform Observer => _observer;
         public Camera ViewCamera => _viewCamera;
         public bool IsSessionActive => _sessionActive;
+        public SensoryPerceptionMask RewardPulseMask => _rewardPulseMask;
         public IReadOnlyList<ThreatPresentationSnapshot> Snapshots => _snapshots;
 
         void OnEnable()
@@ -74,6 +77,8 @@ namespace BlindBlade.Perception
         {
             _sessionActive = false;
             _snapshots.Clear();
+            if (_rewardPulseMask != null)
+                _rewardPulseMask.ClearPulseRegion();
             foreach (ThreatPresentationTarget target in _targets)
                 target.ResetSource();
         }
@@ -130,7 +135,7 @@ namespace BlindBlade.Perception
 
         /// <summary>
         /// target과 준비된 카메라 평면으로 거리·안정된 화면 분류·방향·색상·투명도를 계산한다.
-        /// 개별 인지 반경과 공통 색상 거리를 분리하고 반사·통과 수리검의 UI를 제외한다.
+        /// 근접 적은 거리와 보상 파동 중 높은 가시성을 사용하고 반사·통과 수리검의 UI를 제외한다.
         /// </summary>
         private ThreatPresentationSnapshot ResolveTarget(ThreatPresentationTarget target)
         {
@@ -143,6 +148,8 @@ namespace BlindBlade.Perception
             bool melee = source.Kind == ThreatTargetKind.Melee;
             float radius = melee ? target.GetEnemyRadius(_settings, source.MeleeType, out radiusSource) : 0f;
             float alpha = melee ? _settings.GetEnemyVisibility(distance, radius) : 1f;
+            if (melee && _rewardPulseMask != null)
+                alpha = Mathf.Max(alpha, _rewardPulseMask.GetPulseVisibility(position));
             bool hasBounds = target.TryGetBounds(out Bounds bounds);
             bool intersects = hasBounds && GeometryUtility.TestPlanesAABB(_cameraPlanes, bounds);
             bool stableInCamera = intersects || (hasBounds && target.Snapshot.IsInCamera

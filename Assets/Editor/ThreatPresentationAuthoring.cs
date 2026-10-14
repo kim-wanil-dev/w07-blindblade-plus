@@ -261,10 +261,69 @@ public static class ThreatPresentationAuthoring
         }
         runtime.Initialize();
         ThreatPresentationResolver resolver = root.GetComponent<ThreatPresentationResolver>();
+        SensoryManager sensory = root.GetComponent<SensoryManager>();
+        if (sensory != null)
+        {
+            sensory.Initialize();
+            sensory.SetObserver(resolver.Observer);
+        }
         resolver.BeginSession(resolver.Observer, resolver.ViewCamera);
         resolver.ResolveNow();
         Selection.activeGameObject = root;
         Debug.Log("C 공통 계약 미리보기 세션 시작: " + runtime.Session.SessionId);
+    }
+
+    /// <summary>
+    /// C 전용 씬을 열거나 생성한 뒤 누락된 보상 파동 대상과 연결을 복구하고 저장한다.
+    /// 메뉴 또는 Unity 일괄 실행에서 호출하며 기존 대상과 사용자 편집값은 유지한다.
+    /// </summary>
+    [MenuItem("Tools/Perception/Open or Repair C Reward Pulse Sandbox")]
+    public static void OpenOrRepairRewardPulseSandbox()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+        {
+            Debug.LogWarning("보상 파동 대상 복구는 Play를 종료한 뒤 실행하세요.");
+            return;
+        }
+        OpenOrCreateSandbox();
+        if (EditorSceneManager.GetActiveScene().path == SCENE_PATH)
+            AddRewardPulsePreview();
+    }
+
+    /// <summary>
+    /// C 전용 씬에 보상 파동 마스크와 거리 밖·인지 거리 0·높이·화면 밖 확인 대상을 추가하고 저장한다.
+    /// A의 파동 재생기는 복제하지 않으며 실제 파동 시간은 PlayerPerfectPulse Inspector에서 별도로 확인한다.
+    /// </summary>
+    [MenuItem("Tools/Perception/Add Reward Pulse Preview")]
+    public static void AddRewardPulsePreview()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode || EditorSceneManager.GetActiveScene().path != SCENE_PATH)
+        {
+            Debug.LogWarning("Play를 종료하고 C Threat Sandbox 씬에서 보상 파동 미리보기를 추가하세요.");
+            return;
+        }
+        AddCommonContractPreview();
+        GameObject root = FindPreviewRoot("ThreatPresentation");
+        ThreatPresentationResolver resolver = root.GetComponent<ThreatPresentationResolver>();
+        SensoryPerceptionMask mask = root.GetComponent<SensoryPerceptionMask>();
+        if (mask == null)
+        {
+            mask = Undo.AddComponent<SensoryPerceptionMask>(root);
+            SerializedObject maskData = new SerializedObject(mask);
+            maskData.FindProperty("_playerRadius").floatValue = 0f;
+            maskData.ApplyModifiedProperties();
+        }
+        SerializedObject resolverData = new SerializedObject(resolver);
+        resolverData.FindProperty("_rewardPulseMask").objectReferenceValue = mask;
+        resolverData.ApplyModifiedProperties();
+        CreateRenderingTarget("Pulse_OutsideDistance", new Vector3(0f, 1.6f, 14f), resolver);
+        CreateRenderingTarget("Pulse_ZeroRadius", new Vector3(2f, 1.6f, 10f), resolver, 0f);
+        CreateRenderingTarget("Pulse_HighZeroRadius", new Vector3(-2f, 6f, 10f), resolver, 0f);
+        CreateRenderingTarget("Pulse_Offscreen", new Vector3(14f, 1.6f, -4f), resolver);
+        CreateRenderingTarget("Pulse_OutsidePulse", new Vector3(0f, 1.6f, 18f), resolver);
+        EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene(), SCENE_PATH);
+        Selection.activeObject = mask;
+        Debug.Log("C 보상 파동 확인 대상 5개 준비 완료: Pulse_OutsideDistance, Pulse_ZeroRadius, Pulse_HighZeroRadius, Pulse_Offscreen, Pulse_OutsidePulse. Play 후 Start C Contract Preview Session을 실행하고 Sensory Perception Mask에서 확인하세요.");
     }
 
     /// <summary>편집 중인 C 전용 씬에 발소리 후보·D 전달 슬롯과 청각 경계 확인용 대상을 연결하고 저장한다.</summary>
