@@ -59,6 +59,7 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         _combat.Events.DodgeChanged += HandleDodgeChanged;
         _combat.Events.RevealPulseRequested += HandleRevealPulse;
         _combat.Events.StaminaChanged += HandleStaminaChanged;
+        _combat.Events.EmpowerChanged += HandleEmpowerChanged;
     }
 
     void OnDisable()
@@ -72,6 +73,7 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         _combat.Events.DodgeChanged -= HandleDodgeChanged;
         _combat.Events.RevealPulseRequested -= HandleRevealPulse;
         _combat.Events.StaminaChanged -= HandleStaminaChanged;
+        _combat.Events.EmpowerChanged -= HandleEmpowerChanged;
     }
 
     void OnGUI()
@@ -152,13 +154,13 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
 
     /// <summary>
     /// outcome과 회피 구간 접촉 여부 dodged로 읽기 쉬운 구분을 반환한다.
-    /// DodgeAvoided는 퍼펙트 회피, 회피 구간의 Invulnerable은 일반 회피, 그 밖의 Invulnerable은 반격 무적이며 그 외에는 빈 문자열이다.
+    /// DodgeAvoided는 퍼펙트 회피, 회피 구간의 Invulnerable은 일반 회피, 그 밖의 Invulnerable은 반격·강화 공격 무적이며 그 외에는 빈 문자열이다.
     /// </summary>
     private static string GetOutcomeLabel(DefenseOutcome outcome, bool dodged)
     {
         if (outcome == DefenseOutcome.DodgeAvoided) return "(퍼펙트 회피)";
         if (outcome != DefenseOutcome.Invulnerable) return "";
-        return dodged ? "(일반 회피)" : "(반격 무적)";
+        return dodged ? "(일반 회피)" : "(반격·강화 무적)";
     }
 
     /// <summary>
@@ -197,6 +199,14 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         string dodge = staminaEvent.DodgeId != 0 ? " #" + staminaEvent.DodgeId : "";
         RecordCombat("스태미너 " + staminaEvent.Reason + " " + staminaEvent.Delta.ToString("+0.#;-0.#;0")
             + " → " + staminaEvent.Current.ToString("0.#") + "/" + staminaEvent.Max.ToString("0.#") + dodge);
+    }
+
+    /// <summary>강화 사건 empowerEvent의 단계와 강화 ID, 원인 공격, 끝난 이유를 기록한다. 게임 판정은 변경하지 않는다.</summary>
+    private void HandleEmpowerChanged(PlayerEmpowerEvent empowerEvent)
+    {
+        string reason = empowerEvent.Stage == PlayerEmpowerStage.Ended ? " | " + empowerEvent.EndReason : "";
+        RecordCombat("강화 " + empowerEvent.Stage + " #" + empowerEvent.EmpowerId + " | 원인 공격 "
+            + empowerEvent.SourceAttackId + reason);
     }
 
     /// <summary>전투 판정 text를 최근 목록에 추가하고 설정에 따라 [Combat] 로그를 한 번 남긴다.</summary>

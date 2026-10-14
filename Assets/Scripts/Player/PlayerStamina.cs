@@ -31,6 +31,7 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
     [Header("상태")]
     private KatanaCombatCoordinator _combat;
     private PlayerController _player;
+    private PlayerClock _playerClock;
     private float _current;
     private float _regenResumeTime;
     private float _pendingRegen;
@@ -45,6 +46,7 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
     {
         _combat = GetComponent<KatanaCombatCoordinator>();
         _player = GetComponent<PlayerController>();
+        _playerClock = GetComponent<PlayerClock>();
         _current = _maxStamina;
     }
 
@@ -67,10 +69,10 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
 
     void Update()
     {
-        if (_current >= _maxStamina || Time.time < _regenResumeTime) return;
+        if (_current >= _maxStamina || _playerClock.Now < _regenResumeTime) return;
 
         float rate = _player.IsGuarding ? _regenPerSecond * _guardRegenMultiplier : _regenPerSecond;
-        float amount = Mathf.Min(rate * Time.deltaTime, _maxStamina - _current);
+        float amount = Mathf.Min(rate * _playerClock.DeltaTime, _maxStamina - _current);
         if (amount <= 0f) return;
         _current += amount;
         _pendingRegen += amount;
@@ -121,7 +123,7 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
         else if (resolution.Outcome == DefenseOutcome.Hit)
         {
             FlushRegen();
-            _regenResumeTime = Time.time + _regenDelay;
+            _regenResumeTime = _playerClock.Now + _regenDelay;
         }
     }
 
@@ -135,7 +137,7 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
         if (amount <= 0f) return 0f;
         FlushRegen();
         _current -= amount;
-        _regenResumeTime = Time.time + _regenDelay;
+        _regenResumeTime = _playerClock.Now + _regenDelay;
         Publish(-amount, reason, dodgeId);
         return amount;
     }

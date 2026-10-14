@@ -65,6 +65,7 @@ public sealed class PlayerController : MonoBehaviour
     private IPlayerCombatService _combatService;
     private IPlayerMapService _mapService;
     private PlayerStamina _stamina;
+    private PlayerClock _playerClock;
     private Vector2 _moveInput;
     private Vector2 _requestedMoveInput;
     private float _chargeElapsed;
@@ -116,6 +117,7 @@ public sealed class PlayerController : MonoBehaviour
         if (_viewCamera == null)
             _viewCamera = GetComponentInChildren<Camera>();
         _stamina = GetComponent<PlayerStamina>();
+        _playerClock = GetComponent<PlayerClock>();
 
         BindConfiguredServices();
         Game.Instance.RegisterPlayer(this);
@@ -154,7 +156,8 @@ public sealed class PlayerController : MonoBehaviour
 
         UpdateCrouchPulse();
 
-        float deltaTime = Time.deltaTime;
+        // 이동·회복·차징은 불릿 타임 중 세계보다 덜 느린 플레이어 시계로 진행한다.
+        float deltaTime = _playerClock.DeltaTime;
         if (_state == PlayerActionState.Recovery)
         {
             _recoveryRemaining = Mathf.Max(0f, _recoveryRemaining - deltaTime);
@@ -266,6 +269,17 @@ public sealed class PlayerController : MonoBehaviour
         if (_state != PlayerActionState.Free && _state != PlayerActionState.Guarding)
             CancelAttackForDodge();
         return _motor.TryBeginDodge(_requestedMoveInput);
+    }
+
+    /// <summary>
+    /// 강화 공격이 시작되면 진행 중인 일반 공격·발도 돌진·돌진 베기·회복을 결과 없이 끝내 자유 상태로 만든다.
+    /// 가드는 KatanaCombatCoordinator가 끝내며 자유·가드·사망·일시정지 상태는 바꾸지 않는다.
+    /// </summary>
+    public void CancelActionForEmpowerStrike()
+    {
+        if (_state == PlayerActionState.NormalAttack || _state == PlayerActionState.IaidoDash
+            || _state == PlayerActionState.IaidoSlash || _state == PlayerActionState.Recovery)
+            CancelAttackForDodge();
     }
 
     /// <summary>현재 행동 상태에서 회피를 받을 수 있는지 반환한다. 자유·가드·일반 공격·발도 돌진·돌진 베기와 공격이 끝난 뒤의 회복이 대상이다.</summary>

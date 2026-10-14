@@ -73,6 +73,7 @@ public sealed class PlayerMotor : MonoBehaviour
     private float _dashSlowMotionElapsed;
     private CombatSessionRuntime _timeController;
     private CombatTimeToken _dashSlowMotionToken;
+    private PlayerClock _playerClock;
 
     [Header("짧은 회피")]
     [SerializeField, Min(0.1f)] private float _dodgeDistance = 2.4f;
@@ -157,7 +158,7 @@ private Vector3 _attackLungeDirection;
     void LateUpdate()
     {
         if (_cameraPivot == null) return;
-        float decay = Mathf.Exp(-_recoilReturnSpeed * Time.deltaTime);
+        float decay = Mathf.Exp(-_recoilReturnSpeed * Clock.DeltaTime);
         _recoilOffset *= decay;
         _cameraPivot.localPosition = GetCameraBasePosition() + _recoilOffset;
         _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
@@ -177,7 +178,9 @@ private Vector3 _attackLungeDirection;
     public bool IsCrouching => _crouchBlend > 0.001f;
     public bool IsDashing => _isDashing;
     public bool IsDodging => _isDodging;
-    public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Time.time);
+    public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Clock.Now);
+    // 다른 컴포넌트의 OnEnable이 이 컴포넌트의 Awake보다 먼저 시간을 읽을 수 있어 처음 쓸 때 찾는다.
+    private PlayerClock Clock => _playerClock != null ? _playerClock : _playerClock = GetComponent<PlayerClock>();
     public float DodgeStartedAt => _dodgeStartedAt;
 
     private void Awake()
@@ -262,7 +265,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
             return;
 
         if (_characterController.isGrounded)
-            _lastGroundedTime = Time.time;
+            _lastGroundedTime = Clock.Now;
 
         TickCrouch(deltaTime);
 
@@ -404,7 +407,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         if (_isDodging) return PlayerInputRejectReason.AlreadyDodging;
         if (!_characterController.enabled) return PlayerInputRejectReason.Unavailable;
         if (!HasRecentGroundContact()) return PlayerInputRejectReason.NotGrounded;
-        if (Time.time < _nextDodgeTime) return PlayerInputRejectReason.DodgeCooldown;
+        if (Clock.Now < _nextDodgeTime) return PlayerInputRejectReason.DodgeCooldown;
         return PlayerInputRejectReason.None;
     }
 
@@ -416,15 +419,15 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
     {
         if (GetDodgeBlockReason() != PlayerInputRejectReason.None) return false;
         if (_characterController.isGrounded)
-            _lastGroundedTime = Time.time;
+            _lastGroundedTime = Clock.Now;
         Vector2 direction = input;
         if (direction.sqrMagnitude < 0.001f) direction = Vector2.down;
         direction.Normalize();
         _dodgeDirection = (transform.right * direction.x + transform.forward * direction.y).normalized;
         _dodgeElapsed = 0f;
         _dodgeProgress = 0f;
-        _nextDodgeTime = Time.time + _dodgeCooldown;
-        _dodgeStartedAt = Time.time;
+        _nextDodgeTime = Clock.Now + _dodgeCooldown;
+        _dodgeStartedAt = Clock.Now;
         _isDodging = true;
         _planarVelocity = Vector3.zero;
         ResetWalkStep();
@@ -437,7 +440,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
     private bool HasRecentGroundContact()
     {
         return _characterController.isGrounded
-            || Time.time - _lastGroundedTime <= _dodgeGroundGraceDuration;
+            || Clock.Now - _lastGroundedTime <= _dodgeGroundGraceDuration;
     }
 
     /// <summary>진행 중인 회피와 평면 속도를 정리한다. 이미 사용한 재사용 시간은 유지한다.</summary>
@@ -594,9 +597,9 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         _dodgeProgress = progress;
         bool grounded = (flags & CollisionFlags.Below) != 0 || _characterController.isGrounded;
         if (grounded)
-            _lastGroundedTime = Time.time;
+            _lastGroundedTime = Clock.Now;
 
-        bool groundGraceExpired = Time.time - _lastGroundedTime > _dodgeGroundGraceDuration;
+        bool groundGraceExpired = Clock.Now - _lastGroundedTime > _dodgeGroundGraceDuration;
         if ((flags & CollisionFlags.Sides) != 0 || groundGraceExpired || normalized >= 1f) CancelDodge();
     }
 

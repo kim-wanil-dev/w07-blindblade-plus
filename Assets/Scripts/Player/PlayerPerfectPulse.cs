@@ -1,0 +1,194 @@
+using UnityEngine;
+
+/// <summary>
+/// 퍼펙트 패링 순간 웅크리기 파동처럼 발밑 지면에서 넓게 퍼지는 파동을 낸다.
+/// 바닥 링이 지면을 따라 눈에 보이게 퍼지며 지나간 바닥은 지형 기억에 남고, 그 범위의 적·지형이 드러난다.
+/// 퍼짐은 불릿 타임과 무관한 실시간이며 드러난 범위는 강화 준비·공격 동안 유지하고 끝나면 서서히 감춘다.
+/// 시야 공개는 SensoryPerceptionMask의 퍼펙트 파동 영역, 바닥 링은 기존 웅크리기 파동 프리팹, 칼날 빛줄기·비네트는 EmpowerOverlay가 맡는다.
+/// </summary>
+[DisallowMultipleComponent]
+[RequireComponent(typeof(PlayerEmpower))]
+[RequireComponent(typeof(EmpowerOverlay))]
+public sealed class PlayerPerfectPulse : MonoBehaviour
+{
+    private const string WAVE_RESOURCE_PATH = "Wave/Wave";
+    private const float SURFACE_OFFSET = 0.02f;
+    private const float GROUND_PROBE_EXTRA = 0.5f;
+    private const float MEMORY_STEP_DURATION = 0.0001f;
+
+    [Header("시야 파동")]
+    [SerializeField, Min(1f), Tooltip("파동이 드러내는 최대 반경(미터).")]
+    private float _radius = 40f;
+    [SerializeField, Min(0.01f), Tooltip("반경이 끝까지 퍼지는 실시간.")]
+    private float _expandDuration = 1f;
+    [SerializeField, Min(0.01f), Tooltip("강화가 끝난 뒤 드러난 범위가 사라지는 실시간.")]
+    private float _fadeDuration = 0.8f;
+
+    [Header("바닥 링")]
+    [SerializeField, Min(0.01f), Tooltip("바닥 링이 다 퍼진 뒤 사라지는 실시간.")]
+    private float _ringFadeDuration = 0.3f;
+
+    [Header("화면 연출")]
+    [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링 순간 화면을 가로지르는 칼날 반사 빛줄기의 실시간 길이.")]
+    private float _glintDuration = 0.35f;
+    [SerializeField, Range(0f, 1f), Tooltip("강화 준비 중 화면 가장자리 먹 번짐 진하기.")]
+    private float _readyVignette = 0.75f;
+
+    [Header("상태")]
+    private PlayerEmpower _empower;
+    private EmpowerOverlay _overlay;
+    private CharacterController _controller;
+    private SensoryPerceptionMask _mask;
+    private TerrainMemory _terrainMemory;
+    private GameObject _wave;
+    private SpriteRenderer _ring;
+    private Color _ringBaseColor;
+    private Vector3 _center;
+    private float _elapsed;
+    private float _fadeElapsed;
+    private float _rememberedRadius;
+    private bool _running;
+
+    void Awake()
+    {
+        _empower = GetComponent<PlayerEmpower>();
+        _overlay = GetComponent<EmpowerOverlay>();
+        _controller = GetComponent<CharacterController>();
+    }
+
+    void OnDisable()
+    {
+        Stop();
+    }
+
+    void OnDestroy()
+    {
+        if (_wave != null) Destroy(_wave);
+    }
+
+    void Update()
+    {
+        // 강화 공격 중의 비네트는 연출이 직접 정한다.
+        if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsReady ? _readyVignette : 0f);
+        if (!_running) return;
+
+        float dt = EmpowerOverlay.RealDeltaTime();
+        _elapsed += dt;
+        float t = Mathf.Clamp01(_elapsed / _expandDuration);
+        float radius = _radius * (1f - Mathf.Pow(1f - t, 2f));
+        UpdateRing(radius);
+        RememberGround(radius);
+        float visibility = 1f;
+        if (!_empower.IsBulletTimeActive && t >= 1f)
+        {
+            _fadeElapsed += dt;
+            visibility = 1f - Mathf.Clamp01(_fadeElapsed / _fadeDuration);
+            if (visibility <= 0f)
+            {
+                Stop();
+                return;
+            }
+        }
+        if (_mask != null) _mask.SetPulseRegion(_center, radius, visibility);
+    }
+
+    /// <summary>
+    /// 발밑 지면에서 퍼펙트 파동을 처음부터 시작하고 바닥 링과 화면을 가로지르는 칼날 반사 빛줄기를 띄운다.
+    /// 지면을 찾지 못하면 플레이어 발 위치를 쓰며, 감각 매니저가 준비되지 않았으면 시야 공개 없이 링과 빛줄기만 보인다.
+    /// </summary>
+    public void Begin()
+    {
+        _overlay.Glint(_glintDuration);
+        _mask = FindMask();
+        if (_terrainMemory == null) _terrainMemory = FindAnyObjectByType<TerrainMemory>();
+        FindGround(out Vector3 point, out Vector3 normal);
+        _center = point;
+        _elapsed = 0f;
+        _fadeElapsed = 0f;
+        _rememberedRadius = 0f;
+        _running = true;
+        PrepareRing(point, normal);
+    }
+
+    /// <summary>진행 중인 파동을 멈추고 퍼펙트 파동 영역과 바닥 링을 감춘다. 지형 기억에 남은 바닥은 그대로 둔다.</summary>
+    private void Stop()
+    {
+        if (_running && _mask != null) _mask.ClearPulseRegion();
+        if (_ring != null) _ring.enabled = false;
+        _running = false;
+    }
+
+    /// <summary>
+    /// 웅크리기 파동과 같은 방식으로 캡슐 중심에서 아래로 지면을 찾아 point와 표면 법선 normal을 출력한다.
+    /// 플레이어 자신과 트리거, 위를 향하지 않는 면은 건너뛰고 가장 가까운 지면을 쓰며, 없으면 발 위치와 위쪽 법선을 출력한다.
+    /// </summary>
+    private void FindGround(out Vector3 point, out Vector3 normal)
+    {
+        point = transform.position;
+        normal = Vector3.up;
+        Bounds bounds = _controller.bounds;
+        float closest = float.PositiveInfinity;
+        foreach (RaycastHit hit in Physics.RaycastAll(bounds.center, Vector3.down, bounds.extents.y + GROUND_PROBE_EXTRA,
+                     Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.collider.transform.IsChildOf(transform) || hit.normal.y <= 0f || hit.distance >= closest) continue;
+            closest = hit.distance;
+            point = hit.point;
+            normal = hit.normal;
+        }
+    }
+
+    /// <summary>
+    /// 기존 웅크리기 파동 프리팹을 한 번만 복제해 두고 point 지면에 normal을 위로 하여 시선 방향으로 놓아 링을 켠다.
+    /// 프리팹 자체 재생은 쓰지 않고 링의 원래 색을 기억해 두며, 크기·투명도는 UpdateRing이 실시간으로 정한다.
+    /// </summary>
+    private void PrepareRing(Vector3 point, Vector3 normal)
+    {
+        if (_wave == null)
+        {
+            GameObject prefab = Resources.Load<GameObject>(WAVE_RESOURCE_PATH);
+            if (prefab == null) return;
+            _wave = Instantiate(prefab);
+            _wave.name = "PerfectPulseWave";
+            _ring = _wave.GetComponentInChildren<SpriteRenderer>(true);
+            _ringBaseColor = _ring.color;
+        }
+        Vector3 forward = Vector3.ProjectOnPlane(transform.forward, normal);
+        if (forward.sqrMagnitude <= 0.0001f) forward = Vector3.ProjectOnPlane(Vector3.forward, normal);
+        _wave.transform.SetPositionAndRotation(point + normal * SURFACE_OFFSET, Quaternion.LookRotation(forward, normal));
+        _ring.enabled = true;
+        UpdateRing(0f);
+    }
+
+    /// <summary>바닥 링 지름을 radius에 맞추고 다 퍼진 뒤 _ringFadeDuration 동안 흐리게 한 뒤 끈다.</summary>
+    private void UpdateRing(float radius)
+    {
+        if (_ring == null || !_ring.enabled) return;
+        _ring.transform.localScale = Vector3.one * (radius * 2f);
+        float fade = 1f - Mathf.Clamp01((_elapsed - _expandDuration) / _ringFadeDuration);
+        Color color = _ringBaseColor;
+        color.a *= fade;
+        _ring.color = color;
+        if (fade <= 0f) _ring.enabled = false;
+    }
+
+    /// <summary>
+    /// 파동이 radius까지 넓어졌으면 그 반경을 지형 기억에 바로 남겨 지나간 바닥이 웅크리기 파동처럼 기억되게 한다.
+    /// 지형 기억의 자체 확산 시간은 게임 시간이라 쓰지 않고, 실시간 반경을 매 프레임 즉시 기록한다.
+    /// </summary>
+    private void RememberGround(float radius)
+    {
+        if (_terrainMemory == null || radius <= _rememberedRadius) return;
+        _terrainMemory.RememberExpandingWave(_center, radius, radius, MEMORY_STEP_DURATION);
+        _rememberedRadius = radius;
+    }
+
+    /// <summary>현재 게임의 감각 매니저에 붙은 시야 마스크를 찾아 반환한다. 준비되지 않았으면 null이다.</summary>
+    private static SensoryPerceptionMask FindMask()
+    {
+        if (!Game.IsInitialized) return null;
+        SensoryManager sensoryManager = Game.Instance.SensoryManager;
+        if (sensoryManager == null || !sensoryManager.IsReady) return null;
+        return sensoryManager.GetComponent<SensoryPerceptionMask>();
+    }
+}

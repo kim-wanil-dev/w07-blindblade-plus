@@ -18,6 +18,8 @@ public sealed class InputManager : MonoBehaviour
     private GameStateManager _state;
     private KatanaCombatCoordinator _combat;
     private PlayerMotor _motor;
+    private PlayerEmpower _empower;
+    private PlayerClock _playerClock;
     private InputSystem_Actions _actions;
     private InputAction _guard;
     private InputAction _dodge;
@@ -71,10 +73,16 @@ public sealed class InputManager : MonoBehaviour
             if (_actions.Player.Attack.WasPressedThisFrame() || _guard.WasPressedThisFrame()) SetCursor(true);
             return;
         }
+        // 강화 공격 연출 중에는 이동·시점·가드·회피·공격 입력을 받지 않는다.
+        if (_empower.IsStriking)
+        {
+            player.SetMovementInput(Vector2.zero);
+            return;
+        }
         player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
         Vector2 look = _actions.Player.Look.ReadValue<Vector2>();
         if (_actions.Player.Look.activeControl != null && _actions.Player.Look.activeControl.device is Gamepad)
-            _motor.AddGamepadLookInput(look, _gamepadLookDegreesPerSecond, Time.deltaTime);
+            _motor.AddGamepadLookInput(look, _gamepadLookDegreesPerSecond, _playerClock.DeltaTime);
         else
             player.AddLookInput(look);
 
@@ -116,10 +124,19 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// 새 InputId로 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
+    /// 강화 준비 중이면 일반 공격 대신 강화 공격을 시작하고 그 결과를 기록한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
+        if (_empower.IsReady)
+        {
+            bool struck = _empower.TryBeginStrike();
+            PublishInput(inputId, PlayerInputKind.Attack,
+                struck ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
+                struck ? PlayerInputRejectReason.None : PlayerInputRejectReason.Unavailable, 0, _attackPressTime);
+            return;
+        }
         int previousActionId = player.CurrentActionId;
         bool accepted = _combat.RequestAttack();
         bool started = accepted && player.CurrentActionId != previousActionId;
@@ -209,6 +226,8 @@ public sealed class InputManager : MonoBehaviour
         _state = state;
         _combat = Game.Player.GetComponent<KatanaCombatCoordinator>();
         _motor = Game.Player.GetComponent<PlayerMotor>();
+        _empower = Game.Player.GetComponent<PlayerEmpower>();
+        _playerClock = Game.Player.GetComponent<PlayerClock>();
         _state.StateChanged += HandleState;
         _actions.Player.Enable();
         _guard.Enable();
@@ -284,6 +303,8 @@ public sealed class InputManager : MonoBehaviour
         _state = null;
         _combat = null;
         _motor = null;
+        _empower = null;
+        _playerClock = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
         if (_actions != null) _actions.Player.Disable();

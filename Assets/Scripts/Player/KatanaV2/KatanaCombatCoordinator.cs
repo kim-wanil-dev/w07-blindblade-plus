@@ -131,6 +131,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private KatanaWeaponState _weaponState;
     private int _strike;
     private float _clock;
+    private PlayerClock _playerClock;
     private float _parryOpenedAt;
     private float _parryUntil;
     private float _parryMotionUntil;
@@ -166,13 +167,13 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     public bool IsOpeningAttack => !_counterAttack && _strike == 1 && _player.CurrentState == PlayerActionState.NormalAttack;
     public bool IsCounterAttack => _counterAttack && (_player.CurrentState == PlayerActionState.NormalAttack
         || _player.CurrentState == PlayerActionState.IaidoDash);
-    public bool IsCounterInvulnerable => IsCounterAttack || Time.time < _counterInvulnerableUntil;
-    public float CounterRemaining => Mathf.Max(0f, _counterUntil - Time.time);
+    public bool IsCounterInvulnerable => IsCounterAttack || _playerClock.Now < _counterInvulnerableUntil;
+    public float CounterRemaining => Mathf.Max(0f, _counterUntil - _playerClock.Now);
     public bool CanCounterAttack => isActiveAndEnabled && !_player.IsPaused && Time.timeScale > 0f
-        && CounterRemaining > 0f && Time.time >= _defenseReadyUntil
+        && CounterRemaining > 0f && _playerClock.Now >= _defenseReadyUntil
         && _weaponState != KatanaWeaponState.Sheathing
         && (_player.CurrentState == PlayerActionState.Guarding || _player.CurrentState == PlayerActionState.Free);
-    public bool IsParryWindowOpen => _parryOpen && Time.time < _parryUntil
+    public bool IsParryWindowOpen => _parryOpen && _playerClock.Now < _parryUntil
         && _player.IsGuarding;
 
     /// <summary>
@@ -184,7 +185,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         get
         {
             if (!IsParryWindowOpen) return DefenseOutcome.Guard;
-            float elapsed = Time.time - _parryOpenedAt;
+            float elapsed = _playerClock.Now - _parryOpenedAt;
             if (elapsed >= _perfectParryStart && elapsed < _perfectParryEnd) return DefenseOutcome.PerfectParry;
             if (elapsed >= _normalParryStart && elapsed < _normalParryEnd) return DefenseOutcome.NormalParry;
             return DefenseOutcome.Guard;
@@ -192,10 +193,10 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     }
     public bool IsParryMotion => _parryMotion;
     public float SheatheDuration => _sheatheDuration;
-    public float ParryRemaining => IsParryWindowOpen ? Mathf.Max(0f, _parryUntil - Time.time) : 0f;
+    public float ParryRemaining => IsParryWindowOpen ? Mathf.Max(0f, _parryUntil - _playerClock.Now) : 0f;
     public bool CanStartAction => isActiveAndEnabled && _player != null
         && Time.timeScale > 0f && _player.CurrentState == PlayerActionState.Free
-        && _weaponState != KatanaWeaponState.Sheathing && !_parryOpen && !_parryMotion && Time.time >= _defenseReadyUntil;
+        && _weaponState != KatanaWeaponState.Sheathing && !_parryOpen && !_parryMotion && _playerClock.Now >= _defenseReadyUntil;
 
     void Awake()
     {
@@ -205,6 +206,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         _weaponVisual = GetComponent<KatanaWeaponVisual>();
         _motor = GetComponent<PlayerMotor>();
         _health = GetComponent<PlayerHealth>();
+        _playerClock = GetComponent<PlayerClock>();
     }
 
     void OnEnable()
@@ -233,12 +235,12 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         if (_player.IsPaused || _player.CurrentState == PlayerActionState.Dead)
             return;
 
-        _clock += Time.deltaTime;
+        _clock += _playerClock.DeltaTime;
         if (_automaticCounterPending)
         {
-            if (Time.time >= _counterUntil)
+            if (_playerClock.Now >= _counterUntil)
                 _automaticCounterPending = false;
-            else if (Time.time >= _automaticCounterReadyAt && CanCounterAttack)
+            else if (_playerClock.Now >= _automaticCounterReadyAt && CanCounterAttack)
                 RequestCounterAttack();
         }
         if (_queuedAttack && !IsFirstAttackFollowupBuffered && _queuedActionId == _player.CurrentActionId && _clock >= _queuedReadyAt
@@ -601,7 +603,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     /// </summary>
     private void OpenDefenseWindow()
     {
-        _parryOpenedAt = Time.time;
+        _parryOpenedAt = _playerClock.Now;
         _parryUntil = _parryOpenedAt + Mathf.Max(_perfectParryEnd, _normalParryEnd);
         _parryOpen = true;
         Publish(KatanaStage.ParryAttempted, "Guard started: timed parry window");
@@ -701,6 +703,22 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     /// 진행 중인 공격은 회피 요청 시 PlayerController가 먼저 끝낸다.
     /// </summary>
     private void HandleDodgeStarted()
+    {
+        CancelPendingAttacks();
+    }
+
+    /// <summary>
+    /// 강화 공격이 시작되면 가드를 끝내고 예약된 다음 공격·납도 뒤 공격과 대기 중인 자동 반격·반격 기회를 취소한다.
+    /// 진행 중인 공격은 PlayerController가 따로 끝낸다.
+    /// </summary>
+    public void CancelForEmpowerStrike()
+    {
+        if (_player.IsGuarding) EndDefense();
+        CancelPendingAttacks();
+    }
+
+    /// <summary>_automaticCounterPending·_counterUntil과 예약된 공격·납도 뒤 공격을 비운다.</summary>
+    private void CancelPendingAttacks()
     {
         _automaticCounterPending = false;
         _counterUntil = 0f;
@@ -852,7 +870,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
                     Publish(KatanaStage.ChargeReleased, "Wall blocked");
                 // 반격 돌진·베기 동안의 무적을 반격 종료 뒤에도 설정한 시간만큼 이어간다.
                 if (_counterAttack)
-                    _counterInvulnerableUntil = Time.time + _counterInvulnerabilityAfter;
+                    _counterInvulnerableUntil = _playerClock.Now + _counterInvulnerabilityAfter;
                 _counterAttack = false;
                 break;
             case PlayerActionStage.RecoveryEnded:
@@ -889,7 +907,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             || state == PlayerActionState.IaidoSlash || _player.IsAttackRecoveryMovement)
             return Refuse(PlayerInputRejectReason.Attacking);
 
-        if (state != PlayerActionState.Free || Time.time < _defenseReadyUntil)
+        if (state != PlayerActionState.Free || _playerClock.Now < _defenseReadyUntil)
             return Refuse(PlayerInputRejectReason.ActionBusy);
 
         return StartDefense(inputId) || Refuse(PlayerInputRejectReason.ActionBusy);
@@ -920,8 +938,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         EnemyHealth parriedEnemy = parry && allowCounter && instigator != null
             ? instigator.GetComponentInParent<EnemyHealth>() : null;
         _counterTargetId = counter && parriedEnemy != null && parriedEnemy.IsAlive ? parriedEnemy.TargetId : null;
-        _counterUntil = counter ? Time.time + _counterWindow : 0f;
-        _defenseReadyUntil = parry ? Time.time : Time.time + _blockInputRecovery;
+        _counterUntil = counter ? _playerClock.Now + _counterWindow : 0f;
+        _defenseReadyUntil = parry ? _playerClock.Now : _playerClock.Now + _blockInputRecovery;
         Vector3 point = _player.GetComponent<EnemyCombatService>().GetGuardContactPoint(incoming.Point);
         _parryOpen = false;
         _waiting = false;
@@ -955,7 +973,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             if (counter)
             {
                 _automaticCounterPending = true;
-                _automaticCounterReadyAt = Time.time + Mathf.Min(_automaticCounterDelay, _counterWindow * 0.5f);
+                _automaticCounterReadyAt = _playerClock.Now + Mathf.Min(_automaticCounterDelay, _counterWindow * 0.5f);
             }
         }
         return true;
