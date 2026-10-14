@@ -245,6 +245,7 @@ GameObject:
   - component: {fileID: 912000000120}
   - component: {fileID: 912000000122}
   - component: {fileID: 8878113820235699003}
+  - component: {fileID: 230128326510893174}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1322,3 +1323,21 @@ ParticleSystem:
   m_CorrespondingSourceObject: {fileID: 3437129320176675894, guid: 641ef78c43feafe4fbcf82c9b47f2227, type: 3}
   m_PrefabInstance: {fileID: 6350052290514714908}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &230128326510893174
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 21f13ac15759d21659118b6645eda938, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _maxStamina: 100
+  _dodgeCost: 34
+  _guardCost: 0
+  _regenPerSecond: 20
+  _regenDelay: 1
+  _guardRegenMultiplier: 0.5

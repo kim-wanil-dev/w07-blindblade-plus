@@ -55,6 +55,7 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         _combat.Events.DefenseResolved += HandleDefenseResolved;
         _combat.Events.DodgeChanged += HandleDodgeChanged;
         _combat.Events.RevealPulseRequested += HandleRevealPulse;
+        _combat.Events.StaminaChanged += HandleStaminaChanged;
     }
 
     void OnDisable()
@@ -67,6 +68,7 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
         _combat.Events.DefenseResolved -= HandleDefenseResolved;
         _combat.Events.DodgeChanged -= HandleDodgeChanged;
         _combat.Events.RevealPulseRequested -= HandleRevealPulse;
+        _combat.Events.StaminaChanged -= HandleStaminaChanged;
     }
 
     void OnGUI()
@@ -171,6 +173,14 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
     private void HandleRevealPulse(PlayerRevealPulseEvent pulseEvent)
     {
         RecordCombat("파동 요청 " + pulseEvent.Cause + " #" + pulseEvent.PulseId);
+    }
+
+    /// <summary>스태미너 사건 staminaEvent의 이유와 변화량, 변경 후 값과 관련 회피 ID를 기록한다. 게임 판정은 변경하지 않는다.</summary>
+    private void HandleStaminaChanged(PlayerStaminaEvent staminaEvent)
+    {
+        string dodge = staminaEvent.DodgeId != 0 ? " #" + staminaEvent.DodgeId : "";
+        RecordCombat("스태미너 " + staminaEvent.Reason + " " + staminaEvent.Delta.ToString("+0.#;-0.#;0")
+            + " → " + staminaEvent.Current.ToString("0.#") + "/" + staminaEvent.Max.ToString("0.#") + dodge);
     }
 
     /// <summary>전투 판정 text를 최근 목록에 추가하고 설정에 따라 [Combat] 로그를 한 번 남긴다.</summary>

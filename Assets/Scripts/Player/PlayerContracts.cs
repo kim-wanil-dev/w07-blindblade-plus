@@ -131,7 +131,8 @@ public enum PlayerStaminaChangeReason
     DodgeCost,
     PerfectDodgeRefund,
     Regen,
-    Reset
+    Reset,
+    GuardCost
 }
 
 /// <summary>입력 기록의 종류. GuardHoldResume은 누르고 있는 우클릭으로 가드에 다시 들어간 경우다.</summary>
@@ -156,7 +157,8 @@ public enum PlayerInputRejectReason
     TargetUnavailable,
     AlreadyDodging,
     DodgeCooldown,
-    NotGrounded
+    NotGrounded,
+    NotEnoughStamina
 }
 
 /// <summary>입력 처리 결과. BufferDropped는 예약된 입력이 시작되지 못하고 사라진 경우다.</summary>
@@ -447,7 +449,7 @@ public readonly struct PlayerRevealPulseEvent
     }
 }
 
-/// <summary>스태미너 변경 사건. 아직 발행하는 구현이 없다.</summary>
+/// <summary>스태미너 변경 사건. PlayerStamina가 회피 비용·가드 비용·극한 회피 환불·회복 완료·초기화 때 발행한다.</summary>
 public readonly struct PlayerStaminaEvent
 {
     public float Current { get; }

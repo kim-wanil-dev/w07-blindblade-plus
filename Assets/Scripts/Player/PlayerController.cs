@@ -64,6 +64,7 @@ public sealed class PlayerController : MonoBehaviour
     private IPlayerPerceptionProvider _perceptionProvider;
     private IPlayerCombatService _combatService;
     private IPlayerMapService _mapService;
+    private PlayerStamina _stamina;
     private Vector2 _moveInput;
     private Vector2 _requestedMoveInput;
     private float _chargeElapsed;
@@ -114,6 +115,7 @@ public sealed class PlayerController : MonoBehaviour
             _motor = GetComponent<PlayerMotor>();
         if (_viewCamera == null)
             _viewCamera = GetComponentInChildren<Camera>();
+        _stamina = GetComponent<PlayerStamina>();
 
         BindConfiguredServices();
         Game.Instance.RegisterPlayer(this);
@@ -246,7 +248,7 @@ public sealed class PlayerController : MonoBehaviour
     /// <summary>
     /// 현재 이동 입력으로 짧은 회피를 요청하고 수락 여부를 반환하며 거부되면 reason에 이유를 출력한다.
     /// 일반 공격·발도 돌진·돌진 베기·공격 후딜 중이면 그 공격을 먼저 끝내고 회피한다. 가드는 유지한다.
-    /// 충전·다른 회복·사망·일시정지에서는 거부한다.
+    /// 충전·다른 회복·사망·일시정지에서는 거부하고, 다른 조건을 통과해도 스태미너가 회피 비용보다 적으면 NotEnoughStamina로 거부한다.
     /// </summary>
     public bool RequestDodge(out PlayerInputRejectReason reason)
     {
@@ -256,6 +258,8 @@ public sealed class PlayerController : MonoBehaviour
             reason = PlayerInputRejectReason.ActionBusy;
         else
             reason = _motor.GetDodgeBlockReason();
+        if (reason == PlayerInputRejectReason.None && !_stamina.CanAffordDodge())
+            reason = PlayerInputRejectReason.NotEnoughStamina;
         if (reason != PlayerInputRejectReason.None) return false;
 
         // 공격 상태가 남으면 이동 잠금이 회피를 끊으므로 회피 전에 공격을 끝낸다.
