@@ -248,6 +248,8 @@ GameObject:
   - component: {fileID: 3004}
   - component: {fileID: 3003}
   - component: {fileID: 3006}
+  - component: {fileID: 3007}
+  - component: {fileID: 3008}
   m_Layer: 0
   m_Name: ThreatPresentation
   m_TagString: Untagged
@@ -285,6 +287,7 @@ MonoBehaviour:
   _settings: {fileID: 11400000, guid: 30bbc53a37dc859dad89d4d5d6675020, type: 2}
   _observer: {fileID: 1001}
   _viewCamera: {fileID: 2002}
+  _rewardPulseMask: {fileID: 3008}
 --- !u!114 &3003
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -303,7 +306,7 @@ MonoBehaviour:
   _nearDistance: 4
   _farDistance: 30
   _perceivedThreatColor: {r: 1, g: 1, b: 1, a: 1}
-  _concealedThreatColor: {r: 1, g: 0.55, b: 0.2, a: 1}
+  _concealedThreatColor: {r: 0.8773585, g: 0.0088641755, b: 0, a: 1}
   _perceivedThreatAlpha: 0.7
   _concealedThreatAlpha: 1
   _footstepLifetime: 2
@@ -4423,6 +4426,325 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d91f3a2280298bd4b84ea7e9cbd4a424, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.UI.CombatHud.CombatFootstepMarker
+--- !u!114 &3007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 24460d55f2c9f4738bcecb63c071453a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _observer: {fileID: 1001}
+  _fullVisibilityDistance: 5
+  _maximumDistance: 15
+  _footstepPrefab: {fileID: 0}
+  _wavePrefab: {fileID: 0}
+--- !u!114 &3008
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 042477b7c21e43da89a3fc7e6646d8a7, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _playerRadius: 0
+  _soundRadius: 4
+  _soundLifetime: 1
+  _soundFadeDuration: 0.6
+  _edgeFade: 0.75
+--- !u!1001 &60000
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_Name
+      value: Pulse_OutsideDistance
+      objectReference: {fileID: 0}
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 14
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _resolver
+      value: 
+      objectReference: {fileID: 3002}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _meleeType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _ownership
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _enemyRadius
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _hasPassedPlayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _overrideEnemyRadius
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+--- !u!1001 &60010
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_Name
+      value: Pulse_ZeroRadius
+      objectReference: {fileID: 0}
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _resolver
+      value: 
+      objectReference: {fileID: 3002}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _meleeType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _ownership
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _enemyRadius
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _hasPassedPlayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _overrideEnemyRadius
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+--- !u!1001 &60020
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_Name
+      value: Pulse_HighZeroRadius
+      objectReference: {fileID: 0}
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 6
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _resolver
+      value: 
+      objectReference: {fileID: 3002}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _meleeType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _ownership
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _enemyRadius
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _hasPassedPlayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _overrideEnemyRadius
+      value: 1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+--- !u!1001 &60030
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_Name
+      value: Pulse_Offscreen
+      objectReference: {fileID: 0}
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 14
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -4
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _resolver
+      value: 
+      objectReference: {fileID: 3002}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _meleeType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _ownership
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _enemyRadius
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _hasPassedPlayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _overrideEnemyRadius
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+--- !u!1001 &60040
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_Name
+      value: Pulse_OutsidePulse
+      objectReference: {fileID: 0}
+    - target: {fileID: 1000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 1001, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _resolver
+      value: 
+      objectReference: {fileID: 3002}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _meleeType
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _ownership
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _enemyRadius
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _hasPassedPlayer
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1004, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
+      propertyPath: _overrideEnemyRadius
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: cd572abe99f38f149f6e6a2e28407665, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -4448,3 +4770,8 @@ SceneRoots:
   - {fileID: 713864597}
   - {fileID: 1904725678}
   - {fileID: 295420185}
+  - {fileID: 60000}
+  - {fileID: 60010}
+  - {fileID: 60020}
+  - {fileID: 60030}
+  - {fileID: 60040}

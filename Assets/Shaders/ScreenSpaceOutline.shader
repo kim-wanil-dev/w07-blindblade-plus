@@ -113,9 +113,11 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                         position, _OutlineSoundRegions[i].xyz, revealRadius) * timeVisibility;
                     visibility = max(visibility, soundVisibility);
                 }
-                // 퍼펙트 패링 파동은 반경과 투명도를 플레이어 쪽에서 실시간으로 직접 넘긴다.
+                // 보상 파동은 높이를 무시하고 C의 대상 판정과 같은 수평거리로 공개한다.
                 visibility = max(visibility, RegionVisibility(
-                    position, _OutlinePulseRegion.xyz, _OutlinePulseRegion.w) * _OutlinePulseVisibility);
+                    float3(position.x, 0.0, position.z),
+                    float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
+                    _OutlinePulseRegion.w) * _OutlinePulseVisibility);
                 float memoryVisibility = 0.0;
                 if (includeMemory > 0.5 && _OutlineMemoryEnabled > 0.5)
                 {

@@ -1,10 +1,12 @@
 using UnityEngine;
 
+using BlindBlade.Combat.Contracts;
+
 /// <summary>
 /// 퍼펙트 패링과 극한 회피 순간 웅크리기 파동처럼 발밑 지면에서 넓게 퍼지는 파동을 낸다.
 /// 바닥 링이 지면을 따라 눈에 보이게 퍼지며 지나간 바닥은 지형 기억에 남고, 그 범위의 적·지형이 드러난다.
 /// 퍼짐은 불릿 타임과 무관한 실시간이다. 퍼펙트 파동이 드러낸 범위는 강화 준비·공격 동안 유지하고,
-/// 극한 회피 파동은 다 퍼진 뒤 바로 서서히 감춘다. 퍼펙트 파동이 진행 중이면 극한 회피 파동은 내지 않는다.
+/// 극한 회피 파동은 다 퍼진 뒤 게임 시간으로 감춘다. 퍼펙트 파동이 진행 중이면 극한 회피 파동은 내지 않는다.
 /// 시야 공개는 SensoryPerceptionMask의 퍼펙트 파동 영역, 바닥 링은 기존 웅크리기 파동 프리팹, 칼날 빛줄기·비네트는 EmpowerOverlay가 맡는다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -24,17 +26,21 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private float _expandDuration = 1f;
     [SerializeField, Min(0.01f), Tooltip("강화가 끝난 뒤 드러난 범위가 사라지는 실시간.")]
     private float _fadeDuration = 0.8f;
+    [SerializeField, Tooltip("퍼펙트 패링 바닥 링 색상. 새 파동부터 적용한다.")]
+    private Color _ringColor = Color.white;
 
     [Header("극한 회피 파동")]
     [SerializeField, Min(1f), Tooltip("극한 회피 파동이 드러내는 최대 반경(미터).")]
-    private float _dodgeRadius = 40f;
+    private float _dodgeRadius = 12f;
     [SerializeField, Min(0.01f), Tooltip("극한 회피 파동 반경이 끝까지 퍼지는 실시간.")]
-    private float _dodgeExpandDuration = 1f;
-    [SerializeField, Min(0.01f), Tooltip("극한 회피 파동이 다 퍼진 뒤 드러난 범위가 사라지는 실시간.")]
-    private float _dodgeFadeDuration = 0.8f;
+    private float _dodgeExpandDuration = 1.2f;
+    [SerializeField, Min(0.01f), Tooltip("극한 회피 파동이 다 퍼진 뒤 공개 영역과 링이 사라지는 게임 시간. 정지·불릿 타임에 함께 느려진다.")]
+    private float _dodgeFadeDuration = 0.6f;
+    [SerializeField, Tooltip("극한 회피 바닥 링 색상. 새 파동부터 적용한다.")]
+    private Color _dodgeRingColor = Color.white;
 
     [Header("바닥 링")]
-    [SerializeField, Min(0.01f), Tooltip("바닥 링이 다 퍼진 뒤 사라지는 실시간.")]
+    [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링 바닥 링이 다 퍼진 뒤 사라지는 실시간. 극한 회피 링은 공개 영역과 함께 게임 시간으로 사라진다.")]
     private float _ringFadeDuration = 0.3f;
 
     [Header("화면 연출")]
@@ -47,6 +53,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private PlayerEmpower _empower;
     private EmpowerOverlay _overlay;
     private CharacterController _controller;
+    private PlayerHealth _health;
     private SensoryPerceptionMask _mask;
     private TerrainMemory _terrainMemory;
     private GameObject _wave;
@@ -59,18 +66,40 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private float _activeRadius;
     private float _activeExpandDuration;
     private float _activeFadeDuration;
+    private float _activeRingFadeDuration;
+    private CombatSessionRuntime _sessionRuntime;
+    private CombatSessionKey _session;
+    private bool _hasSession;
     private bool _running;
     private bool _perfectRunning;
+
+    public bool IsRunning => _running;
+    public bool IsPerfectRunning => _running && _perfectRunning;
+    public Vector3 Center => _center;
+    public float CurrentRadius { get; private set; }
+    public float CurrentVisibility { get; private set; }
+    public float ExpansionElapsed => _elapsed;
+    public float FadeElapsed => _fadeElapsed;
+    public float ActiveRadius => _activeRadius;
+    public float ActiveExpandDuration => _activeExpandDuration;
+    public float ActiveFadeDuration => _activeFadeDuration;
 
     void Awake()
     {
         _empower = GetComponent<PlayerEmpower>();
         _overlay = GetComponent<EmpowerOverlay>();
         _controller = GetComponent<CharacterController>();
+        _health = GetComponent<PlayerHealth>();
+    }
+
+    void OnEnable()
+    {
+        _health.Died += HandleDied;
     }
 
     void OnDisable()
     {
+        _health.Died -= HandleDied;
         Stop();
     }
 
@@ -85,18 +114,29 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsReady ? _readyVignette : 0f);
         if (!_running) return;
 
+        if (_hasSession && (_sessionRuntime == null || !_sessionRuntime.IsInitialized
+            || _sessionRuntime.Session.SessionId != _session.SessionId
+            || _sessionRuntime.Session.Generation != _session.Generation))
+        {
+            Stop();
+            return;
+        }
+
         float dt = EmpowerOverlay.RealDeltaTime();
+        float previousElapsed = _elapsed;
         _elapsed += dt;
         float t = Mathf.Clamp01(_elapsed / _activeExpandDuration);
         float radius = _activeRadius * (1f - Mathf.Pow(1f - t, 2f));
-        UpdateRing(radius);
         RememberGround(radius);
         float visibility = 1f;
         // 퍼펙트 파동만 불릿 타임 동안 공개를 유지하고, 극한 회피 파동은 다 퍼지면 바로 감춘다.
         bool hold = _perfectRunning && _empower.IsBulletTimeActive;
         if (!hold && t >= 1f)
         {
-            _fadeElapsed += dt;
+            float fadeDelta = _perfectRunning ? dt : Time.deltaTime;
+            if (!_perfectRunning && dt > 0f && previousElapsed < _activeExpandDuration)
+                fadeDelta *= Mathf.Clamp01((_elapsed - _activeExpandDuration) / dt);
+            _fadeElapsed += fadeDelta;
             visibility = 1f - Mathf.Clamp01(_fadeElapsed / _activeFadeDuration);
             if (visibility <= 0f)
             {
@@ -104,6 +144,9 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
                 return;
             }
         }
+        CurrentRadius = radius;
+        CurrentVisibility = visibility;
+        UpdateRing(radius);
         if (_mask != null) _mask.SetPulseRegion(_center, radius, visibility);
     }
 
@@ -114,7 +157,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     public void Begin()
     {
         _overlay.Glint(_glintDuration);
-        StartPulse(_radius, _expandDuration, _fadeDuration, true);
+        StartPulse(_radius, _expandDuration, _fadeDuration, _ringColor, true);
     }
 
     /// <summary>
@@ -124,29 +167,38 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     public bool BeginPerfectDodge()
     {
         if (_running && _perfectRunning) return false;
-        StartPulse(_dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration, false);
+        StartPulse(_dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration, _dodgeRingColor, false);
         return true;
     }
 
     /// <summary>
-    /// radius·expandDuration·fadeDuration으로 발밑 지면에서 파동을 처음부터 시작하고 바닥 링을 켠다.
+    /// radius·expandDuration·fadeDuration·ringColor를 복사해 발밑 지면에서 파동을 시작하고 바닥 링을 켠다.
     /// perfect가 참이면 강화 동안 공개를 유지하는 퍼펙트 파동으로 표시하며, 진행 상태와 지면 중심을 갱신한다.
     /// 지면을 찾지 못하면 플레이어 발 위치를 쓰며, 감각 매니저가 준비되지 않았으면 시야 공개 없이 링만 보인다.
     /// </summary>
-    private void StartPulse(float radius, float expandDuration, float fadeDuration, bool perfect)
+    private void StartPulse(float radius, float expandDuration, float fadeDuration, Color ringColor, bool perfect)
     {
         _mask = FindMask();
         if (_terrainMemory == null) _terrainMemory = FindAnyObjectByType<TerrainMemory>();
         FindGround(out Vector3 point, out Vector3 normal);
         _center = point;
-        _activeRadius = radius;
-        _activeExpandDuration = expandDuration;
-        _activeFadeDuration = fadeDuration;
+        _activeRadius = Mathf.Max(0f, radius);
+        _activeExpandDuration = Mathf.Max(0.01f, expandDuration);
+        _activeFadeDuration = Mathf.Max(0.01f, fadeDuration);
+        _activeRingFadeDuration = Mathf.Max(0.01f, _ringFadeDuration);
+        _ringBaseColor = ringColor;
+        _sessionRuntime = CombatSessionRuntime.Active;
+        _hasSession = _sessionRuntime != null && _sessionRuntime.IsInitialized
+            && _sessionRuntime.gameObject.scene == gameObject.scene;
+        _session = _hasSession ? _sessionRuntime.Session : default;
         _perfectRunning = perfect;
         _elapsed = 0f;
         _fadeElapsed = 0f;
         _rememberedRadius = 0f;
         _running = true;
+        CurrentRadius = 0f;
+        CurrentVisibility = 1f;
+        if (_mask != null) _mask.ClearPulseRegion();
         PrepareRing(point, normal);
     }
 
@@ -157,6 +209,15 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         if (_ring != null) _ring.enabled = false;
         _running = false;
         _perfectRunning = false;
+        _hasSession = false;
+        CurrentRadius = 0f;
+        CurrentVisibility = 0f;
+    }
+
+    /// <summary>health의 사망 알림을 받아 진행 중인 파동 영역과 링을 즉시 지운다. 지형 기억은 유지한다.</summary>
+    private void HandleDied(PlayerHealth health)
+    {
+        Stop();
     }
 
     /// <summary>
@@ -181,7 +242,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
 
     /// <summary>
     /// 기존 웅크리기 파동 프리팹을 한 번만 복제해 두고 point 지면에 normal을 위로 하여 시선 방향으로 놓아 링을 켠다.
-    /// 프리팹 자체 재생은 쓰지 않고 링의 원래 색을 기억해 두며, 크기·투명도는 UpdateRing이 실시간으로 정한다.
+    /// 프리팹 자체 재생은 쓰지 않으며 발동 시 저장한 색상·반경·페이드 상태를 UpdateRing에 적용한다.
     /// </summary>
     private void PrepareRing(Vector3 point, Vector3 normal)
     {
@@ -192,7 +253,6 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
             _wave = Instantiate(prefab);
             _wave.name = "PerfectPulseWave";
             _ring = _wave.GetComponentInChildren<SpriteRenderer>(true);
-            _ringBaseColor = _ring.color;
         }
         Vector3 forward = Vector3.ProjectOnPlane(transform.forward, normal);
         if (forward.sqrMagnitude <= 0.0001f) forward = Vector3.ProjectOnPlane(Vector3.forward, normal);
@@ -201,12 +261,14 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         UpdateRing(0f);
     }
 
-    /// <summary>바닥 링 지름을 radius에 맞추고 다 퍼진 뒤 _ringFadeDuration 동안 흐리게 한 뒤 끈다.</summary>
+    /// <summary>바닥 링 지름을 radius에 맞춘다. 패링은 저장한 링 실시간 수명, 회피는 공개 가시성으로 알파를 변경한다.</summary>
     private void UpdateRing(float radius)
     {
         if (_ring == null || !_ring.enabled) return;
         _ring.transform.localScale = Vector3.one * (radius * 2f);
-        float fade = 1f - Mathf.Clamp01((_elapsed - _activeExpandDuration) / _ringFadeDuration);
+        float fade = _perfectRunning
+            ? 1f - Mathf.Clamp01((_elapsed - _activeExpandDuration) / _activeRingFadeDuration)
+            : CurrentVisibility;
         Color color = _ringBaseColor;
         color.a *= fade;
         _ring.color = color;

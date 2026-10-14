@@ -1439,6 +1439,11 @@ MonoBehaviour:
   _radius: 40
   _expandDuration: 1
   _fadeDuration: 0.8
+  _ringColor: {r: 1, g: 1, b: 1, a: 1}
+  _dodgeRadius: 12
+  _dodgeExpandDuration: 1.2
+  _dodgeFadeDuration: 0.6
+  _dodgeRingColor: {r: 1, g: 1, b: 1, a: 1}
   _ringFadeDuration: 0.3
   _glintDuration: 0.35
   _readyVignette: 0.75

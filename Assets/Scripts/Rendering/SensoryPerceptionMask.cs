@@ -123,6 +123,20 @@ using UnityEngine;
         }
 
         /// <summary>
+        /// position의 XZ 수평거리와 현재 파동 반경·공간 경계·시간 페이드로 파동 가시성만 반환한다.
+        /// 일반 소리·상시 인지·지형 기억은 제외하며 편집 모드·비활성·관측자 미준비 상태이면 0이다.
+        /// </summary>
+        public float GetPulseVisibility(Vector3 position)
+        {
+            if (!Application.isPlaying || !isActiveAndEnabled || !_sensoryManager.IsReady || _pulseRegion.w <= 0f)
+                return 0f;
+            Vector2 offset = new Vector2(position.x - _pulseRegion.x, position.z - _pulseRegion.z);
+            float innerRadius = Mathf.Max(0f, _pulseRegion.w - Mathf.Max(_edgeFade, 0.0001f));
+            float progress = Mathf.InverseLerp(innerRadius, _pulseRegion.w, offset.magnitude);
+            return (1f - Mathf.SmoothStep(0f, 1f, progress)) * _pulseVisibility;
+        }
+
+        /// <summary>
         /// position의 현재 인지 가시성을 셰이더와 같은 반경·확산·페이드 규칙으로 반환한다.
         /// 지형 기억은 포함하지 않으며 인지 매니저가 준비되지 않으면 0을 반환한다.
         /// </summary>
@@ -151,8 +165,7 @@ using UnityEngine;
                 visibility = Mathf.Max(visibility,
                     RegionVisibility(position, new Vector3(region.x, region.y, region.z), radius) * fade);
             }
-            visibility = Mathf.Max(visibility, RegionVisibility(position,
-                new Vector3(_pulseRegion.x, _pulseRegion.y, _pulseRegion.z), _pulseRegion.w) * _pulseVisibility);
+            visibility = Mathf.Max(visibility, GetPulseVisibility(position));
             return visibility;
         }
 
@@ -272,6 +285,7 @@ using UnityEngine;
         private void ClearMask()
         {
             _soundCount = 0;
+            ClearPulseRegion();
             Shader.SetGlobalVector(_observerRegionId, Vector4.zero);
             Shader.SetGlobalFloat(_pulseVisibilityId, 0f);
             Shader.SetGlobalInt(_soundCountId, 0);
