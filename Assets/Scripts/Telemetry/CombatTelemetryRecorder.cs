@@ -6,6 +6,8 @@ using UnityEngine;
 using Newtonsoft.Json.Linq;
 
 using BlindBlade.Combat.Contracts;
+using CombatDefenseOutcome = BlindBlade.Combat.Contracts.DefenseOutcome;
+using CombatDefenseResolution = BlindBlade.Combat.Contracts.DefenseResolution;
 
 namespace BlindBlade.Telemetry
 {
@@ -238,16 +240,19 @@ namespace BlindBlade.Telemetry
                 new CombatCorrelationIds(0, value.ActionId, 0, 0, 0, 0));
         }
 
-        /// <summary>value의 실제 방어 결과와 공급자 ID·원본 시계를 기록한다. 피해량을 다시 합산하지 않는다.</summary>
-        private void HandleDefense(global::DefenseResolution value)
+        /// <summary>
+        /// value의 실제 방어 결과와 공급자 ID·원본 시계를 기록한다. 피해량을 다시 합산하지 않는다.
+        /// 공통 방어 결과가 제공하지 않는 DodgeId는 미부여 값 0으로 보존한다.
+        /// </summary>
+        private void HandleDefense(CombatDefenseResolution value)
         {
             _defenseCount++;
-            if (value.Outcome == global::DefenseOutcome.NormalParry || value.Outcome == global::DefenseOutcome.PerfectParry)
+            if (value.Outcome == CombatDefenseOutcome.NormalParry || value.Outcome == CombatDefenseOutcome.PerfectParry)
                 _parryCount++;
             Record("defense_resolved", new JObject { ["outcome"] = value.Outcome.ToString(),
                 ["appliedDamage"] = value.AppliedDamage, ["position"] = TelemetryJson.Position(value.ContactPoint),
                 ["sourceRealtime"] = value.RealTime, ["sourceGameTime"] = value.GameTime },
-                new CombatCorrelationIds(value.GuardInputId, 0, value.AttackId, value.HitId, 0, value.DodgeId));
+                new CombatCorrelationIds(value.GuardInputId, 0, value.AttackId, value.HitId, 0, 0));
         }
 
         /// <summary>value의 공급자 입력 기록을 보존한다. 장치 시계는 공통 시계와 보정 없이 직접 차감하지 않는다.</summary>

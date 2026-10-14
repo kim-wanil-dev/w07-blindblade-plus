@@ -26,7 +26,7 @@
 
 ## 이번 통합에서 정한 단일 계약
 
-> 2026-10-14 D5 작업 시 현재 저장소 재확인: 아래는 이전 통합 당시 기록이다. 현재 PlayerContracts에 전역 DefenseResolution/DefenseOutcome이 다시 존재하고 실제 A 사건도 이를 사용한다. 이번 D5는 실제 전역 사건을 소비하며 A의 타입·판정 코드를 수정하지 않았다. 단일화 현재 완료로 해석하지 않는다.
+> 아래는 이전 통합 당시 기록이다. D5 최초 구현 시에는 전역 방어 타입이 있었지만, feature/log 후속 오류 수정 시 현재 공급자는 다시 공통 namespace 타입을 사용한다. Recorder도 공통 계약 별칭으로 연결했다. 시점별 상태는 아래 후속 기록을 따른다.
 
 - `DefenseOutcome`, `IncomingAttackKind`, `DefenseResolution`의 유일한 정의를 `Assets/Scripts/Combat/Contracts/DefenseResolution.cs`의 `BlindBlade.Combat.Contracts`로 통합했다. A의 `DamageContext`와 `PlayerContracts`가 이를 import한다. 전역 중복 타입을 제거해 같은 이름의 API가 둘로 갈라지지 않게 했다.
 - `CombatCorrelationIds`의 원인 연결 ID는 기존 `ActionId:int`와 같은 `int`로 정리했다. 미부여 값은 0이며 원본 사건 순번·표시 Revision·시간 요청 ID만 `long`을 쓴다.
@@ -159,3 +159,11 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - 확인: Unity6000.3.22f1 C# 재컴파일 completed/compilationFailed=false/오류0. Editor API로 BambooDefense/GameSceneInitializer Recorder 및 Player/DefenseDirector/스포너/C 참조를 연결하고 저장했다. Play·자동화 테스트·CSV 실행·실제 Sheets 전송은 수행하지 않았다.
 - 다음 작업자: README의 Google 배포와 로컬 enabled=true 설정 후 수동 확인 목록부터 진행한다. 치명타 순서/재도전/인터넷 복구/중복 ACK/쓰기 실패를 실제 기록으로 확인하기 전 D5 전체 완료로 표시하지 않는다. 현재 브랜치 feature/ui에서 Git CLI/커밋은 사용하지 않았다.
 - 최종 정적 확인: PowerShell 전처리 스크립트 Parser 구문 오류0, Windows PowerShell5.1의 한국어 읽기를 위해 UTF-8 BOM 사용. 마지막 Unity 재컴파일 오류0. 손상 파일은 그 파일의 나머지를 미확인 상태로 보류하고 다른 정상 파일로 진행하도록 보강했다. 실제 프로그램 실행 검증과 구분한다.
+
+### 2026-10-14 feature/log 후속: Recorder CS0400 수정
+
+- 현재 공통 방어 타입으로 통합된 저장소에서 Recorder의 이전 global::DefenseResolution 참조가 CS0400을 발생시켰다.
+- CombatTelemetryRecorder만 공통 DefenseResolution/DefenseOutcome의 명시적 별칭으로 변경했다. 공통 타입·플레이어 공급자·씬은 수정하지 않았다.
+- 공통 방어 결과에 DodgeId가 없어 해당 접근도 제거했다. defense_resolved의 회피 연결은 0, 별도 dodge_changed의 제공된 DodgeId는 유지하며 임의로 연결하지 않는다.
+- 관련 기능명세와 README의 현재 계약 설명을 갱신했다. 브랜치 feature/log에서 Git CLI/커밋은 사용하지 않는다.
+- 수정 후 Unity 재컴파일 completed/compilationFailed=false, 오류0·경고0을 확인했다. Play·원격 전송은 실행하지 않았다.

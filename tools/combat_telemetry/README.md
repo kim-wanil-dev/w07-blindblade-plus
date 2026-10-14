@@ -70,7 +70,7 @@ C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetr
 
 `InputResolved`, `StaminaChanged`, `EmpowerChanged`도 구독하지만 현재 실제 입력/스태미너/강화 공급자가 없으면 해당 기록은 생성되지 않는다. 입력 시간 보정·실제 입력 시도 수가 없으므로 입력 성공률, early/late 판정을 산출하지 않는다. `parryCount/defenseCount`는 접촉 결과 중 패링 비율이며 패링 시도 성공률이 아니다.
 
-현재 PlayerContracts에는 A의 전역 DefenseResolution(회피 ID 포함)도 있다. Recorder는 실제 PlayerCombatEvents의 전역 타입을 명시적으로 소비한다. 기존 공통 namespace 타입을 수정하거나 복제하지 않았다. 타입 재통합은 A/D 합의 후 별도 작업이다.
+현재 PlayerCombatEvents는 `BlindBlade.Combat.Contracts.DefenseResolution`을 사용한다. Recorder는 공통 계약 별칭을 명시해 소비한다. 공통 방어 결과에 DodgeId가 없어 defense_resolved의 correlation.dodgeId는 0이며, 별도 dodge_changed의 원본 DodgeId는 보존한다. 시각이나 현재 회피 상태로 빠진 연결을 추정하지 않는다. 공통 계약과 공급자 코드는 수정하지 않았다.
 
 `runRealtimeSeconds`는 세션 시작부터 GameOver까지 실제 시간이고 준비·플레이어 일시정지·포커스 이탈이 포함된다. GameOver 화면 대기는 제외한다. `combatRealtimeSeconds`는 준비 종료 뒤 실제 시간이며, `survivalGameSeconds`는 기존 director의 배율 적용 시간이다. `activeUnscaledSeconds`는 Runtime의 명시적 frozen만 제외한다. 5~10분 달성 기준에서 어떤 시간을 쓸지 팀이 고정하고 대기/재도전 포함 총 체험 시간과 구별한다.
 
