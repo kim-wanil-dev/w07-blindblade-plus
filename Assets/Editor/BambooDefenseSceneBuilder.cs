@@ -146,36 +146,34 @@ public static class BambooDefenseSceneBuilder
     }
 
     /// <summary>
-    /// 몸·머리 실루엣과 발사 위치를 가진 투척수 프리팹을 찾거나 생성해 반환한다.
-    /// 한 번의 유효 타격에 사망하고 플레이어 돌진 대상에서 제외되며 shurikenPrefab을 던진다.
+    /// shurikenPrefab과 body 재질을 사용하는 투척수 프리팹을 찾거나 생성한다.
+    /// 체력·피격 Collider 없이 몸·머리·발사 위치를 구성하고 반환한다.
     /// </summary>
     private static BambooThrower LoadOrCreateThrowerPrefab(DefenseShuriken shurikenPrefab, Material body)
     {
         string path = THROWER_PREFAB_PATH;
         GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
         if (existing != null)
             return existing.GetComponent<BambooThrower>();
+
         GameObject root = new GameObject("DefenseThrower") { layer = 2 };
-        CapsuleCollider collider = root.AddComponent<CapsuleCollider>();
-        collider.height = 1.5f;
-        collider.radius = 0.35f;
-        Renderer torso = CreateVisual(PrimitiveType.Capsule, "Body", root.transform, new Vector3(0f, -0.15f, 0f),
-            new Vector3(0.6f, 0.6f, 0.6f), body);
-        Renderer head = CreateVisual(PrimitiveType.Sphere, "Head", root.transform, new Vector3(0f, 0.55f, 0f),
-            Vector3.one * 0.38f, body);
+
+        Renderer torso = CreateVisual(PrimitiveType.Capsule, "Body", root.transform, new Vector3(0f, -0.15f, 0f), new Vector3(0.6f, 0.6f, 0.6f), body);
+
+        Renderer head = CreateVisual(PrimitiveType.Sphere, "Head", root.transform, new Vector3(0f, 0.55f, 0f), Vector3.one * 0.38f, body);
         Transform muzzle = new GameObject("Muzzle").transform;
         muzzle.SetParent(root.transform, false);
         muzzle.localPosition = new Vector3(0f, 0.35f, 0.4f);
-        EnemyHealth health = root.AddComponent<EnemyHealth>();
-        SetField(health, "_maxHealth", 1f);
-        SetField(health, "_dieOnAnyHit", true);
-        SetField(health, "_hitCollider", collider);
-        SetField(health, "_dashTargetable", false);
+
         BambooThrower thrower = root.AddComponent<BambooThrower>();
         SetField(thrower, "_shurikenPrefab", shurikenPrefab);
         SetField(thrower, "_muzzle", muzzle);
+        SetField(thrower, "_signalPoint", root.transform);
         SetArray(thrower, "_bodyRenderers", new Object[] { torso, head });
+
         SetField(root.AddComponent<OutlineLayer>(), "_kind", (int)OutlineLayerKind.Threat);
+
         return SavePrefab(root, path).GetComponent<BambooThrower>();
     }
 
