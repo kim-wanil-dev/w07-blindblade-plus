@@ -8,6 +8,7 @@ using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.RenderGraphModule.Util;
 using UnityEngine.Rendering.Universal;
 
+using BlindBlade.Perception;
 
 public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     {
@@ -53,10 +54,12 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         private TransparentDepthPass _depth;
         private LayerMaskPass _sceneryMask;
         private LayerMaskPass _threatMask;
+        private ThreatPresentationRouting _threatRouting;
+        private ThreatPresentationPass _presentation;
         private OutlinePass _outline;
 
         /// <summary>
-        /// 연결된 셰이더로 색상 캡처·투명 깊이·배경·위협 마스크·최종 윤곽선 패스를 생성한다.
+        /// 연결된 셰이더로 기존 캡처·마스크와 대상별 위협 색상·최종 윤곽선 패스를 생성한다.
         /// 기존 패스 리소스를 해제하고 현재 설정으로 재생성한다.
         /// </summary>
         public override void Create()
@@ -94,13 +97,15 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             _depth = new TransparentDepthPass(_depthMaterial);
             _sceneryMask = new LayerMaskPass(OutlineLayer.SCENERY_MASK, _sceneryMaskMaterial, false);
             _threatMask = new LayerMaskPass(OutlineLayer.THREAT_MASK, _threatMaskMaterial, true);
-            _outline = new OutlinePass(_material, _capture, _depth, _alwaysVisibleCapture, _sceneryMask, _threatMask);
+            _threatRouting = new ThreatPresentationRouting(Resources.Load<Material>("Perception/ThreatPresentationMask"));
+            _presentation = new ThreatPresentationPass(_threatRouting);
+            _outline = new OutlinePass(_material, _capture, _depth, _alwaysVisibleCapture, _sceneryMask, _threatMask, _presentation);
             RenderPipelineManager.beginCameraRendering += BeginCamera;
             RenderPipelineManager.endCameraRendering += EndCamera;
         }
 
         /// <summary>
-        /// 지원 카메라의 컬링 전에 선택 VFX의 임시 큐와 표시를 준비한다.
+        /// 지원 카메라의 컬링 전에 선택 VFX와 위협의 임시 재질·표시 경로를 준비한다.
         /// 기능 비활성 상태에서는 원본 URP 렌더링을 유지한다.
         /// </summary>
         private void BeginCamera(ScriptableRenderContext context, Camera camera)
@@ -111,16 +116,22 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             var data = camera.GetComponent<UniversalAdditionalCameraData>();
             if (data != null && data.renderType == CameraRenderType.Overlay)
                 return;
+            _threatRouting.Restore();
             _routing.Prepare();
+            _threatRouting.Prepare(camera);
         }
 
         /// <summary>
         /// 카메라 실행 후 원본 렌더러 상태를 복원한다.
         /// </summary>
-        private void EndCamera(ScriptableRenderContext context, Camera camera) { _routing.Restore(); }
+        private void EndCamera(ScriptableRenderContext context, Camera camera)
+        {
+            _threatRouting?.Restore();
+            _routing.Restore();
+        }
 
         /// <summary>
-        /// 기본 게임 카메라와 Scene View에 현재 설정을 전달하고 캡처·마스크·윤곽선 패스를 등록한다.
+        /// 기본 게임 카메라와 Scene View에 설정을 전달하고 기존 캡처·마스크·개별 위협·윤곽선 패스를 등록한다.
         /// Overlay·Preview·Reflection 카메라는 기존처럼 제외한다.
         /// </summary>
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
@@ -143,6 +154,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             renderer.EnqueuePass(_depth);
             renderer.EnqueuePass(_sceneryMask);
             renderer.EnqueuePass(_threatMask);
+            renderer.EnqueuePass(_presentation);
             renderer.EnqueuePass(_outline);
         }
 
@@ -160,6 +172,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         {
             RenderPipelineManager.beginCameraRendering -= BeginCamera;
             RenderPipelineManager.endCameraRendering -= EndCamera;
+            _threatRouting?.Dispose();
             _routing.Dispose();
             CoreUtils.Destroy(_material);
             CoreUtils.Destroy(_depthMaterial);
@@ -170,6 +183,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             _depth?.Release();
             _sceneryMask?.Release();
             _threatMask?.Release();
+            _presentation?.Release();
             _outline?.Release();
             _material = null;
             _depthMaterial = null;
@@ -180,6 +194,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             _depth = null;
             _sceneryMask = null;
             _threatMask = null;
+            _threatRouting = null;
+            _presentation = null;
             _outline = null;
         }
 
@@ -190,6 +206,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             public TextureHandle TransparentDepth { get; set; }
             public TextureHandle SceneryMask { get; set; }
             public TextureHandle ThreatMask { get; set; }
+            public TextureHandle PresentationColor { get; set; }
+            public TextureHandle PresentationData { get; set; }
 
             /// <summary>
             /// 프레임 종료 시 모든 핸들을 비워 다른 카메라나 프레임에 남기지 않는다.
@@ -201,7 +219,115 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 TransparentDepth = TextureHandle.nullHandle;
                 SceneryMask = TextureHandle.nullHandle;
                 ThreatMask = TextureHandle.nullHandle;
+                PresentationColor = TextureHandle.nullHandle;
+                PresentationData = TextureHandle.nullHandle;
             }
+        }
+
+        private sealed class ThreatPresentationPass : ScriptableRenderPass
+        {
+            private readonly ThreatPresentationRouting _routing;
+            private RTHandle _legacyColor;
+            private RTHandle _legacyData;
+            private RTHandle _legacyDepth;
+            public Texture ColorTexture => _routing.DrawCount > 0 && _legacyColor != null
+                ? _legacyColor.rt : Texture2D.blackTexture;
+            public Texture DataTexture => _routing.DrawCount > 0 && _legacyData != null
+                ? _legacyData.rt : Texture2D.blackTexture;
+
+            private sealed class PresentationData
+            {
+                public ThreatPresentationRouting.ThreatDraw[] Draws { get; set; }
+            }
+
+            /// <summary>routing의 카메라별 위협 캡처 목록을 윤곽선 합성 전에 그리도록 연결한다.</summary>
+            public ThreatPresentationPass(ThreatPresentationRouting routing)
+            {
+                _routing = routing;
+                renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
+            }
+
+            /// <summary>
+            /// graph·frameData로 색상·경계 데이터와 위협끼리만 비교하는 깊이 타깃을 생성한다.
+            /// 표시할 대상이 없으면 검정 기본 텍스처를 제공해 이전 카메라의 결과를 남기지 않는다.
+            /// </summary>
+            public override void RecordRenderGraph(RenderGraph graph, ContextContainer frameData)
+            {
+                var frame = frameData.GetOrCreate<FrameTextures>();
+                // 이 프로젝트의 URP에서는 XR 기본 텍스처가 초기화되지 않으므로 일반 2D 기본값을 사용한다.
+                frame.PresentationColor = graph.defaultResources.blackTexture;
+                frame.PresentationData = graph.defaultResources.blackTexture;
+                if (_routing.DrawCount == 0)
+                    return;
+                var resources = frameData.Get<UniversalResourceData>();
+                var desc = resources.activeColorTexture.GetDescriptor(graph);
+                desc.name = "Threat Presentation Color";
+                desc.depthBufferBits = DepthBits.None;
+                desc.colorFormat = GraphicsFormat.R16G16B16A16_SFloat;
+                desc.msaaSamples = MSAASamples.None;
+                desc.filterMode = FilterMode.Point;
+                desc.clearBuffer = true;
+                desc.clearColor = Color.clear;
+                frame.PresentationColor = graph.CreateTexture(desc);
+                desc.name = "Threat Presentation Data";
+                frame.PresentationData = graph.CreateTexture(desc);
+                desc.name = "Threat Presentation Depth";
+                desc.colorFormat = GraphicsFormat.None;
+                desc.depthBufferBits = DepthBits.Depth32;
+                var depth = graph.CreateTexture(desc);
+                using var builder = graph.AddRasterRenderPass<PresentationData>("Threat Presentation", out var data);
+                data.Draws = _routing.CopyDraws();
+                builder.SetRenderAttachment(frame.PresentationColor, 0, AccessFlags.Write);
+                builder.SetRenderAttachment(frame.PresentationData, 1, AccessFlags.Write);
+                builder.SetRenderAttachmentDepth(depth, AccessFlags.ReadWrite);
+                builder.AllowPassCulling(false);
+                builder.SetRenderFunc<PresentationData>(DrawPresentation);
+            }
+
+            /// <summary>data의 위협 외형을 전용 재질로 그려 대상별 색상·가시성·깊이를 기록한다.</summary>
+            private static void DrawPresentation(PresentationData data, RasterGraphContext context)
+            {
+                foreach (var draw in data.Draws)
+                    for (int i = 0; i < draw.SubMeshCount; i++)
+                        context.cmd.DrawRenderer(draw.Renderer, draw.Material, i, 0);
+            }
+
+            /// <summary>입력 없이 호환 모드에서 할당한 색상·데이터·깊이 타깃을 해제한다.</summary>
+            public void Release()
+            {
+                _legacyColor?.Release();
+                _legacyData?.Release();
+                _legacyDepth?.Release();
+            }
+
+#pragma warning disable CS0618, CS0672
+            /// <summary>
+            /// context·renderingData로 호환 모드의 개별 위협 색상과 데이터를 기록한다.
+            /// 장면 깊이 대신 전용 깊이를 사용해 벽 차폐와 위협끼리의 앞뒤를 분리한다.
+            /// </summary>
+            public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+            {
+                if (_routing.DrawCount == 0)
+                    return;
+                var desc = renderingData.cameraData.cameraTargetDescriptor;
+                desc.depthBufferBits = 0;
+                desc.msaaSamples = 1;
+                desc.graphicsFormat = GraphicsFormat.R16G16B16A16_SFloat;
+                RenderingUtils.ReAllocateHandleIfNeeded(ref _legacyColor, desc, FilterMode.Point, name: "Threat Presentation Color");
+                RenderingUtils.ReAllocateHandleIfNeeded(ref _legacyData, desc, FilterMode.Point, name: "Threat Presentation Data");
+                desc.graphicsFormat = GraphicsFormat.None;
+                desc.depthStencilFormat = GraphicsFormat.D32_SFloat;
+                RenderingUtils.ReAllocateHandleIfNeeded(ref _legacyDepth, desc, name: "Threat Presentation Depth");
+                var cmd = CommandBufferPool.Get("Threat Presentation");
+                cmd.SetRenderTarget(new RenderTargetIdentifier[] { _legacyColor.nameID, _legacyData.nameID }, _legacyDepth.nameID);
+                cmd.ClearRenderTarget(true, true, Color.clear);
+                foreach (var draw in _routing.CopyDraws())
+                    for (int i = 0; i < draw.SubMeshCount; i++)
+                        cmd.DrawRenderer(draw.Renderer, draw.Material, i, 0);
+                context.ExecuteCommandBuffer(cmd);
+                CommandBufferPool.Release(cmd);
+            }
+#pragma warning restore CS0618, CS0672
         }
 
         private sealed class LayerMaskPass : ScriptableRenderPass
@@ -493,6 +619,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             private readonly CapturePass _alwaysVisibleCapture;
             private readonly LayerMaskPass _sceneryMask;
             private readonly LayerMaskPass _threatMask;
+            private readonly ThreatPresentationPass _presentation;
             private RTHandle _legacyResult;
 
             private sealed class PassData
@@ -504,16 +631,18 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 public TextureHandle TransparentDepth { get; set; }
                 public TextureHandle SceneryMask { get; set; }
                 public TextureHandle ThreatMask { get; set; }
+                public TextureHandle PresentationColor { get; set; }
+                public TextureHandle PresentationData { get; set; }
                 public TextureHandle SceneDepth { get; set; }
                 public TextureHandle Normals { get; set; }
             }
 
             /// <summary>
-            /// material과 capture·depth·alwaysVisibleCapture·sceneryMask·threatMask를 연결해 윤곽선 입력을 준비한다.
+            /// material과 기존 캡처·마스크 및 presentation을 연결해 윤곽선 입력을 준비한다.
             /// 깊이·노멀 입력과 중간 카메라 타깃을 요청한다.
             /// </summary>
             public OutlinePass(Material material, CapturePass capture, TransparentDepthPass depth,
-                CapturePass alwaysVisibleCapture, LayerMaskPass sceneryMask, LayerMaskPass threatMask)
+                CapturePass alwaysVisibleCapture, LayerMaskPass sceneryMask, LayerMaskPass threatMask, ThreatPresentationPass presentation)
             {
                 _material = material;
                 _capture = capture;
@@ -521,6 +650,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 _alwaysVisibleCapture = alwaysVisibleCapture;
                 _sceneryMask = sceneryMask;
                 _threatMask = threatMask;
+                _presentation = presentation;
                 renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
                 requiresIntermediateTexture = true;
                 ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Normal);
@@ -548,6 +678,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     data.TransparentDepth = frame.TransparentDepth;
                     data.SceneryMask = frame.SceneryMask;
                     data.ThreatMask = frame.ThreatMask;
+                    data.PresentationColor = frame.PresentationColor;
+                    data.PresentationData = frame.PresentationData;
                     data.SceneDepth = resources.cameraDepthTexture;
                     data.Normals = resources.cameraNormalsTexture;
                     builder.UseTexture(data.Source, AccessFlags.Read);
@@ -556,6 +688,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     builder.UseTexture(data.TransparentDepth, AccessFlags.Read);
                     builder.UseTexture(data.SceneryMask, AccessFlags.Read);
                     builder.UseTexture(data.ThreatMask, AccessFlags.Read);
+                    builder.UseTexture(data.PresentationColor, AccessFlags.Read);
+                    builder.UseTexture(data.PresentationData, AccessFlags.Read);
                     builder.UseTexture(data.SceneDepth, AccessFlags.Read);
                     builder.UseTexture(data.Normals, AccessFlags.Read);
                     builder.SetRenderAttachment(result, 0, AccessFlags.WriteAll);
@@ -577,6 +711,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 properties.SetTexture("_OutlineTransparentDepth", data.TransparentDepth);
                 properties.SetTexture("_OutlineSceneryMask", data.SceneryMask);
                 properties.SetTexture("_OutlineThreatMask", data.ThreatMask);
+                properties.SetTexture("_ThreatPresentationColor", data.PresentationColor);
+                properties.SetTexture("_ThreatPresentationData", data.PresentationData);
                 properties.SetTexture("_CameraDepthTexture", data.SceneDepth);
                 properties.SetTexture("_CameraNormalsTexture", data.Normals);
                 context.cmd.DrawProcedural(Matrix4x4.identity, data.Material, 0, MeshTopology.Triangles, 3, 1, properties);
@@ -602,6 +738,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 _material.SetTexture("_OutlineTransparentDepth", _depth.LegacyDepth);
                 _material.SetTexture("_OutlineSceneryMask", _sceneryMask.LegacyMask);
                 _material.SetTexture("_OutlineThreatMask", _threatMask.LegacyMask);
+                _material.SetTexture("_ThreatPresentationColor", _presentation.ColorTexture);
+                _material.SetTexture("_ThreatPresentationData", _presentation.DataTexture);
                 var cmd = CommandBufferPool.Get("Screen Space Outline");
                 Blitter.BlitCameraTexture(cmd, renderingData.cameraData.renderer.cameraColorTargetHandle,
                     _legacyResult, _material, 0);

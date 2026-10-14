@@ -5,11 +5,17 @@ using UnityEngine;
 
 using BlindBlade.Combat.Contracts;
 
-/// <summary>B의 활성 공격과 발소리를 C의 가시성·화면 방향 결과로 변환해 표시 구독자에게 제공한다.</summary>
-[DefaultExecutionOrder(-100)]
+using CThreatAdapter = BlindBlade.Perception.ThreatPresentationContractAdapter;
+
+/// <summary>연결된 C 위협 결과와 기존 발소리 결과를 공통 계약으로 HUD에 제공한다. 미연결 위협은 기존 경로를 사용한다.</summary>
+[DefaultExecutionOrder(-5)]
 [DisallowMultipleComponent]
 public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPresentationProvider
 {
+    [Header("C 위협 판정 연결")]
+    [SerializeField, Tooltip("연결하면 C의 월드/UI·색상·Alpha를 그대로 사용한다. 비워 두면 기존 수리검 정책을 유지한다.")]
+    private CThreatAdapter _threatPresentationSource;
+
     [Header("위협 표시 정책")]
     [SerializeField, Min(0f)] private float _visibilityThreshold;
     [SerializeField, Min(0.1f)] private float _nearDistance = 4f;
@@ -70,7 +76,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
 
     void LateUpdate()
     {
-        if (!TryGetPresentationServices())
+        if (!TryGetSession())
         {
             if (_hasSessionKey && _previousThreats.Count > 0)
                 PublishEndedThreats();
@@ -82,8 +88,19 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             }
             return;
         }
+        if (_threatPresentationSource != null)
+            PublishThreatSnapshots();
+        if (!TryGetPresentationServices())
+        {
+            if (_threatPresentationSource == null)
+                PublishEndedThreats();
+            UnsubscribeFootsteps();
+            PublishEndedFootsteps();
+            return;
+        }
         RefreshFootstepSubscriptions();
-        PublishThreatSnapshots();
+        if (_threatPresentationSource == null)
+            PublishThreatSnapshots();
         ExpireFootsteps();
     }
 
@@ -94,7 +111,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         PublishEndedFootsteps();
     }
 
-    /// <summary>현재 유효한 투사체 표시 스냅샷을 읽기 전용 목록으로 반환한다.</summary>
+    /// <summary>현재 C 연결 또는 기존 수리검 경로가 제공한 위협 스냅샷 목록을 읽기 전용으로 반환한다.</summary>
     public IReadOnlyList<ThreatPresentationSnapshot> GetCurrentThreats()
     {
         return _currentThreats;
@@ -106,12 +123,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         return _currentFootsteps;
     }
 
-    /// <summary>활성 세션·인지 마스크·플레이어 카메라가 준비되면 true를 반환한다.</summary>
-    private bool TryGetPresentationServices()
+    /// <summary>활성 D 세션을 연결하고 새 세션이면 이전 위협·발소리를 종료한 뒤 표시 순번을 초기화한다.</summary>
+    private bool TryGetSession()
     {
         _sessionRuntime = CombatSessionRuntime.Active;
-        if (_sessionRuntime == null || !_sessionRuntime.IsInitialized || !Game.IsInitialized
-            || Game.Instance.SensoryManager == null || Game.Player == null)
+        if (_sessionRuntime == null || !_sessionRuntime.IsInitialized
+            || _sessionRuntime.gameObject.scene != gameObject.scene)
             return false;
 
         if (!_hasSessionKey || !IsSameSession(_sessionKey, _sessionRuntime.Session))
@@ -129,7 +146,14 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             _hasSessionKey = true;
             _revision = 0;
         }
+        return true;
+    }
 
+    /// <summary>기존 발소리·수리검 경로의 인지 마스크와 플레이어 카메라가 준비되면 true를 반환한다.</summary>
+    private bool TryGetPresentationServices()
+    {
+        if (!Game.IsInitialized || Game.Instance.SensoryManager == null || Game.Player == null)
+            return false;
         if (_perceptionMask == null)
             _perceptionMask = Game.Instance.SensoryManager.GetComponent<SensoryPerceptionMask>();
         if (_playerCamera == null)
@@ -187,23 +211,36 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         _footstepHandlers.Clear();
     }
 
-    /// <summary>활성 수리검의 위치·인지 가시성·화면 방향을 스냅샷으로 발행하고 종료 대상을 닫는다.</summary>
+    /// <summary>C 연결 결과 또는 기존 수리검 판정을 발행하고 현재 목록에 없는 대상의 종료를 전달한다.</summary>
     private void PublishThreatSnapshots()
     {
         _seenThreats.Clear();
         _currentThreats.Clear();
-        DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
-        foreach (DefenseShuriken shuriken in shurikens)
+        if (_threatPresentationSource != null)
         {
-            if (shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying)
-                continue;
-
-            CombatEntityKey key = new CombatEntityKey("Projectile_" + shuriken.ProjectileId, 1);
-            ThreatPresentationSnapshot snapshot = CreateSnapshot(key, shuriken.transform.position, true, true);
-            _seenThreats.Add(key);
-            _currentThreats.Add(snapshot);
-            _previousThreats[key] = snapshot;
-            ThreatChanged?.Invoke(snapshot);
+            if (_threatPresentationSource.isActiveAndEnabled)
+            {
+                foreach (ThreatPresentationSnapshot source in _threatPresentationSource.GetCurrentThreats())
+                {
+                    if (!IsSameSession(source.Session, _sessionKey) || !source.IsActive)
+                        continue;
+                    ThreatPresentationSnapshot snapshot = new ThreatPresentationSnapshot(source.Session, source.Target, ++_revision,
+                        source.IsActive, source.IsEligible, source.IsInCamera, source.WorldVisible, source.UiVisible,
+                        source.UiDirection, source.WorldPosition, source.Proximity, source.Color, source.Alpha);
+                    AddCurrentThreat(snapshot);
+                }
+            }
+        }
+        else
+        {
+            DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
+            foreach (DefenseShuriken shuriken in shurikens)
+            {
+                if (shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying)
+                    continue;
+                CombatEntityKey key = new CombatEntityKey("Projectile_" + shuriken.ProjectileId, 1);
+                AddCurrentThreat(CreateSnapshot(key, shuriken.transform.position, true, true));
+            }
         }
 
         _endedThreats.Clear();
@@ -220,6 +257,16 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         }
     }
 
+    /// <summary>snapshot을 현재 조회 목록·생명 목록에 저장하고 같은 공통 결과를 HUD 구독자에게 발행한다.</summary>
+    private void AddCurrentThreat(ThreatPresentationSnapshot snapshot)
+    {
+        _seenThreats.Add(snapshot.Target);
+        _currentThreats.Add(snapshot);
+        _previousThreats[snapshot.Target] = snapshot;
+        ThreatChanged?.Invoke(snapshot);
+    }
+
+    /// <summary>등록된 발소리 사건의 만료 시각을 확인하고 현재 조회 목록을 다시 만든다.</summary>
     /// <summary>등록된 발소리의 수명·발행자를 확인하고 적의 현재 위치로 표시 결과와 초기 조회 목록을 갱신한다.</summary>
     private void ExpireFootsteps()
     {

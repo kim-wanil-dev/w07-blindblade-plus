@@ -42,6 +42,7 @@
 | 감각 표현 | [명세](features/감각_표현.md) |
 | 발자국 시스템 | [감각 표현](features/감각_표현.md)에서 관리 (FootstepEmitter·발자국·파동) |
 | 화면 공간 윤곽선 | [명세](features/화면_공간_윤곽선.md) |
+| 위협 표시 판정 | [명세](features/위협_표시_판정.md) |
 | 이펙트 시스템 | [명세](features/이펙트_시스템.md) |
 | FMOD 사운드 매니저 | [명세](features/FMOD_사운드_매니저.md) |
 | 사운드 중앙 편집 | [명세](features/사운드_중앙_편집.md) |

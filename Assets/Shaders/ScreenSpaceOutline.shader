@@ -52,6 +52,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             TEXTURE2D_X(_OutlineTransparentDepth);
             TEXTURE2D_X(_OutlineSceneryMask);
             TEXTURE2D_X(_OutlineThreatMask);
+            TEXTURE2D_X(_ThreatPresentationColor);
+            TEXTURE2D_X(_ThreatPresentationData);
 
             #define MAX_SOUND_REGIONS 16
             float4 _OutlineObserverRegion;
@@ -239,7 +241,47 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     max(source.r, max(source.g, source.b)));
             }
 
-            // 불투명 경계와 투명 이펙트 경계를 합성하고 모든 면과 배경은 검게 출력한다.
+            // 외형 점유와 대상 번호가 바뀌는 위치에서 개별 위협의 경계를 검출한다.
+            float PresentationBoundary(float4 first, float4 second)
+            {
+                float coverage = abs(first.r - second.r);
+                float identity = step(0.5, abs(first.b - second.b)) * first.r * second.r;
+                return max(coverage, identity);
+            }
+
+            // 경계 주변에서 가장 가까운 위협의 색상을 골라 먼 대상 색이 앞쪽 선에 섞이지 않게 한다.
+            void SelectPresentation(float2 uv, inout float4 selectedColor, inout float4 selectedData)
+            {
+                float4 candidate = SAMPLE_TEXTURE2D_X(_ThreatPresentationData, sampler_PointClamp, uv);
+                if (candidate.r > 0.5 && (selectedData.r < 0.5 || candidate.a < selectedData.a))
+                {
+                    selectedData = candidate;
+                    selectedColor = SAMPLE_TEXTURE2D_X(_ThreatPresentationColor, sampler_PointClamp, uv);
+                }
+            }
+
+            // 대상별 색상·거리 가시성과 내부 채움을 기존 월드 결과에 한 번 합성한다.
+            float3 ApplyPresentation(float3 scene, float2 uv, float2 firstUv, float2 secondUv,
+                float2 thirdUv, float2 fourthUv)
+            {
+                float4 centerData = SAMPLE_TEXTURE2D_X(_ThreatPresentationData, sampler_PointClamp, uv);
+                float4 firstData = SAMPLE_TEXTURE2D_X(_ThreatPresentationData, sampler_PointClamp, firstUv);
+                float4 secondData = SAMPLE_TEXTURE2D_X(_ThreatPresentationData, sampler_PointClamp, secondUv);
+                float4 thirdData = SAMPLE_TEXTURE2D_X(_ThreatPresentationData, sampler_PointClamp, thirdUv);
+                float4 fourthData = SAMPLE_TEXTURE2D_X(_ThreatPresentationData, sampler_PointClamp, fourthUv);
+                float outline = saturate(max(PresentationBoundary(firstData, secondData),
+                    PresentationBoundary(thirdData, fourthData)) * 1.5);
+                float4 selectedData = centerData;
+                float4 selectedColor = SAMPLE_TEXTURE2D_X(_ThreatPresentationColor, sampler_PointClamp, uv);
+                SelectPresentation(firstUv, selectedColor, selectedData);
+                SelectPresentation(secondUv, selectedColor, selectedData);
+                SelectPresentation(thirdUv, selectedColor, selectedData);
+                SelectPresentation(fourthUv, selectedColor, selectedData);
+                float opacity = saturate(selectedColor.a) * saturate(max(outline, centerData.r * selectedData.g));
+                return lerp(scene, selectedColor.rgb, opacity);
+            }
+
+            // 불투명 경계와 투명 이펙트 및 개별 위협을 합성하고 나머지 면과 배경은 검게 출력한다.
             half4 Frag(Varyings input) : SV_Target
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -272,6 +314,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     max(max(threatFirst, threatSecond), max(threatThird, threatFourth)));
                 float threat = saturate(max(threatEdge, threatFill * _ThreatFillOpacity));
                 edge = lerp(edge, _ThreatColor.rgb * _ThreatColor.a, threat);
+                edge = ApplyPresentation(edge, uv, firstUv, secondUv, thirdUv, fourthUv);
                 return half4(edge, 1.0);
             }
             ENDHLSL

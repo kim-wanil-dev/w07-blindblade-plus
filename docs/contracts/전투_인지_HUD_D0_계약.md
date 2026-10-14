@@ -112,6 +112,16 @@
 
 ## 9. 다른 담당자를 위한 안전한 변경 규칙
 
+### C 표시 결과 연결 후속 기록 (2026-10-14)
+
+- 공통 타입과 버전 0.2.0은 그대로 유지한다. 사용자가 C의 확정 표시 정책을 적용하도록 승인했다.
+- CombatThreatPresentationProvider의 Threat Presentation Source에 ThreatPresentationContractAdapter를 연결하면 C 결과를 전달한다. 미연결 씬의 기존 수리검·발소리 경로는 유지한다.
+- 연결 시 위협의 거리·색·화면 분류·반사/통과 제외는 C가 소유한다. Proximity는 C Settings의 3~12m 수평 거리, Color.a=1, Alpha는 C 색상 알파와 거리 가시성의 곱이다. D 공급자는 Revision만 자기 스트림에 맞춰 재부여한다.
+- 공식 문자열 ID는 ThreatSourceState.EntityId에 보존한다. B 공급자가 없는 전용 미리보기만 Perception/{Kind}/{TargetId} 예약 ID를 사용하며 영구 로그·실제 B ID로 취급하지 않는다.
+- C 전용 씬에서 목록·필드 일치와 재사용 세대·세션 재시작·비활성 정리는 사용자 Play 확인을 마쳤다. 정식 게임 B 프리팹·원본 수명 입력·월드 효과 연결은 남아 있다. 상세 매핑·Inspector·검증은 [위협 표시 판정](../features/위협_표시_판정.md)의 세 번째 단위를 따른다.
+
+### 안전한 변경 규칙
+
 1. 공유 타입 수정은 이 폴더와 이 문서에서만 기준을 정하고, 같은 이름의 전역 복사본을 만들지 않는다.
 2. A가 판정 규칙/HP 적용을, B가 원본 ID·투사체 수명을, C가 표시 자격·색·방향을, D가 HUD 표시와 시간 합성을 맡는다.
 3. 기존 공개 API를 바꿀 때는 이 문서와 모든 호출부·직렬화 참조를 함께 갱신한다. `ResolveIncomingAttack` 뒤 `TakeDamage`를 중복 호출하지 않는다.

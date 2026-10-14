@@ -25,6 +25,9 @@
 - 기존 기록 텍스트·수리검 방향 마커 12개·게임오버 UI 연결을 유지한다. 기존 HUD 연결 도구는 CombatHudReferences의 명시적 참조를 사용한다. 값 텍스트가 추가돼도 첫 TMP 텍스트를 잘못 연결하지 않는다.
 - 사용자가 HP·스태미너·발소리 HUD 구현과 나중에 이미지만 교체 가능한 구성을 요청했다. 다른 작업자의 새 구현과 충돌하는 공급자는 현재 발견되지 않았다.
 - 스태미너 담당자는 `BlindBlade.Combat.Contracts.IPlayerStaminaReadModel`의 `Current`와 `Changed`를 구현한다. 같은 Player에 붙이면 HUD가 바인딩할 때 한 번 찾는다. 다른 오브젝트라면 씬의 CombatPlayerHud / Stamina Source에 연결한다. 실행 중 공급자를 추가·교체할 때는 `BindSources(health, source)`로 즉시 다시 연결한다.
+- 발소리 HUD는 `Origin`이나 적 Transform을 추적하지 않는다. C의 UiDirection·Proximity·Color·Alpha를 적용하고, WorldVisible이면 UiVisible=false인 기존 정책을 따른다. 세션·Target·Revision으로 이전 표시 갱신을 거부한다.
+- 방향 HUD의 공급자에 C 공통 결과 어댑터를 연결하면 C의 표시 규칙을 사용한다. WorldVisible로 전환할 때 방향 마커를 즉시 숨기며 다른 종료의 기존 페이드는 유지한다. 발소리 HUD·마커 풀은 이번 연결에서 변경하지 않았다. C 전용 씬의 공통 값 전달은 사용자 확인했고, 정식 HUD의 실제 화면 전환은 B/월드 연결 이후 확인한다.
+- 풀은 HUD 프리팹에 미리 직렬화한 마커 24개를 재사용한다. 런타임 Instantiate는 없다. 빈 슬롯이 없으면 추가 표시는 생략하고 종료·숨김으로 슬롯을 반환한다. 비활성/재활성 시 구독과 초기 스냅샷을 다시 연결하며 풀을 재생성하지 않는다.
 - 발소리 HUD는 `Emitter(EntityId, SpawnGeneration)`별로 슬롯을 하나만 쓴다. 같은 적의 다음 걸음은 기존 슬롯을 갱신한다. 걸음의 SourceSequence를 먼저, 같은 걸음에서는 Revision을 비교해 이전 걸음의 갱신·만료가 최신 마커를 지우지 않게 한다.
 - 실제 `Origin`은 고정 발생 위치로 보존한다. C가 `Presentation.WorldPosition`과 방향·근접도·가시성을 **발행자 적의 현재 위치**로 갱신하고 D는 그 결과만 적용한다. D는 적 Transform을 저장하거나 인지를 재계산하지 않는다. 월드 발자국 효과는 유지한다.
 - 마지막 걸음의 인지가 살아 있는 동안 적의 현재 방향을 따라간다. 다음 걸음이 없으면 마지막 사건의 수명 2초 뒤 사라진다. 사망·세대 변경·세션 종료에서도 정리한다. C의 WorldVisible/UiVisible 상호 배제 정책은 유지한다.
