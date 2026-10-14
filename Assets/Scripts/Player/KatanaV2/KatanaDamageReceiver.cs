@@ -15,6 +15,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     [System.NonSerialized] private PlayerMotor _motor;
     [System.NonSerialized] private PlayerEmpower _empower;
     [System.NonSerialized] private PlayerClock _playerClock;
+    [System.NonSerialized] private PlayerPerfectPulse _perfectPulse;
 
     [Header("회피 판정")]
     [SerializeField, Min(0f), InspectorName("극한 회피 시작 (초)")]
@@ -38,6 +39,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         _motor = GetComponent<PlayerMotor>();
         _empower = GetComponent<PlayerEmpower>();
         _playerClock = GetComponent<PlayerClock>();
+        _perfectPulse = GetComponent<PlayerPerfectPulse>();
         if (_combat == null) _combat = GetComponent<KatanaCombatCoordinator>();
         if (_view == null)
         {
@@ -189,7 +191,8 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     /// <summary>
     /// context를 dodgeOutcome으로 확정해 피해 없이 DefenseResolved를 발행하고 결과를 반환한다.
-    /// DodgeAvoided이면 현재 회피에서 처음일 때만 PerfectDodge 사건과 파동 요청을 한 번 발행하고 _perfectDodgeRewarded를 참으로 바꾼다.
+    /// DodgeAvoided이면 현재 회피에서 처음일 때만 PerfectDodge 사건을 한 번 발행하고 _perfectDodgeRewarded를 참으로 바꾼다.
+    /// 이때 극한 회피 파동을 내며, 퍼펙트 파동이 진행 중이라 파동을 내지 않았으면 파동 요청 사건도 발행하지 않는다.
     /// </summary>
     private DefenseResolution ResolveDodge(DamageContext context, DefenseOutcome dodgeOutcome)
     {
@@ -197,7 +200,8 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         if (dodgeOutcome != DefenseOutcome.DodgeAvoided || _perfectDodgeRewarded) return resolution;
         _perfectDodgeRewarded = true;
         PublishDodge(PlayerDodgeStage.PerfectDodge, context.AttackId);
-        RequestRevealPulse(PlayerRevealPulseCause.PerfectDodge, context.AttackId);
+        if (_perfectPulse.BeginPerfectDodge())
+            RequestRevealPulse(PlayerRevealPulseCause.PerfectDodge, context.AttackId);
         return resolution;
     }
 
