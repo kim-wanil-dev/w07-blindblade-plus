@@ -57,10 +57,8 @@ public static class BambooDefenseSceneBuilder
         EnsureFolder(ASSET_FOLDER);
         Material bamboo = LoadOrCreateMaterial("Bamboo", new Color(0.35f, 0.45f, 0.3f, 1f));
         Material ground = LoadOrCreateMaterial("Ground", new Color(0.2f, 0.18f, 0.15f, 1f));
-        Material wave = LoadOrCreateMaterial("SwordWave", Color.white);
         Material body = LoadOrCreateMaterial("ThrowerBody", new Color(0.3f, 0.05f, 0.05f, 1f));
-        DefenseSwordWave wavePrefab = LoadOrCreateWavePrefab(wave);
-        DefenseShuriken shurikenPrefab = LoadOrCreateShurikenPrefab(wavePrefab);
+        DefenseShuriken shurikenPrefab = LoadOrCreateShurikenPrefab();
         LoadOrCreateThrowerPrefab(shurikenPrefab, body);
         LoadOrCreateMeleePrefab();
         AssetDatabase.SaveAssets();
@@ -105,28 +103,11 @@ public static class BambooDefenseSceneBuilder
         return material;
     }
 
-    /// <summary>wave 머티리얼을 쓰는 초승달 검기 프리팹을 찾거나 생성해 반환한다. 인지와 무관한 흰 윤곽선으로 표시한다.</summary>
-    private static DefenseSwordWave LoadOrCreateWavePrefab(Material wave)
-    {
-        string path = $"{ASSET_FOLDER}/DefenseSwordWave.prefab";
-        GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-        if (existing != null)
-            return existing.GetComponent<DefenseSwordWave>();
-        GameObject root = new GameObject("DefenseSwordWave", typeof(MeshFilter), typeof(MeshRenderer));
-        MeshRenderer renderer = root.GetComponent<MeshRenderer>();
-        renderer.sharedMaterial = wave;
-        renderer.shadowCastingMode = ShadowCastingMode.Off;
-        root.AddComponent<DefenseSwordWave>();
-        OutlineVFX outline = root.AddComponent<OutlineVFX>();
-        SetField(outline, "_ignorePerception", true);
-        return SavePrefab(root, path).GetComponent<DefenseSwordWave>();
-    }
-
     /// <summary>
     /// 기존 Shuriken3의 모델과 회전을 재사용해 두 배 크기의 빨간 실루엣 수리검 프리팹을 찾거나 생성해 반환한다.
-    /// 기존 투사체·인지 숨김 컴포넌트는 복제본에서만 제거하고 wavePrefab을 패링·회피 검기로 연결한다.
+    /// 기존 투사체·인지 숨김 컴포넌트는 복제본에서만 제거한다.
     /// </summary>
-    private static DefenseShuriken LoadOrCreateShurikenPrefab(DefenseSwordWave wavePrefab)
+    private static DefenseShuriken LoadOrCreateShurikenPrefab()
     {
         string path = $"{ASSET_FOLDER}/DefenseShuriken.prefab";
         GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -139,43 +120,40 @@ public static class BambooDefenseSceneBuilder
         root.transform.Find("Model").localScale *= SHURIKEN_SCALE;
         Object.DestroyImmediate(root.GetComponent<ShurikenPerceptionEffect>());
         Object.DestroyImmediate(root.GetComponent<EnemyProjectile>());
-        DefenseShuriken shuriken = root.AddComponent<DefenseShuriken>();
-        SetField(shuriken, "_wavePrefab", wavePrefab);
+        root.AddComponent<DefenseShuriken>();
         SetField(root.AddComponent<OutlineLayer>(), "_kind", (int)OutlineLayerKind.Threat);
         return SavePrefab(root, path).GetComponent<DefenseShuriken>();
     }
 
     /// <summary>
-    /// 몸·머리 실루엣과 발사 위치를 가진 투척수 프리팹을 찾거나 생성해 반환한다.
-    /// 한 번의 유효 타격에 사망하고 플레이어 돌진 대상에서 제외되며 shurikenPrefab을 던진다.
+    /// shurikenPrefab과 body 재질을 사용하는 투척수 프리팹을 찾거나 생성한다.
+    /// 체력·피격 Collider 없이 몸·머리·발사 위치를 구성하고 반환한다.
     /// </summary>
     private static BambooThrower LoadOrCreateThrowerPrefab(DefenseShuriken shurikenPrefab, Material body)
     {
         string path = THROWER_PREFAB_PATH;
         GameObject existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+
         if (existing != null)
             return existing.GetComponent<BambooThrower>();
+
         GameObject root = new GameObject("DefenseThrower") { layer = 2 };
-        CapsuleCollider collider = root.AddComponent<CapsuleCollider>();
-        collider.height = 1.5f;
-        collider.radius = 0.35f;
-        Renderer torso = CreateVisual(PrimitiveType.Capsule, "Body", root.transform, new Vector3(0f, -0.15f, 0f),
-            new Vector3(0.6f, 0.6f, 0.6f), body);
-        Renderer head = CreateVisual(PrimitiveType.Sphere, "Head", root.transform, new Vector3(0f, 0.55f, 0f),
-            Vector3.one * 0.38f, body);
+
+        Renderer torso = CreateVisual(PrimitiveType.Capsule, "Body", root.transform, new Vector3(0f, -0.15f, 0f), new Vector3(0.6f, 0.6f, 0.6f), body);
+
+        Renderer head = CreateVisual(PrimitiveType.Sphere, "Head", root.transform, new Vector3(0f, 0.55f, 0f), Vector3.one * 0.38f, body);
         Transform muzzle = new GameObject("Muzzle").transform;
         muzzle.SetParent(root.transform, false);
         muzzle.localPosition = new Vector3(0f, 0.35f, 0.4f);
-        EnemyHealth health = root.AddComponent<EnemyHealth>();
-        SetField(health, "_maxHealth", 1f);
-        SetField(health, "_dieOnAnyHit", true);
-        SetField(health, "_hitCollider", collider);
-        SetField(health, "_dashTargetable", false);
+
         BambooThrower thrower = root.AddComponent<BambooThrower>();
         SetField(thrower, "_shurikenPrefab", shurikenPrefab);
         SetField(thrower, "_muzzle", muzzle);
+        SetField(thrower, "_signalPoint", root.transform);
         SetArray(thrower, "_bodyRenderers", new Object[] { torso, head });
+
         SetField(root.AddComponent<OutlineLayer>(), "_kind", (int)OutlineLayerKind.Threat);
+
         return SavePrefab(root, path).GetComponent<BambooThrower>();
     }
 

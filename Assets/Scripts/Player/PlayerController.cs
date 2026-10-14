@@ -64,6 +64,8 @@ public sealed class PlayerController : MonoBehaviour
     private IPlayerPerceptionProvider _perceptionProvider;
     private IPlayerCombatService _combatService;
     private IPlayerMapService _mapService;
+    private PlayerStamina _stamina;
+    private PlayerClock _playerClock;
     private Vector2 _moveInput;
     private Vector2 _requestedMoveInput;
     private float _chargeElapsed;
@@ -114,6 +116,8 @@ public sealed class PlayerController : MonoBehaviour
             _motor = GetComponent<PlayerMotor>();
         if (_viewCamera == null)
             _viewCamera = GetComponentInChildren<Camera>();
+        _stamina = GetComponent<PlayerStamina>();
+        _playerClock = GetComponent<PlayerClock>();
 
         BindConfiguredServices();
         Game.Instance.RegisterPlayer(this);
@@ -152,7 +156,8 @@ public sealed class PlayerController : MonoBehaviour
 
         UpdateCrouchPulse();
 
-        float deltaTime = Time.deltaTime;
+        // 이동·회복·차징은 불릿 타임 중 세계보다 덜 느린 플레이어 시계로 진행한다.
+        float deltaTime = _playerClock.DeltaTime;
         if (_state == PlayerActionState.Recovery)
         {
             _recoveryRemaining = Mathf.Max(0f, _recoveryRemaining - deltaTime);
@@ -240,15 +245,72 @@ public sealed class PlayerController : MonoBehaviour
         _motor?.SetMoveInput(_moveInput);
     }
 
+    /// <summary>현재 이동 입력으로 짧은 회피를 요청하고 수락 여부를 반환한다. 거부 이유는 사용하지 않는다.</summary>
+    public bool RequestDodge() => RequestDodge(out _);
+
     /// <summary>
-    /// 현재 이동 입력으로 짧은 회피를 요청하고 수락 여부를 반환한다.
-    /// 공격 대시 중에는 좌우 회피 후 같은 공격을 이어가며 충전·회복·베기·사망·일시정지에서는 거부한다.
+    /// 현재 이동 입력으로 짧은 회피를 요청하고 수락 여부를 반환하며 거부되면 reason에 이유를 출력한다.
+    /// 일반 공격·발도 돌진·돌진 베기·공격 후딜 중이면 그 공격을 먼저 끝내고 회피한다. 가드는 유지한다.
+    /// 충전·다른 회복·사망·일시정지에서는 거부하고, 다른 조건을 통과해도 스태미너가 회피 비용보다 적으면 NotEnoughStamina로 거부한다.
     /// </summary>
-    public bool RequestDodge()
+    public bool RequestDodge(out PlayerInputRejectReason reason)
     {
-        if (Time.timeScale <= 0f || (_state != PlayerActionState.Free && _state != PlayerActionState.Guarding
-            && _state != PlayerActionState.NormalAttack && _state != PlayerActionState.IaidoDash)) return false;
+        if (Time.timeScale <= 0f || _state == PlayerActionState.Paused)
+            reason = PlayerInputRejectReason.Unavailable;
+        else if (!CanDodgeFromState())
+            reason = PlayerInputRejectReason.ActionBusy;
+        else
+            reason = _motor.GetDodgeBlockReason();
+        if (reason == PlayerInputRejectReason.None && !_stamina.CanAffordDodge())
+            reason = PlayerInputRejectReason.NotEnoughStamina;
+        if (reason != PlayerInputRejectReason.None) return false;
+
+        // 공격 상태가 남으면 이동 잠금이 회피를 끊으므로 회피 전에 공격을 끝낸다.
+        if (_state != PlayerActionState.Free && _state != PlayerActionState.Guarding)
+            CancelAttackForDodge();
         return _motor.TryBeginDodge(_requestedMoveInput);
+    }
+
+    /// <summary>
+    /// 강화 공격이 시작되면 진행 중인 일반 공격·발도 돌진·돌진 베기·회복을 결과 없이 끝내 자유 상태로 만든다.
+    /// 가드는 KatanaCombatCoordinator가 끝내며 자유·가드·사망·일시정지 상태는 바꾸지 않는다.
+    /// </summary>
+    public void CancelActionForEmpowerStrike()
+    {
+        if (_state == PlayerActionState.NormalAttack || _state == PlayerActionState.IaidoDash
+            || _state == PlayerActionState.IaidoSlash || _state == PlayerActionState.Recovery)
+            CancelAttackForDodge();
+    }
+
+    /// <summary>현재 행동 상태에서 회피를 받을 수 있는지 반환한다. 자유·가드·일반 공격·발도 돌진·돌진 베기와 공격이 끝난 뒤의 회복이 대상이다.</summary>
+    private bool CanDodgeFromState()
+    {
+        return _state == PlayerActionState.Free
+            || _state == PlayerActionState.Guarding
+            || _state == PlayerActionState.NormalAttack
+            || _state == PlayerActionState.IaidoDash
+            || _state == PlayerActionState.IaidoSlash
+            || (_state == PlayerActionState.Recovery && _attackActionFinished);
+    }
+
+    /// <summary>
+    /// 회피 요청으로 진행 중인 일반 공격·발도 돌진·돌진 베기를 결과 없이 끝내고 자유 상태로 바꾼다. 공격 후 회복이면 바로 끝낸다.
+    /// 남은 피해 판정을 닫고 대상 연계 타수를 초기화하며 발도 돌진은 행동 종료 뒤 멈춘다.
+    /// </summary>
+    private void CancelAttackForDodge()
+    {
+        _targetedComboStrike = 0;
+        if (_state == PlayerActionState.Recovery)
+        {
+            EndRecovery();
+            return;
+        }
+
+        bool dashing = _state == PlayerActionState.IaidoDash;
+        _attackImpactResolved = true;
+        FinishAttackAction(0f, PlayerAttackOutcome.None, true);
+        // 행동을 먼저 끝내야 대시 종료 사건이 베기로 이어지지 않는다.
+        if (dashing) _motor.CancelDash();
     }
 
     /// <summary>웅크리기 진입은 재입력 간격으로 제한하고, 해제는 즉시 이동 장치에 전달합니다.</summary>
@@ -471,7 +533,10 @@ public sealed class PlayerController : MonoBehaviour
         if (resolution.IsComplete) ApplyAttackResolution(resolution);
     }
 
-    /// <summary>duration의 피격 회복을 적용한다. 일반 공격·가드·반격 대시를 중단하고 추가 피해 판정을 닫는다.</summary>
+    /// <summary>
+    /// duration의 피격 회복을 적용한다. 일반 공격·반격 대시를 중단하고 추가 피해 판정을 닫는다.
+    /// 가드 중 막지 못한 피격은 가드 상태와 남은 패링 창을 유지하고 회복을 적용하지 않는다.
+    /// </summary>
     public void NotifyHitReaction(float duration)
     {
         if (_counterDashAttack && _state == PlayerActionState.IaidoDash)
@@ -485,9 +550,8 @@ public sealed class PlayerController : MonoBehaviour
             _attackImpactResolved = true;
             FinishAttackAction(duration, _currentAttackOutcome);
         }
-        else if (_state == PlayerActionState.Free || _state == PlayerActionState.Guarding)
+        else if (_state == PlayerActionState.Free)
         {
-            if (_state == PlayerActionState.Guarding) EndGuard();
             BeginRecovery(duration, PlayerAttackOutcome.None);
         }
         else if (_state == PlayerActionState.Recovery)

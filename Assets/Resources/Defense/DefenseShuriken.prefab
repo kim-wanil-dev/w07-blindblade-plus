@@ -162,8 +162,7 @@ MonoBehaviour:
   _maximumLeadDistance: 4
   _homingTurnRate: 45
   _homingStopDistance: 4
-  _wavePrefab: {fileID: 8013713205375322848, guid: 5d564a80a143c32419e006565d54e678, type: 3}
-  _dodgeCounterRadius: 3
+  _reflectSpeedMultiplier: 2
 --- !u!114 &5956031840736666487
 MonoBehaviour:
   m_ObjectHideFlags: 0

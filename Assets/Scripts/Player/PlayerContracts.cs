@@ -75,21 +75,6 @@ public enum PlayerActionStage
     RequestRejected
 }
 
-/// <summary>
-/// 플레이어가 들어온 공격 1회에 대해 확정한 방어 결과.
-/// DodgeAvoided는 극한 회피 구간, Invulnerable은 그 밖의 회피 무적 구간의 접촉이다.
-/// </summary>
-public enum DefenseOutcome
-{
-    Hit,
-    Guard,
-    NormalParry,
-    PerfectParry,
-    DodgeAvoided,
-    Invulnerable,
-    Ignored
-}
-
 /// <summary>강화 공격 상태 사건의 단계.</summary>
 public enum PlayerEmpowerStage
 {
@@ -131,7 +116,8 @@ public enum PlayerStaminaChangeReason
     DodgeCost,
     PerfectDodgeRefund,
     Regen,
-    Reset
+    Reset,
+    GuardCost
 }
 
 /// <summary>입력 기록의 종류. GuardHoldResume은 누르고 있는 우클릭으로 가드에 다시 들어간 경우다.</summary>
@@ -142,6 +128,22 @@ public enum PlayerInputKind
     GuardHoldResume,
     GuardRelease,
     Dodge
+}
+
+/// <summary>입력이 거부된 이유. 시작·예약·후속 기록에서는 None이다.</summary>
+public enum PlayerInputRejectReason
+{
+    None,
+    Unavailable,
+    Attacking,
+    ActionBusy,
+    AlreadyBuffered,
+    ChainNotOpen,
+    TargetUnavailable,
+    AlreadyDodging,
+    DodgeCooldown,
+    NotGrounded,
+    NotEnoughStamina
 }
 
 /// <summary>입력 처리 결과. BufferDropped는 예약된 입력이 시작되지 못하고 사라진 경우다.</summary>
@@ -319,39 +321,6 @@ public struct PlayerActionEvent
     }
 }
 
-/// <summary>들어온 공격 1회의 방어 판정 결과. 공격 식별값은 DamageContext에서 그대로 복사한다.</summary>
-public readonly struct DefenseResolution
-{
-    public DefenseOutcome Outcome { get; }
-    public int AttackId { get; }
-    public int HitId { get; }
-    public int GuardInputId { get; }
-    public int DodgeId { get; }
-    public float AppliedDamage { get; }
-    public Vector3 ContactPoint { get; }
-    public float GameTime { get; }
-    public double RealTime { get; }
-
-    /// <summary>
-    /// outcome, attackId, hitId, guardInputId, dodgeId, appliedDamage, contactPoint와 판정 시각으로 방어 판정 결과를 만든다.
-    /// guardInputId는 방어에 쓰인 우클릭 입력, dodgeId는 극한 회피·무적 판정에 쓰인 회피이며 없으면 0이다.
-    /// appliedDamage는 실제로 줄어든 체력이다.
-    /// </summary>
-    public DefenseResolution(DefenseOutcome outcome, int attackId, int hitId, int guardInputId, int dodgeId,
-        float appliedDamage, Vector3 contactPoint, float gameTime, double realTime)
-    {
-        Outcome = outcome;
-        AttackId = attackId;
-        HitId = hitId;
-        GuardInputId = guardInputId;
-        DodgeId = dodgeId;
-        AppliedDamage = appliedDamage;
-        ContactPoint = contactPoint;
-        GameTime = gameTime;
-        RealTime = realTime;
-    }
-}
-
 /// <summary>강화 공격 준비·시작·종료 사건. 아직 발행하는 구현이 없다.</summary>
 public readonly struct PlayerEmpowerEvent
 {
@@ -432,7 +401,7 @@ public readonly struct PlayerRevealPulseEvent
     }
 }
 
-/// <summary>스태미너 변경 사건. 아직 발행하는 구현이 없다.</summary>
+/// <summary>스태미너 변경 사건. PlayerStamina가 회피 비용·가드 비용·극한 회피 환불·회복 완료·초기화 때 발행한다.</summary>
 public readonly struct PlayerStaminaEvent
 {
     public float Current { get; }
@@ -466,21 +435,23 @@ public readonly struct PlayerInputRecord
     public int InputId { get; }
     public PlayerInputKind Kind { get; }
     public PlayerInputStatus Status { get; }
+    public PlayerInputRejectReason RejectReason { get; }
     public int ActionId { get; }
     public double DeviceTime { get; }
     public double FrameRealTime { get; }
     public float GameTime { get; }
 
     /// <summary>
-    /// inputId, kind, status, 시작된 행동 actionId와 장치 입력 시각 deviceTime, 처리 프레임의 실시간·게임 시간으로 기록을 만든다.
-    /// actionId는 공격이 즉시 시작된 경우에만 값이 있고 그 외에는 0이다.
+    /// inputId, kind, status, 거부 이유 rejectReason, 시작된 행동 actionId와 장치 입력 시각 deviceTime, 처리 프레임의 실시간·게임 시간으로 기록을 만든다.
+    /// rejectReason은 Rejected일 때만 값이 있고, actionId는 공격이 즉시 시작된 경우에만 값이 있으며 그 외에는 None·0이다.
     /// </summary>
-    public PlayerInputRecord(int inputId, PlayerInputKind kind, PlayerInputStatus status, int actionId,
-        double deviceTime, double frameRealTime, float gameTime)
+    public PlayerInputRecord(int inputId, PlayerInputKind kind, PlayerInputStatus status,
+        PlayerInputRejectReason rejectReason, int actionId, double deviceTime, double frameRealTime, float gameTime)
     {
         InputId = inputId;
         Kind = kind;
         Status = status;
+        RejectReason = rejectReason;
         ActionId = actionId;
         DeviceTime = deviceTime;
         FrameRealTime = frameRealTime;

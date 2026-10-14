@@ -73,6 +73,7 @@ public sealed class PlayerMotor : MonoBehaviour
     private float _dashSlowMotionElapsed;
     private CombatSessionRuntime _timeController;
     private CombatTimeToken _dashSlowMotionToken;
+    private PlayerClock _playerClock;
 
     [Header("짧은 회피")]
     [SerializeField, Min(0.1f)] private float _dodgeDistance = 2.4f;
@@ -128,9 +129,6 @@ private Vector3 _attackLungeDirection;
     private Vector3 _dashDirection;
     private float _dashGoalDistance;
     private float _dashDistanceTravelled;
-    private float _dashMaximumDistance;
-    private float _dashStandOffDistance;
-    private bool _resumeDashAfterDodge;
     private string _dashTargetId;
     private Collider _dashTargetCollider;
     private IPlayerMapService _mapService;
@@ -160,7 +158,7 @@ private Vector3 _attackLungeDirection;
     void LateUpdate()
     {
         if (_cameraPivot == null) return;
-        float decay = Mathf.Exp(-_recoilReturnSpeed * Time.deltaTime);
+        float decay = Mathf.Exp(-_recoilReturnSpeed * Clock.DeltaTime);
         _recoilOffset *= decay;
         _cameraPivot.localPosition = GetCameraBasePosition() + _recoilOffset;
         _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
@@ -180,7 +178,9 @@ private Vector3 _attackLungeDirection;
     public bool IsCrouching => _crouchBlend > 0.001f;
     public bool IsDashing => _isDashing;
     public bool IsDodging => _isDodging;
-    public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Time.time);
+    public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Clock.Now);
+    // 다른 컴포넌트의 OnEnable이 이 컴포넌트의 Awake보다 먼저 시간을 읽을 수 있어 처음 쓸 때 찾는다.
+    private PlayerClock Clock => _playerClock != null ? _playerClock : _playerClock = GetComponent<PlayerClock>();
     public float DodgeStartedAt => _dodgeStartedAt;
 
     private void Awake()
@@ -265,7 +265,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
             return;
 
         if (_characterController.isGrounded)
-            _lastGroundedTime = Time.time;
+            _lastGroundedTime = Clock.Now;
 
         TickCrouch(deltaTime);
 
@@ -399,31 +399,35 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
     }
 
     /// <summary>
-    /// input 방향으로 짧은 회피를 시작하고 접지·재사용 조건을 충족하면 true를 반환한다.
-    /// 공격 대시 중에는 input.x로 대시 방향의 좌우를 고르고 방향 입력이 없으면 오른쪽으로 회피한다.
+    /// 지금 회피를 시작할 수 없는 이유를 반환하고 시작할 수 있으면 None을 반환한다.
+    /// 진행 중인 회피, 꺼진 CharacterController, 접지 유예 초과, 재사용 대기 순으로 검사하며 상태는 바꾸지 않는다.
+    /// </summary>
+    public PlayerInputRejectReason GetDodgeBlockReason()
+    {
+        if (_isDodging) return PlayerInputRejectReason.AlreadyDodging;
+        if (!_characterController.enabled) return PlayerInputRejectReason.Unavailable;
+        if (!HasRecentGroundContact()) return PlayerInputRejectReason.NotGrounded;
+        if (Clock.Now < _nextDodgeTime) return PlayerInputRejectReason.DodgeCooldown;
+        return PlayerInputRejectReason.None;
+    }
+
+    /// <summary>
+    /// input 방향으로 짧은 회피를 시작하고 GetDodgeBlockReason이 None이면 true를 반환한다. 방향 입력이 없으면 뒤로 회피한다.
     /// 시작하면 DodgeStartedAt을 현재 게임 시간으로 바꾸고 DodgeStarted를 발행한다.
     /// </summary>
     public bool TryBeginDodge(Vector2 input)
     {
-        if (_isDodging || !_characterController.enabled || !HasRecentGroundContact()
-            || Time.time < _nextDodgeTime) return false;
+        if (GetDodgeBlockReason() != PlayerInputRejectReason.None) return false;
         if (_characterController.isGrounded)
-            _lastGroundedTime = Time.time;
+            _lastGroundedTime = Clock.Now;
         Vector2 direction = input;
         if (direction.sqrMagnitude < 0.001f) direction = Vector2.down;
         direction.Normalize();
         _dodgeDirection = (transform.right * direction.x + transform.forward * direction.y).normalized;
-        if (_isDashing)
-        {
-            RestoreDashSlowMotion();
-            float side = input.x < -0.01f ? -1f : 1f;
-            _dodgeDirection = Vector3.Cross(Vector3.up, _dashDirection).normalized * side;
-            _resumeDashAfterDodge = true;
-        }
         _dodgeElapsed = 0f;
         _dodgeProgress = 0f;
-        _nextDodgeTime = Time.time + _dodgeCooldown;
-        _dodgeStartedAt = Time.time;
+        _nextDodgeTime = Clock.Now + _dodgeCooldown;
+        _dodgeStartedAt = Clock.Now;
         _isDodging = true;
         _planarVelocity = Vector3.zero;
         ResetWalkStep();
@@ -436,7 +440,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
     private bool HasRecentGroundContact()
     {
         return _characterController.isGrounded
-            || Time.time - _lastGroundedTime <= _dodgeGroundGraceDuration;
+            || Clock.Now - _lastGroundedTime <= _dodgeGroundGraceDuration;
     }
 
     /// <summary>진행 중인 회피와 평면 속도를 정리한다. 이미 사용한 재사용 시간은 유지한다.</summary>
@@ -593,9 +597,9 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         _dodgeProgress = progress;
         bool grounded = (flags & CollisionFlags.Below) != 0 || _characterController.isGrounded;
         if (grounded)
-            _lastGroundedTime = Time.time;
+            _lastGroundedTime = Clock.Now;
 
-        bool groundGraceExpired = Time.time - _lastGroundedTime > _dodgeGroundGraceDuration;
+        bool groundGraceExpired = Clock.Now - _lastGroundedTime > _dodgeGroundGraceDuration;
         if ((flags & CollisionFlags.Sides) != 0 || groundGraceExpired || normalized >= 1f) CancelDodge();
     }
 
@@ -638,9 +642,6 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         _dashTargetId = hasTarget ? targetId : null;
         _dashTargetCollider = targetCollider;
         _dashDistanceTravelled = 0f;
-        _dashMaximumDistance = Mathf.Max(0f, maxDistance);
-        _dashStandOffDistance = Mathf.Max(0f, standOffDistance);
-        _resumeDashAfterDodge = false;
 
         float requestedDistance = Mathf.Max(0f, maxDistance);
         if (hasTarget)
@@ -678,12 +679,6 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
     /// <summary>대시 거리, 벽·적 충돌, 중력과 도착 여부를 갱신합니다.</summary>
 private void TickDash(float deltaTime)
     {
-        if (_resumeDashAfterDodge)
-        {
-            ResumeDashAfterDodge();
-            if (!_isDashing)
-                return;
-        }
         if (TickDashSlowMotion())
             return;
 
@@ -759,32 +754,6 @@ private void TickDash(float deltaTime)
                 ? PlayerDashEndReason.MaxDistanceReached
                 : PlayerDashEndReason.TargetReached);
         }
-    }
-
-    /// <summary>
-    /// 옆 회피가 끝난 현재 위치에서 기존 대상의 방향과 남은 대시 거리를 다시 계산한다.
-    /// 새 대상이나 공격 ID를 만들지 않으며 대상이 사라졌으면 기존 대시를 종료한다.
-    /// </summary>
-    private void ResumeDashAfterDodge()
-    {
-        _resumeDashAfterDodge = false;
-        if (string.IsNullOrEmpty(_dashTargetId))
-            return;
-        if (!_combatService.TryGetTarget(_dashTargetId, out PlayerCombatTarget target) || !target.IsAlive)
-        {
-            FinishDash(PlayerDashEndReason.MaxDistanceReached);
-            return;
-        }
-
-        Vector3 delta = Vector3.ProjectOnPlane(target.WorldPosition - transform.position, Vector3.up);
-        if (delta.sqrMagnitude > 0.0001f)
-            _dashDirection = delta.normalized;
-        _dashTargetCollider = target.HitCollider;
-        float extent = GetTargetExtent(target.HitCollider, target.CollisionRadius, _dashDirection);
-        float remaining = Mathf.Max(0f, _dashMaximumDistance - _dashDistanceTravelled);
-        float distance = Mathf.Clamp(delta.magnitude - extent - _characterController.radius
-            - _characterController.skinWidth - _dashStandOffDistance, 0f, remaining);
-        _dashGoalDistance = _dashDistanceTravelled + distance;
     }
 
     /// <summary>짧은 대시 예고 동안 전역 시간을 낮춘다. 완료되면 원래 배율로 복구하고 즉시 대시를 진행한다.</summary>
@@ -908,7 +877,6 @@ private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out Rayc
             return;
 
         _isDashing = false;
-        _resumeDashAfterDodge = false;
         CancelDodge();
         RestoreDashSlowMotion();
         _planarVelocity = Vector3.zero;
