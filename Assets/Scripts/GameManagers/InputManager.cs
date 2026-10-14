@@ -19,11 +19,8 @@ public sealed class InputManager : MonoBehaviour
     private KatanaCombatCoordinator _combat;
     private PlayerMotor _motor;
     private InputSystem_Actions _actions;
-    private InputAction _crouchHold;
-    private InputAction _crouchToggle;
     private InputAction _guard;
     private InputAction _dodge;
-    private bool _crouchToggled;
     private int _nextInputId;
     private int _guardInputId;
     private double _attackPressTime;
@@ -33,8 +30,6 @@ public sealed class InputManager : MonoBehaviour
     private int _bufferedAttackInputId;
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
-    private int _bufferedGuardInputId;
-    private double _bufferedGuardPressTime;
 
     public bool IsInitialized => _state != null;
     public bool IsGameplayInputEnabled { get; private set; }
@@ -43,13 +38,8 @@ public sealed class InputManager : MonoBehaviour
     void Awake()
     {
         _actions = new InputSystem_Actions();
-        _crouchHold = new InputAction("CrouchHold", InputActionType.Button);
-        _crouchHold.AddBinding("<Keyboard>/leftCtrl");
-        _crouchHold.AddBinding("<Keyboard>/rightCtrl");
-        _crouchToggle = new InputAction("CrouchToggle", InputActionType.Button, "<Keyboard>/c");
         _guard = new InputAction("Guard", InputActionType.Button, "<Mouse>/rightButton");
         _dodge = new InputAction("Dodge", InputActionType.Button, "<Keyboard>/space");
-        _crouchToggle.AddBinding("<Gamepad>/buttonEast");
         _guard.AddBinding("<Gamepad>/leftShoulder");
         _dodge.AddBinding("<Gamepad>/buttonSouth");
         InputAction attack = _actions.Player.Attack;
@@ -81,8 +71,6 @@ public sealed class InputManager : MonoBehaviour
             if (_actions.Player.Attack.WasPressedThisFrame() || _guard.WasPressedThisFrame()) SetCursor(true);
             return;
         }
-        if (_crouchToggle.WasPressedThisFrame()) _crouchToggled = !_crouchToggled;
-        player.SetCrouchInput(_crouchHold.IsPressed() || _crouchToggled);
         player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
         Vector2 look = _actions.Player.Look.ReadValue<Vector2>();
         if (_actions.Player.Look.activeControl != null && _actions.Player.Look.activeControl.device is Gamepad)
@@ -92,46 +80,42 @@ public sealed class InputManager : MonoBehaviour
 
         ResolveBufferedInputs(player);
 
-        // 새 우클릭은 공격을 가드로 전환하고, 계속 누르는 우클릭은 공격 완료 뒤 가드로 복귀시킨다.
+        // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
+        // 계속 누르는 우클릭은 가드가 끝나 자유 상태가 되면 다시 가드와 패링 창을 연다.
         if (_guard.WasPressedThisFrame() && !player.IsGuarding)
         {
             _guardInputId = ++_nextInputId;
-            RequestDefense(player, PlayerInputKind.GuardPress);
+            RequestDefense(PlayerInputKind.GuardPress);
         }
         else if (_guard.IsPressed() && !player.IsGuarding
             && player.CurrentState == PlayerActionState.Free)
-            RequestDefense(player, PlayerInputKind.GuardHoldResume);
+            RequestDefense(PlayerInputKind.GuardHoldResume);
 
         if (_guard.WasReleasedThisFrame())
         {
             _combat.EndDefense();
-            PublishInput(_guardInputId, PlayerInputKind.GuardRelease, PlayerInputStatus.Started, 0, _guardReleaseTime);
+            PublishInput(_guardInputId, PlayerInputKind.GuardRelease, PlayerInputStatus.Started,
+                PlayerInputRejectReason.None, 0, _guardReleaseTime);
         }
         if (_dodge.WasPressedThisFrame()) RequestDodge(player);
         if (_actions.Player.Attack.WasPressedThisFrame()) RequestAttack(player);
     }
 
     /// <summary>
-    /// 현재 우클릭 _guardInputId로 방어를 요청하고 가드 시작·예약·거부 결과를 kind 입력 기록으로 발행한다.
-    /// 누르고 있는 입력의 재진입은 매 프레임 거부될 수 있으므로 가드가 실제로 시작된 경우에만 기록한다.
+    /// 현재 우클릭 _guardInputId로 방어를 요청하고 가드 시작 또는 거부 결과를 kind 입력 기록으로 발행한다.
+    /// 거부 이유는 Coordinator의 LastRejectReason을 사용한다. 누르고 있는 입력의 재진입은 매 프레임 거부될 수 있으므로 가드가 실제로 시작된 경우에만 기록한다.
     /// </summary>
-    private void RequestDefense(PlayerController player, PlayerInputKind kind)
+    private void RequestDefense(PlayerInputKind kind)
     {
-        bool accepted = _combat.BeginDefense(_guardInputId);
-        PlayerInputStatus status = player.IsGuarding ? PlayerInputStatus.Started
-            : accepted ? PlayerInputStatus.Buffered : PlayerInputStatus.Rejected;
-        if (kind == PlayerInputKind.GuardHoldResume && status != PlayerInputStatus.Started) return;
-        if (status == PlayerInputStatus.Buffered && _combat.HasBufferedDefense)
-        {
-            _bufferedGuardInputId = _guardInputId;
-            _bufferedGuardPressTime = _guardPressTime;
-        }
-        PublishInput(_guardInputId, kind, status, 0, _guardPressTime);
+        bool started = _combat.BeginDefense(_guardInputId);
+        if (kind == PlayerInputKind.GuardHoldResume && !started) return;
+        PublishInput(_guardInputId, kind, started ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
+            started ? PlayerInputRejectReason.None : _combat.LastRejectReason, 0, _guardPressTime);
     }
 
     /// <summary>
     /// 새 InputId로 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 입력 기록으로 발행한다.
-    /// 즉시 시작된 경우에만 player의 새 행동 ID를 기록한다.
+    /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
@@ -147,49 +131,42 @@ public sealed class InputManager : MonoBehaviour
             _bufferedAttackActionId = player.CurrentActionId;
             _bufferedAttackPressTime = _attackPressTime;
         }
-        PublishInput(inputId, PlayerInputKind.Attack, status, started ? player.CurrentActionId : 0, _attackPressTime);
+        PublishInput(inputId, PlayerInputKind.Attack, status,
+            accepted ? PlayerInputRejectReason.None : _combat.LastRejectReason,
+            started ? player.CurrentActionId : 0, _attackPressTime);
     }
 
     /// <summary>
-    /// 예약된 공격·가드 입력이 Coordinator에서 처리됐으면 같은 InputId로 Started 또는 BufferDropped 후속 기록을 발행한다.
-    /// 공격은 예약 당시와 player의 행동 ID가 다르면 시작, 가드는 GuardInputId가 같으면 시작으로 보며 판정 상태는 바꾸지 않는다.
+    /// 예약된 공격 입력이 Coordinator에서 처리됐으면 같은 InputId로 Started 또는 BufferDropped 후속 기록을 발행한다.
+    /// 예약 당시와 player의 행동 ID가 다르면 시작으로 보며 판정 상태는 바꾸지 않는다.
     /// </summary>
     private void ResolveBufferedInputs(PlayerController player)
     {
-        if (_bufferedAttackInputId != 0 && !_combat.HasBufferedAttack)
-        {
-            bool started = player.CurrentActionId != _bufferedAttackActionId;
-            PublishInput(_bufferedAttackInputId, PlayerInputKind.Attack,
-                started ? PlayerInputStatus.Started : PlayerInputStatus.BufferDropped,
-                started ? player.CurrentActionId : 0, _bufferedAttackPressTime);
-            _bufferedAttackInputId = 0;
-        }
-
-        if (_bufferedGuardInputId != 0 && !_combat.HasBufferedDefense)
-        {
-            bool started = _combat.GuardInputId == _bufferedGuardInputId;
-            PublishInput(_bufferedGuardInputId, PlayerInputKind.GuardPress,
-                started ? PlayerInputStatus.Started : PlayerInputStatus.BufferDropped, 0, _bufferedGuardPressTime);
-            _bufferedGuardInputId = 0;
-        }
+        if (_bufferedAttackInputId == 0 || _combat.HasBufferedAttack) return;
+        bool started = player.CurrentActionId != _bufferedAttackActionId;
+        PublishInput(_bufferedAttackInputId, PlayerInputKind.Attack,
+            started ? PlayerInputStatus.Started : PlayerInputStatus.BufferDropped, PlayerInputRejectReason.None,
+            started ? player.CurrentActionId : 0, _bufferedAttackPressTime);
+        _bufferedAttackInputId = 0;
     }
 
-    /// <summary>새 InputId로 player의 회피를 요청하고 시작 또는 거부 결과를 입력 기록으로 발행한다.</summary>
+    /// <summary>새 InputId로 player의 회피를 요청하고 시작 또는 거부 결과와 거부 이유를 입력 기록으로 발행한다.</summary>
     private void RequestDodge(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        bool accepted = player.RequestDodge();
+        bool accepted = player.RequestDodge(out PlayerInputRejectReason reason);
         PublishInput(inputId, PlayerInputKind.Dodge,
-            accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected, 0, _dodgePressTime);
+            accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected, reason, 0, _dodgePressTime);
     }
 
     /// <summary>
-    /// inputId·kind·status·actionId와 장치 입력 시각 deviceTime, 현재 프레임의 실시간·게임 시간으로 입력 기록을 만든다.
+    /// inputId·kind·status·rejectReason·actionId와 장치 입력 시각 deviceTime, 현재 프레임의 실시간·게임 시간으로 입력 기록을 만든다.
     /// 만든 기록을 Coordinator의 InputResolved 사건으로 발행하며 입력 처리 결과는 바꾸지 않는다.
     /// </summary>
-    private void PublishInput(int inputId, PlayerInputKind kind, PlayerInputStatus status, int actionId, double deviceTime)
+    private void PublishInput(int inputId, PlayerInputKind kind, PlayerInputStatus status,
+        PlayerInputRejectReason rejectReason, int actionId, double deviceTime)
     {
-        _combat.Events.RaiseInputResolved(new PlayerInputRecord(inputId, kind, status, actionId,
+        _combat.Events.RaiseInputResolved(new PlayerInputRecord(inputId, kind, status, rejectReason, actionId,
             deviceTime, Time.realtimeSinceStartupAsDouble, Time.time));
     }
 
@@ -221,8 +198,6 @@ public sealed class InputManager : MonoBehaviour
     {
         Shutdown();
         _actions.Dispose();
-        _crouchHold.Dispose();
-        _crouchToggle.Dispose();
         _guard.Dispose();
         _dodge.Dispose();
     }
@@ -236,8 +211,6 @@ public sealed class InputManager : MonoBehaviour
         _motor = Game.Player.GetComponent<PlayerMotor>();
         _state.StateChanged += HandleState;
         _actions.Player.Enable();
-        _crouchHold.Enable();
-        _crouchToggle.Enable();
         _guard.Enable();
         _dodge.Enable();
     }
@@ -259,14 +232,12 @@ public sealed class InputManager : MonoBehaviour
         GameplayInputEnabledChanged?.Invoke(enabled);
     }
 
-    /// <summary>Game.Player의 이동·웅크리기·가드·차지·패링 시도를 정리하고 입력 토글과 모터 입력을 초기화한다.</summary>
+    /// <summary>Game.Player의 이동·가드·차지·패링 시도를 정리하고 모터 입력을 초기화한다.</summary>
     private void ClearHeldInput()
     {
-        _crouchToggled = false;
         PlayerController player = Game.Player;
         if (player == null) return;
         player.SetMovementInput(Vector2.zero);
-        player.SetCrouchInput(false);
         player.EndGuard();
         player.EndCharge();
         if (_combat != null) _combat.CancelParryAttempt();
@@ -281,7 +252,10 @@ public sealed class InputManager : MonoBehaviour
         Cursor.visible = !locked;
     }
 
-    /// <summary>튜토리얼 재개에 사용한 command를 복구된 플레이어에 한 번 전달한다. 회피 방향은 현재 이동 입력을 사용한다.</summary>
+    /// <summary>
+    /// 튜토리얼 재개에 사용한 command를 복구된 플레이어에 한 번 전달한다. 회피 방향은 현재 이동 입력을 사용한다.
+    /// 웅크리기 입력은 게임에서 제외했으므로 Crouch 재개는 전달하지 않는다.
+    /// </summary>
     public void ApplyTutorialInput(TutorialResumeInput command)
     {
         PlayerController player = Game.Player;
@@ -299,9 +273,6 @@ public sealed class InputManager : MonoBehaviour
             case TutorialResumeInput.Dodge:
                 player.RequestDodge();
                 break;
-            case TutorialResumeInput.Crouch:
-                player.SetCrouchInput(true);
-                break;
         }
     }
 
@@ -315,10 +286,7 @@ public sealed class InputManager : MonoBehaviour
         _motor = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
-        _bufferedGuardInputId = 0;
         if (_actions != null) _actions.Player.Disable();
-        if (_crouchHold != null) _crouchHold.Disable();
-        if (_crouchToggle != null) _crouchToggle.Disable();
         if (_guard != null) _guard.Disable();
         if (_dodge != null) _dodge.Disable();
         SetCursor(false);

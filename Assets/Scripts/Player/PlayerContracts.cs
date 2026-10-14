@@ -141,6 +141,21 @@ public enum PlayerInputKind
     Dodge
 }
 
+/// <summary>입력이 거부된 이유. 시작·예약·후속 기록에서는 None이다.</summary>
+public enum PlayerInputRejectReason
+{
+    None,
+    Unavailable,
+    Attacking,
+    ActionBusy,
+    AlreadyBuffered,
+    ChainNotOpen,
+    TargetUnavailable,
+    AlreadyDodging,
+    DodgeCooldown,
+    NotGrounded
+}
+
 /// <summary>입력 처리 결과. BufferDropped는 예약된 입력이 시작되지 못하고 사라진 경우다.</summary>
 public enum PlayerInputStatus
 {
@@ -463,21 +478,23 @@ public readonly struct PlayerInputRecord
     public int InputId { get; }
     public PlayerInputKind Kind { get; }
     public PlayerInputStatus Status { get; }
+    public PlayerInputRejectReason RejectReason { get; }
     public int ActionId { get; }
     public double DeviceTime { get; }
     public double FrameRealTime { get; }
     public float GameTime { get; }
 
     /// <summary>
-    /// inputId, kind, status, 시작된 행동 actionId와 장치 입력 시각 deviceTime, 처리 프레임의 실시간·게임 시간으로 기록을 만든다.
-    /// actionId는 공격이 즉시 시작된 경우에만 값이 있고 그 외에는 0이다.
+    /// inputId, kind, status, 거부 이유 rejectReason, 시작된 행동 actionId와 장치 입력 시각 deviceTime, 처리 프레임의 실시간·게임 시간으로 기록을 만든다.
+    /// rejectReason은 Rejected일 때만 값이 있고, actionId는 공격이 즉시 시작된 경우에만 값이 있으며 그 외에는 None·0이다.
     /// </summary>
-    public PlayerInputRecord(int inputId, PlayerInputKind kind, PlayerInputStatus status, int actionId,
-        double deviceTime, double frameRealTime, float gameTime)
+    public PlayerInputRecord(int inputId, PlayerInputKind kind, PlayerInputStatus status,
+        PlayerInputRejectReason rejectReason, int actionId, double deviceTime, double frameRealTime, float gameTime)
     {
         InputId = inputId;
         Kind = kind;
         Status = status;
+        RejectReason = rejectReason;
         ActionId = actionId;
         DeviceTime = deviceTime;
         FrameRealTime = frameRealTime;

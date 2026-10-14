@@ -1,7 +1,7 @@
 using UnityEngine;
 
 
-/// <summary>적의 기존 IDamageable 호출을 받아 피해 전달 전에 회피 무적과 전방 근접·보스 돌진 방어를 확인한다.</summary>
+/// <summary>적의 기존 IDamageable 호출을 받아 피해 전달 전에 회피·반격 무적과 전방 근접 베기·돌진·보스 공격 방어를 확인한다.</summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
 public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
@@ -69,7 +69,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     /// <summary>
     /// context의 공격 1회를 회피·가드·패링으로 판정하고 막지 못하면 체력을 줄인 뒤 결과를 반환한다.
-    /// 회피 판정 구간이면 가드보다 먼저 DodgeAvoided 또는 Invulnerable로 확정한다.
+    /// 회피 판정 구간이면 가드보다 먼저 DodgeAvoided 또는 Invulnerable로, 반격 무적 중이면 보상 없는 Invulnerable로 확정한다.
     /// 그 외에는 Kind가 Projectile이면 진입 방향과 반격 없음 규칙을, 아니면 기존 전방 근접·보스 공격 규칙을 사용하며
     /// 가드가 열린 뒤 지난 시간으로 PerfectParry·NormalParry·Guard를 나눈다.
     /// 사망·일시정지·시간 정지에서는 Ignored를 반환한다. 모든 결과는 반환 전에 DefenseResolved 사건으로 한 번 발행한다.
@@ -83,6 +83,8 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         // 회피 무적은 가드·패링보다 먼저 판정한다. 접촉은 계속 이 경로로 들어오고 피해만 막는다.
         if (TryGetDodgeOutcome(out DefenseOutcome dodgeOutcome))
             return ResolveDodge(context, dodgeOutcome);
+        if (_combat.IsCounterInvulnerable)
+            return PublishResolution(context, DefenseOutcome.Invulnerable, 0f);
 
         // 투사체는 반사·강화 보상을 투사체 쪽에서 처리하므로 근접 자동 반격을 만들지 않는다.
         bool projectile = context.Kind == IncomingAttackKind.Projectile;
@@ -101,13 +103,13 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// <summary>
     /// context의 투사체 진입 방향으로 전방 가드·패링을 검사하고 방어 성공 여부를 반환한다.
     /// parried에 일반 또는 퍼펙트 패링 여부를 출력하며 기존 방어 효과를 적용한다. allowCounter가 false이면 반격 기회를 만들지 않는다.
-    /// 회피 판정 구간이면 막지 않고 false를 반환해 호출자의 TakeDamage가 회피 결과로 처리하게 한다.
+    /// 회피 판정 구간이나 반격 무적 중이면 막지 않고 false를 반환해 호출자의 TakeDamage가 무적 결과로 처리하게 한다.
     /// 방어에 성공한 경우에만 DefenseResolved를 발행하고, 실패는 호출자의 TakeDamage가 발행한다.
     /// </summary>
     public bool TryDefendProjectile(DamageContext context, out bool parried, bool allowCounter = true)
     {
         parried = false;
-        if (!isActiveAndEnabled || TryGetDodgeOutcome(out _)) return false;
+        if (!isActiveAndEnabled || TryGetDodgeOutcome(out _) || _combat.IsCounterInvulnerable) return false;
         bool eligible = IsFrontProjectile(context);
         DefenseOutcome guardOutcome = _combat.GuardContactOutcome;
         if (!_combat.TryDefendIncoming(context, eligible, allowCounter)) return false;
@@ -116,7 +118,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         return true;
     }
 
-    /// <summary>context의 공격자가 실행 중인 유일한 패턴이 근접 공격이고 전방 각도 안에 있는지 반환한다.</summary>
+    /// <summary>context의 공격자가 실행 중인 유일한 패턴이 활성 근접 베기 또는 돌진이고 공격자가 전방 각도 안에 있는지 반환한다.</summary>
     private bool IsFrontMelee(DamageContext context)
     {
         if (context.Instigator == null) return false;
@@ -127,7 +129,8 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
             if (matching != null) return false;
             matching = pattern;
         }
-        if (!(matching is EnemyMeleeAttack) || matching.Phase != EnemyAttackPhase.Active) return false;
+        if (!(matching is EnemyMeleeAttack || matching is EnemyChargeAttack)
+            || matching.Phase != EnemyAttackPhase.Active) return false;
         Vector3 toEnemy = Vector3.ProjectOnPlane(context.Instigator.transform.position - transform.position, Vector3.up);
         Vector3 forward = _motor.ViewForward;
         return toEnemy.sqrMagnitude > 0.0001f && forward.sqrMagnitude > 0.0001f
@@ -183,7 +186,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// </summary>
     private DefenseResolution ResolveDodge(DamageContext context, DefenseOutcome dodgeOutcome)
     {
-        DefenseResolution resolution = PublishResolution(context, dodgeOutcome, 0f);
+        DefenseResolution resolution = PublishResolution(context, dodgeOutcome, 0f, _dodgeId);
         if (dodgeOutcome != DefenseOutcome.DodgeAvoided || _perfectDodgeRewarded) return resolution;
         _perfectDodgeRewarded = true;
         PublishDodge(PlayerDodgeStage.PerfectDodge, context.AttackId);
@@ -239,15 +242,16 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     /// <summary>
     /// context의 AttackId·HitId·Point와 현재 게임 시간·실시간으로 outcome 판정 결과를 만들고 DefenseResolved로 발행한 뒤 반환한다.
-    /// 가드·패링 결과에는 Coordinator의 GuardInputId를, 회피 결과에는 현재 DodgeId를 넣으며 appliedDamage는 이번 판정에서 실제로 줄어든 체력이다.
+    /// 가드·패링 결과에는 Coordinator의 GuardInputId를 넣고, dodgeId는 회피 판정일 때만 전달하며 반격 무적은 0이다.
+    /// appliedDamage는 이번 판정에서 실제로 줄어든 체력이다.
     /// </summary>
-    private DefenseResolution PublishResolution(DamageContext context, DefenseOutcome outcome, float appliedDamage)
+    private DefenseResolution PublishResolution(DamageContext context, DefenseOutcome outcome, float appliedDamage,
+        int dodgeId = 0)
     {
         bool defended = outcome == DefenseOutcome.Guard || outcome == DefenseOutcome.NormalParry
             || outcome == DefenseOutcome.PerfectParry;
-        bool dodged = outcome == DefenseOutcome.DodgeAvoided || outcome == DefenseOutcome.Invulnerable;
         DefenseResolution resolution = new DefenseResolution(outcome, context.AttackId, context.HitId,
-            defended ? _combat.GuardInputId : 0, dodged ? _dodgeId : 0, appliedDamage, context.Point,
+            defended ? _combat.GuardInputId : 0, dodgeId, appliedDamage, context.Point,
             Time.time, Time.realtimeSinceStartupAsDouble);
         _combat.Events.RaiseDefenseResolved(resolution);
         return resolution;
