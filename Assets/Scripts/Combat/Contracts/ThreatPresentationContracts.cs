@@ -47,7 +47,7 @@ namespace BlindBlade.Combat.Contracts
         }
     }
 
-    /// <summary>실제 발소리의 고정 원점과 그 사건에 대한 C의 표시 결과다.</summary>
+    /// <summary>실제 발소리의 고정 원점과 발행자의 현재 위치에 대한 C의 표시 결과다.</summary>
     public readonly struct FootstepPresentationSnapshot
     {
         public CombatEventIdentity EventIdentity { get; }

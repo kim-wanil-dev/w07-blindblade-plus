@@ -1,9 +1,9 @@
 ### 전투·인지·HUD 공통 계약
 
 - 기능 설명: A의 방어 판정, B의 수리검 수명, C의 인지·표시 계산, D의 HUD 적용이 세션·대상·사건 ID를 공유한다.
-- 동작 조건 및 처리 흐름: `GameSceneInitializer`가 `CombatSessionRuntime`을 초기화한다. B 수리검이 세션 ID 발급기를 사용해 공격·투사체 ID를 만들고 `IPlayerDefenseResolver`를 한 번 호출한다. A가 피해와 `DefenseResolution`을 확정한다. C는 수리검과 발소리 원점을 인지 마스크·카메라에 대조해 표시 스냅샷을 발행하고, D는 해당 스냅샷을 방향 HUD에 적용한다.
+- 동작 조건 및 처리 흐름: `GameSceneInitializer`가 `CombatSessionRuntime`을 초기화한다. B 수리검이 공격·투사체 ID를 만들고 resolver를 한 번 호출한다. A가 피해와 DefenseResolution을 확정한다. C는 수리검과 발소리 발행자의 현재 위치를 인지·카메라에 대조해 표시 결과를 발행하고 D가 적용한다. 발소리는 적당 하나로 합치고 비네팅은 실제 DamageReceived의 짧은 펄스로 표시한다.
 - 상태 소유자: 세션·시간 배율은 `CombatSessionRuntime`, 방어·피해는 A의 `KatanaDamageReceiver`, 투사체 수명과 공격 ID 요청은 B의 `DefenseShuriken`, 인지·표시 결과는 C의 `CombatThreatPresentationProvider`, 마커 풀과 전조 표현은 D의 `ShurikenDirectionIndicator`가 소유한다.
-- 구현 상태: 계약 `0.2.0`을 현재 저장소의 정식 BambooDefense 경로에 연결했다. A의 기존 전역 `DefenseOutcome`·`DefenseResolution`·`IncomingAttackKind` 중복 정의를 제거하고 `BlindBlade.Combat.Contracts`로 통합했다. D의 세션 런타임과 B/C 공급자, HP·발소리 HUD를 씬에 연결했다. 스태미너 게이지는 읽기 계약과 연결 슬롯을 구현했으며 실제 원본 공급자를 기다린다. 실제 피격 전용 비네팅 전환, 로그 저장, 강화 공격·극한 회피 연결은 미구현이다. 팀원의 별도 검토·승인으로 간주하지 않는다.
+- 구현 상태: 계약 `0.2.0`을 현재 저장소의 정식 BambooDefense 경로에 연결했다. 공통 방어 타입, 세션 런타임과 B/C 공급자, HP·적별 방향 HUD·피격 펄스를 연결했다. 스태미너 게이지는 읽기 계약 슬롯을 구현했으며 실제 공급자를 기다린다. 로그 저장, 강화 공격·극한 회피 연결은 미구현이다. 팀원의 별도 검토·승인으로 간주하지 않는다.
 
 #### 관련 코드
 
@@ -34,6 +34,7 @@
 - 공식 씬에서는 `CombatSessionRuntime`이 유일한 `Time.timeScale` 쓰기 소유자다. `GameStateManager`는 정지를 요청하고 `PlayerMotor`는 대시 토큰을 등록·해제한다. `TutorialGuide`의 쓰기는 기존 비활성 레거시 코드에 남아 있으며 정식 BambooDefense 씬은 사용하지 않는다.
 - 스태미너 인터페이스는 형태만 있으며 실제 공급자가 없다. 미구현 타입을 플레이 가능한 가짜 값으로 채우지 않는다.
 - HP·스태미너·발소리 HUD의 Inspector 연결·이미지 교체·공급 전 상태는 [전투 HUD](전투_HUD.md)를 따른다. C는 발소리 감쇠와 만료·사망·세대 변경·종료에서 비활성 스냅샷도 발행해 D 마커를 반환한다.
+- 발소리 Origin은 고정하고 표시 방향은 C가 현재 적 위치로 갱신한다. D는 Emitter ID/세대별로 최신 걸음 하나만 표시한다. 실제 피해 비네팅은 DamageReceived에서만 시작하고 unscaledTime으로 종료한다.
 - 사용자는 A/B/C 실제 시스템 연결을 명시적으로 요청했다. 변경은 현재 공유 저장소에 반영했지만 외부 팀원에게 메시지를 보내거나 검토·합의가 완료됐다고 표시하지 않았다.
 
 #### Inspector와 씬 연결
