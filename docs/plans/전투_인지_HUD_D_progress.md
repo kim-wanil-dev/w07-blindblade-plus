@@ -1,7 +1,7 @@
 # 전투·인지·HUD D 진행 기록
 
 - 갱신일: 2026-10-14
-- 현재 상태: **공통 계약 v0.2.0. HP·적당 하나의 발소리 방향 마커/원호·실제 피격 펄스 구현 및 Play 확인 완료. 스태미너 HUD는 실제 공급자 대기. D3/D4의 나머지 범위는 진행 중.**
+- 현재 상태: **D5 현재 사건 로컬 JSON/JSONL·Google Sheets 자동 전송기·수신 스크립트·CSV 전처리 구현 및 씬 연결. C# 컴파일 성공. 실제 Play 수집/전송/CSV 실행은 미확인. HP·적별 발소리 마커/원호·피격 펄스는 이전 Play 확인 완료. 스태미너 공급자 대기.**
 - 요청: A/B/C 통합에 이어 사용자가 HP·스태미너·발소리 HUD를 임시 이미지로 만들고 나중에 이미지만 교체 가능하게 요청했다. 프로젝트 내부 수정은 기존 상시 지침에 따라 별도 승인 없이 진행한다.
 - 최신 요청 반영: 걸음마다 표시하던 발소리를 적 ID/세대당 하나로 합쳐 현재 적 방향을 추적한다. 저체력 지속 비네팅은 피해 때만 잠깐 나타나는 방식으로 변경했다. 발소리 아이콘 밑에는 수리검과 같은 원호를 추가했다.
 - 작업 경로: `C:\Users\JUNGLE\Documents\w07-blindblade-plus`
@@ -19,12 +19,14 @@
 | D2 | 공식 경로 시간 소유권 적용, 부분 완료 | 게임오버·재도전·중복 토큰 해제와 TutorialGuide 활성 여부 확인 |
 | D3 | HP 게이지·피격 펄스·스태미너 HUD 연결 슬롯 구현, 부분 완료 | A의 실제 스태미너 공급자, 완성 아트와 전체 인수 |
 | D4 | 수리검·발소리 HUD 연결, 부분 완료 | 다른 투사체 유형, 화면 안팎 전체 인수와 일반 패링 Play 확인 |
-| D5 | 미착수 | 확정 사건 recorder·저장·전처리 |
+| D5 | 현재 사건 저장·전송·기본 전처리 구현, 부분 완료 | Google 배포/URL·token, 실제 Play·장애·중복·CSV 확인, 입력 공급자/시계 보정·후보 분석 |
 | D6 | 미착수 | 강화 공격·극한 회피·보상·파동 연결 |
 | D7 | 미착수 | 공용 에셋 값과 전체 Intro→BambooDefense→게임오버→재도전 인수 확인 |
 | D8 | 진행 중 | 모든 단계 완료 후 최종 인수 문서 갱신 |
 
 ## 이번 통합에서 정한 단일 계약
+
+> 2026-10-14 D5 작업 시 현재 저장소 재확인: 아래는 이전 통합 당시 기록이다. 현재 PlayerContracts에 전역 DefenseResolution/DefenseOutcome이 다시 존재하고 실제 A 사건도 이를 사용한다. 이번 D5는 실제 전역 사건을 소비하며 A의 타입·판정 코드를 수정하지 않았다. 단일화 현재 완료로 해석하지 않는다.
 
 - `DefenseOutcome`, `IncomingAttackKind`, `DefenseResolution`의 유일한 정의를 `Assets/Scripts/Combat/Contracts/DefenseResolution.cs`의 `BlindBlade.Combat.Contracts`로 통합했다. A의 `DamageContext`와 `PlayerContracts`가 이를 import한다. 전역 중복 타입을 제거해 같은 이름의 API가 둘로 갈라지지 않게 했다.
 - `CombatCorrelationIds`의 원인 연결 ID는 기존 `ActionId:int`와 같은 `int`로 정리했다. 미부여 값은 0이며 원본 사건 순번·표시 Revision·시간 요청 ID만 `long`을 쓴다.
@@ -141,3 +143,19 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - 실제 키보드/패드 전투 전체·24명 초과·연속 피해 정밀 시간 측정은 미확인이다. 원호 튜닝은 CombatFootstepMarker.prefab의 Arc Thickness/Angle/Gap/Tint, 피격 펄스 튜닝은 Player의 PlayerLowHealthVignette에서 한다.
 - 최종 컴파일 completed/compilationFailed=false/오류 0. 기존 KatanaDebugOverlay CS0414는 남는다. 현재 종료 검증에서 native `t.GetParent() == nullptr` assertion이 재현됐다. 이번 수정 전 동일 Editor 로그(10:25 UTC, seq 158~166)에 이미 9건 있었으며 발소리 HUD를 비활성화한 비교에서도 2건 발생했다. UI 표시/펄스 검증과 종료 문제를 구분한다. 원인은 미확인이고 이번 범위에서 기존 종료 문제를 해결했다고 표시하지 않는다.
 - 비교 중 비활성화한 FootstepMarkers는 저장하지 않고 BambooDefense를 다시 열어 복원했다. Player.prefab과 씬의 Duration/Opacity/Width는 0.3/0.45/0.22로 일치한다. 최신 원호 프리팹과 씬은 저장 상태다.
+
+### 2026-10-14 후속 요청: D5 로컬 로그 + Sheets 자동 전송
+
+- 사용자 요청: 현재 기록 가능한 로컬 로그를 구현하고 D5 자동 전송기를 추가한다. 구현 중 사용자가 할 Google 준비 작업을 먼저 안내했다.
+- 코드: `Assets/Scripts/Telemetry/`의 Recorder, Service, DiskStore, Json 변환. `Assets/Editor/CombatTelemetryAuthoring.cs`는 정식 씬에 읽기 전용 소비자만 추가한다. A/B/C 공급자 코드·수치·공개 계약은 수정하지 않았다.
+- 기존 실제 사건: HP 변경/피해/사망, 플레이어 행동/카타나 단계, 방어/회피/파동, 수리검 발사/전조, 스포너 처치, C 표시 플래그/원본 발소리, 시간 배율. 5초 표본과 세션/전투 시작/최종 결과를 추가했다.
+- 실제 입력 발행부·스태미너·강화 공급자는 현재 없다. 계약은 구독하되 기록을 추정하지 않는다. 기존 문서의 전역 타입 제거 기록과 달리 현재 PlayerContracts의 전역 DefenseResolution이 실제 공급자 타입이다. Recorder는 이를 명시적으로 소비하며 재통합은 별도 담당자 합의로 남겼다.
+- 로컬: `Application.persistentDataPath/CombatTelemetry`. 현재 `C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetry`. 세션 JSON + JSONL, PC 설치 익명 ID, URL별 확인 커서, 별도 접속 설정이다.
+- Google: `tools/combat_telemetry/google_apps_script/Code.gs`. 사용자가 시트 ID/32자 이상 token을 Script Properties에 넣고 setupSheets 실행 후 실행사용자=나/접근=모든사용자로 웹 앱을 배포한다. `/exec` URL/token은 로컬 upload-config.json에만 입력한다. 원격 배포·전송은 수행하지 않았다.
+- 내구성: 주기적 백그라운드 저장, 디스크 원본 재전송, 서버 사건 키 중복 제거·script lock, 정확한 batch/event ACK 후에만 커서 이동, 원본 자동 삭제 없음. 메모리/디스크 한도에서 전투는 계속하고 누락/오류를 진단한다. 손상 끝줄·쓰기 실패·강제 종료에는 손실/보류 가능성이 있어 README에 명시했다.
+- 요약: GameOver는 구독 해제가 아니며 LateUpdate의 run_ended로 마지막 실제 피해·방어 수신 뒤 요약한다. 결과 화면 대기는 runRealtimeSeconds에서 제외하고 준비/일시정지/포커스 이탈 포함 여부를 문서화했다. parryCount/defenseCount를 입력 시도 성공률로 해석하지 않는다.
+- 도구: PowerShell5.1+ `Export-Telemetry.ps1` → events.csv/sessions.csv/diagnostics.csv/explicit-links.csv/analysis-manifest.json. 원본을 보존하고 불완전/중복/순번 누락/종료 누락을 진단한다. 후보 매칭·시계 보정·early/late 분석은 미구현이다.
+- 문서: [기능 명세](../features/전투_로컬로그_자동전송.md), [실행/운영 안내](../../tools/combat_telemetry/README.md), 저장 스키마 v0.2를 추가했다. 이전 v0.1 초안은 보존한다.
+- 확인: Unity6000.3.22f1 C# 재컴파일 completed/compilationFailed=false/오류0. Editor API로 BambooDefense/GameSceneInitializer Recorder 및 Player/DefenseDirector/스포너/C 참조를 연결하고 저장했다. Play·자동화 테스트·CSV 실행·실제 Sheets 전송은 수행하지 않았다.
+- 다음 작업자: README의 Google 배포와 로컬 enabled=true 설정 후 수동 확인 목록부터 진행한다. 치명타 순서/재도전/인터넷 복구/중복 ACK/쓰기 실패를 실제 기록으로 확인하기 전 D5 전체 완료로 표시하지 않는다. 현재 브랜치 feature/ui에서 Git CLI/커밋은 사용하지 않았다.
+- 최종 정적 확인: PowerShell 전처리 스크립트 Parser 구문 오류0, Windows PowerShell5.1의 한국어 읽기를 위해 UTF-8 BOM 사용. 마지막 Unity 재컴파일 오류0. 손상 파일은 그 파일의 나머지를 미확인 상태로 보류하고 다른 정상 파일로 진행하도록 보강했다. 실제 프로그램 실행 검증과 구분한다.
