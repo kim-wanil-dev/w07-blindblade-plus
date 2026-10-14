@@ -1,8 +1,8 @@
 ### 전투 HUD
 
-- 기능 설명: BambooDefense의 HP·스태미너 게이지와 실제 적 발소리 방향을 표시한다. 임시 Sprite를 프리팹의 Image Source Image에서 교체할 수 있도록 시각 요소와 데이터 연결을 분리한다.
+- 기능 설명: BambooDefense의 HP·스태미너 게이지, 적 한 명당 하나의 발소리 방향 마커와 실제 피격 때만 나타나는 짧은 비네팅을 표시한다. 임시 Sprite는 프리팹의 Image Source Image에서 교체한다.
 - 동작 조건 및 처리 흐름: HP는 PlayerHealth의 초기 값과 HealthChanged를 읽는다. 스태미너는 IPlayerStaminaReadModel의 Current·Changed를 읽으며 공급자가 없으면 빈 게이지와 미연결 값을 표시한다. 발소리는 C의 FootstepPresentationSnapshot만 소비한다.
-- 구현 상태: 2026-10-14 HP 게이지·발소리 HUD의 실제 공급자 연결과 스태미너 게이지·읽기 계약 연결 슬롯 구현 완료. 스태미너 게임 규칙은 A 소유이며 현재 공급자가 없어 빈 게이지·`-- / --`·불투명도 0.35로 표시한다.
+- 구현 상태: 2026-10-14 HP·적별 방향 마커·실제 피격 펄스 구현/연결 완료. 스태미너 게이지와 읽기 계약 슬롯은 구현했으며 실제 공급자가 없어 빈 게이지·`-- / --`·불투명도 0.35로 표시한다.
 
 #### 관련 코드
 
@@ -10,10 +10,12 @@
 | --- | --- | --- |
 | Assets/Scripts/UI/CombatHud/CombatResourceGauge.cs | SetValue, SetUnavailable | 게이지 값·보간·공급 전 표시 |
 | Assets/Scripts/UI/CombatHud/CombatPlayerHud.cs | BindSources | HP·스태미너 초기 조회와 구독 수명 |
-| Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs | HandleFootstep | 세션·사건별 발소리 표시 풀 |
-| Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs | Show, Hide | 교체 가능한 Image에 C 표시 결과 적용 |
+| Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs | HandleFootstep | 세션·발행자 ID/세대별 표시 풀, 최신 걸음 순번/Revision 비교 |
+| Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs | Show, Hide | 교체 가능한 Image와 그 아래 방향 원호에 C 표시 결과 적용 |
+| Assets/Scripts/Defense/DefenseDirectionMarker.cs | Configure, OnPopulateMesh | 기존 수리검/원호 도형 재사용, 발소리에서는 아이콘 없이 원호만 그리기 |
 | Assets/Scripts/UI/CombatHud/CombatHudReferences.cs | RecordText, DirectionMarkers, PlayerHud, FootstepHud | HUD 내부의 명시적 직렬화 참조 |
 | Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | ExpireFootsteps, PublishEndedFootsteps | C의 감쇠·만료·발행자 사망/세대 변경·종료 사건 |
+| Assets/Scripts/UI/PlayerLowHealthVignette.cs | HandleDamageReceived, ApplyVignette, ResetPulse | 실제 피해 구독, 고정 두께·강도의 짧은 피격 펄스 |
 | Assets/Editor/CombatHudAuthoring.cs | Install | 임시 Sprite·HUD 프리팹 생성 및 기존 씬 연결 |
 | Assets/Editor/BambooDefenseHudAuthoring.cs | Connect | Record·수리검 배열·HP·스태미너·C 공급자 연결 |
 
@@ -23,8 +25,12 @@
 - 기존 기록 텍스트·수리검 방향 마커 12개·게임오버 UI 연결을 유지한다. 기존 HUD 연결 도구는 CombatHudReferences의 명시적 참조를 사용한다. 값 텍스트가 추가돼도 첫 TMP 텍스트를 잘못 연결하지 않는다.
 - 사용자가 HP·스태미너·발소리 HUD 구현과 나중에 이미지만 교체 가능한 구성을 요청했다. 다른 작업자의 새 구현과 충돌하는 공급자는 현재 발견되지 않았다.
 - 스태미너 담당자는 `BlindBlade.Combat.Contracts.IPlayerStaminaReadModel`의 `Current`와 `Changed`를 구현한다. 같은 Player에 붙이면 HUD가 바인딩할 때 한 번 찾는다. 다른 오브젝트라면 씬의 CombatPlayerHud / Stamina Source에 연결한다. 실행 중 공급자를 추가·교체할 때는 `BindSources(health, source)`로 즉시 다시 연결한다.
-- 발소리 HUD는 `Origin`이나 적 Transform을 추적하지 않는다. C의 UiDirection·Proximity·Color·Alpha를 적용하고, WorldVisible이면 UiVisible=false인 기존 정책을 따른다. 세션·Target·Revision으로 이전 표시 갱신을 거부한다.
-- 풀은 HUD 프리팹에 미리 직렬화한 마커 24개를 재사용한다. 런타임 Instantiate는 없다. 빈 슬롯이 없으면 추가 표시는 생략하고 종료·숨김으로 슬롯을 반환한다. 비활성/재활성 시 구독과 초기 스냅샷을 다시 연결하며 풀을 재생성하지 않는다.
+- 발소리 HUD는 `Emitter(EntityId, SpawnGeneration)`별로 슬롯을 하나만 쓴다. 같은 적의 다음 걸음은 기존 슬롯을 갱신한다. 걸음의 SourceSequence를 먼저, 같은 걸음에서는 Revision을 비교해 이전 걸음의 갱신·만료가 최신 마커를 지우지 않게 한다.
+- 실제 `Origin`은 고정 발생 위치로 보존한다. C가 `Presentation.WorldPosition`과 방향·근접도·가시성을 **발행자 적의 현재 위치**로 갱신하고 D는 그 결과만 적용한다. D는 적 Transform을 저장하거나 인지를 재계산하지 않는다. 월드 발자국 효과는 유지한다.
+- 마지막 걸음의 인지가 살아 있는 동안 적의 현재 방향을 따라간다. 다음 걸음이 없으면 마지막 사건의 수명 2초 뒤 사라진다. 사망·세대 변경·세션 종료에서도 정리한다. C의 WorldVisible/UiVisible 상호 배제 정책은 유지한다.
+- 발소리 아이콘 아래에는 수리검과 같은 화면 중심 원의 호가 있다. 아이콘·원호는 같은 방향·Alpha를 사용하고 함께 숨긴다. 기존 DefenseDirectionMarker의 도형을 재사용하며 발소리용 DirectionArc는 Show Icon=false, 기존 수리검 12개는 true다. 명시적 참조 덕분에 새 원호가 수리검 배열에 섞이지 않는다.
+- 비네팅은 `PlayerHealth.DamageReceived`에만 구독한다. HP 초기값·회복·최대치 변경에는 켜지지 않는다. 피해마다 같은 강도·두께로 펄스를 다시 시작하며 연속 피해를 누적해서 화면을 키우지 않는다. 치명타 후 시간 정지에서도 실시간으로 끝난다.
+- 풀은 HUD 프리팹에 미리 직렬화한 마커 24개를 재사용한다. 최대 24명의 적을 동시에 표시하며 런타임 Instantiate는 없다. 빈 슬롯이 없으면 새 적의 표시는 생략한다. 비활성/재활성 시 구독과 초기 스냅샷을 다시 연결하며 풀을 재생성하지 않는다.
 
 #### Inspector 설정과 이미지 교체
 
@@ -44,10 +50,24 @@ HUD 프리팹: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`.
 - CombatStatusCanvas는 Overlay, Sorting Order 3, 기준 1920×1080, Match 0.5다. HP는 좌하단 (48,98), 360×34, 스태미너는 (48,56), 300×28이다. 새 표시용 Graphic은 모두 Raycast Target=false이며 게이지 CanvasGroup도 입력을 가로채지 않는다.
 - CombatResourceGauge: Transition Duration 0.12초, Unavailable Alpha 0.35. 표시 보간만 unscaledDeltaTime을 사용한다.
 - FootstepMarkers / CombatFootstepHud: Markers 배열 24개, Radius 310, Far Size 24, Near Size 36. 화면 가용 반경 안으로 제한한다. 풀을 늘릴 때는 HUD 프리팹에 마커 중첩 인스턴스를 추가하고 Markers 배열에도 연결한다. 발소리 Icon의 Sprite는 위 전용 프리팹에서 교체한다.
+- `CombatFootstepMarker.prefab`의 CombatFootstepMarker / 방향 호: Arc Thickness 4, Arc Angle 18도, Icon Arc Gap 6, Arc Tint 흰색. Tint는 C 색상에 곱한다. DirectionArc 자식의 Show Icon=false는 유지한다. 원호는 아이콘보다 화면 중심 쪽에 배치되고 원의 중심은 화면 중심으로 맞춘다. 새 원호도 Raycast Target=false다.
 - DefenseDirector / CombatThreatPresentationProvider: Footstep Lifetime 2초, Fade Duration 0.5초. C가 실시간 수명·감쇠·종료 상태를 발행한다.
+- Player 프리팹/씬의 `PlayerLowHealthVignette`: Duration 0.3초, Peak Opacity 0.45, Width 0.22. 색상과 일렁임도 해당 Inspector에서 조절한다. 이름·스크립트 GUID·셰이더 연결은 유지했다. `_maxVignetteOpacity`→`_peakOpacity`, `_maxVignetteWidth`→`_width`는 FormerlySerializedAs로 이관하고 정식 프리팹·씬에는 새 기본값을 저장했다. 과거 최소값 필드와 HP 임계값은 제거했다.
 - 재설치 메뉴는 `BlindBlade/대숲 방어/HUD/임시 전투 HUD 설치·연결`이다. 현재 BambooDefense 편집 모드에서 실행한다. 기존 이미지·새 Canvas·프리팹이 있으면 재생성하지 않으며 원본 연결만 갱신한다.
 
-#### 검증
+#### 적별 방향·피격 펄스 변경 검증
+
+- 재컴파일 up_to_date, failed=false, 오류·경고 0건. 열린 BambooDefense의 연결을 유지하고 Player 프리팹과 씬의 펄스 설정을 Unity Editor로 저장했다.
+- 자연 전투 표본 1: 유효 걸음 9개·발행자 1명·표시 마커 1개. 표본 2: 유효 걸음 13개·발행자 2명·표시 마커 2개. 전체 슬롯은 24개로 유지됐다.
+- 두 표본에서 C 표시 위치와 적의 현재 위치 차이는 0이었다. 고정 Origin과 표시 위치는 0.22~0.56m 달라져 현재 적을 따라가는 것을 확인했다.
+- 원호 추가 후 걸음 9개·발행자 1명·마커 1개·활성 원호 1개를 확인했다. 인지 만료 후 아이콘·원호는 모두 0개였다. 저장 씬에는 발소리 원호 24개, 수리검 12개가 있고 새 원호의 Raycast Target은 모두 false다. 기존 수리검 Show Icon은 12개 모두 true다.
+- 실제 피해 경로를 호출해 HP 99와 HP 25 모두 peak=0.45·width=0.22를 확인했다. 뒤이어 opacity=0·Image 비활성으로 바뀌었다. 회복 뒤에는 비활성을 유지했다.
+- 치명타 HP 0·timeScale 0에서도 즉시 peak=0.45로 켜지고 이후 opacity=0·비활성으로 끝났다. 체력 부족으로 지속되는 비네팅은 없다.
+- GameView의 사망 후 화면에서 가장자리 붉은 효과가 남지 않는 것을 확인했다. `UserSettings/CombatHud/Hud-DamagePulse-Expired.png`가 근거다. 실제 키보드/패드 가드·연속 피격 전체 인수는 미확인이다. 테스트 코드는 작성하지 않았다.
+- `UserSettings/CombatHud/Hud-EnemyDirection-Arc.png`에서 적별 발소리 아이콘과 그 아래 원호, HP 60에서 지속 비네팅이 없는 화면을 확인했다. 검증 중 임시 freeze·runInBackground는 저장하지 않았고 종료 시 복원했다.
+- 최종 재컴파일 completed, compilationFailed=false, 오류 0건. 기존 KatanaDebugOverlay CS0414 경고가 Console에 있다. Play 종료 시 Unity native `t.GetParent() == nullptr` assertion도 재현됐다. 이번 수정 전 `2026-10-14 10:25 UTC` 로그에 같은 assertion 9건이 있었고, 발소리 HUD를 비활성화한 자연 사망/종료 비교에서도 2건이었다. 원인은 미확인으로 남기며 새 원호만의 문제로 판단하지 않는다. 이전 도입 단계의 통과 기록을 전체 종료 문제 해결 근거로 재사용하지 않는다.
+
+#### 이전 HUD 도입 검증 (걸음별 마커 정책 당시 기록)
 
 - Unity Editor 6000.3.22f1 재컴파일 completed, compilationFailed=false, 오류·경고 0건.
 - 최종 저장 씬 조회: Missing Script 0, 기존 방향 마커 12/누락 0, 중첩 발소리 마커 24, 새 Image 30/이미지 누락 0/Raycast Target 0. HUD 설치를 다시 실행해도 중복되지 않았다. 편집 모드·씬 저장 상태·HP 기본값 100으로 종료했다.

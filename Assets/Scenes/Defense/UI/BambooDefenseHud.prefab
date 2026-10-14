@@ -67,6 +67,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &685528417279636183
@@ -273,6 +274,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &805690681296219013
@@ -342,6 +344,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &914247609637675899
@@ -720,6 +723,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &2266341476620444621
@@ -864,6 +868,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &2413014391833249747
@@ -933,6 +938,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &2894981703698881418
@@ -1077,6 +1083,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &3647890753777709768
@@ -1146,6 +1153,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &4213963618602607267
@@ -1483,6 +1491,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &4983926447461665891
@@ -1928,6 +1937,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &6646563486357915424
@@ -1997,6 +2007,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &7006200990624832129
@@ -2129,6 +2140,7 @@ MonoBehaviour:
       m_Calls: []
   _radius: 230
   _iconSize: 16
+  _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
 --- !u!1 &7706114903086575250
