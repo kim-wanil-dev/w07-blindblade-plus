@@ -98,9 +98,9 @@
 ## 7. 미구현 및 다음 범위
 
 - `IPlayerStaminaReadModel`은 데이터 계약만 있고 공급자가 없다. HUD가 추정값을 만들지 않는다.
-- `CombatTelemetryEnvelope`와 `combat-telemetry-v0.1.schema.json`은 저장 명세일 뿐 저장기·payload 검증·전처리기는 없다.
+- `CombatTelemetryEnvelope` 기반 D5 저장기·Sheets 수신 검증·기본 CSV 전처리를 구현했다. 현재 저장 스키마는 별도 `combat-telemetry-v0.2.schema.json`이며 v0.1 초안은 이력으로 유지한다. 실제 수집·원격 전송·입력 시계 보정·후보 분석은 미확인/미구현이다. [D5 안내](../../tools/combat_telemetry/README.md)를 따른다.
 - A의 강화 준비/시작/종료, 스태미너, 회피 보상, 퍼펙트 파동 사건은 형식 일부만 있다.
-- D의 HP·적별 발소리 방향·피격 펄스는 실제 공급자와 연결했고 스태미너 HUD는 공급자를 기다린다. 로그 저장과 전체 Play 통합 인수가 남아 있다.
+- D의 HP·적별 발소리 방향·피격 펄스는 실제 공급자와 연결했고 스태미너 HUD는 공급자를 기다린다. D5 저장·전송 코드는 연결했고 실제 수집·전송 및 전체 Play 통합 인수가 남아 있다.
 - 현재 저장소 변경은 외부 팀원의 검토 완료를 뜻하지 않는다. 병합하거나 추가 변경을 적용하기 전에 각 담당자의 작업공간과 미저장 Editor 상태를 대조한다.
 
 ## 8. 적용 기록과 검증

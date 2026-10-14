@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "D5 combat telemetry 0.2.0",
+  "description": "Local recorder and Sheets receiver wire format. Source sequence is observer assigned except original C footsteps. Unknown IDs remain zero.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contractVersion",
+    "buildVersion",
+    "configVersion",
+    "anonymousPlayerId",
+    "sessionId",
+    "sessionGeneration",
+    "eventSequence",
+    "sourceId",
+    "sourceSequence",
+    "eventType",
+    "occurredAt",
+    "recordedAt",
+    "correlation",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "0.2.0"
+    },
+    "contractVersion": {
+      "const": "0.2.0"
+    },
+    "buildVersion": {
+      "type": "string"
+    },
+    "configVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "anonymousPlayerId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "sessionGeneration": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "eventSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "eventType": {
+      "enum": [
+        "session_started",
+        "state_changed",
+        "session_ended",
+        "combat_started",
+        "progress_sample",
+        "resource_changed",
+        "damage_applied",
+        "player_died",
+        "run_ended",
+        "action_phase",
+        "katana_phase",
+        "defense_resolved",
+        "input_resolved",
+        "dodge_changed",
+        "empower_changed",
+        "reveal_pulse",
+        "projectile_lifecycle",
+        "throw_telegraph",
+        "enemy_lifecycle",
+        "threat_presentation_changed",
+        "footstep",
+        "time_scale_changed"
+      ]
+    },
+    "occurredAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realtimeSeconds",
+        "gameplaySeconds",
+        "activeUnscaledSeconds"
+      ],
+      "properties": {
+        "realtimeSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gameplaySeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "activeUnscaledSeconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "recordedAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realtimeSeconds",
+        "gameplaySeconds",
+        "activeUnscaledSeconds"
+      ],
+      "properties": {
+        "realtimeSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gameplaySeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "activeUnscaledSeconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputId",
+        "actionId",
+        "attackId",
+        "hitId",
+        "projectileId",
+        "dodgeId"
+      ],
+      "properties": {
+        "inputId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "actionId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "attackId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "hitId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "projectileId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "dodgeId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

@@ -3,7 +3,7 @@
 - 기능 설명: A의 방어 판정, B의 수리검 수명, C의 인지·표시 계산, D의 HUD 적용이 세션·대상·사건 ID를 공유한다.
 - 동작 조건 및 처리 흐름: `GameSceneInitializer`가 `CombatSessionRuntime`을 초기화한다. B 수리검이 공격·투사체 ID를 만들고 resolver를 한 번 호출한다. A가 피해와 DefenseResolution을 확정한다. C는 수리검과 발소리 발행자의 현재 위치를 인지·카메라에 대조해 표시 결과를 발행하고 D가 적용한다. 발소리는 적당 하나로 합치고 비네팅은 실제 DamageReceived의 짧은 펄스로 표시한다.
 - 상태 소유자: 세션·시간 배율은 `CombatSessionRuntime`, 방어·피해는 A의 `KatanaDamageReceiver`, 투사체 수명과 공격 ID 요청은 B의 `DefenseShuriken`, 인지·표시 결과는 C의 `CombatThreatPresentationProvider`, 마커 풀과 전조 표현은 D의 `ShurikenDirectionIndicator`가 소유한다.
-- 구현 상태: 계약 `0.2.0`을 현재 저장소의 정식 BambooDefense 경로에 연결했다. 공통 방어 타입, 세션 런타임과 B/C 공급자, HP·적별 방향 HUD·피격 펄스를 연결했다. 스태미너 게이지는 읽기 계약 슬롯을 구현했으며 실제 공급자를 기다린다. 로그 저장, 강화 공격·극한 회피 연결은 미구현이다. 팀원의 별도 검토·승인으로 간주하지 않는다.
+- 구현 상태: 계약 `0.2.0`의 세션 런타임과 B/C 공급자, HP·적별 방향 HUD·피격 펄스를 연결했다. 스태미너 게이지는 실제 공급자를 기다린다. D5 현재 사건 로컬 저장·Sheets 자동 전송·기본 CSV 전처리를 구현했으며 실제 수집/전송은 미확인이다. 강화 공격 등 나머지 통합은 후속 범위다. 현재 A에 전역 방어 타입이 존재하므로 과거 단일화 기록을 현재 완료 상태로 해석하지 않는다. 팀원의 별도 검토·승인으로 간주하지 않는다.
 
 #### 관련 코드
 
