@@ -18,6 +18,7 @@
 | Assets/Scripts/Defense/DefenseShuriken.cs | Launch, ProcessHit | 공격/투사체 ID 부여와 단일 방어 resolver 호출 |
 | Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | PublishThreatSnapshots, HandleFootstep | 인지·카메라 표시 결과와 발소리 사건 발행 |
 | Assets/Scripts/Rendering/ThreatPresentationContractAdapter.cs | PublishNow, GetCurrentThreats | C 거리·외형 판정을 공통 결과로 변환하고 기존 공급자에 연결 |
+| Assets/Scripts/Rendering/EnemyFootstepCandidates.cs | RecordFootstep, RefreshNow, GetCurrentFootsteps | 실제 발걸음의 적별 최신 후보·현재 위치 추적·청각 자격·게임 시간 수명 |
 | Assets/Scripts/Enemies/ShurikenPerceptionEffect.cs | LateUpdate | 월드 수리검에 같은 인지 가시성 기준 적용 |
 | Assets/Scripts/Defense/ShurikenDirectionIndicator.cs | HandleThreatChanged, UpdateMarker | 세션·대상·Revision 기준 HUD 반영 |
 | Assets/Scripts/UI/CombatHud/ | CombatPlayerHud, CombatResourceGauge, CombatFootstepHud, CombatFootstepMarker, CombatHudReferences | HP·스태미너 연결, 발소리 Image 풀, 명시적 HUD 참조 |
@@ -58,3 +59,10 @@
 - 기존 D 공급자·HUD 연결을 유지하면서 선택 슬롯으로 C 결과를 받는다. WorldVisible 전환 시 방향 마커를 즉시 숨겨 월드와 UI의 페이드 중첩을 막는다. 발소리 정책·HP·스태미너·시간 제어는 변경하지 않는다.
 - C 전용 씬에서 사용자 확인: C/D 목록·전달 값 일치, 대표 대상 자격·색·근접도, 생명 세대 변경, 새 세션 ID, 어댑터 중단 시 목록 정리·재활성화, 새 Console 오류 없음.
 - 정식 BambooDefense의 B 대상과 C 컴포넌트 연결은 남아 있다. 기존 ShurikenPerceptionEffect의 Renderer.enabled 제어도 실제 월드 통합 때 표시 소유권을 정리해야 한다. 상세 매핑과 Inspector는 위협 표시 판정 명세를 따른다.
+
+#### C 발소리 후보 연결 후속 기록
+
+- feature/footstep-candidates에서 D 공급자의 Footstep Candidate Source 선택 슬롯을 추가했다. 연결하면 실제 EnemyFootsteps 사건을 C 후보로 전달하고 같은 공통 스냅샷을 기존 HUD에 발행한다. 공통 타입·버전 0.2.0과 HUD 풀은 바꾸지 않는다.
+- 사용자 후속 선택으로 표시 방향은 적의 현재 위치를 추적한다. Origin·OccurredAt은 발생 기록으로 고정한다. 현재 수평 거리 20m 안에서만 UI를 허용하며 적이 실제 월드 표시 중이면 UI를 숨긴다.
+- 후보는 적마다 최신 하나, 별도 수량 상한 없음이다. 게임 시간 수명 0.8초와 마지막 0.3초 페이드는 발생 시 복사하며 설정 변경은 새 걸음부터 적용한다. 청각 범위·공통 색상 변경은 현재 후보에도 적용한다.
+- 후보 슬롯 미연결인 실제 씬의 기존 2초 실시간 발소리는 유지한다. 상세 구현·연결·확인 상태는 [발소리 후보](발소리_후보.md)를 따른다.

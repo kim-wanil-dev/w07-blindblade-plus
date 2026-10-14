@@ -30,7 +30,7 @@
 - 풀은 HUD 프리팹에 미리 직렬화한 마커 24개를 재사용한다. 런타임 Instantiate는 없다. 빈 슬롯이 없으면 추가 표시는 생략하고 종료·숨김으로 슬롯을 반환한다. 비활성/재활성 시 구독과 초기 스냅샷을 다시 연결하며 풀을 재생성하지 않는다.
 - 발소리 HUD는 `Emitter(EntityId, SpawnGeneration)`별로 슬롯을 하나만 쓴다. 같은 적의 다음 걸음은 기존 슬롯을 갱신한다. 걸음의 SourceSequence를 먼저, 같은 걸음에서는 Revision을 비교해 이전 걸음의 갱신·만료가 최신 마커를 지우지 않게 한다.
 - 실제 `Origin`은 고정 발생 위치로 보존한다. C가 `Presentation.WorldPosition`과 방향·근접도·가시성을 **발행자 적의 현재 위치**로 갱신하고 D는 그 결과만 적용한다. D는 적 Transform을 저장하거나 인지를 재계산하지 않는다. 월드 발자국 효과는 유지한다.
-- 마지막 걸음의 인지가 살아 있는 동안 적의 현재 방향을 따라간다. 다음 걸음이 없으면 마지막 사건의 수명 2초 뒤 사라진다. 사망·세대 변경·세션 종료에서도 정리한다. C의 WorldVisible/UiVisible 상호 배제 정책은 유지한다.
+- 마지막 걸음의 인지가 살아 있는 동안 적의 현재 방향을 따라간다. 기존 공급자 경로는 마지막 사건의 수명 2초 뒤 사라진다. C 최신 후보 슬롯을 연결한 경로는 별도 청각 범위 기본 20m, 수명 0.8 게임 초·마지막 0.3 게임 초 페이드를 사용한다. 사망·세대 변경·세션 종료에서도 정리한다. C의 WorldVisible/UiVisible 상호 배제 정책은 유지한다.
 - 발소리 아이콘 아래에는 수리검과 같은 화면 중심 원의 호가 있다. 아이콘·원호는 같은 방향·Alpha를 사용하고 함께 숨긴다. 기존 DefenseDirectionMarker의 도형을 재사용하며 발소리용 DirectionArc는 Show Icon=false, 기존 수리검 12개는 true다. 명시적 참조 덕분에 새 원호가 수리검 배열에 섞이지 않는다.
 - 비네팅은 `PlayerHealth.DamageReceived`에만 구독한다. HP 초기값·회복·최대치 변경에는 켜지지 않는다. 피해마다 같은 강도·두께로 펄스를 다시 시작하며 연속 피해를 누적해서 화면을 키우지 않는다. 치명타 후 시간 정지에서도 실시간으로 끝난다.
 - 풀은 HUD 프리팹에 미리 직렬화한 마커 24개를 재사용한다. 최대 24명의 적을 동시에 표시하며 런타임 Instantiate는 없다. 빈 슬롯이 없으면 새 적의 표시는 생략한다. 비활성/재활성 시 구독과 초기 스냅샷을 다시 연결하며 풀을 재생성하지 않는다.
@@ -54,7 +54,7 @@ HUD 프리팹: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`.
 - CombatResourceGauge: Transition Duration 0.12초, Unavailable Alpha 0.35. 표시 보간만 unscaledDeltaTime을 사용한다.
 - FootstepMarkers / CombatFootstepHud: Markers 배열 24개, Radius 310, Far Size 24, Near Size 36. 화면 가용 반경 안으로 제한한다. 풀을 늘릴 때는 HUD 프리팹에 마커 중첩 인스턴스를 추가하고 Markers 배열에도 연결한다. 발소리 Icon의 Sprite는 위 전용 프리팹에서 교체한다.
 - `CombatFootstepMarker.prefab`의 CombatFootstepMarker / 방향 호: Arc Thickness 4, Arc Angle 18도, Icon Arc Gap 6, Arc Tint 흰색. Tint는 C 색상에 곱한다. DirectionArc 자식의 Show Icon=false는 유지한다. 원호는 아이콘보다 화면 중심 쪽에 배치되고 원의 중심은 화면 중심으로 맞춘다. 새 원호도 Raycast Target=false다.
-- DefenseDirector / CombatThreatPresentationProvider: Footstep Lifetime 2초, Fade Duration 0.5초. C가 실시간 수명·감쇠·종료 상태를 발행한다.
+- DefenseDirector / CombatThreatPresentationProvider: 미연결 기존 발소리는 Footstep Lifetime 2초, Fade Duration 0.5초다. Footstep Candidate Source에 C EnemyFootstepCandidates를 연결하면 Assets/Settings/Perception/ThreatPresentationSettings.asset의 Footstep Hearing Radius 20m, Lifetime 0.8 게임 초, Fade Duration 0.3 게임 초를 사용한다. 새 정책의 범위·연결·검증은 [발소리 후보](발소리_후보.md)를 따른다.
 - Player 프리팹/씬의 `PlayerLowHealthVignette`: Duration 0.3초, Peak Opacity 0.45, Width 0.22. 색상과 일렁임도 해당 Inspector에서 조절한다. 이름·스크립트 GUID·셰이더 연결은 유지했다. `_maxVignetteOpacity`→`_peakOpacity`, `_maxVignetteWidth`→`_width`는 FormerlySerializedAs로 이관하고 정식 프리팹·씬에는 새 기본값을 저장했다. 과거 최소값 필드와 HP 임계값은 제거했다.
 - 재설치 메뉴는 `BlindBlade/대숲 방어/HUD/임시 전투 HUD 설치·연결`이다. 현재 BambooDefense 편집 모드에서 실행한다. 기존 이미지·새 Canvas·프리팹이 있으면 재생성하지 않으며 원본 연결만 갱신한다.
 

@@ -5,9 +5,10 @@ using UnityEngine;
 
 using BlindBlade.Combat.Contracts;
 
+using CFootstepCandidates = BlindBlade.Perception.EnemyFootstepCandidates;
 using CThreatAdapter = BlindBlade.Perception.ThreatPresentationContractAdapter;
 
-/// <summary>연결된 C 위협 결과와 기존 발소리 결과를 공통 계약으로 HUD에 제공한다. 미연결 위협은 기존 경로를 사용한다.</summary>
+/// <summary>연결된 C 위협·발소리 결과를 공통 계약으로 HUD에 제공한다. 미연결 슬롯은 각각 기존 경로를 사용한다.</summary>
 [DefaultExecutionOrder(-5)]
 [DisallowMultipleComponent]
 public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPresentationProvider
@@ -15,6 +16,10 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     [Header("C 위협 판정 연결")]
     [SerializeField, Tooltip("연결하면 C의 월드/UI·색상·Alpha를 그대로 사용한다. 비워 두면 기존 수리검 정책을 유지한다.")]
     private CThreatAdapter _threatPresentationSource;
+
+    [Header("C 발소리 판정 연결")]
+    [SerializeField, Tooltip("연결하면 실제 발걸음을 C 최신 후보로 전달하고 청각 범위·게임 시간 수명을 사용한다.")]
+    private CFootstepCandidates _footstepCandidateSource;
 
     [Header("위협 표시 정책")]
     [SerializeField, Min(0f)] private float _visibilityThreshold;
@@ -42,6 +47,10 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     private readonly List<ActiveFootstep> _activeFootsteps = new List<ActiveFootstep>();
     private readonly List<FootstepPresentationSnapshot> _currentFootsteps =
         new List<FootstepPresentationSnapshot>();
+    private readonly Dictionary<CombatEntityKey, FootstepPresentationSnapshot> _forwardedFootsteps =
+        new Dictionary<CombatEntityKey, FootstepPresentationSnapshot>();
+    private readonly HashSet<CombatEntityKey> _seenFootstepEmitters = new HashSet<CombatEntityKey>();
+    private readonly List<CombatEntityKey> _endedFootstepEmitters = new List<CombatEntityKey>();
     private CombatSessionRuntime _sessionRuntime;
     private SensoryPerceptionMask _perceptionMask;
     private Camera _playerCamera;
@@ -83,6 +92,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             if (_hasSessionKey)
             {
                 PublishEndedFootsteps();
+                PublishEndedForwardedFootsteps();
                 _footstepSequences.Clear();
                 _hasSessionKey = false;
             }
@@ -90,18 +100,28 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         }
         if (_threatPresentationSource != null)
             PublishThreatSnapshots();
+        if (_footstepCandidateSource != null)
+        {
+            if (_activeFootsteps.Count > 0)
+                PublishEndedFootsteps();
+            PublishCandidateFootsteps();
+        }
+        else if (_forwardedFootsteps.Count > 0)
+            PublishEndedForwardedFootsteps();
         if (!TryGetPresentationServices())
         {
             if (_threatPresentationSource == null)
                 PublishEndedThreats();
             UnsubscribeFootsteps();
-            PublishEndedFootsteps();
+            if (_footstepCandidateSource == null)
+                PublishEndedFootsteps();
             return;
         }
         RefreshFootstepSubscriptions();
         if (_threatPresentationSource == null)
             PublishThreatSnapshots();
-        ExpireFootsteps();
+        if (_footstepCandidateSource == null)
+            ExpireFootsteps();
     }
 
     void OnDisable()
@@ -109,6 +129,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         UnsubscribeFootsteps();
         PublishEndedThreats();
         PublishEndedFootsteps();
+        PublishEndedForwardedFootsteps();
     }
 
     /// <summary>현재 C 연결 또는 기존 수리검 경로가 제공한 위협 스냅샷 목록을 읽기 전용으로 반환한다.</summary>
@@ -137,6 +158,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             {
                 PublishEndedThreats();
                 PublishEndedFootsteps();
+                PublishEndedForwardedFootsteps();
             }
             UnsubscribeFootsteps();
             _activeFootsteps.Clear();
@@ -266,7 +288,6 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         ThreatChanged?.Invoke(snapshot);
     }
 
-    /// <summary>등록된 발소리 사건의 만료 시각을 확인하고 현재 조회 목록을 다시 만든다.</summary>
     /// <summary>등록된 발소리의 수명·발행자를 확인하고 적의 현재 위치로 표시 결과와 초기 조회 목록을 갱신한다.</summary>
     private void ExpireFootsteps()
     {
@@ -309,6 +330,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         if (health == null || !health.IsAlive)
             return;
 
+        if (_footstepCandidateSource != null)
+        {
+            _footstepCandidateSource.RecordFootstep(health, position);
+            return;
+        }
+
         CombatEntityKey emitter = new CombatEntityKey(health.TargetId, health.SpawnGeneration);
         _footstepSequences.TryGetValue(emitter, out long sequence);
         sequence++;
@@ -323,6 +350,53 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         _activeFootsteps.Add(new ActiveFootstep(snapshot,
             Time.realtimeSinceStartupAsDouble + _footstepLifetime, health));
         FootstepChanged?.Invoke(snapshot);
+    }
+
+    /// <summary>C의 최신 발소리 후보를 재판정 없이 복사하고 교체·만료·비활성화된 이전 걸음의 종료를 발행한다.</summary>
+    private void PublishCandidateFootsteps()
+    {
+        _currentFootsteps.Clear();
+        _seenFootstepEmitters.Clear();
+        if (_footstepCandidateSource.isActiveAndEnabled)
+        {
+            foreach (FootstepPresentationSnapshot source in _footstepCandidateSource.GetCurrentFootsteps())
+            {
+                if (!IsSameSession(source.Presentation.Session, _sessionKey) || !source.Presentation.IsActive)
+                    continue;
+                if (_forwardedFootsteps.TryGetValue(source.Emitter, out FootstepPresentationSnapshot previous)
+                    && (previous.EventIdentity.SourceId != source.EventIdentity.SourceId
+                        || previous.EventIdentity.SourceSequence != source.EventIdentity.SourceSequence))
+                    PublishEndedFootstep(previous);
+                ThreatPresentationSnapshot value = source.Presentation;
+                ThreatPresentationSnapshot presentation = new ThreatPresentationSnapshot(value.Session, value.Target, ++_revision,
+                    value.IsActive, value.IsEligible, value.IsInCamera, value.WorldVisible, value.UiVisible,
+                    value.UiDirection, value.WorldPosition, value.Proximity, value.Color, value.Alpha);
+                FootstepPresentationSnapshot snapshot = new FootstepPresentationSnapshot(source.EventIdentity,
+                    source.Emitter, source.Origin, source.OccurredAt, presentation);
+                _seenFootstepEmitters.Add(source.Emitter);
+                _forwardedFootsteps[source.Emitter] = snapshot;
+                _currentFootsteps.Add(snapshot);
+                FootstepChanged?.Invoke(snapshot);
+            }
+        }
+        _endedFootstepEmitters.Clear();
+        foreach (CombatEntityKey key in _forwardedFootsteps.Keys)
+            if (!_seenFootstepEmitters.Contains(key))
+                _endedFootstepEmitters.Add(key);
+        foreach (CombatEntityKey key in _endedFootstepEmitters)
+        {
+            PublishEndedFootstep(_forwardedFootsteps[key]);
+            _forwardedFootsteps.Remove(key);
+        }
+    }
+
+    /// <summary>입력 없이 C에서 전달받은 모든 발소리의 종료를 발행하고 D의 조회·추적 목록을 비운다.</summary>
+    private void PublishEndedForwardedFootsteps()
+    {
+        foreach (FootstepPresentationSnapshot snapshot in _forwardedFootsteps.Values)
+            PublishEndedFootstep(snapshot);
+        _forwardedFootsteps.Clear();
+        _currentFootsteps.Clear();
     }
 
     /// <summary>position·활성/자격 상태·alphaMultiplier로 인지 가시성, 화면 방향, 표시 색상·투명도 스냅샷을 반환한다.</summary>

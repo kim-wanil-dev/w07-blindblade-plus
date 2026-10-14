@@ -122,6 +122,8 @@
 
 ### 안전한 변경 규칙
 
+발소리 후보 후속 연결: D 공급자의 Footstep Candidate Source에 EnemyFootstepCandidates를 연결하면 같은 0.2.0 DTO로 적별 최신 후보를 받는다. Origin·OccurredAt은 고정 기록, Presentation.WorldPosition은 현재 적 위치다. SourceSequence는 C 공급자 전체에서 단조 증가하고 동일 세션의 비활성/재활성으로 되감지 않는다. 청각 범위 기본 20m·0.8 게임 초 수명·0.3 게임 초 페이드와 연결 절차는 [발소리 후보](../features/발소리_후보.md)를 따른다. 미연결 기존 공급자 정책은 유지하며 공통 타입을 복제하지 않는다.
+
 1. 공유 타입 수정은 이 폴더와 이 문서에서만 기준을 정하고, 같은 이름의 전역 복사본을 만들지 않는다.
 2. A가 판정 규칙/HP 적용을, B가 원본 ID·투사체 수명을, C가 표시 자격·색·방향을, D가 HUD 표시와 시간 합성을 맡는다.
 3. 기존 공개 API를 바꿀 때는 이 문서와 모든 호출부·직렬화 참조를 함께 갱신한다. `ResolveIncomingAttack` 뒤 `TakeDamage`를 중복 호출하지 않는다.
