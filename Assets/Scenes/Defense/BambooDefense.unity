@@ -6607,6 +6607,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5477092273469113479, guid: 92b8350f7dac642e0b97994d8218101d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 230596787}
+    - targetCorrespondingSourceObject: {fileID: 5477092273469113479, guid: 92b8350f7dac642e0b97994d8218101d, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 230596788}
   m_SourcePrefab: {fileID: 100100000, guid: 92b8350f7dac642e0b97994d8218101d, type: 3}
 --- !u!1 &230596786 stripped
 GameObject:
@@ -6626,6 +6629,33 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Combat.Contracts.CombatSessionRuntime
   _defaultTimeScale: 1
+--- !u!114 &230596788
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 230596786}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb7f1e590a50d01429f3245d811b87d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.CombatTelemetryRecorder
+  _health: {fileID: 876271890}
+  _director: {fileID: 1968806059}
+  _spawner: {fileID: 1968806062}
+  _presentation: {fileID: 1968806063}
+  _recordingEnabled: 1
+  _configVersion: bamboo-2026-10-14
+  _bufferLimit: 4096
+  _flushIntervalSeconds: 2
+  _maximumStorageMegabytes: 100
+  _sampleIntervalSeconds: 5
+  _allowAutomaticUpload: 1
+  _uploadIntervalSeconds: 20
+  _batchEventLimit: 100
+  _requestTimeoutSeconds: 30
+  _maximumRetrySeconds: 300
 --- !u!1 &231236738
 GameObject:
   m_ObjectHideFlags: 0
@@ -56254,6 +56284,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b07df9fafec985e4bb7b581b0e93f21c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CombatThreatPresentationProvider
+  _threatPresentationSource: {fileID: 0}
   _visibilityThreshold: 0
   _nearDistance: 4
   _farDistance: 30

@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "endpoint": "https://script.google.com/macros/s/DEPLOYMENT_ID/exec",
+  "token": "REPLACE_WITH_YOUR_RANDOM_TOKEN_AT_LEAST_32_CHARACTERS"
+}
