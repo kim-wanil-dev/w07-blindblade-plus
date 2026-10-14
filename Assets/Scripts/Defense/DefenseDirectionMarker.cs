@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 화면 중심 원 위의 한 방향에 수리검 모양 아이콘과 방향 호를 그린다.
+/// 화면 중심 원 위의 한 방향에 방향 호와 선택적인 수리검 아이콘을 그린다.
 /// 회전과 투명도는 표시 담당자가 RectTransform과 CanvasRenderer로 조정한다.
 /// </summary>
 [RequireComponent(typeof(CanvasRenderer))]
@@ -14,6 +14,7 @@ public sealed class DefenseDirectionMarker : MaskableGraphic
     [Header("형태")]
     [SerializeField, Min(10f)] private float _radius = 230f;
     [SerializeField, Min(1f)] private float _iconSize = 16f;
+    [SerializeField] private bool _showIcon = true;
     [SerializeField, Min(1f)] private float _arcThickness = 4f;
     [SerializeField, Range(5f, 90f)] private float _arcAngle = 18f;
     private float _iconScale = 1f;
@@ -41,8 +42,11 @@ public sealed class DefenseDirectionMarker : MaskableGraphic
     {
         vh.Clear();
         AddArc(vh);
-        float iconSize = _iconSize * _iconScale;
-        AddShurikenIcon(vh, new Vector2(0f, _radius + _arcThickness + iconSize), iconSize);
+        if (_showIcon)
+        {
+            float iconSize = _iconSize * _iconScale;
+            AddShurikenIcon(vh, new Vector2(0f, _radius + _arcThickness + iconSize), iconSize);
+        }
     }
 
     /// <summary>위쪽을 중심으로 _arcAngle 폭의 얇은 호를 원 반경에 추가한다.</summary>

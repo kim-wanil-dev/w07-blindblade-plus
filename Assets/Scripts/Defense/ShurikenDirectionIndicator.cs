@@ -143,7 +143,12 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
         if (!snapshot.IsActive || !snapshot.IsEligible || !snapshot.UiVisible)
         {
             if (marker != null)
-                BeginFade(marker, snapshot);
+            {
+                if (snapshot.WorldVisible)
+                    Hide(marker);
+                else
+                    BeginFade(marker, snapshot);
+            }
             return;
         }
 

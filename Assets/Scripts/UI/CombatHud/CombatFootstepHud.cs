@@ -6,7 +6,7 @@ using BlindBlade.Combat.Contracts;
 
 namespace BlindBlade.UI.CombatHud
 {
-    /// <summary>C가 발행한 고정 원점 발소리 사건을 세션별 Image 풀로 표시한다.</summary>
+    /// <summary>C의 발소리 인지를 발행자 ID·세대별로 합쳐 적 한 명당 방향 Image 하나를 표시한다.</summary>
     [DisallowMultipleComponent]
     public sealed class CombatFootstepHud : MonoBehaviour
     {
@@ -20,11 +20,25 @@ namespace BlindBlade.UI.CombatHud
         [SerializeField, Min(1f)] private float _farSize = 24f;
         [SerializeField, Min(1f)] private float _nearSize = 36f;
         private readonly Dictionary<CombatEntityKey, int> _slots = new Dictionary<CombatEntityKey, int>();
-        private readonly Dictionary<CombatEntityKey, long> _revisions = new Dictionary<CombatEntityKey, long>();
+        private readonly Dictionary<CombatEntityKey, FootstepVersion> _revisions =
+            new Dictionary<CombatEntityKey, FootstepVersion>();
         private bool[] _used;
         private CombatSessionKey _session;
         private bool _hasSession;
         private bool _subscribed;
+
+        private readonly struct FootstepVersion
+        {
+            public long Sequence { get; }
+            public long Revision { get; }
+
+            /// <summary>sequence와 revision을 보관해 적의 최신 걸음과 해당 표시 갱신 순서를 구분한다.</summary>
+            public FootstepVersion(long sequence, long revision)
+            {
+                Sequence = sequence;
+                Revision = revision;
+            }
+        }
 
         void Awake()
         {
@@ -59,7 +73,7 @@ namespace BlindBlade.UI.CombatHud
             ClearMarkers();
         }
 
-        /// <summary>snapshot의 현재 세션·revision·표시 자격을 확인해 마커를 배치하거나 반환한다. 풀이 가득 차면 새 표시를 생략한다.</summary>
+        /// <summary>snapshot의 발행자·걸음 순번·revision으로 최신 사건만 받아 적별 마커를 갱신하거나 반환한다. 빈 슬롯이 없으면 생략한다.</summary>
         private void HandleFootstep(FootstepPresentationSnapshot snapshot)
         {
             ThreatPresentationSnapshot presentation = snapshot.Presentation;
@@ -73,25 +87,26 @@ namespace BlindBlade.UI.CombatHud
                 _session = presentation.Session;
                 _hasSession = true;
             }
-            if (_revisions.TryGetValue(presentation.Target, out long revision)
-                && revision >= presentation.Revision)
+            CombatEntityKey emitter = snapshot.Emitter;
+            long sequence = snapshot.EventIdentity.SourceSequence;
+            if (_revisions.TryGetValue(emitter, out FootstepVersion previous)
+                && (sequence < previous.Sequence
+                    || (sequence == previous.Sequence && presentation.Revision <= previous.Revision)))
                 return;
-            _revisions[presentation.Target] = presentation.Revision;
+            _revisions[emitter] = new FootstepVersion(sequence, presentation.Revision);
 
             if (!presentation.IsActive || !presentation.IsEligible || !presentation.UiVisible)
             {
-                ReleaseMarker(presentation.Target);
-                if (!presentation.IsActive)
-                    _revisions.Remove(presentation.Target);
+                ReleaseMarker(emitter);
                 return;
             }
 
-            if (!_slots.TryGetValue(presentation.Target, out int slot))
+            if (!_slots.TryGetValue(emitter, out int slot))
             {
                 slot = FindFreeSlot();
                 if (slot < 0)
                     return;
-                _slots.Add(presentation.Target, slot);
+                _slots.Add(emitter, slot);
                 _used[slot] = true;
             }
             float size = Mathf.Lerp(_farSize, _nearSize, presentation.Proximity);
@@ -100,14 +115,14 @@ namespace BlindBlade.UI.CombatHud
             _markers[slot].Show(presentation, Mathf.Min(_radius, availableRadius), size);
         }
 
-        /// <summary>target에 배정된 마커를 숨기고 풀에 반환한다. 다른 사건의 표시는 변경하지 않는다.</summary>
-        private void ReleaseMarker(CombatEntityKey target)
+        /// <summary>emitter에 배정된 마커를 숨기고 풀에 반환한다. 다른 적의 표시는 변경하지 않는다.</summary>
+        private void ReleaseMarker(CombatEntityKey emitter)
         {
-            if (!_slots.TryGetValue(target, out int slot))
+            if (!_slots.TryGetValue(emitter, out int slot))
                 return;
             _markers[slot].Hide();
             _used[slot] = false;
-            _slots.Remove(target);
+            _slots.Remove(emitter);
         }
 
         /// <summary>입력 없이 사용하지 않는 풀 인덱스를 반환한다. 빈 슬롯이 없으면 -1을 반환한다.</summary>

@@ -74,6 +74,7 @@
 - `UiDirection`은 화면 중심 기준 `(x=오른쪽, y=위)` 단위 벡터다. 뒤쪽 투영은 방향을 뒤집고 방향이 모호하면 위쪽을 사용한다.
 - `Proximity`는 공급자 Inspector의 `Near Distance`/`Far Distance`로 계산한다. 색의 alpha는 1, 불투명도는 별도의 `Alpha` 값이다.
 - 현재 공급자는 활성 수리검과 `EnemyFootsteps`에서 발소리 사건을 제공한다. 발소리 `Origin`은 발생 위치로 고정하고, 카메라 회전에 따른 표시 갱신은 같은 EventIdentity와 증가하는 Presentation Revision을 사용한다.
+- 사용자 요청으로 발소리 HUD는 발행자 적의 현재 방향을 추적한다. `Origin`은 기록용 고정 발생 위치이고, `Presentation.WorldPosition`과 방향·인지 결과는 현재 적 위치다. 공개 타입 형태와 원본 사건 식별은 유지한다.
 - 발소리 표시 사건은 Inspector의 `_footstepLifetime` 동안 읽을 수 있다. 이벤트 순번은 적 세대별로 증가하고 표시 Target은 발소리마다 고유하다.
 - 마지막 `_footstepFadeDuration` 동안 C가 Alpha를 감쇠한다. 만료·적 사망·세대 변경·공급자 종료·세션 변경에서는 같은 사건의 `Presentation.IsActive=false`를 발행한다. D는 이를 받아 표시 슬롯을 반환한다.
 - 일반 적 전체의 Threat 수명/표시 우선순위와 다른 투사체 종류는 아직 연결되지 않았다.
@@ -84,8 +85,8 @@
 
 - `ShurikenDirectionIndicator`는 C `IThreatPresentationProvider`의 초기 목록과 `ThreatChanged`를 구독한다.
 - 마커 키는 Session + Target이며 같은 세대의 이전 Revision을 버린다. C의 방향·색·근접도·투명도를 적용하고 플레이어/투사체 Transform을 저장하지 않는다.
-- 발사 전 텔레그래프는 기존 `BambooDefenseDirector.ThrowTelegraphed`를 유지한다. `CombatFootstepHud`가 발소리 초기 목록과 변경 사건을 받아 24개 Image 풀에 적용한다.
-- `CombatPlayerHud`가 PlayerHealth의 현재 값·HealthChanged와 선택적인 IPlayerStaminaReadModel을 읽는다. 스태미너 공급자가 없으면 빈 게이지·미연결 텍스트로 표시한다. 임시 Sprite 교체 위치는 [전투 HUD](../features/전투_HUD.md)를 따른다. 실제 피격 전용 비네팅 전환은 남아 있다.
+- 발사 전 텔레그래프는 기존 `BambooDefenseDirector.ThrowTelegraphed`를 유지한다. `CombatFootstepHud`는 발소리 초기 목록·변경 사건을 `Emitter` ID/세대별로 합쳐 적 한 명당 Image 하나를 쓴다. 최신 SourceSequence 이후에는 이전 걸음의 갱신·종료를 무시하고, 같은 걸음에서는 Revision을 비교한다. 풀은 최대 24명이다.
+- `CombatPlayerHud`가 PlayerHealth의 현재 값·HealthChanged와 선택적인 IPlayerStaminaReadModel을 읽는다. 스태미너 공급자가 없으면 빈 게이지·미연결 텍스트로 표시한다. `PlayerLowHealthVignette`는 DamageReceived만 읽어 실제 피해의 0.3초 펄스를 표시한다. 임시 Sprite 교체 위치는 [전투 HUD](../features/전투_HUD.md)를 따른다.
 
 ### 시간
 
@@ -99,7 +100,7 @@
 - `IPlayerStaminaReadModel`은 데이터 계약만 있고 공급자가 없다. HUD가 추정값을 만들지 않는다.
 - `CombatTelemetryEnvelope`와 `combat-telemetry-v0.1.schema.json`은 저장 명세일 뿐 저장기·payload 검증·전처리기는 없다.
 - A의 강화 준비/시작/종료, 스태미너, 회피 보상, 퍼펙트 파동 사건은 형식 일부만 있다.
-- D의 HP·발소리 HUD는 실제 공급자와 연결했고 스태미너 HUD는 공급자를 기다린다. 실제 피격 비네팅 전환, 로그 저장, 전체 Play 통합 인수가 남아 있다.
+- D의 HP·적별 발소리 방향·피격 펄스는 실제 공급자와 연결했고 스태미너 HUD는 공급자를 기다린다. 로그 저장과 전체 Play 통합 인수가 남아 있다.
 - 현재 저장소 변경은 외부 팀원의 검토 완료를 뜻하지 않는다. 병합하거나 추가 변경을 적용하기 전에 각 담당자의 작업공간과 미저장 Editor 상태를 대조한다.
 
 ## 8. 적용 기록과 검증
@@ -110,6 +111,16 @@
 - Play Mode 검증과 테스트 코드는 요청에 포함되지 않아 실행·작성하지 않았다. 수동 검증 시나리오는 D PRD 8절을 따른다.
 
 ## 9. 다른 담당자를 위한 안전한 변경 규칙
+
+### C 표시 결과 연결 후속 기록 (2026-10-14)
+
+- 공통 타입과 버전 0.2.0은 그대로 유지한다. 사용자가 C의 확정 표시 정책을 적용하도록 승인했다.
+- CombatThreatPresentationProvider의 Threat Presentation Source에 ThreatPresentationContractAdapter를 연결하면 C 결과를 전달한다. 미연결 씬의 기존 수리검·발소리 경로는 유지한다.
+- 연결 시 위협의 거리·색·화면 분류·반사/통과 제외는 C가 소유한다. Proximity는 C Settings의 3~12m 수평 거리, Color.a=1, Alpha는 C 색상 알파와 거리 가시성의 곱이다. D 공급자는 Revision만 자기 스트림에 맞춰 재부여한다.
+- 공식 문자열 ID는 ThreatSourceState.EntityId에 보존한다. B 공급자가 없는 전용 미리보기만 Perception/{Kind}/{TargetId} 예약 ID를 사용하며 영구 로그·실제 B ID로 취급하지 않는다.
+- C 전용 씬에서 목록·필드 일치와 재사용 세대·세션 재시작·비활성 정리는 사용자 Play 확인을 마쳤다. 정식 게임 B 프리팹·원본 수명 입력·월드 효과 연결은 남아 있다. 상세 매핑·Inspector·검증은 [위협 표시 판정](../features/위협_표시_판정.md)의 세 번째 단위를 따른다.
+
+### 안전한 변경 규칙
 
 1. 공유 타입 수정은 이 폴더와 이 문서에서만 기준을 정하고, 같은 이름의 전역 복사본을 만들지 않는다.
 2. A가 판정 규칙/HP 적용을, B가 원본 ID·투사체 수명을, C가 표시 자격·색·방향을, D가 HUD 표시와 시간 합성을 맡는다.
