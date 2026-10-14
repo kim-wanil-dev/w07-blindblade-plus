@@ -220,7 +220,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         }
     }
 
-    /// <summary>등록된 발소리 사건의 만료 시각을 확인하고 현재 조회 목록을 다시 만든다.</summary>
+    /// <summary>등록된 발소리의 수명·발행자를 확인하고 적의 현재 위치로 표시 결과와 초기 조회 목록을 갱신한다.</summary>
     private void ExpireFootsteps()
     {
         double now = Time.realtimeSinceStartupAsDouble;
@@ -240,7 +240,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             float fade = _footstepFadeDuration > 0f
                 ? Mathf.Clamp01((float)(activeFootstep.ExpiresAt - now) / _footstepFadeDuration) : 1f;
             ThreatPresentationSnapshot presentation = CreateSnapshot(previous.Presentation.Target,
-                previous.Origin, true, true, fade);
+                activeFootstep.Emitter.transform.position, true, true, fade);
             FootstepPresentationSnapshot updated = new FootstepPresentationSnapshot(
                 previous.EventIdentity, previous.Emitter, previous.Origin, previous.OccurredAt, presentation);
             _activeFootsteps[i] = new ActiveFootstep(updated, activeFootstep.ExpiresAt, activeFootstep.Emitter);
@@ -270,7 +270,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         CombatTimestamp timestamp = _sessionRuntime.CaptureTimestamp();
         CombatEntityKey pulseTarget = new CombatEntityKey(
             emitter.EntityId + "/footstep/" + sequence, emitter.SpawnGeneration);
-        ThreatPresentationSnapshot presentation = CreateSnapshot(pulseTarget, position, true, true);
+        ThreatPresentationSnapshot presentation = CreateSnapshot(pulseTarget, health.transform.position, true, true);
         FootstepPresentationSnapshot snapshot = new FootstepPresentationSnapshot(
             identity, emitter, position, timestamp, presentation);
         _activeFootsteps.Add(new ActiveFootstep(snapshot,

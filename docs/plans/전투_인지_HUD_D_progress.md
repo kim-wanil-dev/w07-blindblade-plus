@@ -1,8 +1,9 @@
 # 전투·인지·HUD D 진행 기록
 
 - 갱신일: 2026-10-14
-- 현재 상태: **공통 계약 v0.2.0. HP·발소리 HUD 구현/연결 및 Play 화면 확인 완료. 스태미너 게이지·연결 슬롯 구현 완료, 실제 공급자 대기. D3/D4의 나머지 범위는 진행 중.**
+- 현재 상태: **공통 계약 v0.2.0. HP·적당 하나의 발소리 방향 마커/원호·실제 피격 펄스 구현 및 Play 확인 완료. 스태미너 HUD는 실제 공급자 대기. D3/D4의 나머지 범위는 진행 중.**
 - 요청: A/B/C 통합에 이어 사용자가 HP·스태미너·발소리 HUD를 임시 이미지로 만들고 나중에 이미지만 교체 가능하게 요청했다. 프로젝트 내부 수정은 기존 상시 지침에 따라 별도 승인 없이 진행한다.
+- 최신 요청 반영: 걸음마다 표시하던 발소리를 적 ID/세대당 하나로 합쳐 현재 적 방향을 추적한다. 저체력 지속 비네팅은 피해 때만 잠깐 나타나는 방식으로 변경했다. 발소리 아이콘 밑에는 수리검과 같은 원호를 추가했다.
 - 작업 경로: `C:\Users\JUNGLE\Documents\w07-blindblade-plus`
 - 브랜치: `feature/ui`. 이번 작업에서 Git CLI와 커밋은 사용하지 않았다.
 - 계획: [D PRD](전투_인지_HUD_D_구현_PRD.md)
@@ -16,7 +17,7 @@
 | D0 | v0.2.0 공유 저장소 적용 완료 | 별도 담당자 작업공간 대조와 검토 기록은 미완료 |
 | D1 | 런타임 코드 적용, 부분 완료 | 재도전/재활성화에서 세션·반복 종료 Play 확인 |
 | D2 | 공식 경로 시간 소유권 적용, 부분 완료 | 게임오버·재도전·중복 토큰 해제와 TutorialGuide 활성 여부 확인 |
-| D3 | HP 게이지·스태미너 HUD 연결 슬롯 구현, 부분 완료 | A의 실제 스태미너 공급자, 실제 피격 전용 비네팅 전환, 완성 아트 |
+| D3 | HP 게이지·피격 펄스·스태미너 HUD 연결 슬롯 구현, 부분 완료 | A의 실제 스태미너 공급자, 완성 아트와 전체 인수 |
 | D4 | 수리검·발소리 HUD 연결, 부분 완료 | 다른 투사체 유형, 화면 안팎 전체 인수와 일반 패링 Play 확인 |
 | D5 | 미착수 | 확정 사건 recorder·저장·전처리 |
 | D6 | 미착수 | 강화 공격·극한 회피·보상·파동 연결 |
@@ -52,6 +53,7 @@
 - `EnemyFootsteps.Footstep`을 구독하고 EventIdentity·세대·고정 발생 원점이 있는 `FootstepPresentationSnapshot`을 D의 발소리 Image HUD에 제공한다.
 - 위협이 사라지면 마지막 위치를 가진 비활성 스냅샷을 발행해 D가 이전 표시를 정리할 수 있다.
 - 발소리 수명 2초·마지막 0.5초 Alpha 감쇠는 C가 소유한다. 만료·사망·발행자 세대 변경·세션/공급자 종료에서 비활성 스냅샷을 발행한다.
+- Origin은 실제 걸음 발생 위치로 고정하지만 Presentation.WorldPosition·UiDirection은 적의 현재 위치로 갱신한다. D는 Emitter ID/세대별 슬롯 하나를 유지하고 SourceSequence를 먼저 비교해 이전 걸음의 만료가 새 마커를 지우지 않게 한다.
 
 ### D — 세션·시간·HUD 소비
 
@@ -62,6 +64,8 @@
 - `CombatPlayerHud`는 PlayerHealth 초기값·HealthChanged와 선택적인 IPlayerStaminaReadModel을 연결한다. 공급자 없는 스태미너는 fill=0·alpha=0.35·`-- / --`다. 실제 스태미너 규칙을 만들지 않았다.
 - `CombatFootstepHud`는 C의 사건별 방향·가시성·색·Alpha를 HUD에 미리 직렬화한 Image 24개에 적용한다. 런타임 Instantiate가 없고 풀이 가득 차면 새 표시를 생략한다. 재활성화 시 초기 스냅샷을 다시 읽고 풀은 유지한다.
 - `CombatHudReferences`로 Record·12개 방향 마커·새 HUD 참조를 직렬화했다. BambooDefenseHudAuthoring의 첫 TMP/전체 마커 검색을 교체해 새 값 텍스트가 Record 연결을 바꾸지 않게 했다.
+- 발소리 마커마다 DirectionArc 중첩 자식이 있다. 기존 DefenseDirectionMarker를 Show Icon=false로 재사용하고 원호는 아이콘 안쪽의 화면 중심 원 위에 그린다. 기존 수리검 12개는 Show Icon=true를 유지한다.
+- PlayerLowHealthVignette는 DamageReceived만 구독하며 Duration 0.3초·Peak Opacity 0.45·Width 0.22로 실제 피격 펄스를 표시한다. HP 초기 조회·회복에서 켜지지 않고 사망 정지에서도 unscaledTime으로 끝난다.
 
 ## Unity 씬 연결
 
@@ -96,7 +100,7 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 2. 다른 담당자 작업공간과 이 공유 계약의 변경 여부를 대조한다. `BlindBlade.Combat.Contracts` 아래 타입을 다시 전역 복사하지 않는다.
 3. A/B/C 소유권 표와 연결 지점을 기준으로 코드 리뷰한다. 특히 resolver 반환 뒤 `TakeDamage` 중복 호출이 없는지 확인한다.
 4. Unity Play에서 준비→투척→패링/피해→GameOver→재도전을 수동 확인하고 Console·마커 종료·세션 배율을 기록한다.
-5. D3는 A의 실제 스태미너 원본이 준비되면 IPlayerStaminaReadModel을 구현·연결하고 소모·회복을 확인한다. UI 규칙을 복제하지 않는다. 실제 피격 전용 비네팅 전환은 별도 진행한다.
+5. D3는 A의 실제 스태미너 원본이 준비되면 IPlayerStaminaReadModel을 구현·연결하고 소모·회복을 확인한다. UI 규칙을 복제하지 않는다. 실제 피격 펄스는 구현됐으며 전체 가드/연속 피격 인수를 이어간다.
 6. D4에서 다른 위협 유형과 발소리 풀 초과·사망/재사용·화면 경계 전체 인수를 진행한다. C의 표시 규칙을 D에 중복 구현하지 않는다.
 7. D5 로그 저장, D6 강화/회피 통합, D7 전체 인수, D8 최종 문서를 계획 순서대로 진행한다.
 
@@ -118,9 +122,22 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - 수정 에셋: 기존 BambooDefenseHud.prefab·BambooDefense.unity. 새 에셋: CombatFootstepMarker.prefab, UI/Placeholders의 PNG 4개와 Unity가 생성한 meta. 기존 프리팹·씬 GUID와 기록/수리검 연결을 유지했다.
 - 이미지 교체: HUD 프리팹의 HealthGauge·StaminaGauge 아래 Icon/Background/Fill → Image Source Image. 발소리 전체 교체는 CombatFootstepMarker.prefab 루트의 Source Image 한 곳이다. PNG 내용을 같은 경로에서 교체할 때 meta를 보존한다.
 - 스태미너 원본 확인: 저장소 전체에서 실제 구현이 없고 계약만 있다. 과거 TASK_0084~0087 명세의 PlayerStamina·PlayerStaminaBar는 현재 구현으로 간주하지 않는다. A가 같은 Player에 공급자를 붙이면 바인딩 때 자동 조회하며, 다른 위치면 Stamina Source를 명시하거나 BindSources를 호출한다.
-- 현재 요청 범위 밖: 실제 스태미너 규칙, 피격 전용 비네팅 전환, 다른 투사체, 로그 저장, 강화/극한 회피. D3/D4 전체 완료로 표시하지 않는다.
+- HUD 도입 당시 요청 범위 밖이었던 피격 전용 비네팅은 후속 요청으로 완료했다. 실제 스태미너 규칙, 다른 투사체, 로그 저장, 강화/극한 회피는 남아 있으므로 D3/D4 전체 완료로 표시하지 않는다.
 - 최초 런타임 생성 발소리 풀에서 Play 종료 native `t.GetParent() == nullptr` assertion을 발견했다. 발소리 HUD 비활성 비교에서는 발생하지 않았다. HUD에 중첩 마커 24개를 미리 직렬화한 뒤 사망 후 종료·활성 마커 상태 종료 두 번 모두 새 오류 0건이었다. 효과가 없었던 종료 가드는 제거했다.
 - 최종 직렬화 풀 Play 표본: HP 70, 발소리 스냅샷 9, 활성 마커 9, 전체 마커 24. `Hud-Footsteps-Final.png`가 최종 화면 근거다.
 - FMOD 종료 경고 `Cannot close System while suspended` 1종은 남는다. HUD 기능 외 FMOD 구현은 수정하지 않았다. 과거 Console의 assertion 이력과 최신 실행의 오류 0을 구분한다.
-- 다음 시작점은 A의 IPlayerStaminaReadModel 공급자 연결 또는 별도 요청된 피격 전용 비네팅이다. 이미지 교체 방법·기본값은 전투 HUD 명세에 있다.
+- 다음 시작점은 A의 IPlayerStaminaReadModel 공급자 연결 또는 D4 다른 위협 유형/전체 인수다. 피격 펄스는 아래 후속 요청에서 완료했다. 이미지 교체 방법·기본값은 전투 HUD 명세에 있다.
 - 최종 Editor 상태: BambooDefense 편집 모드, scene.isDirty=false, CombatStatusCanvas 활성, 최대 HP 100. Missing Script 0, Record 참조 유지, 방향 마커 12/누락 0, 중첩 발소리 마커 24, 새 Image 30/Source Image 누락 0/Raycast Target 0. 재설치 후에도 동일 수량으로 유지됐다.
+
+### 2026-10-14 후속 요청: 적별 방향·원호·실제 피격 펄스
+
+- 수정 코드: CombatFootstepHud, CombatThreatPresentationProvider, CombatFootstepMarker, DefenseDirectionMarker, PlayerLowHealthVignette, CombatHudAuthoring. 공개 스냅샷의 필드·원본 EventIdentity·고정 Origin은 유지한다.
+- 발소리: raw 걸음 9개/적 1명/마커 1개, raw 13개/적 2명/마커 2개. C 표시 위치와 현재 적 위치의 차이는 0, Origin과 현재 표시 위치는 0.22~0.56m 차이를 확인했다. 이전 걸음의 갱신·종료는 SourceSequence로 거부한다.
+- 원호: 프리팹에 미리 직렬화한 24개 마커에 DirectionArc 자식을 추가했다. 아이콘 1개가 활성일 때 원호도 1개였고 만료 뒤 둘 다 0개였다. 기존 수리검 배열은 12개, Show Icon=true 유지. 새 원호는 false·Raycast Target=false다.
+- 비네팅: HealthChanged를 제거하고 DamageReceived에 구독했다. 최대 불투명도/두께의 이전 필드는 FormerlySerializedAs로 이관했고 Player.prefab·씬에는 새 0.3초/0.45/0.22 값을 저장했다. 최소값/HP 임계값은 제거했다. 기존 클래스명·meta·셰이더는 보존했다.
+- 실제 피해 API 관찰: HP 99와 HP 25에서 peak 0.45/width 0.22로 시작해 opacity 0/비활성으로 종료, 회복에서는 비활성 유지. HP 0/timeScale 0 치명타에서도 같은 펄스 후 종료했다.
+- 화면 근거: UserSettings/CombatHud/Hud-EnemyDirection-Arc.png(HP 60·방향 아이콘/원호·지속 비네팅 없음), Hud-DamagePulse-Expired.png(사망 후 붉은 가장자리 없음). 이전 걸음별 정책 화면과 구분한다.
+- 컴파일 오류 0. 테스트 코드는 작성하지 않았으며 CLI의 실제 Play API·읽기 전용 상태 조회·GameView 화면으로 확인했다. GameView가 비활성일 때 프레임이 멈춰 검증 중 runInBackground만 임시 true로 사용했고 false로 복원했다. 임시 HP/피해/freeze는 Play에만 적용하고 저장하지 않았다.
+- 실제 키보드/패드 전투 전체·24명 초과·연속 피해 정밀 시간 측정은 미확인이다. 원호 튜닝은 CombatFootstepMarker.prefab의 Arc Thickness/Angle/Gap/Tint, 피격 펄스 튜닝은 Player의 PlayerLowHealthVignette에서 한다.
+- 최종 컴파일 completed/compilationFailed=false/오류 0. 기존 KatanaDebugOverlay CS0414는 남는다. 현재 종료 검증에서 native `t.GetParent() == nullptr` assertion이 재현됐다. 이번 수정 전 동일 Editor 로그(10:25 UTC, seq 158~166)에 이미 9건 있었으며 발소리 HUD를 비활성화한 비교에서도 2건 발생했다. UI 표시/펄스 검증과 종료 문제를 구분한다. 원인은 미확인이고 이번 범위에서 기존 종료 문제를 해결했다고 표시하지 않는다.
+- 비교 중 비활성화한 FootstepMarkers는 저장하지 않고 BambooDefense를 다시 열어 복원했다. Player.prefab과 씬의 Duration/Opacity/Width는 0.3/0.45/0.22로 일치한다. 최신 원호 프리팹과 씬은 저장 상태다.
