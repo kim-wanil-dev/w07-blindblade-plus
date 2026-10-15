@@ -189,6 +189,15 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     }
 
     /// <summary>
+    /// 보스 재도전 시작 시 자동 흰 파동을 건너뛰도록 표시한다.
+    /// 이후 퍼펙트 패링과 극한 회피로 발생하는 파동은 유지한다.
+    /// </summary>
+    public void SuppressStartPulse()
+    {
+        _startPulsePlayed = true;
+    }
+
+    /// <summary>
     /// 게임 상태가 처음 Playing이 되면 발밑에서 _startPulseRadius 반경의 회피 파동을 한 번 내 맵 전체를 밝힌다.
     /// 다 퍼진 뒤에는 _startPulseFadeDuration 동안 천천히 흐려진다.
     /// 한 번 시도하면 _startPulsePlayed를 참으로 바꾸며, 반경이 0이면 파동 없이 끝낸다.
