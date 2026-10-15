@@ -11,7 +11,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     private static readonly Dictionary<string, int> _spawnGenerations = new Dictionary<string, int>();
 
     [Header("적 체력")]
-    [SerializeField, Min(1f)] private float _maxHealth = 30f;
+    [SerializeField, Min(1f)] private float _maxHealth = 10f;
     [SerializeField, Tooltip("켜면 양수 피해를 주는 유효한 공격 한 번에 사망합니다.")]
     private bool _dieOnAnyHit;
     [SerializeField] private Collider _hitCollider;
@@ -80,7 +80,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             DamageBlocked?.Invoke(context);
             return;
         }
-
+        Debug.Log($"Take Damage {context.Amount} ");
         _currentHealth = _dieOnAnyHit ? 0f : Mathf.Max(0f, _currentHealth - context.Amount);
         if (_currentHealth > 0f && _cancelAttackOnHit) ApplyHitReaction(context);
         PlayDamageEffects(context);

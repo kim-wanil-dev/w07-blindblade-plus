@@ -13,6 +13,8 @@ public sealed class DefenseArenaBoundary : MonoBehaviour
     private PlayerController _player;
     private CharacterController _controller;
 
+    public float Radius => _radius;
+
     void LateUpdate()
     {
         PlayerController player = Game.Player;

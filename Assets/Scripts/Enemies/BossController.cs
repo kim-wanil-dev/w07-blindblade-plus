@@ -85,6 +85,8 @@ public sealed class BossController : MonoBehaviour
     [SerializeField, Min(0.1f), Tooltip("패턴 위치로 이동하는 속도(미터/초)")]
     private float _repositionSpeed = 25f;
     private bool _repositionReached;
+    private DefenseArenaBoundary _arenaBoundary;
+    private float _arenaInset;
 
     public bool IsRepositioning { get; private set; }
 
@@ -135,6 +137,16 @@ public sealed class BossController : MonoBehaviour
     void OnDisable()
     {
         StopBattle();
+    }
+
+    /// <summary>
+    /// arena와 inset으로 이 보스의 원형 이동 범위를 설정한다.
+    /// 스테이지에서 활성화 전에 호출하며 이후 재배치와 돌진 위치를 제한한다.
+    /// </summary>
+    public void ConfigureArena(DefenseArenaBoundary arena, float inset)
+    {
+        _arenaBoundary = arena;
+        _arenaInset = Mathf.Max(0f, inset);
     }
 
     /// <summary>현재 세션 플레이어와 필수 참조를 확인하고 전투 결과를 구독하여 행동을 시작한다.</summary>
@@ -208,7 +220,7 @@ public sealed class BossController : MonoBehaviour
         RestoreAfterDisappearance();
     }
 
-    /// <summary>설정 횟수와 준비 시간을 사용하여 발사 시 플레이어의 반동 없는 시점보다 0.1m 아래로 투사체를 직선 발사한다.</summary>
+    /// <summary>설정 횟수와 준비 시간을 사용해 플레이어 시점보다 0.1m 아래로 투사체를 발사한다. 비행 유도는 투사체 프리팹이 설정한다.</summary>
     private IEnumerator Ranged()
     {
         ChangeState(BossState.Ranged);
@@ -259,6 +271,7 @@ public sealed class BossController : MonoBehaviour
             Vector3 destination = previous + direction * distance;
             if (_agent.Raycast(destination, out NavMeshHit boundary))
                 destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
+            destination = LimitToArena(destination);
             float travelDistance = Mathf.Max(0f, Vector3.Dot(destination - previous, direction));
             if (TryGetChargePlayerContact(direction, travelDistance, out float contactDistance, out Vector3 point))
             {
@@ -313,7 +326,7 @@ public sealed class BossController : MonoBehaviour
         NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = _agent.agentTypeID, areaMask = _agent.areaMask };
         bool found = NavMesh.SamplePosition(desired, out NavMeshHit hit, 0.5f, filter);
         position = hit.position;
-        return found;
+        return found && IsInsideArena(position);
     }
 
     /// <summary>플레이어 전방 부채꼴의 랜덤 후보 중 이동 가능한 빈 지면을 destination으로 반환한다.</summary>
@@ -328,7 +341,7 @@ public sealed class BossController : MonoBehaviour
             if (!TrySamplePosition(_player.transform.position + offset, out Vector3 position)) continue;
             if (Vector3.Dot(position - _player.transform.position, forward) < 0f) continue;
             if (!TryPlace(position) || !_agent.CalculatePath(position, _path)
-                || _path.status != NavMeshPathStatus.PathComplete) continue;
+                || _path.status != NavMeshPathStatus.PathComplete || !IsPathInsideArena(_path)) continue;
             destination = position;
             return true;
         }
@@ -354,7 +367,8 @@ public sealed class BossController : MonoBehaviour
     {
         _repositionReached = false;
         _motor.Stop();
-        if (!_agent.CalculatePath(destination, _path) || _path.status != NavMeshPathStatus.PathComplete)
+        if (!_agent.CalculatePath(destination, _path) || _path.status != NavMeshPathStatus.PathComplete
+            || !IsPathInsideArena(_path))
             yield break;
         Vector3[] corners = _path.corners;
         IsRepositioning = true;
@@ -365,7 +379,7 @@ public sealed class BossController : MonoBehaviour
                 while (Vector3.Distance(transform.position, corners[i]) > 0.05f)
                 {
                     Vector3 previous = transform.position;
-                    Vector3 next = Vector3.MoveTowards(previous, corners[i], _repositionSpeed * Time.deltaTime);
+                    Vector3 next = LimitToArena(Vector3.MoveTowards(previous, corners[i], _repositionSpeed * Time.deltaTime));
                     _agent.Move(next - previous);
                     Vector3 direction = Vector3.ProjectOnPlane(next - previous, Vector3.up);
                     if (direction.sqrMagnitude > 0.000001f)
@@ -382,6 +396,32 @@ public sealed class BossController : MonoBehaviour
             IsRepositioning = false;
             _motor.Stop();
         }
+    }
+
+    /// <summary>position이 설정된 arena의 inset만큼 안쪽에 있는지 반환한다. 범위 미설정 시 true다.</summary>
+    private bool IsInsideArena(Vector3 position)
+    {
+        if (_arenaBoundary == null) return true;
+        Vector3 offset = Vector3.ProjectOnPlane(position - _arenaBoundary.transform.position, Vector3.up);
+        return offset.sqrMagnitude <= Mathf.Pow(Mathf.Max(0f, _arenaBoundary.Radius - _arenaInset), 2f);
+    }
+
+    /// <summary>path의 모든 NavMesh 모서리가 설정된 원형 공터 안에 있는지 반환한다.</summary>
+    private bool IsPathInsideArena(NavMeshPath path)
+    {
+        foreach (Vector3 corner in path.corners)
+            if (!IsInsideArena(corner)) return false;
+        return true;
+    }
+
+    /// <summary>position의 수평 좌표를 설정된 arena 반경 안으로 제한해 반환한다. 높이는 유지한다.</summary>
+    private Vector3 LimitToArena(Vector3 position)
+    {
+        if (_arenaBoundary == null) return position;
+        Vector3 center = _arenaBoundary.transform.position;
+        Vector3 offset = Vector3.ProjectOnPlane(position - center, Vector3.up);
+        float radius = Mathf.Max(0f, _arenaBoundary.Radius - _arenaInset);
+        return center + Vector3.ClampMagnitude(offset, radius) + Vector3.up * (position.y - center.y);
     }
 
     /// <summary>context의 실제 피격 시 행동을 취소하고 외형을 유지한 채 무적으로 다음 패턴을 준비한다.</summary>

@@ -61,6 +61,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     [Header("세션 연결")]
     private BambooDefenseDirector _director;
     private readonly List<BambooThrower> _allThrowers = new List<BambooThrower>();
+    private bool _waveStopped;
     public event Action EnemyKilled;
 
     private sealed class MeleeUnit
@@ -96,14 +97,41 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     /// <summary>now를 기준으로 준비 종료 후 첫 근접 스폰 시각을 설정한다.</summary>
     internal void Begin(float now)
     {
+        if (_waveStopped)
+            return;
         _nextMeleeSpawnAt = now + Mathf.Max(0f, _meleeStartTime);
     }
 
     /// <summary>elapsed 생존 시간으로 투척수·근접 적의 목표 수와 스폰 시각을 갱신한다.</summary>
     internal void Tick(float elapsed)
     {
+        if (_waveStopped)
+            return;
         UpdateThrowers(elapsed);
         UpdateMelee(elapsed);
+    }
+
+    /// <summary>입력 없이 현재 투척수·근접 적을 대기 풀로 되돌리고 이후 스폰을 막는다. 처치 사건은 만들지 않는다.</summary>
+    internal void StopWave()
+    {
+        if (_waveStopped)
+            return;
+        _waveStopped = true;
+        for (int i = _activeThrowers.Count - 1; i >= 0; i--)
+        {
+            BambooThrower thrower = _activeThrowers[i];
+            if (thrower != null && thrower.gameObject.activeSelf)
+                thrower.gameObject.SetActive(false);
+            else
+                _activeThrowers.RemoveAt(i);
+        }
+        for (int i = _activeMelee.Count - 1; i >= 0; i--)
+        {
+            MeleeUnit unit = _activeMelee[i];
+            _activeMelee.RemoveAt(i);
+            unit.Root.SetActive(false);
+            _idleMelee.Push(unit);
+        }
     }
 
     void OnDestroy()

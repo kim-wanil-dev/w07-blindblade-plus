@@ -10,8 +10,13 @@ public class EnemyProjectile : MonoBehaviour
     [SerializeField, Min(0.01f)] private float _lifetime = 4f;
     [SerializeField, Min(0.01f)] private float _hitRadius = 0.12f;
     [SerializeField] private LayerMask _collisionMask = Physics.DefaultRaycastLayers;
+    [SerializeField, Min(0f), Tooltip("비행 중 목표로 꺾는 최대 각도(도/초). 0이면 직진한다.")]
+    private float _homingTurnRate;
+    [SerializeField, Min(0f), Tooltip("목표와 이 거리 안에서는 유도를 멈추고 직진한다.")]
+    private float _homingStopDistance = 3f;
     private DamageContext _damage;
     private Transform _target;
+    private PlayerMotor _targetMotor;
     private Vector3 _direction;
     private float _elapsedTime;
     private bool _isFlying;
@@ -42,6 +47,8 @@ public class EnemyProjectile : MonoBehaviour
             Release();
             return;
         }
+
+        SteerTowardsTarget();
 
 #if UNITY_EDITOR
         _debugStart = transform.position;
@@ -96,13 +103,14 @@ public class EnemyProjectile : MonoBehaviour
 
     /// <summary>
     /// damage와 direction 및 target을 저장하고 이동 방향, 수명 누적 및 비행 상태를 초기화한다.
-    /// 풀에서 재사용하는 경우에도 호출하며 고정된 방향으로 이동을 시작한다.
+    /// 풀에서 재사용하는 경우에도 호출하며 초기 방향으로 이동을 시작한다.
     /// </summary>
     public virtual void Initialize(DamageContext damage, Vector3 direction, Transform target = null)
     {
         _damage = damage;
         _reflected = false;
         _target = target;
+        _targetMotor = target != null ? target.GetComponent<PlayerMotor>() : null;
         _direction = direction.normalized;
         _elapsedTime = 0f;
 #if UNITY_EDITOR
@@ -113,6 +121,21 @@ public class EnemyProjectile : MonoBehaviour
             transform.rotation = Quaternion.LookRotation(_direction);
         else
             Release();
+    }
+
+    /// <summary>
+    /// 비행 중 target의 시점과 현재 위치를 사용해 설정 각속도만큼 진행 방향을 보정한다.
+    /// 반사 후와 근거리에서는 방향을 유지하며, 유도할 때 _direction과 회전을 갱신한다.
+    /// </summary>
+    private void SteerTowardsTarget()
+    {
+        if (_reflected || _homingTurnRate <= 0f || _target == null) return;
+        Vector3 aim = _targetMotor != null ? _targetMotor.ViewOrigin - Vector3.up * 0.1f : _target.position;
+        Vector3 toTarget = aim - transform.position;
+        if (toTarget.sqrMagnitude <= _homingStopDistance * _homingStopDistance) return;
+        _direction = Vector3.RotateTowards(_direction, toTarget.normalized,
+            _homingTurnRate * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
+        transform.rotation = Quaternion.LookRotation(_direction);
     }
 
     /// <summary>
@@ -164,6 +187,7 @@ public class EnemyProjectile : MonoBehaviour
         _damage = new DamageContext(_damage.Amount, defender, transform.position,
             _direction, "ReflectedProjectile");
         _target = null;
+        if (TryGetComponent(out OutlineLayer threatLayer)) threatLayer.enabled = false;
         _reflected = true;
         _elapsedTime = 0f;
         transform.rotation = Quaternion.LookRotation(_direction);

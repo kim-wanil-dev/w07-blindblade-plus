@@ -4,7 +4,7 @@ using UnityEngine;
 
 using FMODUnity;
 
-/// <summary>보스의 상태별 외형과 공간 소리·돌진 발자국을 독립적으로 표현한다.</summary>
+/// <summary>보스의 상태별 외형과 공간 소리·이동 발자국 및 파동을 표현한다.</summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(BossController))]
 public sealed class BossPresentation : MonoBehaviour
@@ -37,6 +37,14 @@ public sealed class BossPresentation : MonoBehaviour
     [SerializeField] private SoundId _footstepSound = SoundId.EnemyFootstep;
     [SerializeField, Min(0.05f)] private float _minimumStepSoundInterval = 0.18f;
     private float _nextStepSoundTime;
+
+    [Header("이동 파동")]
+    [SerializeField] private RevealRippleSettings _movementRipple = new RevealRippleSettings(
+        8f, 0.9f, 2, 0.12f, 1.2f, new Color(1f, 0.16f, 0.16f, 0.85f));
+    [SerializeField, Min(0.05f), Tooltip("빠른 재배치·돌진 중 파동 사이 최소 시간(초)")]
+    private float _movementRippleInterval = 0.45f;
+    private PerceptionRevealMap _revealMap;
+    private float _nextMovementRippleTime;
 
     [Header("돌진 기합1")]
     [SerializeField] private SoundId _chargeCry = SoundId.BossChargeCry;
@@ -131,6 +139,24 @@ public sealed class BossPresentation : MonoBehaviour
         if (!Game.IsInitialized) return;
         Vector3 direction = movement.normalized;
         EmitFootprint(direction);
+        if (Time.time >= _nextMovementRippleTime)
+        {
+            _nextMovementRippleTime = Time.time + _movementRippleInterval;
+            EmitMovementRipple();
+        }
+    }
+
+    /// <summary>현재 보스 위치와 Inspector 설정으로 지면 파동을 생성해 이동 방향을 알린다.</summary>
+    private void EmitMovementRipple()
+    {
+        if (_revealMap == null)
+            _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
+        if (_revealMap == null) return;
+        Vector3 origin = transform.position;
+        if (Physics.Raycast(origin + Vector3.up * 0.4f, Vector3.down, out RaycastHit hit,
+            1f, _groundMask, QueryTriggerInteraction.Ignore))
+            origin = hit.point;
+        _revealMap.EmitRipple(origin, _movementRipple);
     }
 
     /// <summary>현재 보스 발 위치의 지면에 direction 방향으로 좌우 발자국을 번갈아 생성한다.</summary>

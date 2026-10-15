@@ -603,7 +603,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _playerRoot: {fileID: 9061784569180931348}
   _normalDamage: 10
-  _iaidoInstantKill: 1
   _hitRadius: 0.1
   _attackMask:
     serializedVersion: 2
@@ -790,6 +789,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83cd9423b5624d523dd69578222640dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _damage: 50
   _blackoutDuration: 1
   _cutAngle: 24
   _cutSlashSize: 2400

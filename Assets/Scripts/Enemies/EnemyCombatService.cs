@@ -10,8 +10,6 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     [Header("플레이어 공격 판정")]
     [SerializeField] private Transform _playerRoot;
     [SerializeField, Min(0f)] private float _normalDamage = 10f;
-    [SerializeField, Tooltip("켜면 발도 베기가 남은 체력 전체를 피해로 적용합니다. 끄면 일반 공격 피해량을 적용합니다.")]
-    private bool _iaidoInstantKill = true;
     [SerializeField, Min(0.01f)] private float _hitRadius = 0.2f;
     [SerializeField] private LayerMask _attackMask = ~0;
     [SerializeField, Tooltip("칼날 길이 대신 시점 방향으로 거리 제한 없이 공격 판정합니다. 벽에 막히는 규칙은 유지합니다.")]
@@ -150,13 +148,8 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
                 (string.IsNullOrEmpty(request.PreferredTargetId) || request.PreferredTargetId == health.TargetId))
             {
                 string id = health.TargetId;
-                float damage = _iaidoInstantKill && request.Kind == PlayerAttackKind.IaidoFinisher
-                    && health.GetComponent<BossController>() == null
-                    && health.GetComponent<HumanBossAttack>() == null
-                    && health.GetComponent<BeastBossAttack>() == null
-                    ? health.CurrentHealth
-                    : _normalDamage;
-                health.TakeDamage(new DamageContext(damage, _playerRoot.gameObject, point, request.Direction, request.Kind.ToString()));
+                health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
+                    request.Direction, request.Kind.ToString()));
                 result = new PlayerAttackResolution(request.ActionId, true, id, health.CurrentHealth <= 0f);
             }
         }
@@ -353,13 +346,8 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         string id = hit ? health.TargetId : null;
         if (hit)
         {
-            float damage = _iaidoInstantKill && request.Kind == PlayerAttackKind.IaidoFinisher
-                && health.GetComponent<BossController>() == null
-                && health.GetComponent<HumanBossAttack>() == null
-                && health.GetComponent<BeastBossAttack>() == null
-                ? health.CurrentHealth
-                : _normalDamage;
-            health.TakeDamage(new DamageContext(damage, _playerRoot.gameObject, point, request.Direction, request.Kind.ToString()));
+            health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
+                request.Direction, request.Kind.ToString()));
         }
         PlayerAttackResolution result = new PlayerAttackResolution(request.ActionId, hit, id,
             hit && health.CurrentHealth <= 0f, complete);

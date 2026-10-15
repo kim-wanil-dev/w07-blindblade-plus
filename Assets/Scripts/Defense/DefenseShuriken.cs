@@ -55,6 +55,8 @@ public sealed class DefenseShuriken : MonoBehaviour
     private float _homingStopDistance = 4f;
 
     [Header("일반 패링 반사")]
+    [SerializeField, Min(0f), Tooltip("반사 수리검이 적에게 주는 고정 피해")]
+    private float _reflectDamage = 10f;
     [SerializeField, Min(1f), Tooltip("일반 패링으로 반사한 수리검의 속도 배율. 원래 비행 속도에 곱한다.")]
     private float _reflectSpeedMultiplier = 2f;
     private GameObject _reflectOwner;
@@ -397,14 +399,14 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// collider가 생존 적이면 point에 남은 체력 전체의 PlayerOwned 피해를 한 번 적용한 뒤 수리검을 파괴한다.
+    /// collider가 생존 적이면 point에 reflectDamage만큼의 PlayerOwned 피해를 한 번 적용한 뒤 수리검을 파괴한다.
     /// 지형이면 피해 없이 파괴한다.
     /// </summary>
     private void StrikeReflected(Collider collider, Vector3 point)
     {
         EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
         if (enemy != null)
-            enemy.TakeDamage(new DamageContext(Mathf.Max(enemy.CurrentHealth, 1f), _reflectOwner, point, _direction,
+            enemy.TakeDamage(new DamageContext(_reflectDamage, _reflectOwner, point, _direction,
                 REFLECT_PATTERN_ID, _attackId, 1, IncomingAttackKind.PlayerOwned));
         _reflected = false;
         Destroy(gameObject);
