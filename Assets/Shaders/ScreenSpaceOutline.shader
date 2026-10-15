@@ -404,6 +404,44 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 return lerp(scene, selectedColor.rgb, opacity);
             }
 
+            #define MAX_GROUND_MARKS 8
+            #define GROUND_MARK_HEIGHT_TOLERANCE 0.3
+            int _OutlineGroundMarkCount;
+            // xy: 시작 XZ, zw: 끝 XZ
+            float4 _OutlineGroundMarkSegments[MAX_GROUND_MARKS];
+            // x: 땅 높이, y: 반폭, z: 세기, w: 양 끝 흐림 비율
+            float4 _OutlineGroundMarkParams[MAX_GROUND_MARKS];
+            half4 _OutlineGroundMarkColor;
+
+            // 화면 픽셀의 표면이 땅 흔적 선분 위에 있으면 흔적 색을 반환한다. 파동과 상관없이 그리며 장면 깊이로 가려진다.
+            float3 GroundMarkColor(float2 uv)
+            {
+                if (_OutlineGroundMarkCount <= 0)
+                    return 0.0;
+                float rawDepth = SampleSceneDepth(uv);
+                if (HasSurface(rawDepth) == 0.0)
+                    return 0.0;
+                float3 position = SurfacePosition(uv, rawDepth);
+                float coverage = 0.0;
+                [loop]
+                for (int i = 0; i < _OutlineGroundMarkCount; i++)
+                {
+                    float4 segment = _OutlineGroundMarkSegments[i];
+                    float4 markParams = _OutlineGroundMarkParams[i];
+                    if (abs(position.y - markParams.x) > GROUND_MARK_HEIGHT_TOLERANCE)
+                        continue;
+                    float2 along = segment.zw - segment.xy;
+                    float progress = saturate(dot(position.xz - segment.xy, along) / max(dot(along, along), 0.0001));
+                    float distanceFromLine = distance(position.xz, segment.xy + along * progress);
+                    // 가장자리와 양 끝을 부드럽게 흐려 계단이 지지 않게 한다.
+                    float side = 1.0 - smoothstep(markParams.y * 0.5, markParams.y, distanceFromLine);
+                    float ends = smoothstep(0.0, max(markParams.w, 0.0001), progress)
+                        * smoothstep(0.0, max(markParams.w, 0.0001), 1.0 - progress);
+                    coverage = max(coverage, side * ends * markParams.z);
+                }
+                return _OutlineGroundMarkColor.rgb * _OutlineGroundMarkColor.a * coverage;
+            }
+
             // 불투명 경계와 투명 이펙트 및 개별 위협을 합성하고 나머지 면과 배경은 검게 출력한다.
             half4 Frag(Varyings input) : SV_Target
             {
@@ -426,6 +464,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     abs(AlwaysVisibleCoverage(firstUv) - AlwaysVisibleCoverage(secondUv)),
                     abs(AlwaysVisibleCoverage(thirdUv) - AlwaysVisibleCoverage(fourthUv))) * 1.5);
                 edge = max(edge, foregroundEdge * _LineColor.rgb * _LineColor.a);
+                edge = max(edge, GroundMarkColor(uv));
                 // 위협 실루엣은 경계를 선명하게, 내부는 반투명하게 다른 모든 선 위에 덮는다.
                 float threatFirst = ThreatCoverage(firstUv);
                 float threatSecond = ThreatCoverage(secondUv);
