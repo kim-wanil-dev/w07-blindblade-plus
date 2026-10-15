@@ -792,6 +792,9 @@ MonoBehaviour:
   _ringFadeDuration: 0.3
   _glintDuration: 0.35
   _readyVignette: 0.75
+  _perfectDodgeVignette: 0.6
+  _normalDodgeVignette: 0
+  _dodgeVignetteDuration: 0.4
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1156,15 +1159,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8263282751017363749, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: 56.730274
+      value: 85.526474
       objectReference: {fileID: 0}
     - target: {fileID: 8263282751017363749, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: -61.371494
+      value: 132.39307
       objectReference: {fileID: 0}
     - target: {fileID: 8263282751017363749, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 35.179012
+      value: 58.922337
       objectReference: {fileID: 0}
     - target: {fileID: 8263282751017363749, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
       propertyPath: m_ConstrainProportionsScale
