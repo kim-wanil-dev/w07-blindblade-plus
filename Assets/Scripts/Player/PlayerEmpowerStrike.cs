@@ -65,6 +65,8 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     private float _pushInRate;
     private bool _fovApplied;
 
+    public float CutAngle => _cutAngle;
+
     void Awake()
     {
         _overlay = GetComponent<EmpowerOverlay>();

@@ -85,6 +85,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineRevealSphereStrengths[MAX_REVEAL_SPHERES];
             int _OutlineHiddenOwnerCount;
             float4 _OutlineHiddenOwners[MAX_HIDDEN_OWNERS];
+            // x: 적 파동 바닥 높이, y: 배경을 온전히 밝히는 높이, z: 그 위에서 흐려지는 높이
+            float4 _OutlineHiddenSceneryHeight;
 
             // 잔상 만료 시각과 잔상 길이로 현재 공개 정도를 반환한다.
             float ExpireVisibility(float2 reveal)
@@ -108,8 +110,17 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 return exclusion;
             }
 
+            // 적 파동이 배경을 밝히는 정도를 파동 바닥에서의 높이로 줄인다. 대나무가 기둥째 밝혀지지 않게 한다.
+            float HiddenSceneryHeightFade(float3 position)
+            {
+                float height = position.y - _OutlineHiddenSceneryHeight.x;
+                return 1.0 - smoothstep(_OutlineHiddenSceneryHeight.y,
+                    _OutlineHiddenSceneryHeight.y + max(_OutlineHiddenSceneryHeight.z, 0.0001), height);
+            }
+
             // 걸음 파동이 남긴 XZ 잔상과 이동 시야원의 구형 강조로 현재 공개 정도를 반환한다.
-            float RevealMapVisibility(float3 position)
+            // isScenery가 1이면 적 파동 잔상만 높이에 따라 흐리게 한다.
+            float RevealMapVisibility(float3 position, float isScenery)
             {
                 if (_OutlineRevealEnabled < 0.5)
                     return 0.0;
@@ -120,6 +131,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     float4 reveal = SAMPLE_TEXTURE2D_LOD(_OutlineRevealMap, sampler_OutlineRevealMap, revealUv, 0);
                     visibility = ExpireVisibility(reveal.rg);
                     float hiddenVisibility = ExpireVisibility(reveal.ba);
+                    if (isScenery > 0.5)
+                        hiddenVisibility *= HiddenSceneryHeightFade(position);
                     if (hiddenVisibility > 0.0)
                         visibility = max(visibility, hiddenVisibility * (1.0 - OwnerExclusion(position)));
                 }
@@ -145,7 +158,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             }
 
             // 현재 인지를 선 색상으로 표시하고 일반 지형에만 누적 기억 색상을 합성한다.
-            float3 PerceptionColor(float2 uv, float rawDepth, float hasSurface, float includeMemory)
+            // isScenery가 1이면 배경 표면으로 보고 적 파동 공개에 높이 제한을 건다.
+            float3 PerceptionColor(float2 uv, float rawDepth, float hasSurface, float includeMemory, float isScenery)
             {
                 if (hasSurface == 0.0)
                     return 0.0;
@@ -179,7 +193,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     float3(position.x, 0.0, position.z),
                     float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
                     _OutlinePulseRegion.w) * _OutlinePulseVisibility);
-                visibility = max(visibility, RevealMapVisibility(position));
+                visibility = max(visibility, RevealMapVisibility(position, isScenery));
                 float memoryVisibility = 0.0;
                 if (includeMemory > 0.5 && _OutlineMemoryEnabled > 0.5)
                 {
@@ -197,8 +211,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             {
                 if (hasSurface != 0.0
                     && SAMPLE_TEXTURE2D_X(_OutlineSceneryMask, sampler_PointClamp, uv).r > 0.5)
-                    return PerceptionColor(uv, rawDepth, hasSurface, 0.0);
-                return PerceptionColor(uv, rawDepth, hasSurface, 1.0);
+                    return PerceptionColor(uv, rawDepth, hasSurface, 0.0, 1.0);
+                return PerceptionColor(uv, rawDepth, hasSurface, 1.0, 0.0);
             }
 
             // 위협 대상이 덮는 화면 비율을 반환한다.
@@ -297,8 +311,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 float firstDepth = SAMPLE_TEXTURE2D_X(_OutlineTransparentDepth, sampler_PointClamp, firstUv).r;
                 float secondDepth = SAMPLE_TEXTURE2D_X(_OutlineTransparentDepth, sampler_PointClamp, secondUv).r;
                 float edge = saturate(abs(first - second) * 1.5);
-                return edge * max(PerceptionColor(firstUv, firstDepth, first, 0.0),
-                    PerceptionColor(secondUv, secondDepth, second, 0.0));
+                return edge * max(PerceptionColor(firstUv, firstDepth, first, 0.0, 0.0),
+                    PerceptionColor(secondUv, secondDepth, second, 0.0, 0.0));
             }
 
             // 인지 예외 VFX만 별도로 검출하여 일반 VFX의 색상과 깊이가 섞이지 않게 한다.

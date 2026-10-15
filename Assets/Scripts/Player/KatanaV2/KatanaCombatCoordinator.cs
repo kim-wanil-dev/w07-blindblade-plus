@@ -145,6 +145,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private bool _waitAfterRecovery;
     private bool _normalRequested;
     private bool _suppressSheatheOnGuardEnd;
+    // 제자리 공격 요청은 예약된 공격이 시작되거나 버려질 때까지 대상 돌진을 막는다.
+    private bool _inPlaceAttackRequested;
     private PlayerInputRejectReason _lastRejectReason;
 
     private bool _attackWasDrawn;
@@ -235,6 +237,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         if (_player.IsPaused || _player.CurrentState == PlayerActionState.Dead)
             return;
 
+        if (_inPlaceAttackRequested && !HasBufferedAttack) _inPlaceAttackRequested = false;
         _clock += _playerClock.DeltaTime;
         if (_automaticCounterPending)
         {
@@ -288,8 +291,20 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     public void AddLookInput(Vector2 delta) => _player.AddLookInput(delta);
 
     /// <summary>
+    /// 근처 적이 있어도 대상 돌진 없이 제자리 일반 공격만 시작하거나 예약하고 입력 수락 여부를 반환한다.
+    /// 예약된 경우 _inPlaceAttackRequested를 유지해 예약 공격이 시작되거나 버려질 때까지 대상 돌진을 막는다.
+    /// </summary>
+    public bool RequestInPlaceAttack()
+    {
+        _inPlaceAttackRequested = true;
+        bool accepted = RequestAttack();
+        if (!HasBufferedAttack) _inPlaceAttackRequested = false;
+        return accepted;
+    }
+
+    /// <summary>
     /// 반격, 대상 돌진, 일반 1·2타 연계 중 현재 상태에 맞는 공격을 시작하거나 다음 클릭 하나를 예약한다.
-    /// 가드 중 입력은 가드를 끝내고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다.
+    /// 가드 중 입력은 가드를 끝내고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다. 제자리 공격 요청 중에는 대상 돌진을 건너뛴다.
     /// </summary>
     public bool RequestAttack()
     {
@@ -377,7 +392,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             QueueAttack(true, false, false, _nextComboAllowedAt);
             return true;
         }
-        if (_player.RequestTargetedIaidoAttack(strike))
+        if (!_inPlaceAttackRequested && _player.RequestTargetedIaidoAttack(strike))
             return true;
         if (strike == 1 && _weaponState == KatanaWeaponState.Drawn && !attackFromGuard
             && _clock >= _comboExpiresAt)

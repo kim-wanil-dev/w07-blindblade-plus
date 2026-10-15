@@ -67,6 +67,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private static readonly int _sphereStrengthsId = Shader.PropertyToID("_OutlineRevealSphereStrengths");
     private static readonly int _hiddenOwnerCountId = Shader.PropertyToID("_OutlineHiddenOwnerCount");
     private static readonly int _hiddenOwnersId = Shader.PropertyToID("_OutlineHiddenOwners");
+    private static readonly int _hiddenSceneryHeightId = Shader.PropertyToID("_OutlineHiddenSceneryHeight");
     private static readonly int _boundsId = Shader.PropertyToID("_RevealBounds");
     private static readonly int _timeId = Shader.PropertyToID("_RevealTime");
     private static readonly int _edgeFadeId = Shader.PropertyToID("_RevealEdgeFade");
@@ -97,6 +98,13 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private readonly List<Transform> _hiddenOwners = new List<Transform>(MAX_HIDDEN_OWNERS);
     private readonly Vector4[] _hiddenOwnerBuffer = new Vector4[MAX_HIDDEN_OWNERS];
     private int _hiddenOwnerCount;
+
+    [Header("적 파동의 배경 높이 제한")]
+    [SerializeField, Min(0f), Tooltip("몸체를 밝히지 않는 적 파동이 배경(대나무)을 온전히 밝히는 파동 바닥 기준 높이(미터).")]
+    private float _hiddenSceneryRevealHeight = 1f;
+    [SerializeField, Min(0.01f), Tooltip("위 높이부터 적 파동의 배경 공개가 0이 될 때까지 흐려지는 높이(미터).")]
+    private float _hiddenSceneryFadeHeight = 1f;
+    private float _hiddenGroundY;
 
     [Header("바닥 링")]
     [SerializeField, Tooltip("기존 파동 프리팹의 Ring SpriteRenderer. 시각 오브젝트만 복제한다.")]
@@ -144,14 +152,16 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         public readonly float Radius;
         public readonly float RecordedAt;
         public readonly float Afterimage;
+        public readonly float Strength;
 
-        /// <summary>구형 공개 영역의 중심 center와 radius, 기록 시각 recordedAt, 잔상 afterimage를 보관한다.</summary>
-        public Sphere(Vector3 center, float radius, float recordedAt, float afterimage)
+        /// <summary>구형 공개 영역의 중심 center와 radius, 기록 시각 recordedAt, 잔상 afterimage, 최대 강도 strength를 보관한다.</summary>
+        public Sphere(Vector3 center, float radius, float recordedAt, float afterimage, float strength)
         {
             Center = center;
             Radius = radius;
             RecordedAt = recordedAt;
             Afterimage = afterimage;
+            Strength = strength;
         }
     }
 
@@ -203,6 +213,8 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         UpdateRings(now);
         PublishSpheres(now);
         PublishHiddenOwners();
+        Shader.SetGlobalVector(_hiddenSceneryHeightId,
+            new Vector4(_hiddenGroundY, _hiddenSceneryRevealHeight, _hiddenSceneryFadeHeight, 0f));
         Shader.SetGlobalTexture(_revealMapId, _maps[_current]);
         Shader.SetGlobalVector(_revealMapBoundsId, new Vector4(_minimum.x, _minimum.y, _size.x, _size.y));
         Shader.SetGlobalFloat(_revealMapEnabledId, 1f);
@@ -210,7 +222,8 @@ public sealed class PerceptionRevealMap : MonoBehaviour
 
     /// <summary>
     /// position에서 settings의 겹 수만큼 시간차 링을 퍼뜨려 지나간 지점의 실루엣을 잔상 시간 동안 공개한다.
-    /// owner를 넘기면 그 발생자 주변 몸체는 이 파동으로 밝히지 않는다. 바닥 링 시각도 함께 재생하며 미준비 상태나 반경 0이면 무시한다.
+    /// owner를 넘기면 그 발생자 주변 몸체는 이 파동으로 밝히지 않고, 배경(대나무)은 position 높이 기준으로 일정 높이까지만 밝힌다.
+    /// 바닥 링 시각도 함께 재생하며 미준비 상태나 반경 0이면 무시한다.
     /// </summary>
     public void EmitRipple(Vector3 position, RevealRippleSettings settings, Transform owner = null)
     {
@@ -219,21 +232,24 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         bool hideOwner = owner != null;
         if (hideOwner && !_hiddenOwners.Contains(owner) && _hiddenOwners.Count < MAX_HIDDEN_OWNERS)
             _hiddenOwners.Add(owner);
+        // 적 파동 채널은 하나라서 가장 최근 적 파동의 바닥 높이를 배경 높이 제한 기준으로 쓴다.
+        if (hideOwner) _hiddenGroundY = position.y;
         _ripples.Add(new Ripple(position, Time.time, settings, hideOwner));
     }
 
     /// <summary>
     /// 이번 프레임 position을 중심으로 radius(미터) 구형 영역의 실루엣을 중심에서 가장자리로 흐려지게 강조한다.
-    /// recordTrail이 참이면 그 위치를 afterimage 동안 흐려지는 잔상으로 남긴다.
+    /// strength(0~1)는 중심의 최대 공개 정도이며, recordTrail이 참이면 그 위치를 afterimage 동안 흐려지는 잔상으로 남긴다.
     /// </summary>
-    public void RevealAround(Vector3 position, float radius, float afterimage, bool recordTrail)
+    public void RevealAround(Vector3 position, float radius, float afterimage, bool recordTrail, float strength = 1f)
     {
-        if (!isActiveAndEnabled || !_sensoryManager.IsReady || radius <= 0f)
+        if (!isActiveAndEnabled || !_sensoryManager.IsReady || radius <= 0f || strength <= 0f)
             return;
+        strength = Mathf.Clamp01(strength);
         if (_pendingHeads.Count < MAX_SPHERES)
-            _pendingHeads.Add(new Sphere(position, radius, Time.time, afterimage));
+            _pendingHeads.Add(new Sphere(position, radius, Time.time, afterimage, strength));
         if (recordTrail && afterimage > 0f)
-            _trail.Add(new Sphere(position, radius, Time.time, afterimage));
+            _trail.Add(new Sphere(position, radius, Time.time, afterimage, strength));
     }
 
     /// <summary>
@@ -282,9 +298,10 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         if (hiddenVisibility > 0f)
             visibility = Mathf.Max(visibility, hiddenVisibility * (1f - OwnerExclusion(point)));
         foreach (Sphere head in _heads)
-            visibility = Mathf.Max(visibility, SphereVisibility(position, head, 1f));
+            visibility = Mathf.Max(visibility, SphereVisibility(position, head, head.Strength));
         foreach (Sphere sample in _trail)
-            visibility = Mathf.Max(visibility, SphereVisibility(position, sample, TrailStrength(sample, now)));
+            visibility = Mathf.Max(visibility,
+                SphereVisibility(position, sample, TrailStrength(sample, now) * sample.Strength));
         return visibility;
     }
 
@@ -401,13 +418,13 @@ public sealed class PerceptionRevealMap : MonoBehaviour
             if (count == MAX_SPHERES)
                 break;
             _sphereBuffer[count] = new Vector4(head.Center.x, head.Center.y, head.Center.z, head.Radius);
-            _sphereStrengthBuffer[count++] = new Vector4(1f, 0f, 0f, 0f);
+            _sphereStrengthBuffer[count++] = new Vector4(head.Strength, 0f, 0f, 0f);
         }
         for (int i = _trail.Count - 1; i >= 0 && count < MAX_SPHERES; i--)
         {
             Sphere sample = _trail[i];
             _sphereBuffer[count] = new Vector4(sample.Center.x, sample.Center.y, sample.Center.z, sample.Radius);
-            _sphereStrengthBuffer[count++] = new Vector4(TrailStrength(sample, now), 0f, 0f, 0f);
+            _sphereStrengthBuffer[count++] = new Vector4(TrailStrength(sample, now) * sample.Strength, 0f, 0f, 0f);
         }
         Shader.SetGlobalInt(_sphereCountId, count);
         Shader.SetGlobalVectorArray(_spheresId, _sphereBuffer);

@@ -14,6 +14,12 @@ public sealed class InputManager : MonoBehaviour
     [Header("패드 시점")]
     [SerializeField, Min(1f)] private float _gamepadLookDegreesPerSecond = 180f;
 
+    [Header("시작 시점")]
+    [SerializeField, Min(0f), Tooltip("게임 시작과 커서 잠금 직후 시점 입력을 버리는 실시간(초). 잠금·씬 로드 순간 한꺼번에 들어오는 마우스 이동량으로 시점이 튀는 것을 막는다.")]
+    private float _lookIgnoreAfterLock = 0.2f;
+    private float _lookIgnoredUntil;
+    private bool _viewResetPending;
+
     [Header("입력 상태")]
     private GameStateManager _state;
     private KatanaCombatCoordinator _combat;
@@ -32,6 +38,8 @@ public sealed class InputManager : MonoBehaviour
     private int _bufferedAttackInputId;
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
+    private int _chargeInputId;
+    private double _chargePressTime;
 
     public bool IsInitialized => _state != null;
     public bool IsGameplayInputEnabled { get; private set; }
@@ -81,12 +89,16 @@ public sealed class InputManager : MonoBehaviour
         }
         player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
         Vector2 look = _actions.Player.Look.ReadValue<Vector2>();
-        if (_actions.Player.Look.activeControl != null && _actions.Player.Look.activeControl.device is Gamepad)
+        // 시작·커서 잠금 직후의 튀는 시점 입력은 버린다.
+        bool lookIgnored = Time.unscaledTime < _lookIgnoredUntil;
+        if (!lookIgnored && _actions.Player.Look.activeControl != null
+            && _actions.Player.Look.activeControl.device is Gamepad)
             _motor.AddGamepadLookInput(look, _gamepadLookDegreesPerSecond, _playerClock.DeltaTime);
-        else
+        else if (!lookIgnored)
             player.AddLookInput(look);
 
         ResolveBufferedInputs(player);
+        ResolveUltimateCharge(player);
 
         // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
         // 계속 누르는 우클릭은 가드가 끝나 자유 상태가 되면 다시 가드와 패링 창을 연다.
@@ -122,23 +134,34 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 새 InputId로 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 입력 기록으로 발행한다.
-    /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// 강화 준비 중이면 일반 공격 대신 강화 공격을 시작하고 그 결과를 기록한다.
+    /// 새 InputId로 공격을 요청한다. 토큰이 가득 찬 강화 준비 중이면 궁극기 차징을 시작해 예약 입력으로 기록하고,
+    /// 그 외에는 RequestNormalAttack으로 일반 공격(강화 준비 중이면 검기 공격)을 요청한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        if (_empower.IsReady)
+        if (_empower.BeginCharge())
         {
-            bool struck = _empower.TryBeginStrike();
-            PublishInput(inputId, PlayerInputKind.Attack,
-                struck ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
-                struck ? PlayerInputRejectReason.None : PlayerInputRejectReason.Unavailable, 0, _attackPressTime);
+            _chargeInputId = inputId;
+            _chargePressTime = _attackPressTime;
+            PublishInput(inputId, PlayerInputKind.Attack, PlayerInputStatus.Buffered,
+                PlayerInputRejectReason.None, 0, _attackPressTime);
             return;
         }
+        RequestNormalAttack(player, inputId, _attackPressTime);
+    }
+
+    /// <summary>
+    /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
+    /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
+    /// 강화 준비 중에는 검기가 대상 돌진보다 우선하도록 제자리 공격을 요청하고, 받아들여지면 준비를 끝내고 그 공격의 베기 시작에 검기를 예약한다.
+    /// </summary>
+    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
+    {
         int previousActionId = player.CurrentActionId;
-        bool accepted = _combat.RequestAttack();
+        bool swordWave = _empower.IsReady;
+        bool accepted = swordWave ? _combat.RequestInPlaceAttack() : _combat.RequestAttack();
+        if (accepted && swordWave) _empower.CompleteWithSwordWave(previousActionId);
         bool started = accepted && player.CurrentActionId != previousActionId;
         PlayerInputStatus status = started ? PlayerInputStatus.Started
             : accepted ? PlayerInputStatus.Buffered : PlayerInputStatus.Rejected;
@@ -146,11 +169,42 @@ public sealed class InputManager : MonoBehaviour
         {
             _bufferedAttackInputId = inputId;
             _bufferedAttackActionId = player.CurrentActionId;
-            _bufferedAttackPressTime = _attackPressTime;
+            _bufferedAttackPressTime = pressTime;
         }
         PublishInput(inputId, PlayerInputKind.Attack, status,
             accepted ? PlayerInputRejectReason.None : _combat.LastRejectReason,
-            started ? player.CurrentActionId : 0, _attackPressTime);
+            started ? player.CurrentActionId : 0, pressTime);
+    }
+
+    /// <summary>
+    /// 진행 중인 궁극기 차징 입력 _chargeInputId를 처리한다. 차징이 다 차면 궁극기를 시작해 Started 또는 Rejected로 기록한다.
+    /// 다 차기 전에 좌클릭을 떼면 차징을 멈추고 같은 입력으로 검기 공격을 요청하며, 준비가 먼저 끝났으면 BufferDropped로 기록한다.
+    /// </summary>
+    private void ResolveUltimateCharge(PlayerController player)
+    {
+        if (_chargeInputId == 0) return;
+        int inputId = _chargeInputId;
+        if (_empower.IsUltimateChargeComplete)
+        {
+            _chargeInputId = 0;
+            bool struck = _empower.TryBeginStrike();
+            if (!struck) _empower.CancelCharge();
+            PublishInput(inputId, PlayerInputKind.Attack,
+                struck ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
+                struck ? PlayerInputRejectReason.None : PlayerInputRejectReason.Unavailable, 0, _chargePressTime);
+        }
+        else if (!_empower.IsCharging)
+        {
+            _chargeInputId = 0;
+            PublishInput(inputId, PlayerInputKind.Attack, PlayerInputStatus.BufferDropped,
+                PlayerInputRejectReason.None, 0, _chargePressTime);
+        }
+        else if (!_actions.Player.Attack.IsPressed())
+        {
+            _chargeInputId = 0;
+            _empower.CancelCharge();
+            RequestNormalAttack(player, inputId, _chargePressTime);
+        }
     }
 
     /// <summary>
@@ -228,6 +282,7 @@ public sealed class InputManager : MonoBehaviour
         _motor = Game.Player.GetComponent<PlayerMotor>();
         _empower = Game.Player.GetComponent<PlayerEmpower>();
         _playerClock = Game.Player.GetComponent<PlayerClock>();
+        _viewResetPending = true;
         _state.StateChanged += HandleState;
         _actions.Player.Enable();
         _guard.Enable();
@@ -240,18 +295,27 @@ public sealed class InputManager : MonoBehaviour
         SetGameplayInputEnabled(state == GameplayState.Playing);
     }
 
-    /// <summary>allowed와 게임 상태로 입력 허용 여부를 결정한다. 차단 시 유지 입력을 정리하고 활성화 시 커서를 잠근 뒤 정책 변경을 알린다.</summary>
+    /// <summary>
+    /// allowed와 게임 상태로 입력 허용 여부를 결정한다. 차단 시 유지 입력을 정리하고 활성화 시 커서를 잠근 뒤 정책 변경을 알린다.
+    /// 세션을 연결한 뒤 처음 활성화되면 시점을 스폰 정면으로 되돌리고 잠깐 시점 입력을 버린다.
+    /// </summary>
     public void SetGameplayInputEnabled(bool allowed)
     {
         bool enabled = allowed && _state != null && _state.State == GameplayState.Playing;
         if (!enabled) ClearHeldInput();
         if (IsGameplayInputEnabled == enabled) return;
         IsGameplayInputEnabled = enabled;
+        if (enabled && _viewResetPending)
+        {
+            _viewResetPending = false;
+            _motor.ResetView();
+            _lookIgnoredUntil = Time.unscaledTime + _lookIgnoreAfterLock;
+        }
         if (enabled) SetCursor(true);
         GameplayInputEnabledChanged?.Invoke(enabled);
     }
 
-    /// <summary>Game.Player의 이동·가드·차지·패링 시도를 정리하고 모터 입력을 초기화한다.</summary>
+    /// <summary>Game.Player의 이동·가드·차지·패링 시도와 궁극기 차징을 정리하고 모터 입력을 초기화한다.</summary>
     private void ClearHeldInput()
     {
         PlayerController player = Game.Player;
@@ -261,12 +325,18 @@ public sealed class InputManager : MonoBehaviour
         player.EndCharge();
         if (_combat != null) _combat.CancelParryAttempt();
         if (_motor != null) _motor.ClearInput();
+        if (_empower != null) _empower.CancelCharge();
     }
 
-    /// <summary>locked와 Inspector 설정으로 커서 잠금·표시 상태를 변경한다. 잠금 관리가 꺼져 있으면 상태를 유지한다.</summary>
+    /// <summary>
+    /// locked와 Inspector 설정으로 커서 잠금·표시 상태를 변경한다. 잠금 관리가 꺼져 있으면 상태를 유지한다.
+    /// 풀린 커서를 새로 잠그면 _lookIgnoreAfterLock 동안 시점 입력을 버리도록 _lookIgnoredUntil을 늘린다.
+    /// </summary>
     private void SetCursor(bool locked)
     {
         if (!_lockCursorOnClick) return;
+        if (locked && Cursor.lockState != CursorLockMode.Locked)
+            _lookIgnoredUntil = Mathf.Max(_lookIgnoredUntil, Time.unscaledTime + _lookIgnoreAfterLock);
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;
     }
@@ -307,6 +377,7 @@ public sealed class InputManager : MonoBehaviour
         _playerClock = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
+        _chargeInputId = 0;
         if (_actions != null) _actions.Player.Disable();
         if (_guard != null) _guard.Disable();
         if (_dodge != null) _dodge.Disable();
