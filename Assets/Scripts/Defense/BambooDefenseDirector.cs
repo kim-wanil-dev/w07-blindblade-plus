@@ -142,4 +142,13 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     {
         _kills++;
     }
+
+    /// <summary>
+    /// position, viewCamera, perceptionMask로 화면에서 인지된 근접 적을 조회한다.
+    /// 스폰 담당자가 찾은 적을 target에 담고 성공 여부를 반환한다.
+    /// </summary>
+    internal bool TryFindDetectedMelee(Vector3 position, Camera viewCamera, SensoryPerceptionMask perceptionMask, out EnemyHealth target)
+    {
+        return _spawner.TryFindDetectedMelee(position, viewCamera, perceptionMask, out target);
+    }
 }

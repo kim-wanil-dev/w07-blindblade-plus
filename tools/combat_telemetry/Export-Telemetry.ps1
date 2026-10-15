@@ -32,7 +32,7 @@ foreach ($file in $files) {
                     $sessions[$record.sessionId] = [ordered]@{
                         session_id = $record.sessionId; anonymous_player_id = $record.anonymousPlayerId
                         build_version = $record.buildVersion; config_version = $record.configVersion
-                        started_utc = ''; status = 'incomplete'; has_session_end = $false
+                        started_kst = ''; status = 'incomplete'; has_session_end = $false
                         run_realtime_seconds = ''; combat_realtime_seconds = ''; survival_game_seconds = ''
                         kills = ''; damage_taken = ''; defense_count = ''; parry_count = ''; health = ''
                         dropped_events_total = ''; last_event_sequence = 0L
@@ -51,6 +51,7 @@ foreach ($file in $files) {
                     build_version = $record.buildVersion; config_version = $record.configVersion
                     event_sequence = $record.eventSequence; event_type = $record.eventType
                     source_id = $record.sourceId; source_sequence = $record.sourceSequence
+                    occurred_at_kst = $record.occurredAtKst; recorded_at_kst = $record.recordedAtKst
                     realtime_seconds = $time.realtimeSeconds; gameplay_seconds = $time.gameplaySeconds
                     active_unscaled_seconds = $time.activeUnscaledSeconds
                     input_id = $ids.inputId; action_id = $ids.actionId; attack_id = $ids.attackId
@@ -58,7 +59,19 @@ foreach ($file in $files) {
                     outcome = $payload.outcome; stage = $payload.stage; applied_damage = $payload.appliedDamage
                     payload_json = ($payload | ConvertTo-Json -Depth 30 -Compress)
                 })
-                if ($record.eventType -eq 'session_started') { $summary.started_utc = $payload.startedUtc }
+                if ($record.eventType -eq 'session_started') {
+                    $summary.started_kst = $payload.startedKst
+                    if (!$summary.started_kst -and $payload.startedUtc) {
+                        $legacyTime = [DateTimeOffset]::MinValue
+                        if ([DateTimeOffset]::TryParse([string]$payload.startedUtc, [System.Globalization.CultureInfo]::InvariantCulture,
+                            [System.Globalization.DateTimeStyles]::RoundtripKind, [ref]$legacyTime)) {
+                            $summary.started_kst = $legacyTime.ToOffset([TimeSpan]::FromHours(9)).ToString(
+                                "yyyy-MM-dd'T'HH:mm:ss.fffzzz", [System.Globalization.CultureInfo]::InvariantCulture)
+                        } else {
+                            $diagnostics.Add([pscustomobject]@{ file = $file.Name; line = $lineNumber; problem = 'invalid_legacy_start_time'; event_key = $key })
+                        }
+                    }
+                }
                 if ($record.eventType -in @('progress_sample', 'player_died', 'run_ended', 'session_ended')) {
                     $summary.status = $payload.reason
                     $summary.run_realtime_seconds = $payload.runRealtimeSeconds
@@ -91,7 +104,7 @@ $eventRows | Where-Object { $_.input_id -gt 0 } |
     Select-Object session_id, input_id, action_id, attack_id, hit_id, projectile_id, dodge_id, event_key, event_type |
     Export-Csv -LiteralPath (Join-Path $destinationDirectory 'explicit-links.csv') -NoTypeInformation -Encoding UTF8
 [pscustomobject]@{
-    analysis_version = '0.2.0'; generated_utc = [DateTime]::UtcNow.ToString('O')
+    analysis_version = '0.2.0'; generated_kst = [DateTimeOffset]::UtcNow.ToOffset([TimeSpan]::FromHours(9)).ToString("yyyy-MM-dd'T'HH:mm:ss.fffzzz", [System.Globalization.CultureInfo]::InvariantCulture)
     source_files = @($files | ForEach-Object { [pscustomobject]@{ name = $_.Name; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } })
     events = $eventRows.Count; sessions = $summaryRows.Count; diagnostics = $diagnostics.Count
 } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $destinationDirectory 'analysis-manifest.json') -Encoding UTF8

@@ -39,4 +39,8 @@ public enum SoundId
     BeastBossIdle = 32,
     BeastBossParry = 33,
     SwordSheathe = 34,
+    EmpowerBlackoutSlash = 34,
+    EmpowerBlackoutSheathe = 35,
+    ShurikenFlight = 36,
+    PerfectParryClash = 37,
 }

@@ -35,6 +35,12 @@ public sealed class DefenseShuriken : MonoBehaviour
     private bool _flying;
     private int _attackId;
     private int _projectileId;
+    private bool _terminalFlight;
+    private bool _hasPassedPlayer;
+
+    [Header("소리")]
+    [SerializeField, Tooltip("적대 비행 동안 수리검을 따라 반복하는 비행음. 반사·소멸하면 멈춘다.")]
+    private SoundId _flightSound = SoundId.ShurikenFlight;
 
     [Header("예측 조준·유도")]
     [SerializeField, Min(0f), Tooltip("플레이어 시점보다 낮게 조준하는 높이(미터)")]
@@ -58,6 +64,7 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     public event Action<DefenseShuriken> Released;
     public bool IsFlying => _flying;
+    public bool HasPassedPlayer => _hasPassedPlayer;
     public int AttackId => _attackId;
     public int ProjectileId => _projectileId;
 
@@ -78,10 +85,11 @@ public sealed class DefenseShuriken : MonoBehaviour
             return;
         }
 
-        SteerTowardsTarget(Vector3.Distance(_targetMotor.ViewOrigin, transform.position));
+        Vector3 playerPoint = _targetMotor.ViewOrigin;
+        UpdateFlightPhase(transform.position, transform.position, playerPoint);
+        SteerTowardsTarget(Vector3.Distance(playerPoint, transform.position));
 
-        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts,
-            _collisionMask, QueryTriggerInteraction.Ignore);
+        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts, _collisionMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps; i++)
         {
             if (!CanHit(_contacts[i]))
@@ -91,8 +99,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         }
 
         float distance = _speed * Time.deltaTime;
-        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
-            distance, _collisionMask, QueryTriggerInteraction.Ignore);
+        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits, distance, _collisionMask, QueryTriggerInteraction.Ignore);
         int closest = -1;
         float closestDistance = float.PositiveInfinity;
         for (int i = 0; i < count; i++)
@@ -109,7 +116,11 @@ public sealed class DefenseShuriken : MonoBehaviour
             ProcessHit(_hits[closest].collider, _hits[closest].point);
             return;
         }
-        transform.position += _direction * distance;
+
+        Vector3 start = transform.position;
+        Vector3 end = start + _direction * distance;
+        UpdateFlightPhase(start, end, playerPoint);
+        transform.position = end;
     }
 
     void OnDisable()
@@ -137,8 +148,13 @@ public sealed class DefenseShuriken : MonoBehaviour
         _attackId = session.AllocateAttackId();
         _projectileId = session.AllocateProjectileId();
         _elapsed = 0f;
+        _terminalFlight = false;
+        _hasPassedPlayer = false;
         _flying = true;
         transform.rotation = Quaternion.LookRotation(_direction);
+        // 소멸하면 소유자 파괴로 SoundManager가 정지하고, 반사는 TryReflect에서 직접 멈춘다.
+        if (_flightSound != SoundId.None)
+            Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
     }
 
     /// <summary>
@@ -158,19 +174,43 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// distance가 유도 종료 거리보다 멀면 예측 조준점 방향으로 최대 회전 속도만큼 비행 방향을 꺾는다.
-    /// 가까운 구간은 직진하며 변경된 방향으로 수리검 회전을 맞춘다.
+    /// distance와 현재 직진 상태를 사용해, 아직 유도 중인 수리검만 플레이어 예측 위치로 회전시킨다.
+    /// 회전이 허용되면 _direction과 transform.rotation을 변경한다.
     /// </summary>
     private void SteerTowardsTarget(float distance)
     {
-        if (_homingTurnRate <= 0f || distance <= _homingStopDistance)
+        if (_terminalFlight || _homingTurnRate <= 0f || distance <= _homingStopDistance)
             return;
+
         Vector3 aim = PredictAimPoint(transform.position, _targetMotor, _director.PlayerVelocity) - transform.position;
         if (aim.sqrMagnitude < 0.0001f)
             return;
-        _direction = Vector3.RotateTowards(_direction, aim.normalized,
-            _homingTurnRate * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
+
+        _direction = Vector3.RotateTowards(_direction, aim.normalized, _homingTurnRate * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
         transform.rotation = Quaternion.LookRotation(_direction);
+    }
+
+    /// <summary>
+    /// start부터 end까지의 이동 구간과 playerPoint를 사용해 근접 진입과 통과를 판정한다.
+    /// 근접 시 _terminalFlight를 고정하고, 플레이어가 진행 방향 뒤로 넘어가면 _hasPassedPlayer도 고정한다.
+    /// </summary>
+    private void UpdateFlightPhase(Vector3 start, Vector3 end, Vector3 playerPoint)
+    {
+        if (!_terminalFlight)
+        {
+            Vector3 travel = end - start;
+            float travelLengthSquared = travel.sqrMagnitude;
+            float progress = travelLengthSquared > 0f ? Mathf.Clamp01(Vector3.Dot(playerPoint - start, travel) / travelLengthSquared) : 0f;
+            Vector3 nearest = start + travel * progress;
+
+            if ((playerPoint - nearest).sqrMagnitude <= _homingStopDistance * _homingStopDistance) _terminalFlight = true;
+        }
+
+        if (!_hasPassedPlayer && Vector3.Dot(playerPoint - end, _direction) <= 0f)
+        {
+            _hasPassedPlayer = true;
+            _terminalFlight = true;
+        }
     }
 
     /// <summary>
@@ -224,22 +264,38 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 위치에서 가장 가까운 생존 근접 적을 찾아 owner 소유의 반사 비행으로 바꾸고 true를 반환한다.
-    /// 적대 비행은 이 순간 끝나므로 Released를 한 번 알리며, 대상이 없으면 아무것도 바꾸지 않고 false를 반환한다.
+    /// owner의 수평 시선 방향으로 수리검을 반사한다.
+    /// 화면에서 인지된 적이 있으면 그 적을 목표로 저장하고,
+    /// 반사 상태와 적대 비행 종료를 확정한 뒤 true를 반환한다.
     /// </summary>
     private bool TryReflect(GameObject owner)
     {
-        if (!_director.TryFindNearestMelee(transform.position, out EnemyHealth target))
-            return false;
+        PlayerMotor motor = owner.GetComponent<PlayerMotor>();
+        Camera viewCamera = owner.GetComponentInChildren<Camera>();
+        SensoryPerceptionMask perceptionMask = Game.Instance.SensoryManager.GetComponent<SensoryPerceptionMask>();
 
         _reflectOwner = owner;
-        _reflectTarget = target;
-        _reflectTargetCollider = target.CreateCombatTarget().HitCollider;
+        _reflectTarget = null;
+        _reflectTargetCollider = null;
+        _direction = motor.ViewForward.normalized;
+
+        if (_director.TryFindDetectedMelee(transform.position, viewCamera, perceptionMask, out EnemyHealth target))
+        {
+            _reflectTarget = target;
+            _reflectTargetCollider = target.CreateCombatTarget().HitCollider;
+            AimAtReflectTarget();
+        }
+        else
+        {
+            transform.rotation = Quaternion.LookRotation(_direction);
+        }
+
         _elapsed = 0f;
-        AimAtReflectTarget();
-        // 반사 뒤에는 적대 투사체가 아니므로 투척 예산·방향 표시·강화 공격 제거 대상에서 빠진다.
         _flying = false;
         _reflected = true;
+        // 반사 비행은 더 빨라 같은 비행음을 쓰지 않는다.
+        if (_flightSound != SoundId.None)
+            Managers.Sound.StopFor(gameObject, _flightSound, true, true);
         ShowAsReflected();
         Released?.Invoke(this);
         return true;
@@ -277,11 +333,11 @@ public sealed class DefenseShuriken : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        if (_reflectTarget != null && _reflectTarget.IsAlive)
-            AimAtReflectTarget();
+        if (_reflectTarget != null && _reflectTarget.IsAlive) AimAtReflectTarget();
 
-        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts,
-            _collisionMask, QueryTriggerInteraction.Ignore);
+        int reflectedMask = _collisionMask.value | Physics.IgnoreRaycastLayer;
+
+        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts, reflectedMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps; i++)
         {
             if (!CanHitReflected(_contacts[i]))
@@ -291,8 +347,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         }
 
         float distance = _speed * _reflectSpeedMultiplier * Time.deltaTime;
-        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
-            distance, _collisionMask, QueryTriggerInteraction.Ignore);
+        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits, distance, reflectedMask, QueryTriggerInteraction.Ignore);
         int closest = -1;
         float closestDistance = float.PositiveInfinity;
         for (int i = 0; i < count; i++)
@@ -323,17 +378,22 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// collider가 반사 수리검이 멈출 대상이면 true를 반환한다. 생존 적과 지형에서 멈추고
-    /// 자신·플레이어·죽은 적·적이 아닌 다른 피해 수신자는 통과한다.
+    /// collider가 반사 수리검에 맞을 수 있는 생존 적 또는 기존 지형인지 판정한다.
+    /// 자신, 플레이어, 투척수는 제외하고 추가 검색한 레이어의 비적 대상도 통과시킨다.
     /// </summary>
     private bool CanHitReflected(Collider collider)
     {
-        if (collider.transform.IsChildOf(transform) || collider.GetComponentInParent<PlayerHealth>() != null)
+        if (collider.transform.IsChildOf(transform)
+            || collider.GetComponentInParent<PlayerHealth>() != null
+            || collider.GetComponentInParent<BambooThrower>() != null)
             return false;
+
         EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
         if (enemy != null)
             return enemy.IsAlive;
-        return collider.GetComponentInParent<IDamageable>() == null;
+
+        int layerBit = 1 << collider.gameObject.layer;
+        return (_collisionMask.value & layerBit) != 0 && collider.GetComponentInParent<IDamageable>() == null;
     }
 
     /// <summary>

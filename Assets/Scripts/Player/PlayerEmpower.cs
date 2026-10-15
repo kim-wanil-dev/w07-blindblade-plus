@@ -25,6 +25,11 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _hitStopDuration = 0.08f;
     [SerializeField, Range(0.01f, 1f)] private float _hitStopScale = 0.03f;
 
+    [Header("무적")]
+    [SerializeField, Min(0f), Tooltip("퍼펙트 패링 순간부터 모든 공격을 무적으로 막는 실시간(초).")]
+    private float _perfectParryInvulnerableDuration = 0.3f;
+    private float _invulnerableUntil = float.NegativeInfinity;
+
     [Header("불릿 타임")]
     [SerializeField, Range(0.1f, 1f), Tooltip("강화 준비와 강화 공격 동안 세계 시간 배율.")]
     private float _worldTimeScale = 0.2f;
@@ -49,6 +54,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready;
     public bool IsStriking => _active && _stage == PlayerEmpowerStage.Started;
     public bool IsBulletTimeActive => _active && _hitStopRemaining <= 0f;
+    public bool IsPerfectParryInvulnerable => Time.unscaledTime < _invulnerableUntil;
     public float PlayerTimeScale => _playerTimeScale;
 
     void Awake()
@@ -89,11 +95,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     /// <summary>
     /// 퍼펙트 패링을 알리고 attackId를 원인으로 강화 준비를 시작한다. 새 준비이면 히트스톱 뒤 불릿 타임으로 넘어가며 퍼펙트 파동을 낸다.
     /// 이미 준비 중이면 대기 시간만 처음부터 다시 세고 false를 반환하며, 새 준비를 시작했을 때만 true를 반환한다.
-    /// 강화 공격 중이면 아무것도 바꾸지 않고 false를 반환한다.
+    /// 준비 중이든 새 준비든 _perfectParryInvulnerableDuration 실시간 동안 무적을 건다. 강화 공격 중이면 아무것도 바꾸지 않고 false를 반환한다.
     /// </summary>
     public bool NotifyPerfectParry(int attackId)
     {
         if (IsStriking) return false;
+        _invulnerableUntil = Time.unscaledTime + _perfectParryInvulnerableDuration;
         if (IsReady)
         {
             _readyElapsed = 0f;

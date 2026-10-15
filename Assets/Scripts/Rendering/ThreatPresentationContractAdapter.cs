@@ -118,13 +118,15 @@ namespace BlindBlade.Perception
             }
         }
 
-        /// <summary>positionを接続カメラに投影し、右がx正・上がy正のHUD方向を返す。方向未確定なら上を返す。</summary>
+        /// <summary>position과 카메라의 수평 회전으로 플레이어 기준 HUD 방향을 반환한다. 오른쪽은 x 양수, 앞쪽은 y 양수다.</summary>
         private Vector2 GetUiDirection(Vector3 position)
         {
-            Vector3 viewport = _resolver.ViewCamera.WorldToViewportPoint(position);
-            Vector2 direction = new Vector2(viewport.x - 0.5f, viewport.y - 0.5f);
-            if (viewport.z < 0f)
-                direction = -direction;
+            Quaternion viewYaw = Quaternion.Euler(0f, _resolver.ViewCamera.transform.eulerAngles.y, 0f);
+            Vector3 offset = position - _resolver.ViewCamera.transform.position;
+            offset.y = 0f;
+            Vector2 direction = new Vector2(
+                Vector3.Dot(offset, viewYaw * Vector3.right),
+                Vector3.Dot(offset, viewYaw * Vector3.forward));
             return direction.sqrMagnitude < 0.0001f ? Vector2.up : direction.normalized;
         }
 

@@ -4,8 +4,15 @@
 
 - 정식 `BambooDefense` 씬의 `GameSceneInitializer`에 `CombatTelemetryRecorder`를 연결한다.
 - 설치/참조 복구 메뉴: `BlindBlade > 대숲 방어 > 로그 > D5 로컬 로그 연결`. 열린 정식 씬에서만 동작하고 기존 수치·참조를 재생성하지 않는다.
-- 기본 로컬 기록 ON, 원격 전송은 로컬 설정의 `enabled`가 false여서 OFF다. 추가 SDK·서비스 계정·Python은 필요 없다.
-- JSON은 스키마 `0.2.0`, 계약은 `0.2.0`이다. 이전 `0.1.0` 파일을 이 전처리기에 섞지 않는다.
+- 기본 로컬 기록 ON. 배포용 기본 설정 에셋에 자동 전송이 활성화되어 있으며 새 PC는 CONFIG 작성 없이 전송한다. 로컬 CONFIG가 있으면 그 파일이 우선한다. 추가 SDK·서비스 계정·Python은 필요 없다.
+- JSON은 스키마 `0.2.0`, 계약은 `0.2.0`이다. KST 벽시각 필드는 0.2.0의 선택적 추가 필드라 예전 로그와 기존 미전송 백로그도 처리할 수 있다. 이전 `0.1.0` 파일을 이 전처리기에 섞지 않는다.
+
+## 시간 표기
+
+- 새 사건은 `occurredAtKst`, `recordedAtKst`와 `payload.startedKst`에 한국 표준시를 ISO 8601 형식으로 기록한다. 예: `2026-10-15T13:20:45.123+09:00`. PC의 시간대 설정과 무관하게 +09:00을 사용하며 사건 발생 시각은 해당 기록의 realtime 차이로 계산한다.
+- `occurredAt`/`recordedAt` 안의 `realtimeSeconds`, `gameplaySeconds`, `activeUnscaledSeconds`는 플레이 시간 분석용 경과 초이며 변경하지 않는다.
+- Google Apps Script는 `Events.received_kst`, `Events.occurred_at_kst`, `Events.recorded_at_kst`, `Sessions.started_kst`를 사용한다. 기존 시트의 `received_utc`와 `started_utc` 값은 KST로 변환해 같은 위치에 저장하고 UTC 열 이름은 제거한다. 앞선 버전에서 오른쪽에 추가된 중복 KST 열도 합친다.
+- 이전 JSONL 원본은 수정하지 않는다. 이전 세션의 `startedUtc`는 CSV 전처리에서 `started_kst`로 변환한다. 이전 사건의 발생 KST 시각은 기록된 적이 없으므로 빈 값으로 둔다.
 
 ## 저장 위치와 파일
 
@@ -13,7 +20,7 @@ Unity `Application.persistentDataPath/CombatTelemetry`를 사용한다. 현재 �
 
 ```text
 C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetry
-  upload-config.json                     접속 설정, 원본 사건과 별도
+  upload-config.json                     선택적 로컬 재정의. 새 PC에는 자동 생성하지 않음
   anonymous-player-id.txt                 이 PC 설치의 익명 ID, 실명·Steam ID 아님
   <sessionId>.json                        시작 사건·환경·설정 메타데이터
   <sessionId>.jsonl                       한 줄당 사건 한 건인 원본
@@ -32,11 +39,26 @@ C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetr
 6. `/exec`로 끝나는 배포 URL을 복사한다. `/dev`는 편집자용이므로 게임에 사용하지 않는다.
 7. 수신 코드를 수정한 뒤에는 `배포 관리 > 수정 > 새 버전`으로 갱신한다. 같은 배포 URL을 유지할 수 있다.
 
-`setupSheets`는 헤더가 다르면 기존 데이터를 덮어쓰지 않고 오류를 낸다. 다른 스키마의 탭을 재사용하지 말고 새 스프레드시트로 시작한다.
+`setupSheets`는 이전 UTC 헤더를 KST로 바꾸면서 기존 UTC 시각을 +09:00 문자열로 변환한다. 앞선 버전의 추가 KST 열이 있으면 값을 옮긴 뒤 중복 열을 제거한다. 사건 키와 다른 데이터 열은 유지한다. 다른 헤더나 해석할 수 없는 시각은 오류로 알리며 값을 버리지 않는다. 코드 변경 뒤에는 `setupSheets`를 다시 실행하고 웹 앱을 새 버전으로 재배포한다.
 
 ## Unity/테스터 PC 설정
 
-로컬 `upload-config.json`에 아래 값을 입력한다. 설치 메뉴가 비활성 기본 파일을 생성하며 기존 파일은 덮어쓰지 않는다. 다른 PC에서는 첫 플레이 후 같은 위치에 생긴 파일을 수정한다.
+### 배포 빌드: 테스터 설정 없이 전송
+
+`Assets/Resources/Telemetry/CombatTelemetryUploadSettings.asset`에 현재 정상 동작한 수신 URL/token과 enabled=true를 저장했다. 이 에셋은 Resources를 통해 빌드에 포함된다. 새 PC는 게임을 실행하면 로컬 로그를 저장하고 인터넷 연결 시 해당 시트로 전송한다. AppData에 비활성 CONFIG를 자동 생성하던 동작은 제거했다.
+
+1. 개발자는 `GameSceneInitializer > CombatTelemetryRecorder`의 Recording Enabled와 Allow Automatic Upload를 켜 둔다.
+2. 배포 기본 에셋의 Enabled가 켜져 있는지 확인한다.
+3. **새로 빌드한 전체 게임 폴더**를 테스터에게 배포한다. 기존 실행 파일은 이 변경을 포함하지 않는다.
+4. 테스터는 인터넷에 연결하고 플레이한다. CONFIG 작성, Google 로그인, 시트 접근 권한 부여는 필요 없다.
+
+설정 우선순위는 `로컬 upload-config.json > 빌드 기본 에셋`이다. 기존 CONFIG의 enabled=false는 계속 전송을 끈다. 이전 버전에서 생성된 비활성 CONFIG가 있는 PC는 그 파일을 백업하여 전송 폴더 밖으로 옮기면 빌드 기본값을 사용한다. 코드가 사용자 재정의 파일을 삭제하거나 덮어쓰지 않는다. 잘못된 JSON도 기본값으로 조용히 대체하지 않고 오류로 알린다.
+
+개발자가 URL/token을 변경하려면 로컬 CONFIG에 새 값을 저장한 뒤 `BlindBlade > 대숲 방어 > 로그 > 현재 로컬 설정을 빌드 기본값으로 저장`을 실행하고 재빌드한다. 메뉴는 로컬 설정의 활성 여부까지 그대로 복사하므로 배포 전 Enabled를 확인한다. 동일 에셋을 갱신해 GUID를 보존한다. token은 Inspector에서 숨기고 메뉴/Console 결과에 출력하지 않는다.
+
+### 개발자용 로컬 재정의
+
+기본값을 바꾸지 않고 특정 PC에서 전송을 제어하려면 로그 폴더에 `upload-config.json`을 직접 작성한다. 아래 값은 그 PC에서 빌드 기본값보다 우선한다.
 
 ```json
 {
@@ -51,8 +73,8 @@ C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetr
 - 기본값: 저장 2초, 표본 5초, 전송 확인 주기 20초, 배치 100건/약192KiB, 타임아웃 30초, 재시도 최대300초, 메모리4096건, 원본100MiB.
 - 미확인 기록이 많으면 성공 후 0.5초 간격으로 다음 배치를 보낸다. 수신 오류 시 지수 지연으로 재시도한다. 과제 참가자 수가 늘면 배치 간격·Apps Script 할당량을 관찰한다.
 - 수신 URL별 커서를 사용한다. URL이 바뀌면 그 URL에 원본을 처음부터 보낸다. 동일 스프레드시트에 새 URL을 배포해도 사건 키로 중복을 제거한다.
-- 원격 전송 설정을 `Assets`, Resources, StreamingAssets나 Git에 넣지 않는다. Google 계정 비밀번호·OAuth 토큰·서비스 계정 키는 게임에 필요 없다.
-- 이 설정은 제한된 플레이테스트용이다. 클라이언트의 공유 token은 추출 가능하므로 Steam 공개 배포에서는 인증·요청 제한을 갖춘 수집 서버로 교체한다. 수집 내용을 참가자에게 알리고 필요한 기록만 받는다.
+- 사용자의 요청에 따라 배포용 공유 URL/token을 Resources 설정 에셋에 포함한다. Google 계정 비밀번호·OAuth 토큰·서비스 계정 키를 넣는 방식은 아니다. 로컬 재정의 CONFIG와 token 값은 Console·문서에 출력하지 않는다.
+- 이 설정은 제한된 플레이테스트용이다. Inspector에서 숨겨도 공유 token은 에셋/빌드에서 추출 가능하다. Steam 공개 배포에서는 인증·요청 제한을 갖춘 수집 서버로 교체한다. 수집 내용을 참가자에게 알리고 필요한 기록만 받는다.
 
 ## 기록 가능한 사실
 
@@ -82,11 +104,11 @@ Windows PowerShell 5.1 이상에서 플레이를 마친 원본의 사본을 대�
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\combat_telemetry\Export-Telemetry.ps1 -LogDirectory "C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetry" -OutputDirectory ".\UserSettings\CombatTelemetryAnalysis"
 ```
 
-- `events.csv`: 사건 평탄화, 기존 ID·시계·payload 보존.
-- `sessions.csv`: 요약과 정상 종료 여부. 종료 사건 없는 세션을 클리어/사망/정상 플레이시간으로 단정하지 않는다.
+- `events.csv`: 사건 평탄화, `occurred_at_kst`/`recorded_at_kst`, 기존 ID·경과 시계·payload 보존.
+- `sessions.csv`: `started_kst` 요약과 정상 종료 여부. 이전 `startedUtc`도 KST로 변환한다. 종료 사건 없는 세션을 클리어/사망/정상 플레이시간으로 단정하지 않는다.
 - `diagnostics.csv`: 스키마 미지원, 파싱 실패/잘린 끝줄, 중복 사건 키, 순번 누락·역전, 종료 누락.
 - `explicit-links.csv`: 공급자의 InputId가 있는 사건만 보존한다. 후보 매칭이나 성공 판정을 생성하지 않는다.
-- `analysis-manifest.json`: 분석 버전·시각·입력 SHA256·건수.
+- `analysis-manifest.json`: 분석 버전·`generated_kst`·입력 SHA256·건수.
 
 Google Sheets에는 원본 업로드 기준 `Events`와 최신 요약 `Sessions`가 쌓인다. CSV와 같은 지표 정의로 피벗/차트를 만든다. 전처리 도구는 원본을 수정하지 않는다. 빈 자료의 CSV가 비어 있을 수 있다. 전처리는 분석 분모를 대신 결정하지 않는다.
 
@@ -99,7 +121,7 @@ Google Sheets에는 원본 업로드 기준 `Events`와 최신 요약 `Sessions`
 - 종료 시 네트워크를 기다리지 않는다. 남은 저장은 최대 약3초 기다리며, 강제 종료면 미저장 메모리·끝줄이 손실될 수 있다. 다음 실행에서 디스크에 있는 미확인 기록을 재전송한다.
 - 손상/잘린 줄은 자동 삭제·확인하지 않고 해당 파일의 나머지 전송을 보류한다. 앞의 정상 줄과 다른 정상 세션 파일은 전송할 수 있다. 원본을 백업하고 전처리 보고서를 확인한 뒤 해당 파일을 전송 폴더 밖으로 보관한다. 정상 기록은 CSV로도 구할 수 있다.
 - 100MiB 한도는 원본 JSONL 기준이다. 자동 삭제하지 않는다. 테스팅 회차가 끝나면 원본·메타데이터·커서를 함께 백업하고 게임 종료 상태에서 정리한다.
-- `CombatTelemetryService.Active`의 LogDirectory / LastError / DroppedEvents / AcknowledgedEvents / BufferedEvents가 개발용 상태다. 접속 token·본문을 Console에 출력하지 않는다.
+- `CombatTelemetryService.Active`의 LogDirectory / LastError / DroppedEvents / AcknowledgedEvents / BufferedEvents가 개발용 상태다. ConfigurationSource는 LocalOverride 또는 BuiltIn이며 접속 token·본문을 Console에 출력하지 않는다.
 - Recorder 비활성화는 해당 관찰 세션을 닫는다. 새 세션 기록은 씬 재시작으로 시작한다. 영속 서비스의 미전송 원본 전송은 별개로 계속된다.
 
 ## 연결 후 수동 확인 항목 (미실행)
@@ -111,7 +133,9 @@ Google Sheets에는 원본 업로드 기준 `Events`와 최신 요약 `Sessions`
 5. 잘못된 token, HTML 응답, 타임아웃, 저장 경로 접근 실패에서 게임이 지속되고 실패가 진단되는지 확인한다.
 6. 실제 전송/전처리 자료로 5~10분 지표·손상 로그·누락 분모를 확인한다.
 
-현재 C# 컴파일·씬 연결까지 수행했다. 실제 Play 로그·원격 Sheets·CSV 실행 결과 검증은 아직 수행하지 않았다. Google URL/token이 제공되지 않은 상태에서 원격 성공으로 표시하지 않는다.
+2026-10-15 로컬 CONFIG 경로의 실제 전송은 기존 로그 1건 POST와 Unity Play 자동 전송 400건에서 서버 ACK·커서 생성으로 확인했다. 이후 CONFIG 없는 PC를 위한 빌드 기본 설정 기능을 구현하고 활성 에셋을 Editor API로 저장했다. 새 기능은 C# 컴파일과 에셋 저장까지 확인했으며 CONFIG 없는 실제 PC/Standalone 실행은 미확인이다. 새 동작 확인을 위해 기존 CONFIG를 임의 삭제하거나 새 Play를 실행하지 않았다. 전체 백로그·장애/재도전은 미확인이다.
+
+2026-10-15 KST 확인: `Code.gs` 운영 웹 앱을 동일 URL의 버전 2로 갱신하고 `setupSheets`를 실행했다. 기존 `Events.received_utc` 값은 `received_kst`의 +09:00 문자열로 변환됐다. 실제 로컬 `session_started` 전송은 HTTP 200/ACK 1건을 받았고, 시트 `Events!B7817`의 수신 KST, `V7817`의 발생 KST, `W7817`의 기록 KST와 `Sessions!D7`의 시작 KST를 직접 확인했다. 이전 배포에서 시작 KST가 누락된 두 세션은 원본 시작 사건을 재전송해 채웠다. CSV 내보내기는 사건 12,783건/세션 6건/진단 0건이며 UTC 출력 열이 없다. 과거 사건의 발생·기록 KST를 당시 수신하지 않았다면 그 셀은 빈 값으로 남는다.
 
 ## 참고
 
