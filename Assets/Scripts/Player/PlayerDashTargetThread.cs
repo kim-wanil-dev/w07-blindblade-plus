@@ -48,7 +48,7 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("두께 변화가 실을 따라 흐르는 속도")]
     private float _thicknessChangeSpeed = 1.2f;
     [SerializeField, Range(0f, 1f)] private float _opacity = 1f;
-    [SerializeField, Min(0.01f), Tooltip("사망·칼 숨김 때 실이 사라지고 다시 나타나는 실시간(초)")]
+    [SerializeField, Min(0.01f), Tooltip("사망·우클릭 가드·칼 숨김 때 실이 사라지고 다시 나타나는 실시간(초)")]
     private float _fadeDuration = 0.2f;
 
     [Header("X자 순회 경로")]
@@ -56,10 +56,8 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
     private float _handleLobeScale = 1.08f;
     [SerializeField, Range(0.1f, 1.2f), Tooltip("X 교차점에서 칼집 끝까지 거리 대비 칼집 쪽 고리 길이")]
     private float _scabbardLobeScale = 0.55f;
-    [SerializeField, Range(0.05f, 1f), Tooltip("가드가 아닌데 칼을 뽑았을 때(공격) 손잡이 쪽 고리를 줄이는 비율. 손잡이 쪽 고리는 칼집에 꽂힌 자리 기준이다.")]
+    [SerializeField, Range(0.05f, 1f), Tooltip("칼을 뽑았을 때(공격) 손잡이 쪽 고리를 줄이는 비율. 손잡이 쪽 고리는 칼집에 꽂힌 자리 기준이다.")]
     private float _drawnHandleLobeScale = 0.35f;
-    [SerializeField, Min(0.01f), Tooltip("가드를 시작하거나 끝낼 때 실 전체가 칼집과 뽑힌 칼 사이를 옮겨 가는 시간(초). 가드 중에는 뽑힌 칼의 손잡이·칼날을 순회한다.")]
-    private float _guardFollowDuration = 0.15f;
     [SerializeField, Min(0.1f), Tooltip("칼집·손잡이 단면 반지름 대비 고리 반지름 배율")]
     private float _loopRadiusScale = 1.35f;
     [SerializeField, Range(0f, 1f), Tooltip("경로 모양이 일렁이는 정도")]
@@ -190,8 +188,6 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
     private LocalFrame _scabbardFrame;
     private LocalFrame _gripFrame;
     private Matrix4x4 _gripToScabbard;
-    private Matrix4x4 _scabbardToGrip;
-    private float _guardFollow;
     private float _drawn;
     private Vector3 _junction;
     private Vector3 _handleDirection;
@@ -268,7 +264,6 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
         _gripFrame = new LocalFrame(_grip.localBounds);
         // 애니메이션이 돌기 전의 프리팹 자세는 칼이 꽂힌 상태라 이때 손잡이의 칼집 기준 위치를 기억한다.
         _gripToScabbard = _scabbard.transform.worldToLocalMatrix * _grip.transform.localToWorldMatrix;
-        _scabbardToGrip = _gripToScabbard.inverse;
         AllocateBuffers();
         CreateMeshObject();
     }
@@ -300,7 +295,8 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
         UpdateFlow(0, 1f, deltaTime, time);
         UpdateFlow(1, _counterSpeedRatio, deltaTime, time);
 
-        bool visible = _player.CurrentState != PlayerActionState.Dead
+        // 우클릭 가드 중에는 칼만 뽑혀 올라가 실이 칼집에 홀로 남으므로 숨긴다.
+        bool visible = _player.CurrentState != PlayerActionState.Dead && !_player.IsGuarding
             && _scabbard.enabled && _scabbard.gameObject.activeInHierarchy;
         _visibility = Mathf.MoveTowards(_visibility, visible ? 1f : 0f, Time.unscaledDeltaTime / _fadeDuration);
         if (_visibility <= 0f)
@@ -497,21 +493,16 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
 
     /// <summary>
     /// 칼집의 현재 월드 자세와 칼집에 꽂힌 자세의 손잡이 위치로 X 교차점, 두 고리의 방향·길이·반지름, 공통 둘레 기준축을 갱신한다.
-    /// 가드 중에는 뽑힌 칼에 칼집이 꽂혀 있다고 가정한 자리로 _guardFollow를 deltaTime만큼 옮겨 실 전체가 칼을 따라가게 한다.
-    /// 실제 손잡이가 기준 자리에서 벗어나면(공격으로 칼을 뽑으면) deltaTime 동안 손잡이 쪽 고리를 줄인다.
+    /// 실제 손잡이가 꽂힌 자리에서 벗어나면(공격으로 칼을 뽑으면) deltaTime 동안 손잡이 쪽 고리를 줄인다.
     /// cameraPosition 쪽을 교차점의 앞면으로 삼아 X가 화면 쪽에서 엇갈리게 _crossAngle을 정한다.
     /// </summary>
     private void UpdateFrames(Vector3 cameraPosition, float deltaTime)
     {
-        Matrix4x4 liveGripMatrix = _grip.transform.localToWorldMatrix;
-        // 가드는 칼만 뽑아 화면 가운데로 올리고 칼집은 좌하단에 남으므로, 가드 동안에는 뽑힌 칼 기준 칼집 자리를 쓴다.
-        _guardFollow = Mathf.MoveTowards(_guardFollow, _player.IsGuarding ? 1f : 0f, deltaTime / _guardFollowDuration);
-        Matrix4x4 scabbardMatrix = BlendPose(_scabbard.transform.localToWorldMatrix,
-            liveGripMatrix * _scabbardToGrip, Mathf.SmoothStep(0f, 1f, _guardFollow));
+        Matrix4x4 scabbardMatrix = _scabbard.transform.localToWorldMatrix;
         // 손에 든 실제 손잡이가 아니라 칼집에 꽂힌 자리의 손잡이를 써서 실이 손 쪽으로 끌려가지 않게 한다.
         Matrix4x4 gripMatrix = scabbardMatrix * _gripToScabbard;
         Vector3 sheathedGrip = gripMatrix.MultiplyPoint3x4(_gripFrame.Center);
-        Vector3 liveGrip = liveGripMatrix.MultiplyPoint3x4(_gripFrame.Center);
+        Vector3 liveGrip = _grip.transform.localToWorldMatrix.MultiplyPoint3x4(_gripFrame.Center);
         bool drawn = (liveGrip - sheathedGrip).sqrMagnitude > DRAWN_DISTANCE * DRAWN_DISTANCE;
         _drawn = Mathf.MoveTowards(_drawn, drawn ? 1f : 0f, deltaTime / DRAWN_BLEND_DURATION);
 
@@ -544,20 +535,6 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
         _ringUp = Vector3.Cross(axis, _ringSide);
         Vector3 toCamera = Vector3.ProjectOnPlane(cameraPosition - _junction, axis);
         _crossAngle = Mathf.Atan2(Vector3.Dot(toCamera, _ringUp), Vector3.Dot(toCamera, _ringSide));
-    }
-
-    /// <summary>
-    /// from과 to 두 월드 자세 행렬의 위치·회전·크기를 weight(0~1)만큼 보간한 행렬을 반환한다. 양 끝에서는 원래 행렬을 그대로 반환한다.
-    /// </summary>
-    private static Matrix4x4 BlendPose(Matrix4x4 from, Matrix4x4 to, float weight)
-    {
-        if (weight <= 0f)
-            return from;
-        if (weight >= 1f)
-            return to;
-
-        return Matrix4x4.TRS(Vector3.Lerp(from.GetPosition(), to.GetPosition(), weight),
-            Quaternion.Slerp(from.rotation, to.rotation, weight), Vector3.Lerp(from.lossyScale, to.lossyScale, weight));
     }
 
     /// <summary>matrix로 frame의 두 단면 반지름 벡터를 월드로 옮겨 더 큰 길이를 반환한다.</summary>
