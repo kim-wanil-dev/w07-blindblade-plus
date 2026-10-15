@@ -190,7 +190,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
 
             // 현재 인지를 선 색상으로 표시하고 일반 지형에만 누적 기억 색상을 합성한다.
             // isScenery가 1이면 배경 표면으로 보고 적 파동 공개에 높이 제한을 건다.
-            // forced.b가 1이면 세기 조절 표면이다. 파동으로 밝혀진 정도에 forced.r을 곱해 흐리거나 점점 강하게 한다.
+            // forced.b가 1이면 세기 조절 표면이다. forced.g가 0이면 파동으로 밝혀진 정도에 forced.r을 곱하고, 1이면 파동을 무시하고 forced.r만 쓴다.
             float3 PerceptionColor(float2 uv, float rawDepth, float hasSurface, float includeMemory, float isScenery,
                 float4 forced)
             {
@@ -229,7 +229,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));
                 visibility = max(visibility, ImpactRippleVisibility(position));
                 if (forced.b > 0.5)
-                    visibility *= forced.r;
+                    visibility = lerp(visibility * forced.r, forced.r, forced.g);
                 float memoryVisibility = 0.0;
                 if (includeMemory > 0.5 && _OutlineMemoryEnabled > 0.5)
                 {

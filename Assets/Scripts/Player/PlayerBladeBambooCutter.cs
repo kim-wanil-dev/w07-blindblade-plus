@@ -14,9 +14,15 @@ public sealed class PlayerBladeBambooCutter : MonoBehaviour
     [SerializeField, Tooltip("적 판정과 같은 칼끝.")]
     private Transform _bladeTip;
     [SerializeField, Min(0f), Tooltip("일반 공격이 대나무를 베는 시선 원점 기준 사거리(미터). 플레이어 이동 경계와 숲 사이가 1m라 적 판정 사거리(1.5m)보다 길게 둔다. 적 판정에는 영향이 없다.")]
-    private float _normalReach = 3f;
+    private float _normalReach = 4.5f;
     [SerializeField, Min(0f), Tooltip("돌진 일섬이 대나무를 베는 시선 원점 기준 사거리(미터). 적 판정에는 영향이 없다.")]
-    private float _iaidoReach = 3f;
+    private float _iaidoReach = 4.5f;
+
+    [Header("디버그")]
+    [SerializeField, Tooltip("켜면 베기 구간 동안 칼날이 프레임마다 쓸고 지난 면을 Scene 뷰(Game 뷰는 Gizmos 켬)에 선으로 그린다.")]
+    private bool _drawSweep = true;
+    [SerializeField, Min(0f), Tooltip("칼날 경로 선이 남는 실시간(초).")]
+    private float _drawDuration = 2f;
 
     [Header("상태")]
     private PlayerController _player;
@@ -64,7 +70,11 @@ public sealed class PlayerBladeBambooCutter : MonoBehaviour
         Vector3 currentBase = _bladeBase.position;
         Vector3 currentTip = GetWorldTip(currentBase, _kind == PlayerAttackKind.IaidoFinisher ? _iaidoReach : _normalReach);
         if (_hasPrevious)
+        {
             BambooGrove.CutBySweep(_previousBase, _previousTip, currentBase, currentTip);
+            if (_drawSweep)
+                DrawSweep(_previousBase, _previousTip, currentBase, currentTip);
+        }
         _previousBase = currentBase;
         _previousTip = currentTip;
         _hasPrevious = true;
@@ -85,6 +95,18 @@ public sealed class PlayerBladeBambooCutter : MonoBehaviour
         _kind = normal ? PlayerAttackKind.Normal : PlayerAttackKind.IaidoFinisher;
         _active = true;
         _hasPrevious = false;
+    }
+
+    /// <summary>
+    /// 이전 칼날(previousBase→previousTip)과 지금 칼날(currentBase→currentTip)이 이루는 면의 테두리와 대각선을 _drawDuration 동안 그린다.
+    /// 지금 칼날은 노란색, 나머지는 하늘색이다. 에디터에서만 보인다.
+    /// </summary>
+    private void DrawSweep(Vector3 previousBase, Vector3 previousTip, Vector3 currentBase, Vector3 currentTip)
+    {
+        Debug.DrawLine(currentBase, currentTip, Color.yellow, _drawDuration);
+        Debug.DrawLine(previousTip, currentTip, Color.cyan, _drawDuration);
+        Debug.DrawLine(previousBase, currentBase, Color.cyan, _drawDuration);
+        Debug.DrawLine(previousBase, currentTip, Color.cyan, _drawDuration);
     }
 
     /// <summary>

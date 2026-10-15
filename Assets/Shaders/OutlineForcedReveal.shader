@@ -20,7 +20,7 @@ Shader "Hidden/BlindBlade/OutlineForcedReveal"
             #pragma fragment Frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            // 렌더러별 MaterialPropertyBlock으로 받는다. x: 파동 가시성에 곱할 세기.
+            // 렌더러별 MaterialPropertyBlock으로 받는다. x: 세기, y: 1이면 파동을 무시하고 세기만 쓴다.
             CBUFFER_START(UnityPerMaterial)
                 float4 _ForcedReveal;
             CBUFFER_END
@@ -36,10 +36,10 @@ Shader "Hidden/BlindBlade/OutlineForcedReveal"
                 return output;
             }
 
-            // r에 세기, b에 덮임 표시를 기록한다.
+            // r에 세기, g에 파동 무시 여부, b에 덮임 표시를 기록한다.
             half4 Frag(Varyings input) : SV_Target
             {
-                return half4(saturate(_ForcedReveal.x), 0, 1, 1);
+                return half4(saturate(_ForcedReveal.x), saturate(_ForcedReveal.y), 1, 1);
             }
             ENDHLSL
         }

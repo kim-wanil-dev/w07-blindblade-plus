@@ -196,7 +196,7 @@ public sealed class BambooGrove : MonoBehaviour
 
     /// <summary>
     /// 검기가 from에서 to로 지난 수평 경로의 좌우 halfWidth 안의 대나무와 날아가는 조각을 벤다.
-    /// 베는 평면은 경로를 품고 planeNormal을 법선으로 한다. 서 있는 대나무는 밑동 위치로, 조각은 평면과 만나는 점으로 범위를 판정한다.
+    /// 베는 평면은 경로를 품고 planeNormal을 법선으로 한다. 서 있거나 복구 중인 대나무는 밑동 위치로, 조각은 평면과 만나는 점으로 범위를 판정한다.
     /// 경로 가운데는 경로 방향으로, 옆은 떨어진 비율 × sideSpread만큼 각자 바깥쪽으로 틀어 쓰러뜨린다. 활성 대숲이 없으면 아무것도 하지 않는다.
     /// </summary>
     public static void CutAlongPath(Vector3 from, Vector3 to, float halfWidth, Vector3 planeNormal, float sideSpread)
@@ -212,7 +212,7 @@ public sealed class BambooGrove : MonoBehaviour
         for (int i = 0; i < _active._stalks.Length; i++)
         {
             Stalk stalk = _active._stalks[i];
-            if (stalk.State != StalkState.Standing)
+            if (stalk.State == StalkState.Falling)
                 continue;
             if (!TryGetPathOffset(stalk.Base, from, direction, right, length, halfWidth, out float lateral))
                 continue;
@@ -232,7 +232,7 @@ public sealed class BambooGrove : MonoBehaviour
     }
 
     /// <summary>
-    /// planePoint·planeNormal 평면(화면의 갈라진 선)이 실제로 가로지르는 서 있는 대나무와 날아가는 조각만 거리와 상관없이 벤다.
+    /// planePoint·planeNormal 평면(화면의 갈라진 선)이 실제로 가로지르는 서 있거나 복구 중인 대나무와 날아가는 조각만 거리와 상관없이 벤다.
     /// 평면이 줄기나 조각의 양 끝 사이를 지나고, 그 교차점이 viewProjection 카메라 앞이며 화면 가장자리에서 margin(화면 크기 비율)만큼 넓힌 범위 안일 때만 벤다.
     /// origin에서 멀어지는 방향으로 쓰러뜨리며, 활성 대숲이 없으면 아무것도 하지 않는다.
     /// </summary>
@@ -243,7 +243,7 @@ public sealed class BambooGrove : MonoBehaviour
         for (int i = 0; i < _active._stalks.Length; i++)
         {
             Stalk stalk = _active._stalks[i];
-            if (stalk.State != StalkState.Standing)
+            if (stalk.State == StalkState.Falling)
                 continue;
             float facing = Vector3.Dot(stalk.Up, planeNormal);
             if (Mathf.Abs(facing) < 0.0001f)
@@ -289,7 +289,7 @@ public sealed class BambooGrove : MonoBehaviour
         for (int i = 0; i < _active._stalks.Length; i++)
         {
             Stalk stalk = _active._stalks[i];
-            if (stalk.State != StalkState.Standing
+            if (stalk.State == StalkState.Falling
                 || Vector3.ProjectOnPlane(stalk.Base - center, Vector3.up).magnitude > reach + stalk.Radius)
                 continue;
             if (!IntersectSweep(stalk.Base, stalk.Base + stalk.Up * stalk.Height,
@@ -412,7 +412,7 @@ public sealed class BambooGrove : MonoBehaviour
     }
 
     /// <summary>
-    /// index의 서 있는 대나무를 planePoint·planeNormal 평면과 만나는 높이에서 벤다.
+    /// index의 서 있거나 복구 중인 대나무를 planePoint·planeNormal 평면과 만나는 높이에서 벤다.
     /// 원래 렌더러를 숨기고 밑동과 기울어진 절단면을 세운 뒤, 잘린 윗부분 조각을 절단면에 얹어 fallDirection으로 밀며 기울인다.
     /// </summary>
     private void Cut(int index, Vector3 planePoint, Vector3 planeNormal, Vector3 fallDirection)
@@ -429,6 +429,8 @@ public sealed class BambooGrove : MonoBehaviour
         float cutHeight = Mathf.Clamp(Vector3.Dot(planePoint - stalk.Base, normal) / facing, _minimumStumpHeight, maximumCut);
         Vector3 cutPoint = stalk.Base + stalk.Up * cutHeight;
 
+        // 복구 중인 대나무는 이미 갱신 목록에 있으므로 다시 넣지 않는다.
+        bool animating = stalk.State == StalkState.Regrowing;
         stalk.Renderer.enabled = false;
         ShowStump(stalk, cutHeight);
         ShowCutFace(stalk, cutPoint, normal);
@@ -436,7 +438,8 @@ public sealed class BambooGrove : MonoBehaviour
         stalk.State = StalkState.Falling;
         stalk.Age = 0f;
         Animate(stalk);
-        _animating.Add(index);
+        if (!animating)
+            _animating.Add(index);
     }
 
     /// <summary>
