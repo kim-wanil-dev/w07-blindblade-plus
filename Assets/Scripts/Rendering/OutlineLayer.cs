@@ -16,6 +16,8 @@ public sealed class OutlineLayer : MonoBehaviour
 {
     public const uint SCENERY_MASK = 1u << 29;
     public const uint THREAT_MASK = 1u << 28;
+    // 파동으로 밝혀진 정도에 따로 세기를 곱하는 대상. 세기는 렌더러의 _ForcedReveal 속성 블록으로 넘긴다.
+    public const uint FORCED_REVEAL_MASK = 1u << 27;
 
     [Header("윤곽선 분류")]
     [SerializeField, Tooltip("Scenery는 항상 보이는 회색 윤곽선, Threat는 빨간 실루엣으로 표시한다.")]

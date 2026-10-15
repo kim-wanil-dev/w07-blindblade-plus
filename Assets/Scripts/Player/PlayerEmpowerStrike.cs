@@ -53,6 +53,10 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("수락 순간 위치 기준 베는 수평 반경(미터).")]
     private float _strikeRadius = 50f;
 
+    [Header("대나무 베기")]
+    [SerializeField, Range(0f, 0.5f), Tooltip("갈라진 선(_cutAngle, 화면 중심)이 대나무를 가로지르는 점이 화면 가장자리 밖이어도 베는 여유 범위(화면 크기 비율). 선에 걸치지 않은 대나무는 베지 않는다.")]
+    private float _bambooViewMargin = 0.1f;
+
     [Header("상태")]
     private EmpowerOverlay _overlay;
     private PlayerMotor _motor;
@@ -118,11 +122,15 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     /// <summary>
     /// _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
     /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 비행 중인 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
-    /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다.
+    /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished)
     {
         List<EnemyHealth> targets = CollectFrontEnemies();
+        Vector3 bambooOrigin = transform.position;
+        Matrix4x4 bambooView = _camera.projectionMatrix * _camera.worldToCameraMatrix;
+        Vector3 bambooCutPoint = _camera.transform.position;
+        Vector3 bambooCutNormal = CalculateBambooCutNormal();
 
         // 암전: 화면이 검게 덮인 채 곡선 검격과 갈라진 선만 그어지고 적은 아직 서 있다.
         _overlay.SetVoid(1f);
@@ -138,6 +146,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         _overlay.SetVoid(0f);
         PlaySound(_sheatheSound);
         StrikeEnemies(targets);
+        BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
         // 암전 동안은 강화 공격 무적이라 투사체를 그대로 두고, 화면이 돌아오는 순간 한꺼번에 막아 낸다.
         ReleaseProjectiles();
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
@@ -189,6 +198,20 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             Managers.Sound.PlayCue(CombatSoundCue.Guard, projectile.transform.position);
             projectile.Release();
         }
+    }
+
+    /// <summary>
+    /// 화면 중심을 지나 _cutAngle만큼 기운 갈라진 선(EmpowerOverlay.ShowCutLine)과 겹쳐 보이도록, 카메라를 지나는 평면의 법선을 반환한다.
+    /// 화면 선 위 두 점으로 향하는 시선 광선의 외적을 쓴다.
+    /// </summary>
+    private Vector3 CalculateBambooCutNormal()
+    {
+        Vector2 center = new Vector2(_camera.pixelWidth * 0.5f, _camera.pixelHeight * 0.5f);
+        float radians = _cutAngle * Mathf.Deg2Rad;
+        Vector2 along = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * (_camera.pixelHeight * 0.25f);
+        Vector3 left = _camera.ScreenPointToRay(center - along).direction;
+        Vector3 right = _camera.ScreenPointToRay(center + along).direction;
+        return Vector3.Cross(left, right).normalized;
     }
 
     /// <summary>살아 있는 적 중 지금 위치와 시선 기준 전방 각도·수평 반경 안에 있는 적을 모아 반환한다.</summary>

@@ -42,7 +42,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     [SerializeField, Min(0.01f), Tooltip("돌진 거리를 지나는 플레이어 시간(초). 벽이나 이동 경계에 닿으면 멈춘다.")]
     private float _dashDuration = 0.3f;
     [SerializeField, Tooltip("돌진 중 몸 판정이 검사하는 레이어. 적이 아닌 접촉은 무시한다. 반경과 피해는 검기 프리팹 값을 쓴다.")]
-    private LayerMask _dashHitMask = ~0;
+    private LayerMask _dashHitMask = ~(1 << BambooGrove.DEBRIS_LAYER);
     private readonly RaycastHit[] _dashHits = new RaycastHit[32];
     // 같은 검기 공격의 돌진과 검기가 함께 쓰는 맞은 적 목록이다.
     private readonly HashSet<EnemyHealth> _struck = new HashSet<EnemyHealth>();
