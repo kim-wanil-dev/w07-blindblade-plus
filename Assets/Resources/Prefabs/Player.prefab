@@ -258,6 +258,7 @@ GameObject:
   - component: {fileID: 7719342256018403921}
   - component: {fileID: 7719342256018403922}
   - component: {fileID: 7719342256018403923}
+  - component: {fileID: 7719342256018403924}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1587,3 +1588,21 @@ MonoBehaviour:
     _ringInterval: 0.15
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
+--- !u!114 &7719342256018403924
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67eba47dd6c8454692ffd76c037fcca4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateGroundMark
+  _lineColor: {r: 1, g: 1, b: 1, a: 1}
+  _lineWidth: 0.08
+  _maxLength: 60
+  _endFade: 0.05
+  _holdDuration: 2
+  _fadeDuration: 3
