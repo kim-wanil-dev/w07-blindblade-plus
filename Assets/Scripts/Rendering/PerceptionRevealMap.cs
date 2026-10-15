@@ -45,7 +45,8 @@ public struct RevealRippleSettings
 }
 
 /// <summary>
-/// 걸음 파동 전선과 이동 시야원이 지나간 XZ 지점의 잔상 만료 시각을 GPU 시야 맵에 누적해 윤곽선 셰이더에 전달한다.
+/// 걸음 파동 전선이 지나간 XZ 지점의 잔상 만료 시각을 GPU 시야 맵에 누적하고, 이동 시야원의 구형 공개 영역과 함께 윤곽선 셰이더에 전달한다.
+/// 발생자 몸체를 밝히지 않는 파동은 별도 채널에 기록하고 등록된 발생자 주변에서는 그 채널을 제외한다.
 /// 같은 규칙으로 CPU 가시성을 계산하며 걸음 파동의 바닥 링 시각도 함께 재생한다.
 /// </summary>
 [DefaultExecutionOrder(1000)]
@@ -54,11 +55,18 @@ public struct RevealRippleSettings
 public sealed class PerceptionRevealMap : MonoBehaviour
 {
     private const int MAX_RIPPLES = 128;
-    private const int MAX_STAMPS = 32;
+    private const int MAX_SPHERES = 32;
+    private const int MAX_HIDDEN_OWNERS = 32;
     private const float RING_SURFACE_OFFSET = 0.02f;
+    private const float OWNER_HIDE_EDGE = 0.2f;
     private static readonly int _revealMapId = Shader.PropertyToID("_OutlineRevealMap");
     private static readonly int _revealMapBoundsId = Shader.PropertyToID("_OutlineRevealBounds");
     private static readonly int _revealMapEnabledId = Shader.PropertyToID("_OutlineRevealEnabled");
+    private static readonly int _sphereCountId = Shader.PropertyToID("_OutlineRevealSphereCount");
+    private static readonly int _spheresId = Shader.PropertyToID("_OutlineRevealSpheres");
+    private static readonly int _sphereStrengthsId = Shader.PropertyToID("_OutlineRevealSphereStrengths");
+    private static readonly int _hiddenOwnerCountId = Shader.PropertyToID("_OutlineHiddenOwnerCount");
+    private static readonly int _hiddenOwnersId = Shader.PropertyToID("_OutlineHiddenOwners");
     private static readonly int _boundsId = Shader.PropertyToID("_RevealBounds");
     private static readonly int _timeId = Shader.PropertyToID("_RevealTime");
     private static readonly int _edgeFadeId = Shader.PropertyToID("_RevealEdgeFade");
@@ -66,8 +74,6 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private static readonly int _rippleCountId = Shader.PropertyToID("_RevealRippleCount");
     private static readonly int _ripplesId = Shader.PropertyToID("_RevealRipples");
     private static readonly int _rippleParamsId = Shader.PropertyToID("_RevealRippleParams");
-    private static readonly int _stampCountId = Shader.PropertyToID("_RevealStampCount");
-    private static readonly int _stampsId = Shader.PropertyToID("_RevealStamps");
 
     [Header("시야 맵")]
     [SerializeField, Tooltip("Hidden/BlindBlade/PerceptionRevealUpdate 셰이더.")]
@@ -85,6 +91,13 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private Material _updateMaterial;
     private bool _clearPending;
 
+    [Header("발생자 몸체 제외")]
+    [SerializeField, Min(0.01f), Tooltip("몸체를 밝히지 않는 파동의 발생자 주변에서 그 파동 시야를 빼는 수평 반경(미터).")]
+    private float _ownerHideRadius = 0.75f;
+    private readonly List<Transform> _hiddenOwners = new List<Transform>(MAX_HIDDEN_OWNERS);
+    private readonly Vector4[] _hiddenOwnerBuffer = new Vector4[MAX_HIDDEN_OWNERS];
+    private int _hiddenOwnerCount;
+
     [Header("바닥 링")]
     [SerializeField, Tooltip("기존 파동 프리팹의 Ring SpriteRenderer. 시각 오브젝트만 복제한다.")]
     private SpriteRenderer _ringPrefab;
@@ -95,11 +108,13 @@ public sealed class PerceptionRevealMap : MonoBehaviour
 
     [Header("런타임 상태")]
     private readonly List<Ripple> _ripples = new List<Ripple>(MAX_RIPPLES);
-    private readonly List<Vector4> _pendingStamps = new List<Vector4>(MAX_STAMPS);
-    private readonly List<Stamp> _stampHistory = new List<Stamp>(128);
+    private readonly List<Sphere> _pendingHeads = new List<Sphere>(MAX_SPHERES);
+    private readonly List<Sphere> _heads = new List<Sphere>(MAX_SPHERES);
+    private readonly List<Sphere> _trail = new List<Sphere>(MAX_SPHERES * 2);
     private readonly Vector4[] _rippleBuffer = new Vector4[MAX_RIPPLES];
     private readonly Vector4[] _rippleParamBuffer = new Vector4[MAX_RIPPLES];
-    private readonly Vector4[] _stampBuffer = new Vector4[MAX_STAMPS];
+    private readonly Vector4[] _sphereBuffer = new Vector4[MAX_SPHERES];
+    private readonly Vector4[] _sphereStrengthBuffer = new Vector4[MAX_SPHERES];
     private SensoryManager _sensoryManager;
 
     private readonly struct Ripple
@@ -107,13 +122,15 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         public readonly Vector3 Center;
         public readonly float StartedAt;
         public readonly RevealRippleSettings Settings;
+        public readonly bool HideOwner;
 
-        /// <summary>파동 중심 center와 시작 시각 startedAt, 설정 settings를 보관한다.</summary>
-        public Ripple(Vector3 center, float startedAt, RevealRippleSettings settings)
+        /// <summary>파동 중심 center와 시작 시각 startedAt, 설정 settings, 발생자 몸체 제외 여부 hideOwner를 보관한다.</summary>
+        public Ripple(Vector3 center, float startedAt, RevealRippleSettings settings, bool hideOwner)
         {
             Center = center;
             StartedAt = startedAt;
             Settings = settings;
+            HideOwner = hideOwner;
         }
 
         public float LastRingStart => StartedAt + (Settings.RingCount - 1) * Settings.RingInterval;
@@ -121,19 +138,19 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         public float ExpireTime => FrontEndTime + Settings.Afterimage;
     }
 
-    private readonly struct Stamp
+    private readonly struct Sphere
     {
-        public readonly Vector2 Center;
+        public readonly Vector3 Center;
         public readonly float Radius;
-        public readonly float StampedAt;
+        public readonly float RecordedAt;
         public readonly float Afterimage;
 
-        /// <summary>이동 시야원의 XZ 중심 center와 radius, 기록 시각 stampedAt, 잔상 afterimage를 보관한다.</summary>
-        public Stamp(Vector2 center, float radius, float stampedAt, float afterimage)
+        /// <summary>구형 공개 영역의 중심 center와 radius, 기록 시각 recordedAt, 잔상 afterimage를 보관한다.</summary>
+        public Sphere(Vector3 center, float radius, float recordedAt, float afterimage)
         {
             Center = center;
             Radius = radius;
-            StampedAt = stampedAt;
+            RecordedAt = recordedAt;
             Afterimage = afterimage;
         }
     }
@@ -151,9 +168,14 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     void OnDisable()
     {
         Shader.SetGlobalFloat(_revealMapEnabledId, 0f);
+        Shader.SetGlobalInt(_sphereCountId, 0);
+        Shader.SetGlobalInt(_hiddenOwnerCountId, 0);
         _ripples.Clear();
-        _pendingStamps.Clear();
-        _stampHistory.Clear();
+        _pendingHeads.Clear();
+        _heads.Clear();
+        _trail.Clear();
+        _hiddenOwners.Clear();
+        _hiddenOwnerCount = 0;
         foreach (SpriteRenderer ring in _rings)
             ring.enabled = false;
     }
@@ -170,6 +192,8 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         if (!_sensoryManager.IsReady || !EnsureResources())
         {
             Shader.SetGlobalFloat(_revealMapEnabledId, 0f);
+            Shader.SetGlobalInt(_sphereCountId, 0);
+            Shader.SetGlobalInt(_hiddenOwnerCountId, 0);
             return;
         }
 
@@ -177,6 +201,8 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         PruneHistory(now);
         UpdateMap(now);
         UpdateRings(now);
+        PublishSpheres(now);
+        PublishHiddenOwners();
         Shader.SetGlobalTexture(_revealMapId, _maps[_current]);
         Shader.SetGlobalVector(_revealMapBoundsId, new Vector4(_minimum.x, _minimum.y, _size.x, _size.y));
         Shader.SetGlobalFloat(_revealMapEnabledId, 1f);
@@ -184,32 +210,35 @@ public sealed class PerceptionRevealMap : MonoBehaviour
 
     /// <summary>
     /// position에서 settings의 겹 수만큼 시간차 링을 퍼뜨려 지나간 지점의 실루엣을 잔상 시간 동안 공개한다.
-    /// 바닥 링 시각도 함께 재생하며 감각 매니저가 준비되지 않았거나 반경이 0이면 무시한다.
+    /// owner를 넘기면 그 발생자 주변 몸체는 이 파동으로 밝히지 않는다. 바닥 링 시각도 함께 재생하며 미준비 상태나 반경 0이면 무시한다.
     /// </summary>
-    public void EmitRipple(Vector3 position, RevealRippleSettings settings)
+    public void EmitRipple(Vector3 position, RevealRippleSettings settings, Transform owner = null)
     {
         if (!isActiveAndEnabled || !_sensoryManager.IsReady || settings.Radius <= 0f || settings.RingCount <= 0)
             return;
-        _ripples.Add(new Ripple(position, Time.time, settings));
+        bool hideOwner = owner != null;
+        if (hideOwner && !_hiddenOwners.Contains(owner) && _hiddenOwners.Count < MAX_HIDDEN_OWNERS)
+            _hiddenOwners.Add(owner);
+        _ripples.Add(new Ripple(position, Time.time, settings, hideOwner));
     }
 
     /// <summary>
-    /// 이번 프레임 position 주변 radius(미터)를 공개하고 afterimage 동안 잔상을 남긴다.
-    /// 매 프레임 호출하면 이동 경로를 따라 짧은 잔상 꼬리가 생긴다.
+    /// 이번 프레임 position을 중심으로 radius(미터) 구형 영역의 실루엣을 중심에서 가장자리로 흐려지게 강조한다.
+    /// recordTrail이 참이면 그 위치를 afterimage 동안 흐려지는 잔상으로 남긴다.
     /// </summary>
-    public void RevealAround(Vector3 position, float radius, float afterimage)
+    public void RevealAround(Vector3 position, float radius, float afterimage, bool recordTrail)
     {
-        if (!isActiveAndEnabled || !_sensoryManager.IsReady || radius <= 0f || afterimage <= 0f)
+        if (!isActiveAndEnabled || !_sensoryManager.IsReady || radius <= 0f)
             return;
-        if (_pendingStamps.Count == MAX_STAMPS)
-            return;
-        _pendingStamps.Add(new Vector4(position.x, position.z, radius, afterimage));
-        _stampHistory.Add(new Stamp(new Vector2(position.x, position.z), radius, Time.time, afterimage));
+        if (_pendingHeads.Count < MAX_SPHERES)
+            _pendingHeads.Add(new Sphere(position, radius, Time.time, afterimage));
+        if (recordTrail && afterimage > 0f)
+            _trail.Add(new Sphere(position, radius, Time.time, afterimage));
     }
 
     /// <summary>
-    /// position의 XZ 지점이 걸음 파동과 이동 시야원 잔상으로 보이는 정도를 셰이더와 같은 규칙으로 반환한다.
-    /// 0은 보이지 않음, 1은 완전 공개이며 비활성·미준비 상태이면 0이다.
+    /// position이 걸음 파동 잔상과 구형 공개 영역으로 보이는 정도를 셰이더와 같은 규칙으로 반환한다.
+    /// 몸체를 밝히지 않는 파동은 등록된 발생자 주변에서 제외하며, 0은 보이지 않음, 1은 완전 공개다. 미준비 상태이면 0이다.
     /// </summary>
     public float GetVisibility(Vector3 position)
     {
@@ -218,8 +247,10 @@ public sealed class PerceptionRevealMap : MonoBehaviour
 
         float now = Time.time;
         Vector2 point = new Vector2(position.x, position.z);
-        float expireTime = float.NegativeInfinity;
-        float afterimage = 1f;
+        float generalExpire = float.NegativeInfinity;
+        float generalAfterimage = 1f;
+        float hiddenExpire = float.NegativeInfinity;
+        float hiddenAfterimage = 1f;
         foreach (Ripple ripple in _ripples)
         {
             RevealRippleSettings settings = ripple.Settings;
@@ -231,27 +262,30 @@ public sealed class PerceptionRevealMap : MonoBehaviour
             for (int ring = 0; ring < settings.RingCount; ring++)
             {
                 float ringStart = ripple.StartedAt + ring * settings.RingInterval;
+                if (now < ringStart + hitTime)
+                    continue;
                 float candidate = ringStart + hitTime + edgeAfterimage;
-                if (now >= ringStart + hitTime && candidate > expireTime)
+                if (ripple.HideOwner && candidate > hiddenExpire)
                 {
-                    expireTime = candidate;
-                    afterimage = settings.Afterimage;
+                    hiddenExpire = candidate;
+                    hiddenAfterimage = settings.Afterimage;
+                }
+                else if (!ripple.HideOwner && candidate > generalExpire)
+                {
+                    generalExpire = candidate;
+                    generalAfterimage = settings.Afterimage;
                 }
             }
         }
-        foreach (Stamp stamp in _stampHistory)
-        {
-            float distance = Vector2.Distance(point, stamp.Center);
-            if (distance > stamp.Radius)
-                continue;
-            float candidate = stamp.StampedAt + stamp.Afterimage * EdgeFactor(distance, stamp.Radius);
-            if (candidate > expireTime)
-            {
-                expireTime = candidate;
-                afterimage = stamp.Afterimage;
-            }
-        }
-        return Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((expireTime - now) / Mathf.Max(afterimage, 0.0001f)));
+        float visibility = ExpireVisibility(generalExpire, generalAfterimage, now);
+        float hiddenVisibility = ExpireVisibility(hiddenExpire, hiddenAfterimage, now);
+        if (hiddenVisibility > 0f)
+            visibility = Mathf.Max(visibility, hiddenVisibility * (1f - OwnerExclusion(point)));
+        foreach (Sphere head in _heads)
+            visibility = Mathf.Max(visibility, SphereVisibility(position, head, 1f));
+        foreach (Sphere sample in _trail)
+            visibility = Mathf.Max(visibility, SphereVisibility(position, sample, TrailStrength(sample, now)));
+        return visibility;
     }
 
     /// <summary>
@@ -263,6 +297,40 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         return settings.ExpandDuration * (1f - Mathf.Sqrt(Mathf.Clamp01(1f - distance / settings.Radius)));
     }
 
+    /// <summary>expireTime과 afterimage로 now 시점의 잔상 가시성을 0~1로 반환한다.</summary>
+    private static float ExpireVisibility(float expireTime, float afterimage, float now)
+    {
+        return Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((expireTime - now) / Mathf.Max(afterimage, 0.0001f)));
+    }
+
+    /// <summary>position과 sphere 중심의 3D 거리로 중심 1에서 가장자리 0까지 흐려지는 가시성에 strength를 곱해 반환한다.</summary>
+    private static float SphereVisibility(Vector3 position, Sphere sphere, float strength)
+    {
+        float progress = Vector3.Distance(position, sphere.Center) / Mathf.Max(sphere.Radius, 0.0001f);
+        return (1f - Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress))) * strength;
+    }
+
+    /// <summary>sample의 기록 후 경과 시간으로 now 시점의 잔상 강도를 1에서 0으로 줄여 반환한다.</summary>
+    private static float TrailStrength(Sphere sample, float now)
+    {
+        return 1f - Mathf.Clamp01((now - sample.RecordedAt) / Mathf.Max(sample.Afterimage, 0.0001f));
+    }
+
+    /// <summary>XZ point가 등록된 발생자 주변 _ownerHideRadius 안에 있을수록 1에 가까운 제외 배율을 반환한다.</summary>
+    private float OwnerExclusion(Vector2 point)
+    {
+        float exclusion = 0f;
+        float innerRadius = Mathf.Max(0f, _ownerHideRadius - OWNER_HIDE_EDGE);
+        for (int i = 0; i < _hiddenOwnerCount; i++)
+        {
+            Vector4 owner = _hiddenOwnerBuffer[i];
+            float distance = Vector2.Distance(point, new Vector2(owner.x, owner.z));
+            exclusion = Mathf.Max(exclusion,
+                1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(innerRadius, _ownerHideRadius, distance)));
+        }
+        return exclusion;
+    }
+
     /// <summary>distance가 radius 바깥 경계의 _edgeFade 구간에 들어갈수록 0에 가까워지는 잔상 배율을 반환한다.</summary>
     private float EdgeFactor(float distance, float radius)
     {
@@ -270,7 +338,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         return 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(innerRadius, radius, distance));
     }
 
-    /// <summary>now 기준으로 잔상까지 끝난 파동과 이동 시야원 기록을 제거한다.</summary>
+    /// <summary>now 기준으로 잔상까지 끝난 파동과 구형 잔상을 제거하고 이번 프레임 구형 중심을 현재 목록으로 옮긴다.</summary>
     private void PruneHistory(float now)
     {
         for (int i = _ripples.Count - 1; i >= 0; i--)
@@ -278,16 +346,19 @@ public sealed class PerceptionRevealMap : MonoBehaviour
             if (now >= _ripples[i].ExpireTime)
                 _ripples.RemoveAt(i);
         }
-        for (int i = _stampHistory.Count - 1; i >= 0; i--)
+        for (int i = _trail.Count - 1; i >= 0; i--)
         {
-            if (now >= _stampHistory[i].StampedAt + _stampHistory[i].Afterimage)
-                _stampHistory.RemoveAt(i);
+            if (now >= _trail[i].RecordedAt + _trail[i].Afterimage)
+                _trail.RemoveAt(i);
         }
+        _heads.Clear();
+        _heads.AddRange(_pendingHeads);
+        _pendingHeads.Clear();
     }
 
     /// <summary>
-    /// 전선이 아직 퍼지는 파동과 이번 프레임 이동 시야원을 갱신 셰이더에 넘겨 시야 맵을 다음 버퍼에 기록한다.
-    /// 기록할 원천이 없으면 이전 맵을 그대로 두며 now는 게임 시간이다.
+    /// 전선이 아직 퍼지는 파동을 갱신 셰이더에 넘겨 시야 맵을 다음 버퍼에 기록한다.
+    /// 몸체를 밝히지 않는 파동은 겹 수를 음수로 넘기며, 기록할 파동이 없으면 이전 맵을 그대로 둔다.
     /// </summary>
     private void UpdateMap(float now)
     {
@@ -299,14 +370,10 @@ public sealed class PerceptionRevealMap : MonoBehaviour
                 continue;
             RevealRippleSettings settings = ripple.Settings;
             _rippleBuffer[rippleCount] = new Vector4(ripple.Center.x, ripple.Center.z, ripple.StartedAt, settings.Radius);
-            _rippleParamBuffer[rippleCount++] = new Vector4(
-                settings.ExpandDuration, settings.RingInterval, settings.Afterimage, settings.RingCount);
+            _rippleParamBuffer[rippleCount++] = new Vector4(settings.ExpandDuration, settings.RingInterval,
+                settings.Afterimage, ripple.HideOwner ? -settings.RingCount : settings.RingCount);
         }
-        int stampCount = _pendingStamps.Count;
-        for (int i = 0; i < stampCount; i++)
-            _stampBuffer[i] = _pendingStamps[i];
-        _pendingStamps.Clear();
-        if (rippleCount == 0 && stampCount == 0 && !_clearPending)
+        if (rippleCount == 0 && !_clearPending)
             return;
 
         _updateMaterial.SetVector(_boundsId, new Vector4(_minimum.x, _minimum.y, _size.x, _size.y));
@@ -316,12 +383,54 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         _updateMaterial.SetInt(_rippleCountId, rippleCount);
         _updateMaterial.SetVectorArray(_ripplesId, _rippleBuffer);
         _updateMaterial.SetVectorArray(_rippleParamsId, _rippleParamBuffer);
-        _updateMaterial.SetInt(_stampCountId, stampCount);
-        _updateMaterial.SetVectorArray(_stampsId, _stampBuffer);
         int next = 1 - _current;
         Graphics.Blit(_maps[_current], _maps[next], _updateMaterial);
         _current = next;
         _clearPending = false;
+    }
+
+    /// <summary>
+    /// 이번 프레임 구형 중심과 잔상 표본을 중심·반경과 강도 배열로 셰이더에 전달한다.
+    /// 최대 개수를 넘으면 현재 중심을 우선하고 최근 잔상부터 채운다.
+    /// </summary>
+    private void PublishSpheres(float now)
+    {
+        int count = 0;
+        foreach (Sphere head in _heads)
+        {
+            if (count == MAX_SPHERES)
+                break;
+            _sphereBuffer[count] = new Vector4(head.Center.x, head.Center.y, head.Center.z, head.Radius);
+            _sphereStrengthBuffer[count++] = new Vector4(1f, 0f, 0f, 0f);
+        }
+        for (int i = _trail.Count - 1; i >= 0 && count < MAX_SPHERES; i--)
+        {
+            Sphere sample = _trail[i];
+            _sphereBuffer[count] = new Vector4(sample.Center.x, sample.Center.y, sample.Center.z, sample.Radius);
+            _sphereStrengthBuffer[count++] = new Vector4(TrailStrength(sample, now), 0f, 0f, 0f);
+        }
+        Shader.SetGlobalInt(_sphereCountId, count);
+        Shader.SetGlobalVectorArray(_spheresId, _sphereBuffer);
+        Shader.SetGlobalVectorArray(_sphereStrengthsId, _sphereStrengthBuffer);
+    }
+
+    /// <summary>비활성·파괴된 발생자를 목록에서 빼고 남은 발생자의 위치와 제외 반경을 셰이더에 전달한다.</summary>
+    private void PublishHiddenOwners()
+    {
+        _hiddenOwnerCount = 0;
+        for (int i = _hiddenOwners.Count - 1; i >= 0; i--)
+        {
+            Transform owner = _hiddenOwners[i];
+            if (owner == null || !owner.gameObject.activeInHierarchy)
+            {
+                _hiddenOwners.RemoveAt(i);
+                continue;
+            }
+            Vector3 position = owner.position;
+            _hiddenOwnerBuffer[_hiddenOwnerCount++] = new Vector4(position.x, position.y, position.z, _ownerHideRadius);
+        }
+        Shader.SetGlobalInt(_hiddenOwnerCountId, _hiddenOwnerCount);
+        Shader.SetGlobalVectorArray(_hiddenOwnersId, _hiddenOwnerBuffer);
     }
 
     /// <summary>
@@ -380,7 +489,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     }
 
     /// <summary>
-    /// 갱신 머티리얼과 두 장의 RGFloat 시야 맵을 준비하고 준비 성공 여부를 반환한다.
+    /// 갱신 머티리얼과 두 장의 ARGBFloat 시야 맵을 준비하고 준비 성공 여부를 반환한다.
     /// 해상도가 바뀌면 다시 만들고 다음 갱신에서 맵을 비운다.
     /// </summary>
     private bool EnsureResources()
@@ -396,7 +505,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         _maps = new RenderTexture[2];
         for (int i = 0; i < _maps.Length; i++)
         {
-            _maps[i] = new RenderTexture(_resolution, _resolution, 0, RenderTextureFormat.RGFloat,
+            _maps[i] = new RenderTexture(_resolution, _resolution, 0, RenderTextureFormat.ARGBFloat,
                 RenderTextureReadWrite.Linear)
             {
                 name = "Perception reveal " + i,
