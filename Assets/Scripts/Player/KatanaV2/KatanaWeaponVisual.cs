@@ -32,9 +32,6 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     [SerializeField, InspectorName("1타 AnimationClip")]
     [Tooltip("일반 공격·대상 돌진의 1타 IaidoDoubleSlash를 교체합니다. 빈 슬롯과 충전 발도는 기존 클립을 사용합니다.")]
     private AnimationClip _firstAttackClip;
-    [SerializeField, InspectorName("발도 상태 1타 AnimationClip")]
-    [Tooltip("2타 뒤 발도 상태에서 다시 1타를 시작할 때 사용합니다. 시작 자세를 2타의 발도 대기 자세와 맞춥니다.")]
-    private AnimationClip _firstAttackDrawnClip;
     [SerializeField, InspectorName("1타 클립에 Idle 복귀 포함")]
     [Tooltip("교체 1타가 끝에서 검·검집을 Idle 자세로 복귀시키면 체크합니다. 끝까지 완료한 뒤 별도 납도 모션을 재생하지 않습니다.")]
     private bool _firstAttackReturnsToIdle = true;
@@ -474,9 +471,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
         bool opening = kind == PlayerAttackKind.Normal && _combat.IsOpeningAttack;
         bool firstAttack = name == "IaidoDoubleSlash" && (opening
             || kind == PlayerAttackKind.IaidoFinisher && _combat.Player.TargetedComboStrike == 1);
-        AnimationClip firstClip = kind == PlayerAttackKind.Normal && e.WasDrawn
-            && _motion == "Normal1" && _firstAttackDrawnClip != null
-            ? _firstAttackDrawnClip : _firstAttackClip;
+        AnimationClip firstClip = _firstAttackClip;
         ApplyAttackClips(firstAttack, firstClip);
         bool customFirstAttack = firstAttack && firstClip != null;
         bool matchedSecondAttack = name == "Normal1" && UsesOpeningTimingForSecondAttack;

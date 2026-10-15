@@ -435,7 +435,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
   _normalSheatheDelay: 0
-  _repeatAttackCooldown: 0.6
   _firstAttackInputBufferWindow: 0.2
   _comboBufferWindow: 0.2
   _comboResetDelay: 0.4
@@ -493,7 +492,6 @@ MonoBehaviour:
   _idleClip: {fileID: 7400000, guid: 8c03e20cc5701384195e95a718f911ce, type: 2}
   _counterAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
   _firstAttackClip: {fileID: 7400000, guid: c83264164fb7e824ab09176b14e72719, type: 2}
-  _firstAttackDrawnClip: {fileID: 7400000, guid: 43fc2157b55748cfbf244101a983a66d, type: 2}
   _firstAttackReturnsToIdle: 0
   _secondAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
   _secondAttackUsesOpeningTiming: 1
