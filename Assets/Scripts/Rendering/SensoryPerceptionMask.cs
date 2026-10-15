@@ -44,6 +44,7 @@ using UnityEngine;
         private float _edgeFade = 0.75f;
         private SensoryManager _sensoryManager;
         private TerrainMemory _terrainMemory;
+        private PerceptionRevealMap _revealMap;
 
         [Header("퍼펙트 패링 파동")]
         private Vector4 _pulseRegion;
@@ -52,6 +53,7 @@ using UnityEngine;
         void Awake()
         {
             _sensoryManager = GetComponent<SensoryManager>();
+            _revealMap = GetComponent<PerceptionRevealMap>();
         }
 
         void OnEnable()
@@ -138,6 +140,7 @@ using UnityEngine;
 
         /// <summary>
         /// position의 현재 인지 가시성을 셰이더와 같은 반경·확산·페이드 규칙으로 반환한다.
+        /// 같은 오브젝트에 시야 맵이 있으면 걸음 파동·이동 시야원 잔상도 포함한다.
         /// 지형 기억은 포함하지 않으며 인지 매니저가 준비되지 않으면 0을 반환한다.
         /// </summary>
         public float GetVisibility(Vector3 position)
@@ -166,6 +169,8 @@ using UnityEngine;
                     RegionVisibility(position, new Vector3(region.x, region.y, region.z), radius) * fade);
             }
             visibility = Mathf.Max(visibility, GetPulseVisibility(position));
+            if (_revealMap != null)
+                visibility = Mathf.Max(visibility, _revealMap.GetVisibility(position));
             return visibility;
         }
 

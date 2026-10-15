@@ -73,6 +73,23 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineMemoryBounds;
             float4 _OutlineMemoryColor;
             float _OutlineMemoryEnabled;
+            TEXTURE2D(_OutlineRevealMap);
+            SAMPLER(sampler_OutlineRevealMap);
+            float4 _OutlineRevealBounds;
+            float _OutlineRevealEnabled;
+
+            // 걸음 파동·이동 시야원이 남긴 XZ 잔상 만료 시각으로 현재 공개 정도를 반환한다.
+            float RevealMapVisibility(float3 position)
+            {
+                if (_OutlineRevealEnabled < 0.5)
+                    return 0.0;
+                float2 revealUv = (position.xz - _OutlineRevealBounds.xy) / _OutlineRevealBounds.zw;
+                if (any(revealUv < 0.0) || any(revealUv > 1.0))
+                    return 0.0;
+                float2 reveal = SAMPLE_TEXTURE2D_LOD(_OutlineRevealMap, sampler_OutlineRevealMap, revealUv, 0).rg;
+                return smoothstep(0.0, 1.0,
+                    saturate((reveal.x - _OutlinePerceptionTime) / max(reveal.y, 0.0001)));
+            }
 
             // 영역 반경의 안쪽 경계부터 가장자리까지 공간 가시성을 부드럽게 줄인다.
             float RegionVisibility(float3 position, float3 center, float radius)
@@ -118,6 +135,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     float3(position.x, 0.0, position.z),
                     float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
                     _OutlinePulseRegion.w) * _OutlinePulseVisibility);
+                visibility = max(visibility, RevealMapVisibility(position));
                 float memoryVisibility = 0.0;
                 if (includeMemory > 0.5 && _OutlineMemoryEnabled > 0.5)
                 {
@@ -130,12 +148,12 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 return memoryColor * (1.0 - visibility) + _LineColor.rgb * _LineColor.a * visibility;
             }
 
-            // 항상 보이는 배경 표면은 인지 범위·편집 모드와 무관하게 고정된 배경 선 색상을 사용한다.
+            // 배경 표면은 상시 표시하지 않고 현재 인지로만 드러내며 지형 기억에는 남기지 않는다.
             float3 SurfaceColor(float2 uv, float rawDepth, float hasSurface)
             {
                 if (hasSurface != 0.0
                     && SAMPLE_TEXTURE2D_X(_OutlineSceneryMask, sampler_PointClamp, uv).r > 0.5)
-                    return _SceneryColor.rgb * _SceneryColor.a;
+                    return PerceptionColor(uv, rawDepth, hasSurface, 0.0);
                 return PerceptionColor(uv, rawDepth, hasSurface, 1.0);
             }
 
