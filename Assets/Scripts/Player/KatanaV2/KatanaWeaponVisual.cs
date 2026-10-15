@@ -32,6 +32,9 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     [SerializeField, InspectorName("1타 AnimationClip")]
     [Tooltip("일반 공격·대상 돌진의 1타 IaidoDoubleSlash를 교체합니다. 빈 슬롯과 충전 발도는 기존 클립을 사용합니다.")]
     private AnimationClip _firstAttackClip;
+    [SerializeField, InspectorName("발도 상태 1타 AnimationClip")]
+    [Tooltip("2타 뒤 발도 상태에서 다시 1타를 시작할 때 사용합니다. 시작 자세를 2타의 발도 대기 자세와 맞춥니다.")]
+    private AnimationClip _firstAttackDrawnClip;
     [SerializeField, InspectorName("1타 클립에 Idle 복귀 포함")]
     [Tooltip("교체 1타가 끝에서 검·검집을 Idle 자세로 복귀시키면 체크합니다. 끝까지 완료한 뒤 별도 납도 모션을 재생하지 않습니다.")]
     private bool _firstAttackReturnsToIdle = true;
@@ -51,6 +54,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     private AnimationClip _secondSourceClip;
     private AnimationClip _firstDefaultClip;
     private AnimationClip _secondDefaultClip;
+    private AnimationClip _activeFirstAttackClip;
 
     [Header("Presentation")]
     [SerializeField] private bool _showWeapon = true;
@@ -217,9 +221,9 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
 
     /// <summary>
     /// Inspector의 Idle·1·2타 클립을 해당 원본 클립에 대응시킨다.
-    /// firstAttack이면 1타를 교체하고 반격 Normal2에 전용 클립을 적용한다. 빈 슬롯은 기본 클립으로 복원한다.
+    /// firstAttack과 firstClip으로 1타를 선택하고 반격 Normal2에 전용 클립을 적용하며, 빈 슬롯은 기본 클립으로 복원한다.
     /// </summary>
-    private void ApplyAttackClips(bool firstAttack = false)
+    private void ApplyAttackClips(bool firstAttack = false, AnimationClip firstClip = null)
     {
         for (int i = 0; i < _attackOverrides.Count; i++)
         {
@@ -228,7 +232,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             if (pair.Key == _idleSourceClip)
                 clip = _idleClip != null ? _idleClip : _idleDefaultClip;
             else if (pair.Key == _firstSourceClip)
-                clip = firstAttack && _firstAttackClip != null ? _firstAttackClip : _firstDefaultClip;
+                clip = firstAttack && firstClip != null ? firstClip : _firstDefaultClip;
             else if (pair.Key == _secondSourceClip)
                 clip = _secondAttackClip != null ? _secondAttackClip : _secondDefaultClip;
             else if (pair.Key == _counterSourceClip)
@@ -317,7 +321,8 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             && _animator.GetFloat(ActionProgressId) >= FirstAttackFollowupProgress() - 0.00001f)
         {
             // 연계 판정 전에 정확한 5번 프레임을 평가해 프레임 간격에 따른 자세 초과를 막는다.
-            _firstAttackClip.SampleAnimation(_animator.gameObject, Mathf.Min(5f / _firstAttackClip.frameRate, _firstAttackClip.length));
+            _activeFirstAttackClip.SampleAnimation(_animator.gameObject,
+                Mathf.Min(5f / _activeFirstAttackClip.frameRate, _activeFirstAttackClip.length));
             if (_combat.TryStartFirstAttackFollowup()) _animator.Update(0f);
         }
         ApplyAttackDeflection();
@@ -361,10 +366,11 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             _attackDeflectionRotation * Quaternion.Euler(_attackDeflectionAngles), weight);
     }
 
-    /// <summary>교체 1타의 프레임률과 길이를 사용해 5번 프레임의 정규화 진행도를 반환한다.</summary>
+    /// <summary>현재 재생 중인 1타 클립의 프레임률과 길이로 5번 프레임의 정규화 진행도를 반환한다.</summary>
     private float FirstAttackFollowupProgress()
     {
-        return Mathf.Clamp01(5f / Mathf.Max(0.001f, _firstAttackClip.frameRate * _firstAttackClip.length));
+        return Mathf.Clamp01(5f / Mathf.Max(0.001f,
+            _activeFirstAttackClip.frameRate * _activeFirstAttackClip.length));
     }
 
 /// <summary>e의 전투 이벤트를 발도 공격 클립과 성공 피드백으로 변환한다. 피해 판정은 호출하지 않는다.</summary>
@@ -432,7 +438,8 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
                     _animator.SetFloat(ActionProgressId, start);
                     break;
                 }
-                string sheath = _motion == "IaidoDoubleSlash" ? "SheatheIaido" : _motion == "Normal2" ? "Sheathe2" : "Sheathe1";
+                string sheath = _motion == "Normal1" || (_motion == "IaidoDoubleSlash" && !_usingFirstAttackClip)
+                    ? "Sheathe2" : "Sheathe1";
                 Play(sheath, _motion == "GuardHold" || _motion == "GuardEnter" || _motion == "GuardDeflect"
                     ? _guardTransitionBlendTime : _blendTime);
                 _animator.SetFloat(ActionProgressId, 0f);
@@ -467,8 +474,11 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
         bool opening = kind == PlayerAttackKind.Normal && _combat.IsOpeningAttack;
         bool firstAttack = name == "IaidoDoubleSlash" && (opening
             || kind == PlayerAttackKind.IaidoFinisher && _combat.Player.TargetedComboStrike == 1);
-        ApplyAttackClips(firstAttack);
-        bool customFirstAttack = firstAttack && _firstAttackClip != null;
+        AnimationClip firstClip = kind == PlayerAttackKind.Normal && e.WasDrawn
+            && _motion == "Normal1" && _firstAttackDrawnClip != null
+            ? _firstAttackDrawnClip : _firstAttackClip;
+        ApplyAttackClips(firstAttack, firstClip);
+        bool customFirstAttack = firstAttack && firstClip != null;
         bool matchedSecondAttack = name == "Normal1" && UsesOpeningTimingForSecondAttack;
         bool transitioningFromGuard = _motion == "GuardHold" || _motion == "GuardEnter" || _motion == "GuardDeflect";
         float blend = transitioningFromGuard ? _guardTransitionBlendTime
@@ -478,6 +488,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             blend = 0f;
         Play(name, blend);
         _usingFirstAttackClip = customFirstAttack;
+        _activeFirstAttackClip = customFirstAttack ? firstClip : null;
         _attackReturnsToIdle = customFirstAttack && _firstAttackReturnsToIdle
             || name == "Normal1" && _secondAttackClip != null && _secondAttackReturnsToIdle
             || name == "Normal2" && _counterAttackClip != null && _secondAttackReturnsToIdle;

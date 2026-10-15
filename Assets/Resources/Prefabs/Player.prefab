@@ -434,11 +434,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
-  _normalSheatheDelay: 2
+  _normalSheatheDelay: 0
+  _repeatAttackCooldown: 0.6
   _firstAttackInputBufferWindow: 0.2
   _comboBufferWindow: 0.2
-  _comboFollowThrough: 0.02
-  _comboResetDelay: 2
+  _comboResetDelay: 0.4
   _targetedAttackMinimumDuration: 0.14
   _perfectParryStart: 0
   _perfectParryEnd: 0.1
@@ -493,6 +493,7 @@ MonoBehaviour:
   _idleClip: {fileID: 7400000, guid: 8c03e20cc5701384195e95a718f911ce, type: 2}
   _counterAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
   _firstAttackClip: {fileID: 7400000, guid: c83264164fb7e824ab09176b14e72719, type: 2}
+  _firstAttackDrawnClip: {fileID: 7400000, guid: 43fc2157b55748cfbf244101a983a66d, type: 2}
   _firstAttackReturnsToIdle: 0
   _secondAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
   _secondAttackUsesOpeningTiming: 1
@@ -563,6 +564,7 @@ MonoBehaviour:
   _volume: 0.8
   _damageVolumeMultiplier: 1
   _damagePitch: 1
+  _perfectParrySound: 37
   _contactService: {fileID: 1080894898460965423}
 --- !u!114 &8491623887222581670
 MonoBehaviour:
@@ -718,6 +720,7 @@ MonoBehaviour:
   _readyDuration: 5
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
+  _perfectParryInvulnerableDuration: 0.3
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
 --- !u!114 &1235757311588725982
