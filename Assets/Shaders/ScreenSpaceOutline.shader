@@ -52,6 +52,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             TEXTURE2D_X(_OutlineTransparentDepth);
             TEXTURE2D_X(_OutlineSceneryMask);
             TEXTURE2D_X(_OutlineThreatMask);
+            TEXTURE2D_X(_OutlineForcedReveal);
             TEXTURE2D_X(_ThreatPresentationColor);
             TEXTURE2D_X(_ThreatPresentationData);
 
@@ -87,6 +88,36 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineHiddenOwners[MAX_HIDDEN_OWNERS];
             // x: 적 파동 바닥 높이, y: 배경을 온전히 밝히는 높이, z: 그 위에서 흐려지는 높이
             float4 _OutlineHiddenSceneryHeight;
+            #define MAX_IMPACT_RIPPLES 32
+            int _OutlineImpactRippleCount;
+            // xyz: 중심, w: 최대 반경
+            float4 _OutlineImpactRipples[MAX_IMPACT_RIPPLES];
+            // x: 확산 시간, y: 잔상 시간, z: 세기, w: 시작 시각
+            float4 _OutlineImpactRippleParams[MAX_IMPACT_RIPPLES];
+
+            // 약한 충격 파동이 구 모양으로 퍼진 전선이 지나간 뒤 잔상 동안 흐려지는 세기를 모두 더해 반환한다. 겹치면 더 밝아진다.
+            float ImpactRippleVisibility(float3 position)
+            {
+                float visibility = 0.0;
+                [loop]
+                for (int i = 0; i < _OutlineImpactRippleCount; i++)
+                {
+                    float4 ripple = _OutlineImpactRipples[i];
+                    float4 rippleParams = _OutlineImpactRippleParams[i];
+                    float distanceFromCenter = distance(position, ripple.xyz);
+                    if (distanceFromCenter > ripple.w)
+                        continue;
+                    // 걸음 파동과 같은 감속 확산식으로 전선이 이 지점을 지난 시각을 구한다.
+                    float hitTime = rippleParams.x * (1.0 - sqrt(saturate(1.0 - distanceFromCenter / ripple.w)));
+                    float age = _OutlinePerceptionTime - (rippleParams.w + hitTime);
+                    if (age < 0.0)
+                        continue;
+                    float fade = smoothstep(0.0, 1.0, saturate(1.0 - age / max(rippleParams.y, 0.0001)));
+                    float innerRadius = max(0.0, ripple.w - max(_OutlineEdgeFade, 0.0001));
+                    visibility += fade * (1.0 - smoothstep(innerRadius, ripple.w, distanceFromCenter)) * rippleParams.z;
+                }
+                return saturate(visibility);
+            }
 
             // 잔상 만료 시각과 잔상 길이로 현재 공개 정도를 반환한다.
             float ExpireVisibility(float2 reveal)
@@ -159,7 +190,9 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
 
             // 현재 인지를 선 색상으로 표시하고 일반 지형에만 누적 기억 색상을 합성한다.
             // isScenery가 1이면 배경 표면으로 보고 적 파동 공개에 높이 제한을 건다.
-            float3 PerceptionColor(float2 uv, float rawDepth, float hasSurface, float includeMemory, float isScenery)
+            // forced.b가 1이면 세기 조절 표면이다. forced.g가 0이면 파동으로 밝혀진 정도에 forced.r을 곱하고, 1이면 파동을 무시하고 forced.r만 쓴다.
+            float3 PerceptionColor(float2 uv, float rawDepth, float hasSurface, float includeMemory, float isScenery,
+                float4 forced)
             {
                 if (hasSurface == 0.0)
                     return 0.0;
@@ -194,6 +227,9 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
                     _OutlinePulseRegion.w) * _OutlinePulseVisibility);
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));
+                visibility = max(visibility, ImpactRippleVisibility(position));
+                if (forced.b > 0.5)
+                    visibility = lerp(visibility * forced.r, forced.r, forced.g);
                 float memoryVisibility = 0.0;
                 if (includeMemory > 0.5 && _OutlineMemoryEnabled > 0.5)
                 {
@@ -207,12 +243,16 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             }
 
             // 배경 표면은 상시 표시하지 않고 현재 인지로만 드러내며 지형 기억에는 남기지 않는다.
+            // 세기 조절 표면도 배경처럼 지형 기억에 남기지 않는다.
             float3 SurfaceColor(float2 uv, float rawDepth, float hasSurface)
             {
-                if (hasSurface != 0.0
-                    && SAMPLE_TEXTURE2D_X(_OutlineSceneryMask, sampler_PointClamp, uv).r > 0.5)
-                    return PerceptionColor(uv, rawDepth, hasSurface, 0.0, 1.0);
-                return PerceptionColor(uv, rawDepth, hasSurface, 1.0, 0.0);
+                if (hasSurface == 0.0)
+                    return PerceptionColor(uv, rawDepth, hasSurface, 1.0, 0.0, 0.0);
+                float4 forced = SAMPLE_TEXTURE2D_X(_OutlineForcedReveal, sampler_PointClamp, uv);
+                if (forced.b > 0.5
+                    || SAMPLE_TEXTURE2D_X(_OutlineSceneryMask, sampler_PointClamp, uv).r > 0.5)
+                    return PerceptionColor(uv, rawDepth, hasSurface, 0.0, 1.0, forced);
+                return PerceptionColor(uv, rawDepth, hasSurface, 1.0, 0.0, forced);
             }
 
             // 위협 대상이 덮는 화면 비율을 반환한다.
@@ -311,8 +351,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 float firstDepth = SAMPLE_TEXTURE2D_X(_OutlineTransparentDepth, sampler_PointClamp, firstUv).r;
                 float secondDepth = SAMPLE_TEXTURE2D_X(_OutlineTransparentDepth, sampler_PointClamp, secondUv).r;
                 float edge = saturate(abs(first - second) * 1.5);
-                return edge * max(PerceptionColor(firstUv, firstDepth, first, 0.0, 0.0),
-                    PerceptionColor(secondUv, secondDepth, second, 0.0, 0.0));
+                return edge * max(PerceptionColor(firstUv, firstDepth, first, 0.0, 0.0, 0.0),
+                    PerceptionColor(secondUv, secondDepth, second, 0.0, 0.0, 0.0));
             }
 
             // 인지 예외 VFX만 별도로 검출하여 일반 VFX의 색상과 깊이가 섞이지 않게 한다.

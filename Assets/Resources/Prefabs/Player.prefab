@@ -255,6 +255,9 @@ GameObject:
   - component: {fileID: 6051350681916135295}
   - component: {fileID: 7253810946217735011}
   - component: {fileID: 6618034975521349126}
+  - component: {fileID: 7719342256018403921}
+  - component: {fileID: 7719342256018403922}
+  - component: {fileID: 7719342256018403923}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -604,7 +607,7 @@ MonoBehaviour:
   _hitRadius: 0.1
   _attackMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4294967287
   _unlimitedRange: 0
   _bladeBase: {fileID: 8419536739964497533}
   _bladeTip: {fileID: 87512033506737446}
@@ -1533,3 +1536,54 @@ ParticleSystem:
   m_CorrespondingSourceObject: {fileID: 3437129320176675894, guid: 641ef78c43feafe4fbcf82c9b47f2227, type: 3}
   m_PrefabInstance: {fileID: 6350052290514714908}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &7719342256018403921
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ef227930b4f4bee85f42a20fa403e8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerBladeBambooCutter
+  _bladeBase: {fileID: 8419536739964497533}
+  _bladeTip: {fileID: 87512033506737446}
+  _normalReach: 4.5
+  _iaidoReach: 4.5
+  _drawSweep: 1
+  _drawDuration: 2
+--- !u!114 &7719342256018403922
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5abf8fc65014c60b142bf312096ee50, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponReveal
+  _weapon: {fileID: 8362338574495906464}
+  _strength: 1
+--- !u!114 &7719342256018403923
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2af30b5157e480fa01b3ad156c89eae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwingRipple
+  _ripple:
+    _radius: 14.4
+    _expandDuration: 1.2
+    _ringCount: 1
+    _ringInterval: 0.15
+    _afterimage: 1.2
+    _ringColor: {r: 1, g: 1, b: 1, a: 1}

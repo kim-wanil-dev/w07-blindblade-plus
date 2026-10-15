@@ -13,6 +13,8 @@ GameObject:
   - component: {fileID: 5310155325172330040}
   - component: {fileID: 8013713205375322848}
   - component: {fileID: 7494757157295272122}
+  - component: {fileID: 3518842096617724411}
+  - component: {fileID: 6204519873310256482}
   m_Layer: 0
   m_Name: PlayerSwordWave
   m_TagString: Untagged
@@ -105,11 +107,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DefenseSwordWave
   _speed: 200
-  _maxDistance: 45
+  _maxDistance: 85
   _hitRadius: 4.725
   _hitMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 4294967287
   _damage: 30
   _unscaledTime: 1
   _arcRadius: 6.075
@@ -132,3 +134,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OutlineVFX
   _ignorePerception: 1
+--- !u!114 &3518842096617724411
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 684308223341142084}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11d7d6b758ad49d39ecbb8ed87514bfb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SwordWaveBambooCutter
+  _halfWidth: 5.26
+  _sideSpread: 0.5
+--- !u!114 &6204519873310256482
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 684308223341142084}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e0b7c2f4a3d4f61b8d92c7e1a6f3b40, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SwordWavePerceptionReveal
+  _radius: 12
+  _afterimage: 1
+  _trailSpacing: 10

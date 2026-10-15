@@ -44,16 +44,19 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         [SerializeField] private Shader _shader;
         [SerializeField] private Shader _transparentDepthShader;
         [SerializeField] private Shader _layerMaskShader;
+        [SerializeField] private Shader _forcedRevealShader;
         private Material _material;
         private Material _depthMaterial;
         private Material _sceneryMaskMaterial;
         private Material _threatMaskMaterial;
+        private Material _forcedRevealMaterial;
         private readonly OutlineVFXRouting _routing = new OutlineVFXRouting();
         private CapturePass _capture;
         private CapturePass _alwaysVisibleCapture;
         private TransparentDepthPass _depth;
         private LayerMaskPass _sceneryMask;
         private LayerMaskPass _threatMask;
+        private ForcedRevealPass _forcedReveal;
         private ThreatPresentationRouting _threatRouting;
         private ThreatPresentationPass _presentation;
         private OutlinePass _outline;
@@ -84,6 +87,13 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 Debug.LogError("ScreenSpaceOutlineFeature에 배경·위협 마스크 셰이더를 연결해야 합니다.", this);
                 return;
             }
+            if (_forcedRevealShader == null)
+                _forcedRevealShader = Shader.Find("Hidden/BlindBlade/OutlineForcedReveal");
+            if (_forcedRevealShader == null)
+            {
+                Debug.LogError("ScreenSpaceOutlineFeature에 강제 공개 마스크 셰이더를 연결해야 합니다.", this);
+                return;
+            }
             _material = CoreUtils.CreateEngineMaterial(_shader);
             _depthMaterial = CoreUtils.CreateEngineMaterial(_transparentDepthShader);
             _depthMaterial.SetFloat("_DepthBlendOp", SystemInfo.usesReversedZBuffer ? 4f : 3f);
@@ -97,9 +107,12 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             _depth = new TransparentDepthPass(_depthMaterial);
             _sceneryMask = new LayerMaskPass(OutlineLayer.SCENERY_MASK, _sceneryMaskMaterial, false);
             _threatMask = new LayerMaskPass(OutlineLayer.THREAT_MASK, _threatMaskMaterial, true);
+            _forcedRevealMaterial = CoreUtils.CreateEngineMaterial(_forcedRevealShader);
+            _forcedReveal = new ForcedRevealPass(_forcedRevealMaterial);
             _threatRouting = new ThreatPresentationRouting(Resources.Load<Material>("Perception/ThreatPresentationMask"));
             _presentation = new ThreatPresentationPass(_threatRouting);
-            _outline = new OutlinePass(_material, _capture, _depth, _alwaysVisibleCapture, _sceneryMask, _threatMask, _presentation);
+            _outline = new OutlinePass(_material, _capture, _depth, _alwaysVisibleCapture, _sceneryMask, _threatMask,
+                _forcedReveal, _presentation);
             RenderPipelineManager.beginCameraRendering += BeginCamera;
             RenderPipelineManager.endCameraRendering += EndCamera;
         }
@@ -154,6 +167,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             renderer.EnqueuePass(_depth);
             renderer.EnqueuePass(_sceneryMask);
             renderer.EnqueuePass(_threatMask);
+            renderer.EnqueuePass(_forcedReveal);
             renderer.EnqueuePass(_presentation);
             renderer.EnqueuePass(_outline);
         }
@@ -178,22 +192,26 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             CoreUtils.Destroy(_depthMaterial);
             CoreUtils.Destroy(_sceneryMaskMaterial);
             CoreUtils.Destroy(_threatMaskMaterial);
+            CoreUtils.Destroy(_forcedRevealMaterial);
             _capture?.Release();
             _alwaysVisibleCapture?.Release();
             _depth?.Release();
             _sceneryMask?.Release();
             _threatMask?.Release();
+            _forcedReveal?.Release();
             _presentation?.Release();
             _outline?.Release();
             _material = null;
             _depthMaterial = null;
             _sceneryMaskMaterial = null;
             _threatMaskMaterial = null;
+            _forcedRevealMaterial = null;
             _capture = null;
             _alwaysVisibleCapture = null;
             _depth = null;
             _sceneryMask = null;
             _threatMask = null;
+            _forcedReveal = null;
             _threatRouting = null;
             _presentation = null;
             _outline = null;
@@ -206,6 +224,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             public TextureHandle TransparentDepth { get; set; }
             public TextureHandle SceneryMask { get; set; }
             public TextureHandle ThreatMask { get; set; }
+            public TextureHandle ForcedReveal { get; set; }
             public TextureHandle PresentationColor { get; set; }
             public TextureHandle PresentationData { get; set; }
 
@@ -219,6 +238,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 TransparentDepth = TextureHandle.nullHandle;
                 SceneryMask = TextureHandle.nullHandle;
                 ThreatMask = TextureHandle.nullHandle;
+                ForcedReveal = TextureHandle.nullHandle;
                 PresentationColor = TextureHandle.nullHandle;
                 PresentationData = TextureHandle.nullHandle;
             }
@@ -430,6 +450,98 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 #pragma warning restore CS0618, CS0672
         }
 
+        private sealed class ForcedRevealPass : ScriptableRenderPass
+        {
+            private readonly List<ShaderTagId> _tags = new List<ShaderTagId>
+            {
+                new ShaderTagId("UniversalForward"), new ShaderTagId("UniversalForwardOnly"),
+                new ShaderTagId("SRPDefaultUnlit")
+            };
+            private readonly FilteringSettings _filter = new FilteringSettings(RenderQueueRange.all,
+                -1, OutlineLayer.FORCED_REVEAL_MASK);
+            private readonly Material _material;
+            private RTHandle _legacyMask;
+            public RTHandle LegacyMask => _legacyMask;
+
+            private sealed class MaskData { public RendererListHandle Renderers { get; set; } }
+
+            /// <summary>
+            /// 강제 공개 비트를 가진 렌더러를 material로 그려 렌더러별 세기를 기록하도록 준비한다.
+            /// </summary>
+            public ForcedRevealPass(Material material)
+            {
+                _material = material;
+                renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
+            }
+
+            /// <summary>
+            /// 카메라 크기의 RGBA 타깃에 강제 공개 대상의 세기(r)와 덮임(b)을 기록한다.
+            /// 장면 깊이는 읽기만 하며 가려진 부분은 기록하지 않는다. 결과 핸들은 현재 프레임에만 보관한다.
+            /// </summary>
+            public override void RecordRenderGraph(RenderGraph graph, ContextContainer frameData)
+            {
+                var resources = frameData.Get<UniversalResourceData>();
+                var desc = resources.activeColorTexture.GetDescriptor(graph);
+                desc.name = "Outline Forced Reveal";
+                desc.depthBufferBits = DepthBits.None;
+                desc.msaaSamples = MSAASamples.None;
+                desc.colorFormat = GraphicsFormat.R8G8B8A8_UNorm;
+                desc.clearBuffer = true;
+                desc.clearColor = Color.clear;
+                var target = graph.CreateTexture(desc);
+                var drawing = RenderingUtils.CreateDrawingSettings(_tags, frameData.Get<UniversalRenderingData>(),
+                    frameData.Get<UniversalCameraData>(), frameData.Get<UniversalLightData>(), SortingCriteria.CommonOpaque);
+                drawing.overrideMaterial = _material;
+                drawing.overrideMaterialPassIndex = 0;
+                var parameters = new RendererListParams(frameData.Get<UniversalRenderingData>().cullResults, drawing, _filter);
+                using var builder = graph.AddRasterRenderPass<MaskData>(desc.name, out var data);
+                data.Renderers = graph.CreateRendererList(parameters);
+                builder.UseRendererList(data.Renderers);
+                builder.AllowPassCulling(false);
+                builder.SetRenderAttachment(target, 0, AccessFlags.Write);
+                builder.SetRenderAttachmentDepth(resources.activeDepthTexture, AccessFlags.Read);
+                builder.SetRenderFunc<MaskData>(DrawMask);
+                frameData.GetOrCreate<FrameTextures>().ForcedReveal = target;
+            }
+
+            /// <summary>
+            /// 현재 카메라의 강제 공개 렌더러 목록을 전용 머티리얼로 출력한다.
+            /// </summary>
+            private static void DrawMask(MaskData data, RasterGraphContext context)
+            {
+                context.cmd.DrawRendererList(data.Renderers);
+            }
+
+            /// <summary>
+            /// 호환 모드에서 할당한 마스크 타깃을 해제한다.
+            /// </summary>
+            public void Release() { _legacyMask?.Release(); }
+
+#pragma warning disable CS0618, CS0672
+            /// <summary>
+            /// 호환 모드에서 강제 공개 대상의 세기를 RGBA 타깃에 기록한다.
+            /// </summary>
+            public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+            {
+                var desc = renderingData.cameraData.cameraTargetDescriptor;
+                desc.depthBufferBits = 0;
+                desc.msaaSamples = 1;
+                desc.graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm;
+                RenderingUtils.ReAllocateHandleIfNeeded(ref _legacyMask, desc, name: "Outline Forced Reveal");
+                var cmd = CommandBufferPool.Get("Outline Forced Reveal");
+                CoreUtils.SetRenderTarget(cmd, _legacyMask, renderingData.cameraData.renderer.cameraDepthTargetHandle,
+                    ClearFlag.Color, Color.clear);
+                context.ExecuteCommandBuffer(cmd);
+                CommandBufferPool.Release(cmd);
+                var drawing = CreateDrawingSettings(_tags, ref renderingData, SortingCriteria.CommonOpaque);
+                drawing.overrideMaterial = _material;
+                drawing.overrideMaterialPassIndex = 0;
+                var filter = _filter;
+                context.DrawRenderers(renderingData.cullResults, ref drawing, ref filter);
+            }
+#pragma warning restore CS0618, CS0672
+        }
+
         private sealed class CapturePass : ScriptableRenderPass
         {
             private readonly List<ShaderTagId> _tags = new List<ShaderTagId>
@@ -619,6 +731,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             private readonly CapturePass _alwaysVisibleCapture;
             private readonly LayerMaskPass _sceneryMask;
             private readonly LayerMaskPass _threatMask;
+            private readonly ForcedRevealPass _forcedReveal;
             private readonly ThreatPresentationPass _presentation;
             private RTHandle _legacyResult;
 
@@ -631,6 +744,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 public TextureHandle TransparentDepth { get; set; }
                 public TextureHandle SceneryMask { get; set; }
                 public TextureHandle ThreatMask { get; set; }
+                public TextureHandle ForcedReveal { get; set; }
                 public TextureHandle PresentationColor { get; set; }
                 public TextureHandle PresentationData { get; set; }
                 public TextureHandle SceneDepth { get; set; }
@@ -638,11 +752,12 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             }
 
             /// <summary>
-            /// material과 기존 캡처·마스크 및 presentation을 연결해 윤곽선 입력을 준비한다.
+            /// material과 기존 캡처·마스크·강제 공개 마스크 및 presentation을 연결해 윤곽선 입력을 준비한다.
             /// 깊이·노멀 입력과 중간 카메라 타깃을 요청한다.
             /// </summary>
             public OutlinePass(Material material, CapturePass capture, TransparentDepthPass depth,
-                CapturePass alwaysVisibleCapture, LayerMaskPass sceneryMask, LayerMaskPass threatMask, ThreatPresentationPass presentation)
+                CapturePass alwaysVisibleCapture, LayerMaskPass sceneryMask, LayerMaskPass threatMask,
+                ForcedRevealPass forcedReveal, ThreatPresentationPass presentation)
             {
                 _material = material;
                 _capture = capture;
@@ -650,6 +765,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 _alwaysVisibleCapture = alwaysVisibleCapture;
                 _sceneryMask = sceneryMask;
                 _threatMask = threatMask;
+                _forcedReveal = forcedReveal;
                 _presentation = presentation;
                 renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
                 requiresIntermediateTexture = true;
@@ -678,6 +794,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     data.TransparentDepth = frame.TransparentDepth;
                     data.SceneryMask = frame.SceneryMask;
                     data.ThreatMask = frame.ThreatMask;
+                    data.ForcedReveal = frame.ForcedReveal;
                     data.PresentationColor = frame.PresentationColor;
                     data.PresentationData = frame.PresentationData;
                     data.SceneDepth = resources.cameraDepthTexture;
@@ -688,6 +805,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     builder.UseTexture(data.TransparentDepth, AccessFlags.Read);
                     builder.UseTexture(data.SceneryMask, AccessFlags.Read);
                     builder.UseTexture(data.ThreatMask, AccessFlags.Read);
+                    builder.UseTexture(data.ForcedReveal, AccessFlags.Read);
                     builder.UseTexture(data.PresentationColor, AccessFlags.Read);
                     builder.UseTexture(data.PresentationData, AccessFlags.Read);
                     builder.UseTexture(data.SceneDepth, AccessFlags.Read);
@@ -711,6 +829,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 properties.SetTexture("_OutlineTransparentDepth", data.TransparentDepth);
                 properties.SetTexture("_OutlineSceneryMask", data.SceneryMask);
                 properties.SetTexture("_OutlineThreatMask", data.ThreatMask);
+                properties.SetTexture("_OutlineForcedReveal", data.ForcedReveal);
                 properties.SetTexture("_ThreatPresentationColor", data.PresentationColor);
                 properties.SetTexture("_ThreatPresentationData", data.PresentationData);
                 properties.SetTexture("_CameraDepthTexture", data.SceneDepth);
@@ -738,6 +857,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 _material.SetTexture("_OutlineTransparentDepth", _depth.LegacyDepth);
                 _material.SetTexture("_OutlineSceneryMask", _sceneryMask.LegacyMask);
                 _material.SetTexture("_OutlineThreatMask", _threatMask.LegacyMask);
+                _material.SetTexture("_OutlineForcedReveal", _forcedReveal.LegacyMask);
                 _material.SetTexture("_ThreatPresentationColor", _presentation.ColorTexture);
                 _material.SetTexture("_ThreatPresentationData", _presentation.DataTexture);
                 var cmd = CommandBufferPool.Get("Screen Space Outline");
