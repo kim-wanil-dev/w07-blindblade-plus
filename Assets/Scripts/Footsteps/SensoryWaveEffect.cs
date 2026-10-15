@@ -16,6 +16,8 @@ public sealed class FootstepWave : SensoryEffect
     [SerializeField, Min(0f), Tooltip("종료 반경(미터)")]
     private float _endRadius = 1.5f;
     private bool _isConfigured;
+    private Color _playColor;
+    private float _playEndRadius;
 
     public float Duration => _duration;
     public float StartRadius => _startRadius;
@@ -46,17 +48,28 @@ public sealed class FootstepWave : SensoryEffect
     /// </summary>
     public void Play(float visibility = 1f)
     {
+        Play(_ringColor, _endRadius, _duration, visibility);
+    }
+
+    /// <summary>
+    /// color, endRadius, duration, visibility로 이번 링의 색·크기·수명을 설정하고 재생한다.
+    /// 재생 중인 링의 표시 상태만 변경하며 프리팹 기본값은 유지한다.
+    /// </summary>
+    public void Play(Color color, float endRadius, float duration, float visibility = 1f)
+    {
         if (!_isConfigured)
         {
             Managers.Resource.Destroy(gameObject);
             return;
         }
-        Color startColor = _ringColor;
+        _playColor = color;
+        _playEndRadius = Mathf.Max(_startRadius, endRadius);
+        Color startColor = _playColor;
         startColor.a *= Mathf.Clamp01(visibility);
         _ringRenderer.color = startColor;
         _ringRenderer.transform.localScale = Vector3.one * (_startRadius * 2f);
         _ringRenderer.enabled = true;
-        BeginPlayback(_duration, visibility);
+        BeginPlayback(duration, visibility);
     }
 
     /// <summary>
@@ -66,8 +79,8 @@ public sealed class FootstepWave : SensoryEffect
     {
         float expansion = Mathf.SmoothStep(0f, 1f, progress);
         _ringRenderer.transform.localScale = Vector3.one
-            * (Mathf.Lerp(_startRadius, _endRadius, expansion) * 2f);
-        Color color = _ringColor;
+            * (Mathf.Lerp(_startRadius, _playEndRadius, expansion) * 2f);
+        Color color = _playColor;
         color.a *= (1f - Mathf.SmoothStep(0f, 1f, progress)) * Visibility;
         _ringRenderer.color = color;
     }

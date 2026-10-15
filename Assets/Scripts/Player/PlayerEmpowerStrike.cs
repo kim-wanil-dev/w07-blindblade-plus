@@ -19,6 +19,9 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 {
     private const string PATTERN_ID = "EmpowerStrike";
 
+    [Header("공격 피해")]
+    [SerializeField, Min(0f)] private float _damage = 50f;
+
     [Header("암전")]
     [SerializeField, Min(0f), Tooltip("수락부터 납도까지 화면이 암흑으로 덮인 채 검격과 갈라진 선만 보이는 실시간.")]
     private float _blackoutDuration = 1f;
@@ -247,7 +250,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             if (enemy == null || !enemy.IsAlive) continue;
             Vector3 toEnemy = Vector3.ProjectOnPlane(enemy.transform.position - origin, Vector3.up);
             Vector3 direction = toEnemy.sqrMagnitude > 0.0001f ? toEnemy.normalized : _motor.ViewForward;
-            enemy.TakeDamage(new DamageContext(enemy.MaxHealth, gameObject, enemy.transform.position + Vector3.up,
+            enemy.TakeDamage(new DamageContext(_damage, gameObject, enemy.transform.position + Vector3.up,
                 direction, PATTERN_ID, 0, 0, IncomingAttackKind.PlayerOwned));
         }
     }

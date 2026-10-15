@@ -158,11 +158,13 @@ MonoBehaviour:
   _collisionMask:
     serializedVersion: 2
     m_Bits: 51
+  _flightSound: 36
   _aimDrop: 0.1
   _leadAccuracy: 0.8
   _maximumLeadDistance: 4
   _homingTurnRate: 45
   _homingStopDistance: 4
+  _reflectDamage: 10
   _reflectSpeedMultiplier: 2
 --- !u!114 &5956031840736666487
 MonoBehaviour:

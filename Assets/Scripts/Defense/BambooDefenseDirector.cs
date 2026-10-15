@@ -17,6 +17,7 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private bool _started;
     private float _elapsed;
     private int _kills;
+    private bool _waveStopped;
 
     [Header("플레이어 이동 추적")]
     [SerializeField, Min(0.1f), Tooltip("수평 속도 평활 계수. 클수록 방향 전환에 빨리 반응합니다.")]
@@ -57,6 +58,8 @@ public sealed class BambooDefenseDirector : MonoBehaviour
 
     void Update()
     {
+        if (_waveStopped)
+            return;
         if (!Game.IsInitialized || Game.Player == null || Game.Instance.GameStateManager == null
             || Game.Instance.GameStateManager.State != GameplayState.Playing)
             return;
@@ -100,7 +103,7 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     /// <summary>진행 중 세션에서 근접 전조와 투척 한도를 확인하고 예약 성공 여부를 반환한다.</summary>
     internal bool TryReserveThrow()
     {
-        if (!_started || !isActiveAndEnabled || Game.Instance.GameStateManager.State != GameplayState.Playing
+        if (_waveStopped || !_started || !isActiveAndEnabled || Game.Instance.GameStateManager.State != GameplayState.Playing
             || (_deferDuringMeleeTelegraph && _spawner.IsMeleeTelegraphNearPlayer(_meleeTelegraphRadius)))
             return false;
         return _throwBudget.TryReserve(Time.time, _maximumConcurrentShurikens, _minimumThrowGap);
@@ -141,6 +144,21 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private void HandleEnemyKilled()
     {
         _kills++;
+    }
+
+    /// <summary>스테이지 전환 때 현재 웨이브의 스폰·투척 예약·비행 수리검을 종료하고 처치 수는 보존한다.</summary>
+    public void StopWave()
+    {
+        if (_waveStopped)
+            return;
+        _waveStopped = true;
+        _spawner.StopWave();
+        foreach (DefenseShuriken shuriken in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
+        {
+            if (shuriken.gameObject.scene == gameObject.scene && shuriken.IsFlying)
+                shuriken.Release();
+        }
+        _throwBudget.Clear();
     }
 
     /// <summary>

@@ -112,7 +112,7 @@ MonoBehaviour:
   _hitMask:
     serializedVersion: 2
     m_Bits: 4294967287
-  _damage: 30
+  _damage: 20
   _unscaledTime: 1
   _arcRadius: 6.075
   _arcAngle: 120
