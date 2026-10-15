@@ -42,20 +42,20 @@ public sealed class FootstepRipple : MonoBehaviour
     /// <summary>플레이어 발걸음 step의 착지 위치에서 파동을 낸다.</summary>
     private void HandlePlayerFootstep(PlayerFootstepEvent step)
     {
-        Emit(step.WorldPosition);
+        Emit(step.WorldPosition, null);
     }
 
-    /// <summary>character의 지면 접촉 position에서 파동을 낸다.</summary>
+    /// <summary>적 character의 지면 접촉 position에서 파동을 내며 이 파동은 character 자신의 몸체를 밝히지 않는다.</summary>
     private void HandleGroundContact(Transform character, Vector3 position)
     {
-        Emit(position);
+        Emit(position, character);
     }
 
     /// <summary>
     /// 걸음을 _stepCount에 세어 _stepsPerRipple번째 걸음마다 시야 맵에 position 중심의 _ripple 파동을 등록한다.
-    /// 시야 맵이 없으면 무시한다.
+    /// hiddenOwner가 있으면 그 몸체를 이 파동으로 밝히지 않는다. 시야 맵이 없으면 무시한다.
     /// </summary>
-    private void Emit(Vector3 position)
+    private void Emit(Vector3 position, Transform hiddenOwner)
     {
         _stepCount = (_stepCount + 1) % _stepsPerRipple;
         if (_stepCount != 0)
@@ -68,6 +68,6 @@ public sealed class FootstepRipple : MonoBehaviour
             if (_revealMap == null)
                 return;
         }
-        _revealMap.EmitRipple(position, _ripple);
+        _revealMap.EmitRipple(position, _ripple, hiddenOwner);
     }
 }

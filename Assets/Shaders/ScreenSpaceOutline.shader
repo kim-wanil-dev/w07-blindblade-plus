@@ -77,18 +77,62 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             SAMPLER(sampler_OutlineRevealMap);
             float4 _OutlineRevealBounds;
             float _OutlineRevealEnabled;
+            #define MAX_REVEAL_SPHERES 32
+            #define MAX_HIDDEN_OWNERS 32
+            #define OWNER_HIDE_EDGE 0.2
+            int _OutlineRevealSphereCount;
+            float4 _OutlineRevealSpheres[MAX_REVEAL_SPHERES];
+            float4 _OutlineRevealSphereStrengths[MAX_REVEAL_SPHERES];
+            int _OutlineHiddenOwnerCount;
+            float4 _OutlineHiddenOwners[MAX_HIDDEN_OWNERS];
 
-            // 걸음 파동·이동 시야원이 남긴 XZ 잔상 만료 시각으로 현재 공개 정도를 반환한다.
+            // 잔상 만료 시각과 잔상 길이로 현재 공개 정도를 반환한다.
+            float ExpireVisibility(float2 reveal)
+            {
+                return smoothstep(0.0, 1.0,
+                    saturate((reveal.x - _OutlinePerceptionTime) / max(reveal.y, 0.0001)));
+            }
+
+            // 몸체를 밝히지 않는 파동의 발생자 주변일수록 1에 가까운 제외 배율을 반환한다.
+            float OwnerExclusion(float3 position)
+            {
+                float exclusion = 0.0;
+                [loop]
+                for (int i = 0; i < _OutlineHiddenOwnerCount; i++)
+                {
+                    float4 owner = _OutlineHiddenOwners[i];
+                    float innerRadius = max(0.0, owner.w - OWNER_HIDE_EDGE);
+                    exclusion = max(exclusion,
+                        1.0 - smoothstep(innerRadius, owner.w, distance(position.xz, owner.xz)));
+                }
+                return exclusion;
+            }
+
+            // 걸음 파동이 남긴 XZ 잔상과 이동 시야원의 구형 강조로 현재 공개 정도를 반환한다.
             float RevealMapVisibility(float3 position)
             {
                 if (_OutlineRevealEnabled < 0.5)
                     return 0.0;
+                float visibility = 0.0;
                 float2 revealUv = (position.xz - _OutlineRevealBounds.xy) / _OutlineRevealBounds.zw;
-                if (any(revealUv < 0.0) || any(revealUv > 1.0))
-                    return 0.0;
-                float2 reveal = SAMPLE_TEXTURE2D_LOD(_OutlineRevealMap, sampler_OutlineRevealMap, revealUv, 0).rg;
-                return smoothstep(0.0, 1.0,
-                    saturate((reveal.x - _OutlinePerceptionTime) / max(reveal.y, 0.0001)));
+                if (all(revealUv >= 0.0) && all(revealUv <= 1.0))
+                {
+                    float4 reveal = SAMPLE_TEXTURE2D_LOD(_OutlineRevealMap, sampler_OutlineRevealMap, revealUv, 0);
+                    visibility = ExpireVisibility(reveal.rg);
+                    float hiddenVisibility = ExpireVisibility(reveal.ba);
+                    if (hiddenVisibility > 0.0)
+                        visibility = max(visibility, hiddenVisibility * (1.0 - OwnerExclusion(position)));
+                }
+                // 구형 강조는 중심에서 가장자리로 갈수록 흐려진다.
+                [loop]
+                for (int i = 0; i < _OutlineRevealSphereCount; i++)
+                {
+                    float4 sphere = _OutlineRevealSpheres[i];
+                    float progress = saturate(distance(position, sphere.xyz) / max(sphere.w, 0.0001));
+                    visibility = max(visibility,
+                        (1.0 - smoothstep(0.0, 1.0, progress)) * _OutlineRevealSphereStrengths[i].x);
+                }
+                return visibility;
             }
 
             // 영역 반경의 안쪽 경계부터 가장자리까지 공간 가시성을 부드럽게 줄인다.
