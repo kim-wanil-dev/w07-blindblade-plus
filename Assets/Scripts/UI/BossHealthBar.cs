@@ -11,7 +11,7 @@ public sealed class BossHealthBar : MonoBehaviour
 {
     [Header("체력바 표시")]
     [SerializeField] private Vector2 _size = new Vector2(420f, 16f);
-    [SerializeField, Min(0f)] private float _topOffset = 36f;
+    [SerializeField, Min(0f)] private float _topOffset = 72f;
     [SerializeField, Min(0.01f), Tooltip("지연 바가 현재 체력에 도달하는 시간(초)")] private float _followDuration = 0.8f;
     [SerializeField] private Color _followColor = Color.red;
     private EnemyHealth _health;

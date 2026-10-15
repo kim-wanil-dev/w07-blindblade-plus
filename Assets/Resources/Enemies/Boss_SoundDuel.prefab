@@ -368,7 +368,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _size: {x: 420, y: 16}
-  _topOffset: 36
+  _topOffset: 72
   _followDuration: 0.8
   _followColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!114 &3826241647446682600
