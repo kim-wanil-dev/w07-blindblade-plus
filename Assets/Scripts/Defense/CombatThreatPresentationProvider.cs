@@ -256,10 +256,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         else
         {
             DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
+
             foreach (DefenseShuriken shuriken in shurikens)
             {
-                if (shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying)
+                if (shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying || shuriken.HasPassedPlayer)
                     continue;
+
                 CombatEntityKey key = new CombatEntityKey("Projectile_" + shuriken.ProjectileId, 1);
                 AddCurrentThreat(CreateSnapshot(key, shuriken.transform.position, true, true));
             }
