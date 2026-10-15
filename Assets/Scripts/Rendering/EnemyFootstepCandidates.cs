@@ -154,7 +154,7 @@ namespace BlindBlade.Perception
             RefreshNow();
         }
 
-        /// <summary>후보의 현재 적 위치·수평 거리·실제 월드 표시와 게임 시간 age로 불변 발소리 결과를 반환한다.</summary>
+        /// <summary>후보의 현재 적 위치·수평 거리·화면 진입과 게임 시간 age로 발소리 표시 결과를 반환한다.</summary>
         private FootstepPresentationSnapshot CreateSnapshot(Candidate candidate, double age)
         {
             Vector3 position = candidate.EmitterTransform.position;
@@ -170,15 +170,17 @@ namespace BlindBlade.Perception
             Color color = settings.GetDistanceColor(distance);
             float alpha = eligible ? fade * color.a : 0f;
             color.a = 1f;
-            Vector3 viewport = _resolver.ViewCamera.WorldToViewportPoint(position);
-            Vector2 direction = new Vector2(viewport.x - 0.5f, viewport.y - 0.5f);
-            if (viewport.z < 0f)
-                direction = -direction;
+            Quaternion viewYaw = Quaternion.Euler(0f, _resolver.ViewCamera.transform.eulerAngles.y, 0f);
+            Vector3 horizontalOffset = position - _resolver.ViewCamera.transform.position;
+            horizontalOffset.y = 0f;
+            Vector2 direction = new Vector2(
+                Vector3.Dot(horizontalOffset, viewYaw * Vector3.right),
+                Vector3.Dot(horizontalOffset, viewYaw * Vector3.forward));
             direction = direction.sqrMagnitude < 0.0001f ? Vector2.up : direction.normalized;
             CombatEntityKey target = new CombatEntityKey(candidate.Emitter.EntityId + "/footstep/" + candidate.Identity.SourceSequence,
                 candidate.Emitter.SpawnGeneration);
             ContractSnapshot presentation = new ContractSnapshot(_session, target, ++_revision,
-                true, eligible, inCamera, worldVisible, eligible && !worldVisible,
+                true, eligible, inCamera, worldVisible, eligible && !inCamera,
                 direction, position, settings.GetProximity(distance), color, alpha);
             return new FootstepPresentationSnapshot(candidate.Identity, candidate.Emitter, candidate.Origin,
                 candidate.OccurredAt, presentation);

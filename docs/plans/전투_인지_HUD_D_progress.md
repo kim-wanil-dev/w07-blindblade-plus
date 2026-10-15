@@ -203,3 +203,9 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - Google Apps Script의 `setupSheets` 실행을 완료하고 운영 웹 앱을 동일 URL의 버전 2로 갱신했다. `Events!B1=received_kst`, `Sessions!D1=started_kst`이며 기존 `Events!B7816` 값은 `05:01:15.951Z`에서 `14:01:15.951+09:00`으로 변환됐다.
 - 실제 최신 세션의 원본 `session_started` 1건을 전송해 HTTP 200, `ok=true`, 정확한 batchId, ACK 1건을 받았다. 새 `Events!A7817=6746c8285eac452481fb58fcaffcd586:1`, `B7817=2026-10-15T14:11:25.273+09:00`, `V7817=W7817=2026-10-15T13:59:50.074+09:00` 및 `Sessions!D7=2026-10-15T13:59:50.067+09:00`을 시트에서 확인했다. 이전 배포 때문에 비었던 `Sessions!D5:D6`도 각각 원본 시작 사건을 재전송해 `13:48:16.958+09:00`, `13:48:41.148+09:00`으로 채웠다.
 - 로컬 전처리: 실제 사건 12,783건/세션 6건/진단 0건. `events.csv`와 `sessions.csv`에는 UTC 열이 없고, 세션 시작시각 6건이 모두 `+09:00`이다. Apps Script 문법 검사 통과, Unity 재컴파일 up_to_date 및 오류·경고 0건. 과거에 시트가 받지 않은 사건별 발생·기록 KST는 비어 있을 수 있다. 새 PC에서 CONFIG 없이 실제 자동 전송되는지, 전체 백로그와 장애 복구는 별도 검증이 필요하다. 브랜치 `feature/log`이므로 Git CLI와 커밋은 수행하지 않았다.
+
+### 2026-10-15 후속: 적 발자국 화면 진입과 방향 수정
+
+- 정식 BambooDefense 씬의 `CombatThreatPresentationProvider`는 C Threat Adapter와 Footstep Candidate Source가 모두 미연결이므로 기존 공급자 경로가 실제 적용 대상이다. 기존 경로는 적 루트가 화면 안이지만 감각 마스크의 월드 표시가 꺼진 때 발자국 UI를 계속 허용했다. 발자국 사건 때 적 Renderer 배열을 보관하고 매 갱신마다 카메라 프러스텀과 교차하는지 확인해 화면 안에서는 `UiVisible=false`로 즉시 숨기도록 바꿨다. 루트만 화면 안인 경우도 숨긴다.
+- 정식 경로와 C 후보 경로의 발자국 방향, C 계약 어댑터의 수리검 방향을 카메라의 수평 회전과 현재 대상 위치로 계산한다. 카메라 뒤 정중앙 대상은 아래, 앞은 위, 오른쪽은 오른쪽을 가리킨다. 수리검 발사 전조의 `PlayerMotor.ViewForward` 수평 각도와 HUD 회전 부호는 검토 결과 같은 기준이므로 유지했다. 아이콘·원호·프리팹·씬 직렬화 연결은 변경하지 않았다.
+- C 후보 경로도 `UiVisible`을 화면 밖일 때만 허용하도록 수정했다. 공급자별 마커 슬롯·사건 수명·페이드와 월드 위협 표시 정책은 유지한다. Unity Editor 6000.3.22f1 재컴파일 `completed`, 오류 0건·경고 0건. 현재 Editor에는 `IntroScene`이 열려 있고 Play는 꺼져 있어 정식 BambooDefense에서 실제 회전·화면 진입 시각 확인은 이번 작업에서 수행하지 않았다. 테스트 코드는 추가하지 않았다.
