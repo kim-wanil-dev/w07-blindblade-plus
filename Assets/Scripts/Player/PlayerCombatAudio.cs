@@ -22,6 +22,8 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     [Header("방어·피격 신호")]
     [SerializeField, Min(0f)] private float _damageVolumeMultiplier = 1f;
     [SerializeField, Range(0.25f, 4f)] private float _damagePitch = 1f;
+    [SerializeField, Tooltip("퍼펙트 패링 순간 가드·패링 소리 대신 재생하는 소리. 연출음 버스라 불릿 타임 효과를 받지 않는다.")]
+    private SoundId _perfectParrySound = SoundId.PerfectParryClash;
     private PlayerHealth _health;
     private PlayerActionDriver _timing;
     private PlayerMotor _motor;
@@ -88,6 +90,8 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     void Start()
     {
         RegisterEnemyAudio();
+        // 퍼펙트 패링음은 판정 순간 바로 들려야 하므로 샘플 데이터를 미리 올려 둔다.
+        if (_isPrimary && _perfectParrySound != SoundId.None) Managers.Sound.PreloadSampleData(_perfectParrySound);
         if (_profile != null && _profile.PlayAmbience)
             Managers.Sound.PlayBgm(_profile.AmbienceSound, gameObject, _profile.LoopAmbience, _profile.AmbienceVolume);
     }
@@ -190,7 +194,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     }
 
     /// <summary>
-    /// result의 방어 종류와 접촉 위치로 가드 또는 패링 설정을 재생한다.
+    /// result의 방어 종류와 접촉 위치로 가드 또는 패링 설정을 재생하고, 퍼펙트 패링이면 대신 _perfectParrySound를 재생한다.
     /// 정확한 패링이면 생존한 공격자 위치에 고통 음성도 재생하며 피해와 반격 기회는 변경하지 않는다.
     /// </summary>
     private void HandleDefense(KatanaDefenseResult result)
@@ -204,6 +208,8 @@ public sealed class PlayerCombatAudio : MonoBehaviour
                 Managers.Sound.PlayAttached(SoundId.EnemyGetParryed, enemy.gameObject);
             }
         }
+        if (result.IsPerfectParry && _perfectParrySound != SoundId.None
+            && Managers.Sound.Play(_perfectParrySound, result.Point, _volume, gameObject)) return;
         if (QueueCue(result.IsParry ? CombatSoundCue.Parry : CombatSoundCue.Guard, result.Point, false)) return;
         Managers.Sound.Play(result.IsParry ? SoundId.ParryClash : _hitSound, result.Point, _volume, gameObject);
     }

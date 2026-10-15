@@ -30,7 +30,7 @@ namespace BlindBlade.Telemetry
         [SerializeField, Min(1)] private int _maximumStorageMegabytes = 100;
         [SerializeField, Min(1f)] private float _sampleIntervalSeconds = 5f;
 
-        [Header("Google Sheets 전송 — 접속 정보는 로컬 upload-config.json")]
+        [Header("Google Sheets 전송 — 빌드 기본 설정 / 로컬 CONFIG 재정의")]
         [SerializeField] private bool _allowAutomaticUpload = true;
         [SerializeField, Min(5f)] private float _uploadIntervalSeconds = 20f;
         [SerializeField, Range(1, 100)] private int _batchEventLimit = 100;
@@ -42,6 +42,7 @@ namespace BlindBlade.Telemetry
         private CombatSessionRuntime _runtime;
         private CombatSessionKey _session;
         private CombatTimestamp _lastTimestamp;
+        private DateTimeOffset _sessionStartedAtKst;
         private CombatTelemetryService _service;
         private PlayerController _player;
         private KatanaCombatCoordinator _combat;
@@ -73,6 +74,8 @@ namespace BlindBlade.Telemetry
                 return;
             }
             _session = _runtime.Session;
+            _sessionStartedAtKst = TelemetryJson.CurrentKoreanTime();
+            _lastTimestamp = _runtime.CaptureTimestamp();
             _player = _health.GetComponent<PlayerController>();
             _combat = _health.GetComponent<KatanaCombatCoordinator>();
             _state = Game.Instance.GameStateManager;
@@ -107,7 +110,7 @@ namespace BlindBlade.Telemetry
                 _presentation.FootstepChanged += HandleFootstep;
             }
             _bound = true;
-            Record("session_started", new JObject { ["startedUtc"] = DateTime.UtcNow.ToString("O"),
+            Record("session_started", new JObject { ["startedKst"] = TelemetryJson.FormatKoreanTime(_sessionStartedAtKst),
                 ["scene"] = gameObject.scene.path, ["unityVersion"] = Application.unityVersion,
                 ["platform"] = Application.platform.ToString(), ["isEditor"] = Application.isEditor,
                 ["clockRealtimeOrigin"] = Time.realtimeSinceStartupAsDouble - _runtime.CaptureTimestamp().RealtimeSeconds,
@@ -169,7 +172,10 @@ namespace BlindBlade.Telemetry
                 _lastTimestamp = _runtime.CaptureTimestamp();
             long sequence = ++_sequence;
             CombatEventIdentity identity = source ?? new CombatEventIdentity(_session, "D5.observer", sequence);
-            CombatTelemetryEnvelope envelope = new CombatTelemetryEnvelope(identity, occurredAt ?? _lastTimestamp, ids, type);
+            CombatTimestamp occurredTimestamp = occurredAt ?? _lastTimestamp;
+            DateTimeOffset recordedAtKst = TelemetryJson.CurrentKoreanTime();
+            string occurredAtKst = TelemetryJson.KoreanWallClock(recordedAtKst, _lastTimestamp.RealtimeSeconds, occurredTimestamp);
+            CombatTelemetryEnvelope envelope = new CombatTelemetryEnvelope(identity, occurredTimestamp, ids, type);
             _service.Enqueue(new JObject { ["schemaVersion"] = TelemetryJson.SCHEMA_VERSION,
                 ["contractVersion"] = "0.2.0", ["configVersion"] = string.IsNullOrWhiteSpace(_configVersion) ? "unspecified" : _configVersion,
                 ["buildVersion"] = Application.version, ["sessionId"] = _session.SessionId,
@@ -177,7 +183,9 @@ namespace BlindBlade.Telemetry
                 ["sessionGeneration"] = _session.Generation, ["eventSequence"] = sequence,
                 ["sourceId"] = envelope.Identity.SourceId, ["sourceSequence"] = envelope.Identity.SourceSequence,
                 ["eventType"] = envelope.EventType, ["occurredAt"] = TelemetryJson.Timestamp(envelope.OccurredAt),
+                ["occurredAtKst"] = occurredAtKst,
                 ["recordedAt"] = TelemetryJson.Timestamp(_lastTimestamp),
+                ["recordedAtKst"] = TelemetryJson.FormatKoreanTime(recordedAtKst),
                 ["correlation"] = TelemetryJson.Correlation(envelope.Correlation), ["payload"] = payload });
         }
 

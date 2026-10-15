@@ -14,6 +14,8 @@ public class SoundLibrary : ScriptableObject
     [Header("Mixer")]
     [SerializeField] private string _bgmBusPath = "bus:/BGM_Bus";
     [SerializeField] private string _effectBusPath = "bus:/SFX_Bus";
+    [SerializeField, Tooltip("불릿 타임 먹먹함·느려짐을 받지 않는 연출음 버스. 효과음 음량 옵션을 함께 따른다.")]
+    private string _cinematicBusPath = "bus:/Cinematic_Bus";
 
     [Header("전투 신호 청취")]
     [SerializeField, Min(0f)] private float _combatFocusDuration = 0.35f;
@@ -21,6 +23,7 @@ public class SoundLibrary : ScriptableObject
 
     internal string BgmBusPath => _bgmBusPath;
     internal string EffectBusPath => _effectBusPath;
+    internal string CinematicBusPath => _cinematicBusPath;
     internal float CombatFocusDuration => _combatFocusDuration;
     internal float CombatFootstepVolume => _combatFootstepVolume;
 

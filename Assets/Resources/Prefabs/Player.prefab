@@ -252,6 +252,7 @@ GameObject:
   - component: {fileID: 505307292897056262}
   - component: {fileID: 980745157811939617}
   - component: {fileID: 7414776361951269170}
+  - component: {fileID: 6051350681916135295}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -755,6 +756,8 @@ MonoBehaviour:
   _sheathePause: 0.3
   _scatterCount: 48
   _scatterLifetime: 1.2
+  _blackoutSound: 34
+  _sheatheSound: 35
   _strikeAngle: 180
   _strikeRadius: 50
 --- !u!114 &505307292897056262
@@ -818,6 +821,22 @@ MonoBehaviour:
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
   _stepsPerRipple: 2
+--- !u!114 &6051350681916135295
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a7db4fcd163dfea47ae9d74189d726f4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerBulletTimeAudio
+  _pitch: 0.6
+  _lowpassCutoff: 800
+  _enterDuration: 0.1
+  _exitDuration: 0.3
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0

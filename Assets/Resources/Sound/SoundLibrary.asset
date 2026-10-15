@@ -493,7 +493,68 @@ MonoBehaviour:
     _combatCue: 0
     _spatialize2D: 0
     _finishNaturally: 1
+        Data1: -1799725372
+        Data2: 1298887908
+        Data3: 747572632
+        Data4: 1008374082
+      Path: event:/Empower/Blackout_Slash
+    _enabled: 1
+    _volumeMultiplier: 1.3
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 0
+  - _id: 35
+    _type: 1
+    _event:
+      Guid:
+        Data1: 2029394549
+        Data2: 1154629632
+        Data3: 783040648
+        Data4: -147790873
+      Path: event:/Empower/Blackout_Sheathe
+    _enabled: 1
+    _volumeMultiplier: 0.75
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 0
+  - _id: 36
+    _type: 1
+    _event:
+      Guid:
+        Data1: -1026603018
+        Data2: 1275634314
+        Data3: 1755801990
+        Data4: -1931371380
+      Path: event:/Shuriken/Shuriken_Flight
+    _enabled: 1
+    _volumeMultiplier: 0.4
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 0
+  - _id: 37
+    _type: 1
+    _event:
+      Guid:
+        Data1: 2140897875
+        Data2: 1311468524
+        Data3: 499171228
+        Data4: 1009756335
+      Path: event:/Empower/PerfectParry_Clash
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 0
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
+  _cinematicBusPath: bus:/Cinematic_Bus
   _combatFocusDuration: 0.35
   _combatFootstepVolume: 0.35

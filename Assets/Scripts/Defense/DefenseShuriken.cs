@@ -38,6 +38,10 @@ public sealed class DefenseShuriken : MonoBehaviour
     private bool _terminalFlight;
     private bool _hasPassedPlayer;
 
+    [Header("소리")]
+    [SerializeField, Tooltip("적대 비행 동안 수리검을 따라 반복하는 비행음. 반사·소멸하면 멈춘다.")]
+    private SoundId _flightSound = SoundId.ShurikenFlight;
+
     [Header("예측 조준·유도")]
     [SerializeField, Min(0f), Tooltip("플레이어 시점보다 낮게 조준하는 높이(미터)")]
     private float _aimDrop = 0.1f;
@@ -148,6 +152,9 @@ public sealed class DefenseShuriken : MonoBehaviour
         _hasPassedPlayer = false;
         _flying = true;
         transform.rotation = Quaternion.LookRotation(_direction);
+        // 소멸하면 소유자 파괴로 SoundManager가 정지하고, 반사는 TryReflect에서 직접 멈춘다.
+        if (_flightSound != SoundId.None)
+            Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
     }
 
     /// <summary>
@@ -273,6 +280,9 @@ public sealed class DefenseShuriken : MonoBehaviour
         // 반사 뒤에는 적대 투사체가 아니므로 투척 예산·방향 표시·강화 공격 제거 대상에서 빠진다.
         _flying = false;
         _reflected = true;
+        // 반사 비행은 더 빨라 같은 비행음을 쓰지 않는다.
+        if (_flightSound != SoundId.None)
+            Managers.Sound.StopFor(gameObject, _flightSound, true, true);
         ShowAsReflected();
         Released?.Invoke(this);
         return true;

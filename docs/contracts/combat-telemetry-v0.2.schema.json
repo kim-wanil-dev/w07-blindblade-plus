@@ -110,6 +110,12 @@
         }
       }
     },
+    "occurredAtKst": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "\\+09:00$",
+      "description": "Event wall-clock time in Korean Standard Time. Optional for compatibility with existing 0.2.0 logs."
+    },
     "recordedAt": {
       "type": "object",
       "additionalProperties": false,
@@ -132,6 +138,12 @@
           "minimum": 0
         }
       }
+    },
+    "recordedAtKst": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "\\+09:00$",
+      "description": "Observer receipt wall-clock time in Korean Standard Time. Optional for compatibility with existing 0.2.0 logs."
     },
     "correlation": {
       "type": "object",
