@@ -92,7 +92,8 @@ public enum PlayerEmpowerEndReason
     Hit,
     Dodged,
     Died,
-    SessionEnded
+    SessionEnded,
+    SwordWave
 }
 
 /// <summary>회피 사건의 단계. PerfectDodge는 극한 회피 구간에 실제 공격 접촉이 확정된 경우이며 회피 1회에 한 번이다.</summary>

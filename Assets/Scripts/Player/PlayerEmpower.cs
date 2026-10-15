@@ -3,18 +3,25 @@ using UnityEngine;
 using BlindBlade.Combat.Contracts;
 
 /// <summary>
-/// 퍼펙트 패링 뒤의 강화 준비와 강화 공격 수명을 관리한다.
-/// 퍼펙트 패링 순간 짧게 세계를 멈춘 뒤 불릿 타임으로 좌클릭을 기다리며, 수락·만료·사망·세션 종료를 EmpowerChanged 사건으로 발행한다.
+/// 퍼펙트 패링 뒤의 강화 준비와 강화 공격 수명, 퍼펙트 패링 토큰을 관리한다.
+/// 퍼펙트 패링 순간 토큰을 하나 모으고 짧게 세계를 멈춘 뒤 불릿 타임으로 좌클릭을 기다린다.
+/// 좌클릭은 검기 공격으로 준비를 끝내고, 토큰이 가득 차 있으면 차징으로 궁극기를 시작한다. 수명 변화는 EmpowerChanged 사건으로 발행한다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
 [RequireComponent(typeof(PlayerEmpowerStrike))]
 [RequireComponent(typeof(PlayerPerfectPulse))]
+[RequireComponent(typeof(PlayerSwordWaveLauncher))]
 public sealed class PlayerEmpower : MonoBehaviour
 {
     private const string HIT_STOP_TIME_OWNER = "PlayerEmpower.HitStop";
     private const string READY_TIME_OWNER = "PlayerEmpower.Ready";
     private const string STRIKE_TIME_OWNER = "PlayerEmpower.Strike";
+    // 같은 소유자 요청은 겹쳐 등록할 수 없으므로 차징 감속은 두 소유자를 번갈아 써서 배율을 바꾼다.
+    private const string CHARGE_TIME_OWNER_A = "PlayerEmpower.ChargeA";
+    private const string CHARGE_TIME_OWNER_B = "PlayerEmpower.ChargeB";
+    private const int MAX_TOKENS = 3;
+    private const float CHARGE_SCALE_STEP = 0.001f;
 
     [Header("준비")]
     [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 뒤 좌클릭을 기다리는 시간. 일시정지를 제외한 실시간으로 잰다.")]
@@ -36,12 +43,28 @@ public sealed class PlayerEmpower : MonoBehaviour
     [SerializeField, Range(0.1f, 1f), Tooltip("강화 준비와 강화 공격 동안 플레이어 시간 배율. 세계 배율보다 크면 플레이어가 덜 느리다.")]
     private float _playerTimeScale = 0.5f;
 
+    [Header("궁극기 차징")]
+    [SerializeField, Min(0.01f), Tooltip("토큰이 가득 찬 준비 중 좌클릭을 이 실시간(초)만큼 누르고 있으면 궁극기가 나간다. 세계 감속 시간과 따로 정한다.")]
+    private float _ultimateChargeDuration = 1.5f;
+    [SerializeField, Range(0.01f, 1f), Tooltip("차징 동안 세계 시간 배율이 천천히 내려가 닿는 목표 배율. 플레이어 배율은 바뀌지 않는다.")]
+    private float _chargeWorldTimeScale = 0.1f;
+    [SerializeField, Min(0.01f), Tooltip("차징 시작부터 세계 배율이 목표 배율에 닿을 때까지의 실시간(초).")]
+    private float _chargeSlowDuration = 0.7f;
+    private bool _charging;
+    private float _chargeElapsed;
+    private float _appliedChargeScale;
+    private bool _useChargeOwnerB;
+
+    [Header("퍼펙트 패링 토큰")]
+    private int _tokens;
+
     [Header("상태")]
     private KatanaCombatCoordinator _combat;
     private PlayerController _player;
     private PlayerHealth _health;
     private PlayerEmpowerStrike _strike;
     private PlayerPerfectPulse _pulse;
+    private PlayerSwordWaveLauncher _swordWave;
     private CombatSessionRuntime _timeRuntime;
     private CombatTimeToken _timeToken;
     private PlayerEmpowerStage _stage;
@@ -56,6 +79,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     public bool IsBulletTimeActive => _active && _hitStopRemaining <= 0f;
     public bool IsPerfectParryInvulnerable => Time.unscaledTime < _invulnerableUntil;
     public float PlayerTimeScale => _playerTimeScale;
+    public int Tokens => _tokens;
+    public int MaxTokens => MAX_TOKENS;
+    public bool IsCharging => IsReady && _charging;
+    public bool IsUltimateChargeComplete => IsCharging && _chargeElapsed >= _ultimateChargeDuration;
+    public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : 0f;
+    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : 0f;
 
     void Awake()
     {
@@ -64,6 +93,7 @@ public sealed class PlayerEmpower : MonoBehaviour
         _health = GetComponent<PlayerHealth>();
         _strike = GetComponent<PlayerEmpowerStrike>();
         _pulse = GetComponent<PlayerPerfectPulse>();
+        _swordWave = GetComponent<PlayerSwordWaveLauncher>();
     }
 
     void OnEnable()
@@ -89,17 +119,26 @@ public sealed class PlayerEmpower : MonoBehaviour
             if (_hitStopRemaining <= 0f) ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
         }
         _readyElapsed += dt;
+        if (_charging)
+        {
+            _chargeElapsed += dt;
+            if (_hitStopRemaining <= 0f) UpdateChargeSlow();
+            return;
+        }
+        // 차징 중에는 궁극기 발동이나 차징 취소로 끝나도록 준비 만료를 미룬다.
         if (_readyElapsed >= _readyDuration) End(PlayerEmpowerEndReason.Expired);
     }
 
     /// <summary>
     /// 퍼펙트 패링을 알리고 attackId를 원인으로 강화 준비를 시작한다. 새 준비이면 히트스톱 뒤 불릿 타임으로 넘어가며 퍼펙트 파동을 낸다.
+    /// 퍼펙트 패링마다 토큰을 MAX_TOKENS까지 하나 늘린다.
     /// 이미 준비 중이면 대기 시간만 처음부터 다시 세고 false를 반환하며, 새 준비를 시작했을 때만 true를 반환한다.
     /// 준비 중이든 새 준비든 _perfectParryInvulnerableDuration 실시간 동안 무적을 건다. 강화 공격 중이면 아무것도 바꾸지 않고 false를 반환한다.
     /// </summary>
     public bool NotifyPerfectParry(int attackId)
     {
         if (IsStriking) return false;
+        _tokens = Mathf.Min(_tokens + 1, MAX_TOKENS);
         _invulnerableUntil = Time.unscaledTime + _perfectParryInvulnerableDuration;
         if (IsReady)
         {
@@ -123,13 +162,55 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
-    /// 준비 중이면 강화 공격을 시작해 Started를 발행하고 true를 반환한다. 준비 중이 아니거나 사망·일시정지이면 false다.
+    /// 토큰이 가득 찬 준비 중이면 궁극기 차징을 시작하고 true를 반환한다. 이미 차징 중이거나 토큰이 모자라면 false다.
+    /// _charging과 _chargeElapsed를 초기화하며, 세계 배율은 이후 Update에서 차징 목표 배율로 천천히 내린다.
+    /// </summary>
+    public bool BeginCharge()
+    {
+        if (!IsReady || _charging || _tokens < MAX_TOKENS || _player.IsPaused
+            || _player.CurrentState == PlayerActionState.Dead) return false;
+
+        _charging = true;
+        _chargeElapsed = 0f;
+        _appliedChargeScale = _worldTimeScale;
+        return true;
+    }
+
+    /// <summary>
+    /// 궁극기 차징을 발동 없이 멈추고 세계 배율을 준비 배율로 되돌린다. 차징 중이 아니면 아무것도 바꾸지 않는다.
+    /// 준비와 토큰은 그대로 두며 _charging을 거짓으로 바꾼다.
+    /// </summary>
+    public void CancelCharge()
+    {
+        if (!IsCharging) return;
+        _charging = false;
+        _chargeElapsed = 0f;
+        if (_hitStopRemaining <= 0f)
+            ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
+    }
+
+    /// <summary>
+    /// 준비 중 좌클릭으로 일반 공격이 받아들여지면 검기 발사를 예약하고 준비를 SwordWave로 끝낸다.
+    /// previousActionId는 공격 요청 전 플레이어 행동 ID이며, 검기는 그 뒤 시작된 일반 공격의 베기 시작에 나간다. 준비 중이 아니면 아무것도 바꾸지 않는다.
+    /// </summary>
+    public void CompleteWithSwordWave(int previousActionId)
+    {
+        if (!IsReady) return;
+        _swordWave.Arm(previousActionId);
+        End(PlayerEmpowerEndReason.SwordWave);
+    }
+
+    /// <summary>
+    /// 궁극기 차징이 다 찼으면 토큰을 모두 소모하고 강화 공격을 시작해 Started를 발행한 뒤 true를 반환한다.
+    /// 차징이 다 차지 않았거나 사망·일시정지이면 false다.
     /// 진행 중인 가드·공격·반격 예약을 끝내고 연출을 재생하며, 시간 요청은 강화 공격용으로 바꿔 연출이 끝날 때까지 불릿 타임을 유지한다.
     /// </summary>
     public bool TryBeginStrike()
     {
-        if (!IsReady || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
+        if (!IsUltimateChargeComplete || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
 
+        _tokens = 0;
+        _charging = false;
         _stage = PlayerEmpowerStage.Started;
         _hitStopRemaining = 0f;
         ChangeTimeRequest(STRIKE_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _worldTimeScale);
@@ -162,8 +243,28 @@ public sealed class PlayerEmpower : MonoBehaviour
         _active = false;
         _stage = PlayerEmpowerStage.Ended;
         _hitStopRemaining = 0f;
+        _charging = false;
+        _chargeElapsed = 0f;
         ReleaseTimeRequest();
         Publish(PlayerEmpowerStage.Ended, reason);
+    }
+
+    /// <summary>
+    /// _chargeElapsed를 _chargeSlowDuration으로 나눈 진행도로 세계 배율을 준비 배율에서 차징 목표 배율까지 부드럽게 내린다.
+    /// 배율이 CHARGE_SCALE_STEP 이상 바뀐 경우에만 두 차징 소유자를 번갈아 써서 시간 요청을 바꾸고 _appliedChargeScale을 갱신한다.
+    /// </summary>
+    private void UpdateChargeSlow()
+    {
+        float t = Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration);
+        float scale = Mathf.Lerp(_worldTimeScale, _chargeWorldTimeScale, Mathf.SmoothStep(0f, 1f, t));
+        // 끝에 닿은 순간에는 남은 작은 차이도 한 번 반영해 목표 배율에 정확히 멈춘다.
+        if (Mathf.Abs(scale - _appliedChargeScale) < CHARGE_SCALE_STEP && t < 1f) return;
+        if (Mathf.Approximately(scale, _appliedChargeScale)) return;
+
+        _useChargeOwnerB = !_useChargeOwnerB;
+        ChangeTimeRequest(_useChargeOwnerB ? CHARGE_TIME_OWNER_B : CHARGE_TIME_OWNER_A,
+            CombatTimeReason.EmpoweredReady, scale);
+        _appliedChargeScale = scale;
     }
 
     /// <summary>

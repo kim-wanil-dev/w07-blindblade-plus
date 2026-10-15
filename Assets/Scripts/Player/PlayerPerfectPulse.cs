@@ -39,6 +39,13 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     [SerializeField, Tooltip("극한 회피 바닥 링 색상. 새 파동부터 적용한다.")]
     private Color _dodgeRingColor = Color.white;
 
+    [Header("시작 파동")]
+    [SerializeField, Min(0f), Tooltip("게임 플레이가 처음 시작될 때 한 번 내는 회피 파동 반경(미터). 맵 전체를 덮도록 크게 두며 0이면 내지 않는다. 확산 시간·링 색은 극한 회피 파동 값을 쓴다.")]
+    private float _startPulseRadius = 50f;
+    [SerializeField, Min(0.01f), Tooltip("시작 파동이 다 퍼진 뒤 공개 영역과 링이 천천히 흐려져 사라지는 게임 시간(초).")]
+    private float _startPulseFadeDuration = 3f;
+    private bool _startPulsePlayed;
+
     [Header("바닥 링")]
     [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링 바닥 링이 다 퍼진 뒤 사라지는 실시간. 극한 회피 링은 공개 영역과 함께 게임 시간으로 사라진다.")]
     private float _ringFadeDuration = 0.3f;
@@ -48,6 +55,8 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private float _glintDuration = 0.35f;
     [SerializeField, Range(0f, 1f), Tooltip("강화 준비 중 화면 가장자리 먹 번짐 진하기.")]
     private float _readyVignette = 0.75f;
+    [SerializeField, Range(0f, 1f), Tooltip("궁극기 차징이 다 찼을 때 준비 비네트 위에 겹치는 차징 비네트 진하기. 차징 진행도만큼 경계 없이 안쪽으로 번지며 진해진다.")]
+    private float _chargeVignette = 1f;
     [SerializeField, Range(0f, 1f), Tooltip("극한 회피 순간 화면 가장자리에 짧게 번지는 먹 비네트 진하기. 0이면 내지 않는다.")]
     private float _perfectDodgeVignette = 0.6f;
     [SerializeField, Range(0f, 1f), Tooltip("일반 회피(회피 무적 구간에서 공격을 피함) 순간 짧게 번지는 먹 비네트 진하기. 0이면 내지 않는다.")]
@@ -116,8 +125,10 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
 
     void Update()
     {
-        // 강화 공격 중의 비네트는 연출이 직접 정한다.
+        // 강화 공격 중의 비네트는 연출이 직접 정하고, 궁극기 차징 비네트는 따로 겹쳐 진행도만큼 안쪽으로 번진다.
         if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsReady ? _readyVignette : 0f);
+        _overlay.SetChargeVignette(_empower.ChargeProgress, _chargeVignette);
+        if (!_startPulsePlayed) TryPlayStartPulse();
         if (!_running) return;
 
         if (_hasSession && (_sessionRuntime == null || !_sessionRuntime.IsInitialized
@@ -175,6 +186,20 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         if (_running && _perfectRunning) return false;
         StartPulse(_dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration, _dodgeRingColor, false);
         return true;
+    }
+
+    /// <summary>
+    /// 게임 상태가 처음 Playing이 되면 발밑에서 _startPulseRadius 반경의 회피 파동을 한 번 내 맵 전체를 밝힌다.
+    /// 다 퍼진 뒤에는 _startPulseFadeDuration 동안 천천히 흐려진다.
+    /// 한 번 시도하면 _startPulsePlayed를 참으로 바꾸며, 반경이 0이면 파동 없이 끝낸다.
+    /// </summary>
+    private void TryPlayStartPulse()
+    {
+        if (!Game.IsInitialized || Game.Instance.GameStateManager == null
+            || Game.Instance.GameStateManager.State != GameplayState.Playing) return;
+        _startPulsePlayed = true;
+        if (_startPulseRadius <= 0f) return;
+        StartPulse(_startPulseRadius, _dodgeExpandDuration, _startPulseFadeDuration, _dodgeRingColor, false);
     }
 
     /// <summary>

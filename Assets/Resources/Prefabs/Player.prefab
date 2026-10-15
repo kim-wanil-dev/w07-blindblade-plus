@@ -253,6 +253,8 @@ GameObject:
   - component: {fileID: 980745157811939617}
   - component: {fileID: 7414776361951269170}
   - component: {fileID: 6051350681916135295}
+  - component: {fileID: 7253810946217735011}
+  - component: {fileID: 6618034975521349126}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -718,6 +720,49 @@ MonoBehaviour:
   _hitStopScale: 0.03
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
+--- !u!114 &7253810946217735011
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ecbc2d670254ec6916afd22b6e3e429, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwordWaveLauncher
+  _wavePrefab: {fileID: 8013713205375322848, guid: 0c86a271ec9f4d3eb02235a56501aa56, type: 3}
+  _tiltAngle: 75
+  _spawnDistance: 1
+  _spawnHeightOffset: -0.5
+  _dashDistance: 18
+  _dashDuration: 0.3
+  _launchFovKick: 30
+  _launchTimeScale: 0.1
+  _launchRiseRatio: 0.15
+--- !u!114 &6618034975521349126
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c004ce25417d4a96a91fa8d362b01160, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwordWaveGuide
+  _lineMaterial: {fileID: 2100000, guid: d9859716a952461db94ff1cc2aacb654, type: 2}
+  _length: 1.3
+  _lineWidth: 3.5
+  _lineColor: {r: 1, g: 1, b: 1, a: 1}
+  _startOffset: 0.5
+  _fadeDuration: 0.15
+  _revealCount: 4
+  _revealColumns: 3
+  _revealRadius: 1
+  _revealHeight: 0.3
 --- !u!114 &1235757311588725982
 MonoBehaviour:
   m_ObjectHideFlags: 0

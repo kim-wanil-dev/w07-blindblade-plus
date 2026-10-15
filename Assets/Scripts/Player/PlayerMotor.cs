@@ -114,6 +114,7 @@ private Vector3 _attackLungeDirection;
     private float _verticalVelocity;
     private float _yaw;
     private float _pitch;
+    private float _initialYaw;
     private float _stepDistanceAccumulated;
     private float _stepElapsed;
     private bool _stepInProgress;
@@ -178,6 +179,7 @@ private Vector3 _attackLungeDirection;
     public bool IsCrouching => _crouchBlend > 0.001f;
     public bool IsDashing => _isDashing;
     public bool IsDodging => _isDodging;
+    public bool IsCombatPushing => _combatPushDistance > 0f;
     public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Clock.Now);
     // 다른 컴포넌트의 OnEnable이 이 컴포넌트의 Awake보다 먼저 시간을 읽을 수 있어 처음 쓸 때 찾는다.
     private PlayerClock Clock => _playerClock != null ? _playerClock : _playerClock = GetComponent<PlayerClock>();
@@ -196,6 +198,7 @@ private Vector3 _attackLungeDirection;
         }
 
         _yaw = transform.eulerAngles.y;
+        _initialYaw = _yaw;
         _standingCharacterHeight = _characterController.height;
         _standingCharacterCenter = _characterController.center;
         _crouchedCharacterHeight = Mathf.Clamp(
@@ -242,6 +245,20 @@ private Vector3 _attackLungeDirection;
     public void AddLookDelta(Vector2 delta)
     {
         _pendingLookDelta += delta;
+    }
+
+    /// <summary>
+    /// 시점을 스폰할 때의 좌우 방향과 수평 상하 시점으로 되돌리고 쌓인 시점 입력을 버린다.
+    /// _yaw·_pitch·_pendingLookDelta와 플레이어·카메라 회전을 바꾼다.
+    /// </summary>
+    public void ResetView()
+    {
+        _yaw = _initialYaw;
+        _pitch = 0f;
+        _pendingLookDelta = Vector2.zero;
+        transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+        if (_cameraPivot != null)
+            _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
     }
 
     /// <summary>이동과 시점 입력, 현재 평면 속도를 초기화합니다.</summary>

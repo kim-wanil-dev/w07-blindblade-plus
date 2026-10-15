@@ -21,6 +21,12 @@ public sealed class EmpowerOverlay : MonoBehaviour
     [Header("비네트")]
     [SerializeField, Min(0.01f), Tooltip("비네트가 목표 진하기로 바뀌는 데 걸리는 실시간.")]
     private float _vignetteBlendTime = 0.25f;
+    [SerializeField, Min(1f), Tooltip("차징 비네트를 시작할 때의 크기 배율. 화면보다 크게 시작해 차징이 찰수록 1배로 줄어들며 짙은 부분이 안쪽으로 번진다. 1보다 작아지지 않아 이미지 경계가 화면에 보이지 않는다.")]
+    private float _chargeVignetteStartScale = 2f;
+    private Image _chargeVignette;
+    private float _chargeVignetteProgress;
+    private float _chargeVignetteTargetProgress;
+    private float _chargeVignetteStrength;
 
     [Header("칼날 빛줄기")]
     [SerializeField, Min(1f)] private float _glintThickness = 4f;
@@ -98,6 +104,16 @@ public sealed class EmpowerOverlay : MonoBehaviour
     public void SetVignette(float target)
     {
         _vignetteTarget = Mathf.Clamp01(target);
+    }
+
+    /// <summary>
+    /// 궁극기 차징 비네트를 progress(0~1)와 최대 진하기 strength로 정한다. 진행도가 오를수록 비네트가 진해지며 안쪽으로 번진다.
+    /// 오를 때는 바로 따라가고 내려갈 때는 _vignetteBlendTime에 걸쳐 풀리며, _chargeVignetteTargetProgress·_chargeVignetteStrength를 바꾼다.
+    /// </summary>
+    public void SetChargeVignette(float progress, float strength)
+    {
+        _chargeVignetteTargetProgress = Mathf.Clamp01(progress);
+        _chargeVignetteStrength = Mathf.Clamp01(strength);
     }
 
     /// <summary>
@@ -233,6 +249,9 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _vignetteBase = 0f;
         _vignettePulseStrength = 0f;
         SetAlpha(_vignette, 0f);
+        _chargeVignetteProgress = 0f;
+        _chargeVignetteTargetProgress = 0f;
+        ApplyChargeVignette();
         _flashStrength = 0f;
         SetAlpha(_flash, 0f);
         _glintAge = -1f;
@@ -246,12 +265,28 @@ public sealed class EmpowerOverlay : MonoBehaviour
 
     /// <summary>
     /// 지속 비네트 진하기를 _vignetteTarget으로 dt만큼 옮기고, 짧은 비네트 나이를 늘린 뒤 둘 중 큰 진하기를 비네트 이미지에 적용한다.
+    /// 차징 비네트 진행도도 오를 때는 바로, 내려갈 때는 dt만큼 따라가게 한 뒤 적용한다.
     /// </summary>
     private void UpdateVignette(float dt)
     {
         _vignetteBase = Mathf.MoveTowards(_vignetteBase, _vignetteTarget, dt / _vignetteBlendTime);
         _vignettePulseAge += dt;
         SetAlpha(_vignette, Mathf.Max(_vignetteBase, CurrentVignettePulse()));
+        _chargeVignetteProgress = _chargeVignetteTargetProgress >= _chargeVignetteProgress
+            ? _chargeVignetteTargetProgress
+            : Mathf.MoveTowards(_chargeVignetteProgress, _chargeVignetteTargetProgress, dt / _vignetteBlendTime);
+        ApplyChargeVignette();
+    }
+
+    /// <summary>
+    /// _chargeVignetteProgress로 차징 비네트의 진하기와 크기를 정한다. 크기는 _chargeVignetteStartScale에서 1배로 줄어 짙은 부분이 안쪽으로 들어오고,
+    /// 진하기는 진행도에 _chargeVignetteStrength를 곱한 값이다. 이미지는 늘 화면 이상 크기라 경계가 보이지 않는다.
+    /// </summary>
+    private void ApplyChargeVignette()
+    {
+        float eased = Mathf.SmoothStep(0f, 1f, _chargeVignetteProgress);
+        _chargeVignette.rectTransform.localScale = Vector3.one * Mathf.Lerp(_chargeVignetteStartScale, 1f, eased);
+        SetAlpha(_chargeVignette, eased * _chargeVignetteStrength);
     }
 
     /// <summary>짧은 비네트의 현재 진하기를 반환한다. 앞 15% 동안 빠르게 번지고 나머지 동안 부드럽게 사라지며 끝나면 0이다.</summary>
@@ -374,6 +409,8 @@ public sealed class EmpowerOverlay : MonoBehaviour
 
         _vignette = CreateImage("Vignette", Color.black, EmpowerInkTextures.Vignette, _canvasRect);
         Stretch(_vignette.rectTransform);
+        _chargeVignette = CreateImage("ChargeVignette", Color.black, EmpowerInkTextures.ChargeVignette, _canvasRect);
+        Stretch(_chargeVignette.rectTransform);
         _void = CreateImage("Void", Color.black, null, _canvasRect);
         Stretch(_void.rectTransform);
         GameObject effectRoot = new GameObject("Effects", typeof(RectTransform));

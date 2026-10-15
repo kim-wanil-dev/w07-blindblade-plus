@@ -16,11 +16,13 @@ public static class EmpowerInkTextures
     private const float ARC_MAX_WIDTH = 0.34f;
 
     private static Sprite _vignette;
+    private static Sprite _chargeVignette;
     private static Sprite _splat;
     private static Sprite _line;
     private static Sprite _arc;
 
     public static Sprite Vignette => _vignette != null ? _vignette : _vignette = CreateVignette();
+    public static Sprite ChargeVignette => _chargeVignette != null ? _chargeVignette : _chargeVignette = CreateChargeVignette();
     public static Sprite Splat => _splat != null ? _splat : _splat = CreateSplat();
     public static Sprite Line => _line != null ? _line : _line = CreateLine();
     public static Sprite Arc => _arc != null ? _arc : _arc = CreateArc();
@@ -70,6 +72,20 @@ public static class EmpowerInkTextures
             for (int x = 0; x < VIGNETTE_SIZE; x++)
                 pixels[y * VIGNETTE_SIZE + x] = new Color(1f, 1f, 1f,
                     Mathf.SmoothStep(0.45f, 1.3f, Radius(x, y, VIGNETTE_SIZE)));
+        return CreateSprite(VIGNETTE_SIZE, VIGNETTE_SIZE, pixels);
+    }
+
+    /// <summary>
+    /// 궁극기 차징용 비네트 스프라이트를 만든다. 가운데 가까이부터 가장자리까지 아주 넓게 부드럽게 짙어져 경계선이 생기지 않는다.
+    /// 화면보다 크게 키웠다가 줄이면 짙은 부분이 안쪽으로 번져 들어온다.
+    /// </summary>
+    private static Sprite CreateChargeVignette()
+    {
+        Color[] pixels = new Color[VIGNETTE_SIZE * VIGNETTE_SIZE];
+        for (int y = 0; y < VIGNETTE_SIZE; y++)
+            for (int x = 0; x < VIGNETTE_SIZE; x++)
+                pixels[y * VIGNETTE_SIZE + x] = new Color(1f, 1f, 1f,
+                    Mathf.SmoothStep(0.05f, 1.35f, Radius(x, y, VIGNETTE_SIZE)));
         return CreateSprite(VIGNETTE_SIZE, VIGNETTE_SIZE, pixels);
     }
 

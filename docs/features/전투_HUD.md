@@ -16,6 +16,7 @@
 | Assets/Scripts/UI/CombatHud/CombatHudReferences.cs | RecordText, DirectionMarkers, PlayerHud, FootstepHud | HUD 내부의 명시적 직렬화 참조 |
 | Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | ExpireFootsteps, PublishEndedFootsteps | C의 감쇠·만료·발행자 사망/세대 변경·종료 사건 |
 | Assets/Scripts/UI/PlayerLowHealthVignette.cs | HandleDamageReceived, ApplyVignette, ResetPulse | 실제 피해 구독, 고정 두께·강도의 짧은 피격 펄스 |
+| Assets/Scripts/UI/CombatHud/CombatPerfectParryTokenHud.cs | ApplyTokens, Update | 퍼펙트 패링 토큰 3칸 표시(2026-10-15). 규칙과 이미지 교체는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
 | Assets/Editor/CombatHudAuthoring.cs | Install | 임시 Sprite·HUD 프리팹 생성 및 기존 씬 연결 |
 | Assets/Editor/BambooDefenseHudAuthoring.cs | Connect | Record·수리검 배열·HP·스태미너·C 공급자 연결 |
 
@@ -46,6 +47,7 @@ HUD 프리팹: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`.
 | 스태미너 아이콘 | CombatStatusCanvas/StaminaGauge/Icon → Image / Source Image |
 | 스태미너 게이지 배경·채움 | CombatStatusCanvas/StaminaGauge/Background·Fill → Image / Source Image |
 | 발소리 아이콘 전체 | `Assets/Scenes/Defense/UI/CombatFootstepMarker.prefab` 루트 → Image / Source Image. HUD의 중첩 프리팹 마커 전체에 적용 |
+| 퍼펙트 패링 토큰 | CombatStatusCanvas/PerfectParryTokens → Combat Perfect Parry Token Hud / Filled Sprite·Empty Sprite(Image Source Image는 실행 중 이 값으로 바뀜). 좌하단 (48,144), HP 게이지 위 |
 
 - 새 이미지는 Texture Type을 Sprite (2D and UI)로 가져온 뒤 Source Image에 연결한다. 같은 임시 PNG 파일 내용만 바꿀 수도 있다. 이때 `.meta`를 유지하면 기존 GUID 연결이 유지된다. 표시 코드 변경은 필요 없다.
 - 임시 PNG는 `Assets/Scenes/Defense/UI/Placeholders/`의 HealthPlaceholder·StaminaPlaceholder·FootstepPlaceholder·BarPlaceholder다. 흰색 알파 이미지에 HP 붉은색·스태미너 녹색·발소리 C 정책 색을 곱한다. 완성 이미지도 투명 배경 단색 Sprite를 사용하면 현재 색 정책이 유지된다.
