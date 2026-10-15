@@ -10,7 +10,7 @@ using BlindBlade.Combat.Contracts;
 /// 강화 공격을 암전 속 일섬 한 장면으로 실행한다.
 /// 화면이 암흑으로 덮인 채 사선을 따라 큰 곡선 검격과 갈라진 선이 그어지고, 적이 아직 서 있는 동안 머문 뒤
 /// 납도와 함께 화면이 돌아오며 대상이 동시에 쓰러지고 선이 먹 조각으로 흩어진다.
-/// 수락 순간 비행 중인 투사체는 연출 없이 사라진다. 카메라 출력은 바꾸지 않으며 화면 표현은 EmpowerOverlay가 그린다.
+/// 비행 중인 투사체는 암흑이 걷히는 납도 순간 가드 소리를 내며 사라진다. 카메라 출력은 바꾸지 않으며 화면 표현은 EmpowerOverlay가 그린다.
 /// 연출 시간은 일시정지를 제외한 실시간이다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -41,6 +41,12 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     [SerializeField, Min(0.01f), Tooltip("갈라진 선이 흩어진 먹 조각이 떠다니다 사라지는 실시간. 강화가 끝난 뒤에도 남는다.")]
     private float _scatterLifetime = 1.2f;
 
+    [Header("소리")]
+    [SerializeField, Tooltip("암전이 시작되며 곡선 검격이 그어지는 순간의 효과음.")]
+    private SoundId _blackoutSound = SoundId.EmpowerBlackoutSlash;
+    [SerializeField, Tooltip("암흑이 걷히며 납도하는 순간의 효과음.")]
+    private SoundId _sheatheSound = SoundId.EmpowerBlackoutSheathe;
+
     [Header("전방 베기")]
     [SerializeField, Range(1f, 360f), Tooltip("수락 순간 시선 기준 베는 전방 각도.")]
     private float _strikeAngle = 180f;
@@ -65,6 +71,13 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         _motor = GetComponent<PlayerMotor>();
         _camera = GetComponentInChildren<Camera>();
         _baseFov = _camera.fieldOfView;
+    }
+
+    void Start()
+    {
+        // 샘플 데이터를 재생 때 불러오면 암전 순간 소리가 늦어지므로 미리 올려 둔다.
+        if (_blackoutSound != SoundId.None) Managers.Sound.PreloadSampleData(_blackoutSound);
+        if (_sheatheSound != SoundId.None) Managers.Sound.PreloadSampleData(_sheatheSound);
     }
 
     void OnDisable()
@@ -101,17 +114,17 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// 투사체를 없앤 뒤 _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
-    /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 선을 흩뜨린 다음 onFinished를 호출한다.
+    /// _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
+    /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 비행 중인 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
     /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished)
     {
         List<EnemyHealth> targets = CollectFrontEnemies();
-        ReleaseProjectiles();
 
         // 암전: 화면이 검게 덮인 채 곡선 검격과 갈라진 선만 그어지고 적은 아직 서 있다.
         _overlay.SetVoid(1f);
+        PlaySound(_blackoutSound);
         SlashAcross();
         _overlay.ShowCutLine(_cutAngle, _seamThickness, 0.08f);
         _overlay.Flash(_cutFlash, 0.2f);
@@ -121,7 +134,10 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 
         // 납도: 암흑이 걷히는 순간 선이 흩어지고 대상 적이 동시에 쓰러진다.
         _overlay.SetVoid(0f);
+        PlaySound(_sheatheSound);
         StrikeEnemies(targets);
+        // 암전 동안은 강화 공격 무적이라 투사체를 그대로 두고, 화면이 돌아오는 순간 한꺼번에 막아 낸다.
+        ReleaseProjectiles();
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
         _overlay.Flash(_sheatheFlash, 0.2f);
         PunchFov();
@@ -144,6 +160,13 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             _overlay.AccentColor);
     }
 
+    /// <summary>soundId가 지정되어 있으면 플레이어 위치에서 효과음을 한 번 재생한다.</summary>
+    private void PlaySound(SoundId soundId)
+    {
+        if (soundId != SoundId.None)
+            Managers.Sound.Play(soundId, transform.position);
+    }
+
     /// <summary>seconds만큼 일시정지를 제외한 실시간을 기다린다.</summary>
     private static IEnumerator WaitReal(float seconds)
     {
@@ -155,11 +178,15 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         }
     }
 
-    /// <summary>현재 비행 중인 모든 DefenseShuriken을 없앤다.</summary>
+    /// <summary>현재 적대 비행 중인 모든 DefenseShuriken을 그 위치에서 가드 성공 소리를 내며 없앤다. 반사된 수리검은 그대로 둔다.</summary>
     private static void ReleaseProjectiles()
     {
         foreach (DefenseShuriken projectile in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
-            if (projectile.IsFlying) projectile.Release();
+        {
+            if (!projectile.IsFlying) continue;
+            Managers.Sound.PlayCue(CombatSoundCue.Guard, projectile.transform.position);
+            projectile.Release();
+        }
     }
 
     /// <summary>살아 있는 적 중 지금 위치와 시선 기준 전방 각도·수평 반경 안에 있는 적을 모아 반환한다.</summary>

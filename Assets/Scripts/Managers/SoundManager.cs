@@ -37,9 +37,14 @@ public class SoundManager
     [Header("Mixer")]
     private FMOD.Studio.Bus _bgmBus;
     private FMOD.Studio.Bus _effectBus;
+    private FMOD.Studio.Bus _cinematicBus;
     private bool _busesReady;
     private float _bgmVolume = 1f;
     private float _effectVolume = 1f;
+
+    [Header("Time Warp")]
+    private readonly FMOD.DSP[] _warpFilters = new FMOD.DSP[2];
+    private readonly bool[] _hasWarpFilters = new bool[2];
 
     /// <summary>
     /// library의 사운드 ID와 FMOD 이벤트 연결을 보관한다.
@@ -67,7 +72,7 @@ public class SoundManager
     }
 
     /// <summary>
-    /// 효과음 Bus의 공통 음량 배율을 0~1 범위로 설정하거나 조회한다.
+    /// 효과음 Bus와 연출음 Bus의 공통 음량 배율을 0~1 범위로 설정하거나 조회한다.
     /// 이미 재생 중인 효과음과 이후 재생할 효과음에 함께 적용한다.
     /// </summary>
     public float EffectVolume
@@ -77,7 +82,11 @@ public class SoundManager
         {
             _effectVolume = Mathf.Clamp01(value);
             if (RuntimeManager.IsInitialized && TryInitializeBuses())
+            {
                 _effectBus.setVolume(_effectVolume);
+                if (_cinematicBus.isValid())
+                    _cinematicBus.setVolume(_effectVolume);
+            }
         }
     }
 
@@ -127,6 +136,20 @@ public class SoundManager
         if (_combatProfile != null && (soundId == SoundId.SwordHit || soundId == SoundId.PlayerDamaged))
             return PlayCue(CombatSoundCue.Damage, source.transform.position, source, true);
         return PlayEffect(soundId, source.transform.position, source, true, volume, pitch: pitch);
+    }
+
+    /// <summary>
+    /// soundId의 반복 효과음을 source에 연결하여 volume 배율로 재생한다.
+    /// 루프 구간이 있는 이벤트도 허용하며 StopFor로 정지하거나 source가 비활성·파괴되면 정지한다. 성공 시 true를 반환한다.
+    /// </summary>
+    public bool PlayAttachedLoop(SoundId soundId, GameObject source, float volume = 1f)
+    {
+        if (source == null)
+        {
+            Debug.LogWarning("[SoundManager] PlayAttachedLoop requires a source GameObject.");
+            return false;
+        }
+        return PlayEffect(soundId, source.transform.position, source, true, volume, allowLooping: true);
     }
 
     /// <summary>
@@ -361,7 +384,63 @@ public class SoundManager
         _footstepOnlyOwner = null;
         StopBgm(false);
         StopEffects();
+        SetTimeWarp(1f, 0f);
         _busesReady = false;
+    }
+
+    /// <summary>
+    /// soundId 이벤트의 샘플 데이터를 미리 메모리에 올려 재생할 때 불러오는 지연을 없앤다.
+    /// 등록된 효과음 이벤트이고 요청이 성공하면 true를 반환한다.
+    /// </summary>
+    public bool PreloadSampleData(SoundId soundId)
+    {
+        if (!TryResolveEvent(soundId, SoundType.Effect, out EventReference eventReference))
+            return false;
+        try
+        {
+            return RuntimeManager.GetEventDescription(eventReference).loadSampleData() == FMOD.RESULT.OK;
+        }
+        catch (EventNotFoundException exception)
+        {
+            Debug.LogWarning("[SoundManager] Effect event not found in loaded banks: " + exception.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 효과음·BGM 버스의 모든 소리를 pitch 배율로 재생해 음높이와 속도를 함께 바꾸고, lowpassCutoff(Hz) 위를 걸러 먹먹하게 한다.
+    /// 연출음 버스는 영향을 받지 않는다. pitch 1과 lowpassCutoff 0 이하이면 원래 소리로 되돌리며 FMOD가 초기화되지 않았으면 아무것도 하지 않는다.
+    /// </summary>
+    public void SetTimeWarp(float pitch, float lowpassCutoff)
+    {
+        if (!RuntimeManager.IsInitialized || !TryInitializeBuses())
+            return;
+        ApplyTimeWarp(_effectBus, 0, pitch, lowpassCutoff);
+        ApplyTimeWarp(_bgmBus, 1, pitch, lowpassCutoff);
+    }
+
+    /// <summary>
+    /// bus 채널 그룹에 pitch와 index번째 저역 통과 필터의 lowpassCutoff(Hz)를 적용한다.
+    /// 채널 그룹이 아직 만들어지지 않았으면 다음 호출에서 다시 시도하며, 필터는 처음 먹먹하게 할 때 한 번 만든다.
+    /// </summary>
+    private void ApplyTimeWarp(FMOD.Studio.Bus bus, int index, float pitch, float lowpassCutoff)
+    {
+        if (bus.getChannelGroup(out FMOD.ChannelGroup group) != FMOD.RESULT.OK)
+            return;
+        group.setPitch(Mathf.Clamp(pitch, 0.25f, 1f));
+        bool muffled = lowpassCutoff > 0f;
+        if (muffled && !_hasWarpFilters[index]
+            && RuntimeManager.CoreSystem.createDSPByType(FMOD.DSP_TYPE.MULTIBAND_EQ, out _warpFilters[index]) == FMOD.RESULT.OK)
+        {
+            _warpFilters[index].setParameterInt((int)FMOD.DSP_MULTIBAND_EQ.A_FILTER, (int)FMOD.DSP_MULTIBAND_EQ_FILTER_TYPE.LOWPASS_24DB);
+            group.addDSP(FMOD.CHANNELCONTROL_DSP_INDEX.HEAD, _warpFilters[index]);
+            _hasWarpFilters[index] = true;
+        }
+        if (!_hasWarpFilters[index])
+            return;
+        if (muffled)
+            _warpFilters[index].setParameterFloat((int)FMOD.DSP_MULTIBAND_EQ.A_FREQUENCY, Mathf.Clamp(lowpassCutoff, 20f, 22000f));
+        _warpFilters[index].setBypass(!muffled);
     }
 
     /// <summary>
@@ -397,9 +476,10 @@ public class SoundManager
     /// soundId의 단발 효과음을 position 또는 source에서 volume·pitch 배율로 재생한다.
     /// attach로 위치 추적과 playDuringMovement로 이동 예외를 선택하고 parameterName과 label을 시작 전에 적용한다.
     /// eventOverride와 cueName으로 중앙 설정의 음원 및 기록을 적용하며 재생 성공 여부를 반환한다.
+    /// allowLooping이 거짓이면 단발 이벤트만 재생한다.
     /// </summary>
     private bool PlayEffect(SoundId soundId, Vector3 position, GameObject source, bool attach, float volume, bool playDuringMovement = false, string parameterName = null, string label = null, float pitch = 1f,
-        EventReference? eventOverride = null, string cueName = null)
+        EventReference? eventOverride = null, string cueName = null, bool allowLooping = false)
     {
         _library.GetPlaybackSettings(soundId, out bool enabled, out float volumeMultiplier, out float pitchMultiplier, out bool useCallerLabel);
         if (!enabled) return false;
@@ -422,7 +502,7 @@ public class SoundManager
         try
         {
             var description = RuntimeManager.GetEventDescription(eventReference);
-            if (description.isOneshot(out bool isOneShot) != FMOD.RESULT.OK || !isOneShot)
+            if (description.isOneshot(out bool isOneShot) != FMOD.RESULT.OK || (!isOneShot && !allowLooping))
             {
                 Debug.LogWarning("[SoundManager] Play and PlayAttached require a one-shot event: " + soundId);
                 return false;
@@ -559,12 +639,35 @@ public class SoundManager
             _busesReady = bgmResult == FMOD.RESULT.OK && effectResult == FMOD.RESULT.OK;
             if (!_busesReady)
                 Debug.LogError("[SoundManager] Failed to set bus volume: " + bgmResult + ", " + effectResult);
+            // 불릿 타임 효과가 바로 걸리도록 두 버스의 채널 그룹을 항상 유지한다.
+            _bgmBus.lockChannelGroup();
+            _effectBus.lockChannelGroup();
+            TryInitializeCinematicBus();
             return _busesReady;
         }
         catch (BusNotFoundException exception)
         {
             Debug.LogWarning("[SoundManager] Bus not found in loaded banks: " + exception.Message);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// 연출음 Bus를 찾아 효과음 음량 옵션을 적용한다. 뱅크에 없으면 경고 없이 비워 두어 기존 버스 준비를 막지 않는다.
+    /// _cinematicBus를 변경한다.
+    /// </summary>
+    private void TryInitializeCinematicBus()
+    {
+        if (string.IsNullOrEmpty(_library.CinematicBusPath))
+            return;
+        try
+        {
+            _cinematicBus = RuntimeManager.GetBus(_library.CinematicBusPath);
+            _cinematicBus.setVolume(_effectVolume);
+        }
+        catch (BusNotFoundException)
+        {
+            _cinematicBus = default;
         }
     }
 
