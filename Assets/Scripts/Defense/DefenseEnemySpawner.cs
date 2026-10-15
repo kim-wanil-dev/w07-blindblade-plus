@@ -56,6 +56,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private readonly Dictionary<EnemyHealth, MeleeUnit> _meleeByHealth = new Dictionary<EnemyHealth, MeleeUnit>();
     private NavMeshPath _meleePath;
     private float _nextMeleeSpawnAt;
+    private readonly Plane[] _reflectCameraPlanes = new Plane[6];
 
     [Header("세션 연결")]
     private BambooDefenseDirector _director;
@@ -259,6 +260,45 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     }
 
     /// <summary>
+    /// position에서 반사할 활성 근접 적을 찾는다.
+    /// viewCamera 화면에 몸체가 걸치고 perceptionMask로 인지된 적 중
+    /// 가장 가까운 적을 nearest에 담아 성공 여부를 반환한다.
+    /// </summary>
+    internal bool TryFindDetectedMelee(Vector3 position, Camera viewCamera, SensoryPerceptionMask perceptionMask, out EnemyHealth nearest)
+    {
+        nearest = null;
+        float closest = float.PositiveInfinity;
+
+        Matrix4x4 viewProjection = viewCamera.projectionMatrix * viewCamera.worldToCameraMatrix;
+        GeometryUtility.CalculateFrustumPlanes(viewProjection, _reflectCameraPlanes);
+
+        foreach (MeleeUnit unit in _activeMelee)
+        {
+            if (!unit.Health.IsAlive)
+                continue;
+
+            Collider hitCollider = unit.Health.CreateCombatTarget().HitCollider;
+            Bounds bounds = hitCollider.bounds;
+
+            if (!GeometryUtility.TestPlanesAABB(_reflectCameraPlanes, bounds))
+                continue;
+            if (perceptionMask.GetVisibility(bounds.center) <= 0f)
+                continue;
+
+            float distance = HorizontalDistance(unit.Root.transform.position, position);
+            if (distance >= closest)
+                continue;
+
+            closest = distance;
+            nearest = unit.Health;
+        }
+
+        return nearest != null;
+    }
+
+
+
+    /// <summary>
     /// 투척수 프리팹을 비활성 상태로 생성하고 디스폰 사건을 구독한다.
     /// 생성한 투척수를 전체 목록에 보관하고 반환한다.
     /// </summary>
@@ -295,7 +335,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         _meleeByHealth.Add(unit.Health, unit);
         unit.Health.Died += HandleMeleeDied;
         return unit;
-    }     
+    }
 
     /// <summary>health의 근접 적 사망을 처치 수에 더하고 다음 재사용을 위해 대기 목록으로 옮긴다.</summary>
     private void HandleMeleeDied(EnemyHealth health)
