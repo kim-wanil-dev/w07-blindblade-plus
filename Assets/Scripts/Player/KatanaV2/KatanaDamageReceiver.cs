@@ -29,6 +29,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     private int _dodgeId;
     private bool _dodgeActive;
     private bool _perfectDodgeRewarded;
+    private bool _normalDodgeVignetteShown;
 
     [Header("파동 요청")]
     private int _pulseId;
@@ -192,21 +193,32 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// <summary>
     /// context를 dodgeOutcome으로 확정해 피해 없이 DefenseResolved를 발행하고 결과를 반환한다.
     /// DodgeAvoided이면 현재 회피에서 처음일 때만 PerfectDodge 사건을 한 번 발행하고 _perfectDodgeRewarded를 참으로 바꾼다.
-    /// 이때 극한 회피 파동을 내며, 퍼펙트 파동이 진행 중이라 파동을 내지 않았으면 파동 요청 사건도 발행하지 않는다.
+    /// 이때 극한 회피 비네트와 파동을 내며, 퍼펙트 파동이 진행 중이라 파동을 내지 않았으면 파동 요청 사건도 발행하지 않는다.
+    /// Invulnerable이면 이 회피에서 극한 회피 보상과 일반 회피 비네트가 아직 없을 때만 일반 회피 비네트를 한 번 내고 _normalDodgeVignetteShown을 참으로 바꾼다.
     /// </summary>
     private DefenseResolution ResolveDodge(DamageContext context, DefenseOutcome dodgeOutcome)
     {
         DefenseResolution resolution = PublishResolution(context, dodgeOutcome, 0f);
-        if (dodgeOutcome != DefenseOutcome.DodgeAvoided || _perfectDodgeRewarded) return resolution;
+        if (dodgeOutcome != DefenseOutcome.DodgeAvoided)
+        {
+            if (!_perfectDodgeRewarded && !_normalDodgeVignetteShown)
+            {
+                _normalDodgeVignetteShown = true;
+                _perfectPulse.PlayDodgeVignette(false);
+            }
+            return resolution;
+        }
+        if (_perfectDodgeRewarded) return resolution;
         _perfectDodgeRewarded = true;
         PublishDodge(PlayerDodgeStage.PerfectDodge, context.AttackId);
+        _perfectPulse.PlayDodgeVignette(true);
         if (_perfectPulse.BeginPerfectDodge())
             RequestRevealPulse(PlayerRevealPulseCause.PerfectDodge, context.AttackId);
         return resolution;
     }
 
     /// <summary>
-    /// PlayerMotor의 회피 시작을 받아 새 DodgeId를 발급하고 극한 회피 보상 여부를 초기화한 뒤 Started 사건을 발행한다.
+    /// PlayerMotor의 회피 시작을 받아 새 DodgeId를 발급하고 극한 회피 보상·일반 회피 비네트 여부를 초기화한 뒤 Started 사건을 발행한다.
     /// 이전 회피의 판정 구간이 남아 있으면 그 회피의 Ended를 먼저 발행한다.
     /// </summary>
     private void HandleDodgeStarted()
@@ -215,6 +227,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         _dodgeId++;
         _dodgeActive = true;
         _perfectDodgeRewarded = false;
+        _normalDodgeVignetteShown = false;
         PublishDodge(PlayerDodgeStage.Started, 0);
     }
 
