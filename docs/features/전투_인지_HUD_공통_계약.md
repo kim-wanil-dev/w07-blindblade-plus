@@ -31,7 +31,7 @@
 - `DefenseShuriken`은 한 번의 타격에 `AttackId`, `HitId = 1`, `Kind = Projectile`을 기록한다. 수신자가 `IPlayerDefenseResolver`이면 resolver가 피해까지 적용하므로 호출자는 다시 `TakeDamage`를 부르지 않는다. Resolver가 없는 기존 `PlayerHealth`에는 `TakeDamage` 호환 경로를 쓴다.
 - `CombatSessionRuntime`은 `GameSceneInitializer`와 같은 오브젝트에 직렬화되어 있다. 초기화 코드는 컴포넌트가 빠진 씬에서만 추가한다. `BambooDefense.unity`의 `DefenseDirector`에는 `CombatThreatPresentationProvider`가 있고 기존 `_director` 및 12개 마커 참조는 유지한다.
 - C 연결을 추가한 공급자는 Threat Presentation Source의 공통 결과를 사용한다. Resolver -20 → Adapter -10 → Provider -5 순으로 LateUpdate를 실행하고, 표시 값은 재판정 없이 보존하며 공급자 Revision만 다시 부여한다. 슬롯이 비어 있는 기존 정식 씬은 아래 감각 마스크 경로를 유지한다. 실제 프리팹·씬 연결은 [위협 표시 판정](위협_표시_판정.md)의 세 번째 단위 인계를 따른다.
-- C는 `SensoryPerceptionMask.GetVisibility`, 플레이어 카메라 투영과 Inspector 거리·색상 설정을 이용해 최종 `WorldVisible`, `UiVisible`, `UiDirection`, `Proximity`, `Color`, `Alpha`를 만든다. 월드 `ShurikenPerceptionEffect`도 같은 가시성 임계값을 읽는다. 월드와 UI 표시 플래그는 동시에 켜지지 않는다. D는 거리·차폐·색 판정을 다시 하지 않는다.
+- C는 `SensoryPerceptionMask.GetVisibility`, 플레이어 카메라의 화면 분류·수평 회전과 Inspector 거리·색상 설정을 이용해 최종 `WorldVisible`, `UiVisible`, `UiDirection`, `Proximity`, `Color`, `Alpha`를 만든다. 방향은 카메라 기준 앞=위, 뒤=아래, 오른쪽=오른쪽이다. 월드 `ShurikenPerceptionEffect`도 같은 가시성 임계값을 읽는다. 월드와 UI 표시 플래그는 동시에 켜지지 않는다. D는 거리·차폐·색 판정을 다시 하지 않는다.
 - 공식 씬에서는 `CombatSessionRuntime`이 유일한 `Time.timeScale` 쓰기 소유자다. `GameStateManager`는 정지를 요청하고 `PlayerMotor`는 대시 토큰을 등록·해제한다. `TutorialGuide`의 쓰기는 기존 비활성 레거시 코드에 남아 있으며 정식 BambooDefense 씬은 사용하지 않는다.
 - 스태미너 인터페이스는 형태만 있으며 실제 공급자가 없다. 미구현 타입을 플레이 가능한 가짜 값으로 채우지 않는다.
 - HP·스태미너·발소리 HUD의 Inspector 연결·이미지 교체·공급 전 상태는 [전투 HUD](전투_HUD.md)를 따른다. C는 발소리 감쇠와 만료·사망·세대 변경·종료에서 비활성 스냅샷도 발행해 D 마커를 반환한다.
@@ -63,6 +63,6 @@
 #### C 발소리 후보 연결 후속 기록
 
 - feature/footstep-candidates에서 D 공급자의 Footstep Candidate Source 선택 슬롯을 추가했다. 연결하면 실제 EnemyFootsteps 사건을 C 후보로 전달하고 같은 공통 스냅샷을 기존 HUD에 발행한다. 공통 타입·버전 0.2.0과 HUD 풀은 바꾸지 않는다.
-- 사용자 후속 선택으로 표시 방향은 적의 현재 위치를 추적한다. Origin·OccurredAt은 발생 기록으로 고정한다. 현재 수평 거리 20m 안에서만 UI를 허용하며 적이 실제 월드 표시 중이면 UI를 숨긴다.
+- 사용자 후속 선택으로 표시 방향은 적의 현재 위치를 추적한다. Origin·OccurredAt은 발생 기록으로 고정한다. 현재 수평 거리 20m 안에서 화면 밖에 있는 적만 발소리 UI를 허용한다. 화면 안에서는 월드 표시 여부와 관계없이 숨긴다.
 - 후보는 적마다 최신 하나, 별도 수량 상한 없음이다. 게임 시간 수명 0.8초와 마지막 0.3초 페이드는 발생 시 복사하며 설정 변경은 새 걸음부터 적용한다. 청각 범위·공통 색상 변경은 현재 후보에도 적용한다.
 - 후보 슬롯 미연결인 실제 씬의 기존 2초 실시간 발소리는 유지한다. 상세 구현·연결·확인 상태는 [발소리 후보](발소리_후보.md)를 따른다.

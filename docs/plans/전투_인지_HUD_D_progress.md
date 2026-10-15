@@ -1,7 +1,7 @@
 # 전투·인지·HUD D 진행 기록
 
-- 갱신일: 2026-10-14
-- 현재 상태: **D5 현재 사건 로컬 JSON/JSONL·Google Sheets 자동 전송기·수신 스크립트·CSV 전처리 구현 및 씬 연결. C# 컴파일 성공. 실제 Play 수집/전송/CSV 실행은 미확인. HP·적별 발소리 마커/원호·피격 펄스는 이전 Play 확인 완료. 스태미너 공급자 대기.**
+- 갱신일: 2026-10-15
+- 현재 상태: **D5 로컬 저장·Sheets 전송·CSV 전처리와 CONFIG 없는 PC용 빌드 기본 설정 구현. 로컬 CONFIG 경로에서 Play 전송400건 ACK를 확인했다. 빌드 기본 에셋은 활성 상태로 저장·컴파일했으며 새 PC/Standalone 실행은 미확인. 전체 백로그·장애/재도전·CSV 실행은 미확인. 스태미너 공급자 대기.**
 - 요청: A/B/C 통합에 이어 사용자가 HP·스태미너·발소리 HUD를 임시 이미지로 만들고 나중에 이미지만 교체 가능하게 요청했다. 프로젝트 내부 수정은 기존 상시 지침에 따라 별도 승인 없이 진행한다.
 - 최신 요청 반영: 걸음마다 표시하던 발소리를 적 ID/세대당 하나로 합쳐 현재 적 방향을 추적한다. 저체력 지속 비네팅은 피해 때만 잠깐 나타나는 방식으로 변경했다. 발소리 아이콘 밑에는 수리검과 같은 원호를 추가했다.
 - 작업 경로: `C:\Users\JUNGLE\Documents\w07-blindblade-plus`
@@ -167,3 +167,45 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - 공통 방어 결과에 DodgeId가 없어 해당 접근도 제거했다. defense_resolved의 회피 연결은 0, 별도 dodge_changed의 제공된 DodgeId는 유지하며 임의로 연결하지 않는다.
 - 관련 기능명세와 README의 현재 계약 설명을 갱신했다. 브랜치 feature/log에서 Git CLI/커밋은 사용하지 않는다.
 - 수정 후 Unity 재컴파일 completed/compilationFailed=false, 오류0·경고0을 확인했다. Play·원격 전송은 실행하지 않았다.
+
+### 2026-10-15 Sheets 미전송 원인 확인 및 실제 전송
+
+- 실제 persistentDataPath의 upload-config.json에 URL/token은 있었지만 enabled=false였다. Inspector Allow Automatic Upload만으로는 전송되지 않는다. 사용자 요청에 따라 enabled=true로 수정하고 기존 URL/token은 보존했다. 비밀 값은 Console·문서·도구 출력에 노출하지 않았다.
+- 저장된 실제 로그 1건을 구성된 Apps Script 수신기로 POST하여 HTTP200, ok=true, batchId 일치, 사건 키 ACK1건을 확인했다. 가상 사건을 생성하지 않았으며 수동 요청으로 로컬 커서를 임의 갱신하지 않았다.
+- 처음에는 Editor가 Play 종료 상태였고 서비스도 없었다. 깨끗하게 저장된 BambooDefense에서 Play를 시작하고 GameView를 활성화해 실제 자동 전송을 확인했다.
+- Unity 서비스 관측: AcknowledgedEvents400, BufferedEvents0, DroppedEvents0, LastError=null. URL별 .cursor 파일도 생성됐다. 이 수는 관측 시점의 확인 건수이며 전체 백로그 완료를 뜻하지 않는다.
+- 확인 후 Play를 종료했다. 실제 설정 enabled=true는 유지한다. 미확인 백로그는 다음 실행에서 이어서 전송된다. 런타임 코드·전투 수치·씬 직렬화는 변경하지 않았다.
+- Google Sheets 화면 직접 열람·집계 대조, 인터넷 차단 복구, 재도전 정밀 검증과 CSV 실행은 아직 미확인이다. 전체 D5 완료로 표시하지 않는다. feature/log에서 Git CLI/커밋은 사용하지 않았다.
+
+### 2026-10-15 후속: CONFIG 없는 PC의 빌드 기본 전송
+
+- 사용자 요청: 다른 PC에서 CONFIG 수정 없이 현재 시트로 자동 전송하도록 변경.
+- `CombatTelemetryUploadSettings` ScriptableObject와 Resources 에셋을 추가했다. 현재 정상 동작한 로컬 URL/token/활성 여부를 Editor API로 복사했고 enabled=true로 저장했다. 비밀 값을 출력·문서화하지 않았다.
+- 서비스 설정 우선순위는 기존 로컬 CONFIG > 빌드 기본 에셋. 기존 enabled=false와 잘못된 JSON은 재정의/오류로 존중한다. 파일 부재 시 비활성 CONFIG를 생성하던 코드는 제거했다.
+- 기존 씬 연결 메뉴도 CONFIG를 자동 생성하지 않는다. 새 메뉴 `BlindBlade > 대숲 방어 > 로그 > 현재 로컬 설정을 빌드 기본값으로 저장`으로 URL/token 변경 후 에셋을 갱신할 수 있다. GUID를 보존하고 배포에는 재빌드가 필요하다.
+- 코드: CombatTelemetryService, CombatTelemetryUploadSettings, CombatTelemetryAuthoring, Recorder의 Inspector 안내문. 로그 스키마·Google 수신 코드·전투 공급자·씬 수치는 변경하지 않았다.
+- 개발용 ConfigurationSource는 LocalOverride/BuiltIn을 제공한다. token은 에셋 Inspector에서 숨기지만 클라이언트 배포에 포함되므로 제한된 과제 테스트 용도다. Steam 공개 배포는 별도 수집 서버가 권장된다.
+- 확인: C# 컴파일 오류0·경고0, Editor 에셋 생성 결과 enabled=true/endpointConfigured=true/tokenConfigured=true/saved=true. 이번 수정 후 Play·Standalone 빌드·새 PC 기본값 전송은 실행하지 않았다. 기존 로컬 CONFIG와 원본을 임의 이동/삭제하지 않았다.
+- 다음 작업자: 전체 게임 폴더를 새 빌드로 배포하고 CONFIG 없는 PC에서 기본값 전송을 확인한다. 기존 PC는 CONFIG가 우선하며 이전 disabled 파일을 계속 보관하면 전송이 꺼진다. README의 배포/로컬 재정의 안내를 따른다. feature/log에서 Git CLI/커밋 없음.
+
+### 2026-10-15 후속: 로그 벽시각을 한국시간으로 표기
+
+- 사용자 요청: 로그가 UTC 대신 한국시간으로 보이도록 변경.
+- 새 JSONL 사건에 `occurredAtKst`와 `recordedAtKst`, 세션 시작 payload에 `startedKst`를 기록하도록 했다. 각 기록 시점의 KST와 realtime 차이로 사건 시각을 계산하고 ISO 8601 `+09:00` 오프셋을 포함한다. 기존 경과 시계 필드는 분석 호환을 위해 유지한다.
+- CSV에는 사건 발생/수신 KST 열, 세션 시작 KST, manifest 생성 KST를 추가했다. 과거 UTC 세션 열은 과거 로그 호환을 위해 남겼다.
+- Apps Script는 새 Events/Sessions KST 열을 기존 열 오른쪽에 추가하며 UTC 과거 데이터는 보존한다. 새 수신의 UTC 열은 비우고 KST 열을 채운다.
+- 확인 범위: 코드와 문서를 갱신했다. 이번 변경 후 Unity 컴파일/Play, CSV 실행, Google Apps Script 재배포 및 실제 Sheets 표시를 검증하지 않았다. 사용자는 Apps Script 편집본을 새 버전으로 배포하고 `setupSheets`를 실행해야 한다.
+
+### 2026-10-15 후속: UTC 출력 열 제거 및 KST 저장 확인
+
+- 최신 로컬 JSONL `6746c8285eac452481fb58fcaffcd586.jsonl`의 2,236건을 확인했다. 시작 사건 `occurredAtKst=2026-10-15T13:59:50.074+09:00`, 종료 사건 `recordedAtKst=2026-10-15T14:01:17.798+09:00`이며 세션 시작 payload도 `startedKst`를 가졌다. 새 원본에는 `startedUtc`가 없었다.
+- 사용자가 본 UTC는 Sheets/CSV에 남긴 옛 열 이름이 원인으로 판단했다. 수신 스크립트와 CSV 출력에서 UTC 열을 없애고, 시트의 기존 UTC 값을 +09:00으로 변환하는 마이그레이션을 추가했다. 과거 JSONL 원본은 수정하지 않는다.
+- Google Apps Script의 `setupSheets` 실행을 완료하고 운영 웹 앱을 동일 URL의 버전 2로 갱신했다. `Events!B1=received_kst`, `Sessions!D1=started_kst`이며 기존 `Events!B7816` 값은 `05:01:15.951Z`에서 `14:01:15.951+09:00`으로 변환됐다.
+- 실제 최신 세션의 원본 `session_started` 1건을 전송해 HTTP 200, `ok=true`, 정확한 batchId, ACK 1건을 받았다. 새 `Events!A7817=6746c8285eac452481fb58fcaffcd586:1`, `B7817=2026-10-15T14:11:25.273+09:00`, `V7817=W7817=2026-10-15T13:59:50.074+09:00` 및 `Sessions!D7=2026-10-15T13:59:50.067+09:00`을 시트에서 확인했다. 이전 배포 때문에 비었던 `Sessions!D5:D6`도 각각 원본 시작 사건을 재전송해 `13:48:16.958+09:00`, `13:48:41.148+09:00`으로 채웠다.
+- 로컬 전처리: 실제 사건 12,783건/세션 6건/진단 0건. `events.csv`와 `sessions.csv`에는 UTC 열이 없고, 세션 시작시각 6건이 모두 `+09:00`이다. Apps Script 문법 검사 통과, Unity 재컴파일 up_to_date 및 오류·경고 0건. 과거에 시트가 받지 않은 사건별 발생·기록 KST는 비어 있을 수 있다. 새 PC에서 CONFIG 없이 실제 자동 전송되는지, 전체 백로그와 장애 복구는 별도 검증이 필요하다. 브랜치 `feature/log`이므로 Git CLI와 커밋은 수행하지 않았다.
+
+### 2026-10-15 후속: 적 발자국 화면 진입과 방향 수정
+
+- 정식 BambooDefense 씬의 `CombatThreatPresentationProvider`는 C Threat Adapter와 Footstep Candidate Source가 모두 미연결이므로 기존 공급자 경로가 실제 적용 대상이다. 기존 경로는 적 루트가 화면 안이지만 감각 마스크의 월드 표시가 꺼진 때 발자국 UI를 계속 허용했다. 발자국 사건 때 적 Renderer 배열을 보관하고 매 갱신마다 카메라 프러스텀과 교차하는지 확인해 화면 안에서는 `UiVisible=false`로 즉시 숨기도록 바꿨다. 루트만 화면 안인 경우도 숨긴다.
+- 정식 경로와 C 후보 경로의 발자국 방향, C 계약 어댑터의 수리검 방향을 카메라의 수평 회전과 현재 대상 위치로 계산한다. 카메라 뒤 정중앙 대상은 아래, 앞은 위, 오른쪽은 오른쪽을 가리킨다. 수리검 발사 전조의 `PlayerMotor.ViewForward` 수평 각도와 HUD 회전 부호는 검토 결과 같은 기준이므로 유지했다. 아이콘·원호·프리팹·씬 직렬화 연결은 변경하지 않았다.
+- C 후보 경로도 `UiVisible`을 화면 밖일 때만 허용하도록 수정했다. 공급자별 마커 슬롯·사건 수명·페이드와 월드 위협 표시 정책은 유지한다. Unity Editor 6000.3.22f1 재컴파일 `completed`, 오류 0건·경고 0건. 현재 Editor에는 `IntroScene`이 열려 있고 Play는 꺼져 있어 정식 BambooDefense에서 실제 회전·화면 진입 시각 확인은 이번 작업에서 수행하지 않았다. 테스트 코드는 추가하지 않았다.

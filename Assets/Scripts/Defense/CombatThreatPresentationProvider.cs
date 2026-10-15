@@ -51,6 +51,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         new Dictionary<CombatEntityKey, FootstepPresentationSnapshot>();
     private readonly HashSet<CombatEntityKey> _seenFootstepEmitters = new HashSet<CombatEntityKey>();
     private readonly List<CombatEntityKey> _endedFootstepEmitters = new List<CombatEntityKey>();
+    private readonly Plane[] _cameraPlanes = new Plane[6];
     private CombatSessionRuntime _sessionRuntime;
     private SensoryPerceptionMask _perceptionMask;
     private Camera _playerCamera;
@@ -68,13 +69,16 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         public FootstepPresentationSnapshot Snapshot { get; }
         public double ExpiresAt { get; }
         public EnemyHealth Emitter { get; }
+        public Renderer[] Renderers { get; }
 
-        /// <summary>snapshot·만료 시각·emitter를 보관해 사건 수명과 발행자 세대를 확인할 발소리 표시를 만든다.</summary>
-        public ActiveFootstep(FootstepPresentationSnapshot snapshot, double expiresAt, EnemyHealth emitter)
+        /// <summary>snapshot·만료 시각·emitter와 외형 renderers를 보관해 발소리 수명과 화면 진입을 판정한다.</summary>
+        public ActiveFootstep(FootstepPresentationSnapshot snapshot, double expiresAt, EnemyHealth emitter,
+            Renderer[] renderers)
         {
             Snapshot = snapshot;
             ExpiresAt = expiresAt;
             Emitter = emitter;
+            Renderers = renderers;
         }
     }
 
@@ -310,10 +314,11 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             float fade = _footstepFadeDuration > 0f
                 ? Mathf.Clamp01((float)(activeFootstep.ExpiresAt - now) / _footstepFadeDuration) : 1f;
             ThreatPresentationSnapshot presentation = CreateSnapshot(previous.Presentation.Target,
-                activeFootstep.Emitter.transform.position, true, true, fade);
+                activeFootstep.Emitter.transform.position, true, true, fade, activeFootstep.Renderers);
             FootstepPresentationSnapshot updated = new FootstepPresentationSnapshot(
                 previous.EventIdentity, previous.Emitter, previous.Origin, previous.OccurredAt, presentation);
-            _activeFootsteps[i] = new ActiveFootstep(updated, activeFootstep.ExpiresAt, activeFootstep.Emitter);
+            _activeFootsteps[i] = new ActiveFootstep(updated, activeFootstep.ExpiresAt,
+                activeFootstep.Emitter, activeFootstep.Renderers);
         }
         _currentFootsteps.Clear();
         foreach (ActiveFootstep footstep in _activeFootsteps)
@@ -346,11 +351,13 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         CombatTimestamp timestamp = _sessionRuntime.CaptureTimestamp();
         CombatEntityKey pulseTarget = new CombatEntityKey(
             emitter.EntityId + "/footstep/" + sequence, emitter.SpawnGeneration);
-        ThreatPresentationSnapshot presentation = CreateSnapshot(pulseTarget, health.transform.position, true, true);
+        Renderer[] renderers = health.GetComponentsInChildren<Renderer>();
+        ThreatPresentationSnapshot presentation = CreateSnapshot(pulseTarget, health.transform.position,
+            true, true, 1f, renderers);
         FootstepPresentationSnapshot snapshot = new FootstepPresentationSnapshot(
             identity, emitter, position, timestamp, presentation);
         _activeFootsteps.Add(new ActiveFootstep(snapshot,
-            Time.realtimeSinceStartupAsDouble + _footstepLifetime, health));
+            Time.realtimeSinceStartupAsDouble + _footstepLifetime, health, renderers));
         FootstepChanged?.Invoke(snapshot);
     }
 
@@ -401,24 +408,42 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         _currentFootsteps.Clear();
     }
 
-    /// <summary>position·활성/자격 상태·alphaMultiplier로 인지 가시성, 화면 방향, 표시 색상·투명도 스냅샷을 반환한다.</summary>
+    /// <summary>position·활성/자격·alphaMultiplier와 발소리 외형을 읽어 화면 진입·플레이어 기준 방향의 표시 결과를 반환한다.</summary>
     private ThreatPresentationSnapshot CreateSnapshot(
-        CombatEntityKey target, Vector3 position, bool isActive, bool isEligible, float alphaMultiplier = 1f)
+        CombatEntityKey target, Vector3 position, bool isActive, bool isEligible,
+        float alphaMultiplier = 1f, Renderer[] footstepRenderers = null)
     {
         float visibility = _perceptionMask.GetVisibility(position);
         Vector3 viewport = _playerCamera.WorldToViewportPoint(position);
         bool inCamera = viewport.z > 0f && viewport.x >= 0f && viewport.x <= 1f
             && viewport.y >= 0f && viewport.y <= 1f;
+        if (footstepRenderers != null)
+        {
+            GeometryUtility.CalculateFrustumPlanes(_playerCamera, _cameraPlanes);
+            foreach (Renderer renderer in footstepRenderers)
+            {
+                if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy
+                    && GeometryUtility.TestPlanesAABB(_cameraPlanes, renderer.bounds))
+                {
+                    inCamera = true;
+                    break;
+                }
+            }
+        }
         bool worldVisible = visibility > _visibilityThreshold && inCamera;
-        Vector2 direction = new Vector2(viewport.x - 0.5f, viewport.y - 0.5f);
-        if (viewport.z < 0f)
-            direction = -direction;
+        Quaternion viewYaw = Quaternion.Euler(0f, _playerCamera.transform.eulerAngles.y, 0f);
+        Vector3 horizontalOffset = position - _playerCamera.transform.position;
+        horizontalOffset.y = 0f;
+        Vector2 direction = new Vector2(
+            Vector3.Dot(horizontalOffset, viewYaw * Vector3.right),
+            Vector3.Dot(horizontalOffset, viewYaw * Vector3.forward));
         if (direction.sqrMagnitude < 0.0001f)
             direction = Vector2.up;
         else
             direction.Normalize();
 
-        bool uiVisible = isActive && isEligible && (!inCamera || !worldVisible);
+        bool uiVisible = isActive && isEligible && !worldVisible
+            && (footstepRenderers == null || !inCamera);
         Color color = worldVisible ? _perceivedThreatColor : _concealedThreatColor;
         color.a = 1f;
         float alpha = worldVisible ? _perceivedThreatAlpha : _concealedThreatAlpha;

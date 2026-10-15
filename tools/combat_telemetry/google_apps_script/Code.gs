@@ -1,11 +1,12 @@
 const EVENT_HEADERS = [
-  'event_key', 'received_utc', 'schema_version', 'build_version', 'config_version',
+  'event_key', 'received_kst', 'schema_version', 'build_version', 'config_version',
   'session_id', 'event_sequence', 'event_type', 'realtime_seconds', 'gameplay_seconds',
   'active_unscaled_seconds', 'source_id', 'source_sequence', 'input_id', 'action_id',
-  'attack_id', 'hit_id', 'projectile_id', 'dodge_id', 'anonymous_player_id', 'payload_json'
+  'attack_id', 'hit_id', 'projectile_id', 'dodge_id', 'anonymous_player_id', 'payload_json',
+  'occurred_at_kst', 'recorded_at_kst'
 ];
 const SESSION_HEADERS = [
-  'session_id', 'build_version', 'config_version', 'started_utc', 'last_event_sequence',
+  'session_id', 'build_version', 'config_version', 'started_kst', 'last_event_sequence',
   'status', 'run_realtime_seconds', 'combat_realtime_seconds', 'survival_game_seconds',
   'kills', 'damage_taken', 'defense_count', 'parry_count', 'health', 'dropped_events_total', 'anonymous_player_id'
 ];
@@ -52,7 +53,7 @@ function doPost(e) {
       ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().map(row => String(row[0])) : []);
     const rows = [];
     const acknowledged = [];
-    const now = new Date().toISOString();
+    const receivedKst = formatKst(new Date());
     body.records.forEach(record => {
       const key = record.sessionId + ':' + record.eventSequence;
       acknowledged.push(key);
@@ -61,11 +62,11 @@ function doPost(e) {
       const time = record.occurredAt;
       const ids = record.correlation;
       rows.push([
-        key, now, record.schemaVersion, record.buildVersion, record.configVersion,
+        key, receivedKst, record.schemaVersion, record.buildVersion, record.configVersion,
         record.sessionId, record.eventSequence, record.eventType, time.realtimeSeconds,
         time.gameplaySeconds, time.activeUnscaledSeconds, record.sourceId, record.sourceSequence,
         ids.inputId, ids.actionId, ids.attackId, ids.hitId, ids.projectileId, ids.dodgeId, record.anonymousPlayerId,
-        JSON.stringify(record.payload)
+        JSON.stringify(record.payload), record.occurredAtKst || '', record.recordedAtKst || ''
       ].map(safeCell));
     });
     if (rows.length) {
@@ -113,17 +114,88 @@ function validateRecord(record) {
   if (JSON.stringify(record.payload).length > 40000) throw new Error('payload_too_large');
 }
 
-/** spreadsheet의 name 탭을 준비하고 기존 헤더가 계약과 다르면 덮어쓰지 않고 실패한다. */
+/** spreadsheet의 name 탭을 준비하고 이전 UTC 열을 KST로 변환해 현재 헤더를 반환한다. */
 function ensureSheet(spreadsheet, name, headers) {
   const sheet = spreadsheet.getSheetByName(name) || spreadsheet.insertSheet(name);
-  if (sheet.getMaxColumns() < headers.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
   if (sheet.getLastRow() === 0) {
+    ensureColumns(sheet, headers.length);
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
-  } else if (JSON.stringify(sheet.getRange(1, 1, 1, headers.length).getValues()[0]) !== JSON.stringify(headers)) {
+    return sheet;
+  }
+  const count = sheet.getLastColumn();
+  const currentHeaders = sheet.getRange(1, 1, 1, count).getValues()[0];
+  if (JSON.stringify(currentHeaders) !== JSON.stringify(headers)) {
+    if (name === 'Events') migrateEventSheet(sheet, currentHeaders);
+    else if (name === 'Sessions') migrateSessionSheet(sheet, currentHeaders);
+  }
+  if (sheet.getLastColumn() !== headers.length
+      || JSON.stringify(sheet.getRange(1, 1, 1, headers.length).getValues()[0]) !== JSON.stringify(headers)) {
     throw new Error('header_mismatch');
   }
   return sheet;
+}
+
+/** sheet에 필요한 열 수를 확보하고 기존 열과 데이터는 유지한다. */
+function ensureColumns(sheet, count) {
+  if (sheet.getMaxColumns() < count) sheet.insertColumnsAfter(sheet.getMaxColumns(), count - sheet.getMaxColumns());
+}
+
+/** 이전 Events의 UTC 수신 시각을 KST로 옮기고 중복 수신 열을 제거한다. */
+function migrateEventSheet(sheet, currentHeaders) {
+  const count = currentHeaders.length;
+  if (count < 21 || count > 24) throw new Error('header_mismatch');
+  for (let i = 0; i < 21; i++) {
+    if (i === 1 && currentHeaders[i] === 'received_utc') continue;
+    if (currentHeaders[i] !== EVENT_HEADERS[i]) throw new Error('header_mismatch');
+  }
+  for (let i = 21; i < Math.min(count, 23); i++) {
+    if (currentHeaders[i] !== EVENT_HEADERS[i]) throw new Error('header_mismatch');
+  }
+  if (count === 24 && currentHeaders[23] !== 'received_kst') throw new Error('header_mismatch');
+  migrateTimeColumn(sheet, 2, count === 24 ? 24 : 0);
+  sheet.getRange(1, 2).setValue('received_kst');
+  if (count < EVENT_HEADERS.length) {
+    ensureColumns(sheet, EVENT_HEADERS.length);
+    sheet.getRange(1, count + 1, 1, EVENT_HEADERS.length - count).setValues([EVENT_HEADERS.slice(count)]);
+  }
+  if (count === 24) sheet.deleteColumn(24);
+}
+
+/** 이전 Sessions의 UTC 시작 시각을 KST로 옮기고 중복 시작 열을 제거한다. */
+function migrateSessionSheet(sheet, currentHeaders) {
+  const count = currentHeaders.length;
+  if (count !== 16 && count !== 17) throw new Error('header_mismatch');
+  for (let i = 0; i < 16; i++) {
+    if (i === 3 && currentHeaders[i] === 'started_utc') continue;
+    if (currentHeaders[i] !== SESSION_HEADERS[i]) throw new Error('header_mismatch');
+  }
+  if (count === 17 && currentHeaders[16] !== 'started_kst') throw new Error('header_mismatch');
+  migrateTimeColumn(sheet, 4, count === 17 ? 17 : 0);
+  sheet.getRange(1, 4).setValue('started_kst');
+  if (count === 17) sheet.deleteColumn(17);
+}
+
+/** 대상 열의 이전 UTC 또는 추가 KST 값을 +09:00 문자열로 바꾼다. */
+function migrateTimeColumn(sheet, destinationColumn, preferredColumn) {
+  const lastRow = sheet.getLastRow();
+  for (let start = 2; start <= lastRow; start += 500) {
+    const count = Math.min(500, lastRow - start + 1);
+    const oldValues = sheet.getRange(start, destinationColumn, count, 1).getValues();
+    const preferredValues = preferredColumn ? sheet.getRange(start, preferredColumn, count, 1).getValues() : null;
+    const converted = oldValues.map((row, index) => [toKst(preferredValues && preferredValues[index][0] ? preferredValues[index][0] : row[0])]);
+    sheet.getRange(start, destinationColumn, count, 1).setValues(converted);
+  }
+}
+
+/** 이전 UTC 날짜 또는 기존 KST 문자열을 한국 표준시 ISO 8601 문자열로 반환한다. */
+function toKst(value) {
+  if (value === '' || value === null) return '';
+  if (typeof value === 'string' && /\+09:00$/.test(value)) return value;
+  if (typeof value === 'string' && !/(?:Z|[+\-]\d{2}:\d{2})$/i.test(value)) throw new Error('invalid_legacy_time');
+  const date = value instanceof Date ? value : new Date(value);
+  if (isNaN(date.getTime())) throw new Error('invalid_legacy_time');
+  return formatKst(date);
 }
 
 /** records의 최신 요약을 세션당 한 행으로 갱신한다. 원본 사건 재전송과 오래된 요약은 누적 수를 중복 합산하지 않는다. */
@@ -143,7 +215,7 @@ function updateSessions(spreadsheet, records) {
     }
     const row = rows[i];
     const payload = record.payload;
-    if (record.eventType === 'session_started' && !row[3]) row[3] = safeCell(payload.startedUtc || '');
+    if (record.eventType === 'session_started' && !row[3]) row[3] = safeCell(payload.startedKst || '');
     if (Number(row[4]) >= record.eventSequence) return;
     row[1] = safeCell(record.buildVersion);
     row[2] = safeCell(record.configVersion);
@@ -166,6 +238,11 @@ function updateSessions(spreadsheet, records) {
 /** value가 수식으로 실행되지 않게 텍스트를 이스케이프하고 셀 값을 반환한다. */
 function safeCell(value) {
   return typeof value === 'string' && /^[=+\-@\t\r\n]/.test(value) ? "'" + value : value;
+}
+
+/** date를 Asia/Seoul 시간대의 ISO 8601 문자열로 반환한다. */
+function formatKst(date) {
+  return Utilities.formatDate(date, 'Asia/Seoul', "yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 }
 
 /** value를 JSON 확인 응답으로 반환한다. */
