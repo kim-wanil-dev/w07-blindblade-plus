@@ -31,6 +31,8 @@ public sealed class SwordWaveBambooCutter : MonoBehaviour
                     normal = Vector3.up;
                 BambooGrove.CutAlongPath(_previousPosition, position, _halfWidth * transform.localScale.x,
                     normal.normalized, _sideSpread);
+                RainStageWeather.RecordWaveSweep(_previousPosition, position, transform.right,
+                    _halfWidth * transform.localScale.x);
             }
         }
         _previousPosition = position;

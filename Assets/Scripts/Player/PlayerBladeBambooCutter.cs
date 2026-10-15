@@ -72,6 +72,7 @@ public sealed class PlayerBladeBambooCutter : MonoBehaviour
         if (_hasPrevious)
         {
             BambooGrove.CutBySweep(_previousBase, _previousTip, currentBase, currentTip);
+            RainStageWeather.RecordBladeSweep(_previousBase, _previousTip, currentBase, currentTip);
             if (_drawSweep)
                 DrawSweep(_previousBase, _previousTip, currentBase, currentTip);
         }
