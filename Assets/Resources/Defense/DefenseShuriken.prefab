@@ -157,7 +157,7 @@ MonoBehaviour:
   _hitRadius: 0.3
   _collisionMask:
     serializedVersion: 2
-    m_Bits: 4294967291
+    m_Bits: 51
   _aimDrop: 0.1
   _leadAccuracy: 0.8
   _maximumLeadDistance: 4
@@ -191,3 +191,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::MovingPerceptionReveal
   _radius: 2.5
   _afterimage: 0.3
+  _trailInterval: 0.05

@@ -310,11 +310,11 @@ public sealed class DefenseShuriken : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        if (_reflectTarget != null && _reflectTarget.IsAlive)
-            AimAtReflectTarget();
+        if (_reflectTarget != null && _reflectTarget.IsAlive) AimAtReflectTarget();
 
-        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts,
-            _collisionMask, QueryTriggerInteraction.Ignore);
+        int reflectedMask = _collisionMask.value | Physics.IgnoreRaycastLayer;
+
+        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts, reflectedMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps; i++)
         {
             if (!CanHitReflected(_contacts[i]))
@@ -324,8 +324,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         }
 
         float distance = _speed * _reflectSpeedMultiplier * Time.deltaTime;
-        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
-            distance, _collisionMask, QueryTriggerInteraction.Ignore);
+        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits, distance, reflectedMask, QueryTriggerInteraction.Ignore);
         int closest = -1;
         float closestDistance = float.PositiveInfinity;
         for (int i = 0; i < count; i++)
@@ -356,17 +355,22 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// collider가 반사 수리검이 멈출 대상이면 true를 반환한다. 생존 적과 지형에서 멈추고
-    /// 자신·플레이어·죽은 적·적이 아닌 다른 피해 수신자는 통과한다.
+    /// collider가 반사 수리검에 맞을 수 있는 생존 적 또는 기존 지형인지 판정한다.
+    /// 자신, 플레이어, 투척수는 제외하고 추가 검색한 레이어의 비적 대상도 통과시킨다.
     /// </summary>
     private bool CanHitReflected(Collider collider)
     {
-        if (collider.transform.IsChildOf(transform) || collider.GetComponentInParent<PlayerHealth>() != null)
+        if (collider.transform.IsChildOf(transform)
+            || collider.GetComponentInParent<PlayerHealth>() != null
+            || collider.GetComponentInParent<BambooThrower>() != null)
             return false;
+
         EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
         if (enemy != null)
             return enemy.IsAlive;
-        return collider.GetComponentInParent<IDamageable>() == null;
+
+        int layerBit = 1 << collider.gameObject.layer;
+        return (_collisionMask.value & layerBit) != 0 && collider.GetComponentInParent<IDamageable>() == null;
     }
 
     /// <summary>
