@@ -16,6 +16,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     [Header("전투 효과음")]
     [SerializeField] private SoundId _swingSound = SoundId.SwordSwing;
     [SerializeField] private SoundId _hitSound = SoundId.SwordClash;
+    [SerializeField] private SoundId _sheatheSound = SoundId.SwordSheathe;
     [SerializeField, Min(0f)] private float _volume = 0.8f;
 
     [Header("방어·피격 신호")]
@@ -80,6 +81,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         if (_katana != null && _katana.isActiveAndEnabled)
         {
             _katana.DefenseSucceeded += HandleDefense;
+            _katana.EventRaised += HandleKatanaEvent;
         }
     }
 
@@ -102,6 +104,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         if (_katana != null)
         {
             _katana.DefenseSucceeded -= HandleDefense;
+            _katana.EventRaised -= HandleKatanaEvent;
         }
         if (Managers.IsInitialized)
             Managers.Sound.StopFor(gameObject);
@@ -203,6 +206,16 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         }
         if (QueueCue(result.IsParry ? CombatSoundCue.Parry : CombatSoundCue.Guard, result.Point, false)) return;
         Managers.Sound.Play(result.IsParry ? SoundId.ParryClash : _hitSound, result.Point, _volume, gameObject);
+    }
+
+    /// <summary>
+    /// e의 납도 시작 사건에서 설정된 검 납도음을 플레이어 위치에 재생한다.
+    /// 다른 카타나 사건과 전투 상태는 변경하지 않는다.
+    /// </summary>
+    private void HandleKatanaEvent(KatanaEvent e)
+    {
+        if (e.Stage == KatanaStage.SheatheStarted)
+            Managers.Sound.PlayAttached(_sheatheSound, gameObject, _volume);
     }
 
     /// <summary>

@@ -396,14 +396,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
   _animationEventRelay: {fileID: 0}
-  _iaidoHitTime: 0.32
-  _iaidoSlashDuration: 0.6
-  _strikeWindow: 0.2
-  _normalHitTime: 0.22
-  _normalActionDuration: 0.48
-  _normalStrikeWindow: 0.16
-  _targetedComboHitTime: 0.12
-  _targetedComboActionDuration: 0.32
+  _iaidoHitTime: 0.06
+  _iaidoSlashDuration: 0.25
+  _strikeWindow: 0.12
+  _normalHitTime: 0.06
+  _normalActionDuration: 0.25
+  _normalStrikeWindow: 0.12
+  _targetedComboHitTime: 0.06
+  _targetedComboActionDuration: 0.25
   _counterHitTime: 0.12
   _counterActionDuration: 0.34
   _counterStrikeWindow: 0.12
@@ -433,12 +433,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
-  _normalSheatheDelay: 0.8
+  _normalSheatheDelay: 2
   _firstAttackInputBufferWindow: 0.2
   _comboBufferWindow: 0.2
-  _comboFollowThrough: 0.12
-  _comboResetDelay: 0.65
-  _targetedAttackMinimumDuration: 0.45
+  _comboFollowThrough: 0.02
+  _comboResetDelay: 2
+  _targetedAttackMinimumDuration: 0.14
   _perfectParryStart: 0
   _perfectParryEnd: 0.1
   _normalParryStart: 0.1
@@ -492,12 +492,12 @@ MonoBehaviour:
   _idleClip: {fileID: 7400000, guid: 8c03e20cc5701384195e95a718f911ce, type: 2}
   _counterAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
   _firstAttackClip: {fileID: 7400000, guid: c83264164fb7e824ab09176b14e72719, type: 2}
-  _firstAttackReturnsToIdle: 1
+  _firstAttackReturnsToIdle: 0
   _secondAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
   _secondAttackUsesOpeningTiming: 1
-  _secondAttackReturnsToIdle: 1
+  _secondAttackReturnsToIdle: 0
   _showWeapon: 1
-  _blendTime: 0.025
+  _blendTime: 0.008
   _guardTransitionBlendTime: 0.1
   _iaidoImpactProgress: 0.88461536
   _normal1ImpactProgress: 0.75
@@ -506,7 +506,7 @@ MonoBehaviour:
   _minimumCancelSheatheDuration: 0.12
   _openingImpactProgress: 0.5
   _openingEndProgress: 0.65
-  _comboBlendTime: 0.08
+  _comboBlendTime: 0.008
   _attackDeflectionDuration: 0.22
   _attackDeflectionOffset: {x: 0.05, y: 0.08, z: -0.16}
   _attackDeflectionAngles: {x: -25, y: 0, z: 35}
@@ -542,6 +542,7 @@ MonoBehaviour:
   _slashVfx: {fileID: 8623487348853501226}
   _secondSlashVfx: {fileID: 8032878143575903317}
   _thirdSlashVfx: {fileID: 3649354136773276188}
+  _normalSlashDelayAfterImpact: 0.02
   _useOutlineShader: 1
 --- !u!114 &9012958133378258241
 MonoBehaviour:
@@ -557,6 +558,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _swingSound: 3
   _hitSound: 10
+  _sheatheSound: 34
   _volume: 0.8
   _damageVolumeMultiplier: 1
   _damagePitch: 1

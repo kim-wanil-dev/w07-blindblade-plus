@@ -496,13 +496,14 @@ public class SoundManager
 
     /// <summary>
     /// soundId와 source, playDuringMovement를 기존 이동 중 사운드 정책에 대조한다.
-    /// 플레이어 발걸음과 전투음, 발도음 및 기존 전조 예외가 허용되면 true를 반환한다.
+    /// 플레이어 발걸음과 전투음, 발도·납도음 및 기존 전조 예외가 허용되면 true를 반환한다.
     /// </summary>
     private bool CanPlayDuringMovement(SoundId soundId, GameObject source, bool playDuringMovement)
     {
         return _footstepOnlyOwner == null || playDuringMovement || soundId == SoundId.WarCry
             || (source == _footstepOnlyOwner && (soundId == SoundId.Footstep || soundId == SoundId.SwordSwing
-                || soundId == SoundId.SwordHit || soundId == SoundId.SwordUnsheath));
+                || soundId == SoundId.SwordHit || soundId == SoundId.SwordUnsheath
+                || soundId == SoundId.SwordSheathe));
     }
 
     /// <summary>

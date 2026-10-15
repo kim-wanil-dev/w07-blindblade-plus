@@ -21,12 +21,13 @@ public sealed class PlayerAttackSlashVfx : MonoBehaviour
     private ParticleSystem _thirdSlashVfx;
 
     [Header("검기 표현")]
+    [SerializeField, Min(0f), InspectorName("일반 참격 후 검기 지연 (초)")]
+    private float _normalSlashDelayAfterImpact = 0.02f;
     [SerializeField, InspectorName("Outline Shader 사용"), Tooltip("켜면 검기를 OutlineVFX로 표시하고, 끄면 검기의 원래 재질로 표시합니다. 연결된 모든 공격 검기에 적용됩니다.")]
     private bool _useOutlineShader = true;
     private PlayerActionDriver _timing;
     private KatanaCombatCoordinator _combat;
     private ParticleSystem _pendingSlashVfx;
-    private ParticleSystem _currentSlashVfx;
     private int _pendingAction;
     private PlayerAttackKind _pendingKind;
     private bool _pending;
@@ -77,18 +78,34 @@ public sealed class PlayerAttackSlashVfx : MonoBehaviour
             else
             {
                 _timing.GetStrikeWindow(_pendingKind, out float start, out _);
+                if (_pendingKind == PlayerAttackKind.Normal && !_combat.IsCounterAttack
+                    || _pendingKind == PlayerAttackKind.IaidoFinisher && _player.TargetedComboStrike > 0)
+                {
+                    _timing.GetPresentationTiming(_pendingKind, out float impact, out _);
+                    start = impact + _normalSlashDelayAfterImpact;
+                }
                 if (_timing.GetPresentationElapsed(_pendingAction) >= start)
                 {
                     _pending = false;
-                    _currentSlashVfx = _pendingSlashVfx;
-                    _currentSlashVfx.gameObject.SetActive(true);
-                    _currentSlashVfx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                    _currentSlashVfx.Play(true);
+                    _pendingSlashVfx.gameObject.SetActive(true);
+                    _pendingSlashVfx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+                    _pendingSlashVfx.Play(true);
                 }
             }
         }
-        if (_currentSlashVfx != null && _currentSlashVfx.gameObject.activeSelf && !_currentSlashVfx.IsAlive(true))
-            _currentSlashVfx.gameObject.SetActive(false);
+        DisableFinishedSlash(_slashVfx);
+        DisableFinishedSlash(_secondSlashVfx);
+        DisableFinishedSlash(_thirdSlashVfx);
+    }
+
+    /// <summary>
+    /// slash의 재생이 끝났으면 해당 파티클 오브젝트를 비활성화한다.
+    /// 다른 타수에서 아직 살아 있는 검기와 공격 예약은 유지한다.
+    /// </summary>
+    private void DisableFinishedSlash(ParticleSystem slash)
+    {
+        if (slash != null && slash.gameObject.activeSelf && !slash.IsAlive(true))
+            slash.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -170,7 +187,7 @@ public sealed class PlayerAttackSlashVfx : MonoBehaviour
         if ((action.Stage == PlayerActionStage.AttackStarted && action.State == PlayerActionState.NormalAttack)
             || action.Stage == PlayerActionStage.SlashStarted)
         {
-            StopSlash();
+            _pending = false;
             _pendingAction = action.ActionId;
             _pendingKind = action.Stage == PlayerActionStage.SlashStarted ? PlayerAttackKind.IaidoFinisher : PlayerAttackKind.Normal;
             _pendingSlashVfx = GetSlashForAttack(_pendingKind);
@@ -200,7 +217,6 @@ public sealed class PlayerAttackSlashVfx : MonoBehaviour
     {
         _pending = false;
         _pendingSlashVfx = null;
-        _currentSlashVfx = null;
         StopParticle(_slashVfx);
         StopParticle(_secondSlashVfx);
         StopParticle(_thirdSlashVfx);

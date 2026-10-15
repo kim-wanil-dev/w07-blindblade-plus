@@ -38,4 +38,5 @@ public enum SoundId
     BeastBossDie = 31,
     BeastBossIdle = 32,
     BeastBossParry = 33,
+    SwordSheathe = 34,
 }

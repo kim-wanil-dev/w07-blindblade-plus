@@ -1,5 +1,11 @@
 ### FMOD 사운드 매니저
 
+#### 2026-10-15 납도 효과음
+
+- 사용자가 지정한 `484299__giddster__drawing-dagger-from-scabbard.wav`를 FMOD 프로젝트의 `Assets/Player_Sword_Sheathe.wav`로 가져오고 `event:/Sword/Player_Sword_Sheathe`를 SFX 뱅크에 추가했다. `SoundId.SwordSheathe = 34`와 `SoundLibrary.asset`의 같은 ID를 연결했다.
+- `PlayerCombatAudio.HandleKatanaEvent`는 `KatanaStage.SheatheStarted`에서 플레이어에게 해당 이벤트를 재생한다. 입력 없이 2초 발도 대기 후의 자동 납도에서 호출된다. `SoundManager.CanPlayDuringMovement`의 플레이어 전투음 허용 목록에도 납도음을 추가했다. 이벤트는 약 1.11초의 원본 파일을 재생하며 납도 애니메이션은 0.3초다.
+- `fmodstudiocl -build -banks SFX -platforms Desktop -export-guids -ignore-warnings` 성공. FMOD가 기존 에셋 경로 압축·스트리밍 설정 충돌 경고를 출력해 `-ignore-warnings`로 빌드했다. Unity Play 청취는 미확인이다.
+
 #### 적 리듬 공격 등록 및 취소 기반 — 2단계 (2026-10-12)
 
 - 새 이벤트 6개를 SoundId 23~28 및 기존 SoundLibrary에 등록했다. 중앙 편집·기본 설정·검증은 [사운드 중앙 편집](사운드_중앙_편집.md)의 「적 리듬 공격 사운드 중앙 등록」을 따른다. 기존 ID와 재생 호출부는 유지했다.

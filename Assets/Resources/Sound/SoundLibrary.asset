@@ -477,6 +477,22 @@ MonoBehaviour:
     _combatCue: 1
     _spatialize2D: 0
     _finishNaturally: 1
+  - _id: 34
+    _type: 1
+    _event:
+      Guid:
+        Data1: -162744304
+        Data2: 1286575757
+        Data3: 2116152962
+        Data4: 499637055
+      Path: event:/Sword/Player_Sword_Sheathe
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 1
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _combatFocusDuration: 0.35
