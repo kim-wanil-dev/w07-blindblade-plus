@@ -189,7 +189,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     /// <summary>
     /// 지난 몸 판정 위치에서 지금 플레이어 몸 중심까지 검기 판정 반경의 구를 쓸어 그 사이 생존 적에게 검기와 같은 피해를 준다.
-    /// 한 프레임에 멀리 움직여도 사이의 적을 건너뛰지 않으며, _struck에 이미 있는 적은 맞히지 않는다. 돌진이 끝나면 _dashing을 끄고 발사 연출도 함께 끝낸 뒤 그 자리에서 검기를 발사한다.
+    /// 한 프레임에 멀리 움직여도 사이의 적을 건너뛰지 않으며, _struck에 이미 있는 적은 맞히지 않는다. 같은 구간에 닿은 적대 수리검은 없앤다.
+    /// 돌진이 끝나면 _dashing을 끄고 발사 연출도 함께 끝낸 뒤 그 자리에서 검기를 발사한다.
     /// </summary>
     private void StrikeAlongDash()
     {
@@ -197,6 +198,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         Vector3 travel = center - _dashLastCenter;
         float distance = Mathf.Max(travel.magnitude, MIN_SWEEP_DISTANCE);
         Vector3 direction = travel.sqrMagnitude > 0.0001f ? travel.normalized : _motor.ViewForward;
+        DefenseShuriken.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         int count = Physics.SphereCastNonAlloc(_dashLastCenter, _wavePrefab.HitRadius, direction, _dashHits,
             distance, _dashHitMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)

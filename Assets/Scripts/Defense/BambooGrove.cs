@@ -314,10 +314,10 @@ public sealed class BambooGrove : MonoBehaviour
     }
 
     /// <summary>
-    /// 잘린 조각이 바닥 받침이나 다른 조각의 point에 접촉면 수직 속도 speed로 닿았을 때 point를 중심으로 구 모양으로 퍼지는 작은 충격 파동을 남긴다.
-    /// 반경은 speed에 비례해 최대 반경까지 커지며, _impactMinimumSpeed보다 느리면 무시한다. 다른 파동과 겹칠 수 있다.
+    /// 잘린 조각이 바닥 받침이나 다른 조각의 point에 접촉면 수직 속도 speed로 닿았을 때 작은 충격 파동을 남긴다.
+    /// _impactMinimumSpeed보다 느리면 무시하며, isBambooCollision이면 같은 위치에서 대나무 파손음도 재생한다.
     /// </summary>
-    public void NotifyImpact(Vector3 point, float speed)
+    public void NotifyImpact(Vector3 point, float speed, bool isBambooCollision)
     {
         if (speed < _impactMinimumSpeed)
             return;
@@ -325,6 +325,8 @@ public sealed class BambooGrove : MonoBehaviour
         _impactSlots[_impactNext] = new Vector4(point.x, point.y, point.z, radius);
         _impactSlotParams[_impactNext] = new Vector4(_impactExpandDuration, _impactAfterimage, _impactStrength, Time.time);
         _impactNext = (_impactNext + 1) % MAX_IMPACT_RIPPLES;
+        if (isBambooCollision)
+            Managers.Sound.Play(SoundId.BambooBreak, point, playDuringMovement: true);
     }
 
     /// <summary>
@@ -435,6 +437,7 @@ public sealed class BambooGrove : MonoBehaviour
         ShowStump(stalk, cutHeight);
         ShowCutFace(stalk, cutPoint, normal);
         LaunchTop(stalk, cutPoint, cutHeight, normal, fallDirection);
+        Managers.Sound.Play(SoundId.BambooBreak, cutPoint, playDuringMovement: true);
         stalk.State = StalkState.Falling;
         stalk.Age = 0f;
         Animate(stalk);
@@ -525,6 +528,7 @@ public sealed class BambooGrove : MonoBehaviour
         piece.Body.linearVelocity = lowerVelocity;
         piece.Body.angularVelocity = angularVelocity;
         SpawnPiece(piece.Owner, upperCenter, rotation, upperLength, upperVelocity, angularVelocity);
+        Managers.Sound.Play(SoundId.BambooBreak, bottom + up * crossing, playDuringMovement: true);
     }
 
     /// <summary>

@@ -104,10 +104,12 @@ public sealed class DefenseSwordWave : MonoBehaviour
 
     /// <summary>
     /// 현재 위치에서 step만큼의 구간을 반경 검사하여 처음 닿은 생존 적마다 _damage만큼, 0이면 남은 체력 전체의 피해를 적용한다.
-    /// 같은 적은 한 번만 처리하고 적이 아닌 접촉은 무시하여 관통 이동을 유지한다.
+    /// 같은 적은 한 번만 처리하고 적이 아닌 접촉은 무시하여 관통 이동을 유지한다. 같은 구간에 닿은 적대 수리검은 없앤다.
     /// </summary>
     private void StrikeAlong(float step)
     {
+        DefenseShuriken.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
+
         int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
             step, _hitMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)
