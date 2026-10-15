@@ -52280,6 +52280,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1968806060}
     m_Modifications:
+    - target: {fileID: 932319107663727525, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0.000015258789
+      objectReference: {fileID: 0}
     - target: {fileID: 1012769593652945470, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: _provider
       value: 
@@ -52287,6 +52291,10 @@ PrefabInstance:
     - target: {fileID: 1138209146400131558, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 2945568411076688482, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0.000015258789
       objectReference: {fileID: 0}
     - target: {fileID: 4215774086827740307, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -52355,6 +52363,10 @@ PrefabInstance:
     - target: {fileID: 7585884103523774683, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 8227192258335351465, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0.000015258789
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -261,6 +261,24 @@ private Vector3 _attackLungeDirection;
             _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
     }
 
+    /// <summary>
+    /// worldTarget을 카메라 기준으로 정면에 두도록 좌우·상하 시점을 즉시 맞춘다.
+    /// 계산한 회전을 _yaw·_pitch와 Transform에 저장하고 이전 시점 입력을 버린다.
+    /// </summary>
+    public void FaceTarget(Vector3 worldTarget)
+    {
+        Vector3 direction = worldTarget - ViewOrigin;
+        if (direction.sqrMagnitude < 0.0001f) return;
+        Vector3 horizontal = Vector3.ProjectOnPlane(direction, Vector3.up);
+        _yaw = Mathf.Atan2(horizontal.x, horizontal.z) * Mathf.Rad2Deg;
+        _pitch = Mathf.Clamp(-Mathf.Atan2(direction.y, horizontal.magnitude) * Mathf.Rad2Deg,
+            -_verticalLookLimit, _verticalLookLimit);
+        _initialYaw = _yaw;
+        _pendingLookDelta = Vector2.zero;
+        transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+        _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+    }
+
     /// <summary>이동과 시점 입력, 현재 평면 속도를 초기화합니다.</summary>
     public void ClearInput()
     {
