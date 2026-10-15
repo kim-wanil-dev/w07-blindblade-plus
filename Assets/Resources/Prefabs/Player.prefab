@@ -342,7 +342,7 @@ MonoBehaviour:
   _normalFootstepNoise: 0.6
   _quietFootstepNoise: 0.2
   _iaidoSpeed: 28
-  _iaidoMaxDistance: 7
+  _iaidoMaxDistance: 9
   _dashCollisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -380,6 +380,7 @@ MonoBehaviour:
   _iaidoAttackRange: 2
   _targetStandOff: 0.15
   _attackOriginHeight: 1.1
+  _targetedIaidoMaxDistance: 8
   _crouchReentryInterval: 0.5
   _normalAttackRecovery: 0
   _guardStartRecovery: 0
@@ -568,6 +569,7 @@ MonoBehaviour:
   _volume: 0.8
   _damageVolumeMultiplier: 1
   _damagePitch: 1
+  _perfectParrySound: 37
   _contactService: {fileID: 1080894898460965423}
 --- !u!114 &8491623887222581670
 MonoBehaviour:
@@ -608,7 +610,7 @@ MonoBehaviour:
   _hitRadius: 0.1
   _attackMask:
     serializedVersion: 2
-    m_Bits: 4294967287
+    m_Bits: 55
   _unlimitedRange: 0
   _bladeBase: {fileID: 8419536739964497533}
   _bladeTip: {fileID: 87512033506737446}
@@ -722,51 +724,12 @@ MonoBehaviour:
   _readyDuration: 5
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
+  _perfectParryInvulnerableDuration: 0.3
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
---- !u!114 &7253810946217735011
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6ecbc2d670254ec6916afd22b6e3e429, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwordWaveLauncher
-  _wavePrefab: {fileID: 8013713205375322848, guid: 0c86a271ec9f4d3eb02235a56501aa56, type: 3}
-  _tiltAngle: 75
-  _spawnDistance: 1
-  _spawnHeightOffset: -0.5
-  _dashDistance: 18
-  _dashDuration: 0.3
-  _launchFovKick: 30
-  _launchTimeScale: 0.1
-  _launchRiseRatio: 0.15
---- !u!114 &6618034975521349126
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c004ce25417d4a96a91fa8d362b01160, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwordWaveGuide
-  _lineMaterial: {fileID: 2100000, guid: d9859716a952461db94ff1cc2aacb654, type: 2}
-  _length: 1.3
-  _lineWidth: 3.5
-  _lineColor: {r: 1, g: 1, b: 1, a: 1}
-  _startOffset: 0.5
-  _fadeDuration: 0.15
-  _revealCount: 4
-  _revealColumns: 3
-  _revealRadius: 1
-  _revealHeight: 0.3
+  _ultimateChargeDuration: 1.5
+  _chargeWorldTimeScale: 0.1
+  _chargeSlowDuration: 0.7
 --- !u!114 &1235757311588725982
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -808,6 +771,7 @@ MonoBehaviour:
   _sheatheSound: 35
   _strikeAngle: 180
   _strikeRadius: 50
+  _bambooViewMargin: 0.1
 --- !u!114 &505307292897056262
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -822,6 +786,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _accentColor: {r: 1, g: 1, b: 1, a: 1}
   _vignetteBlendTime: 0.25
+  _chargeVignetteStartScale: 2
   _glintThickness: 4
 --- !u!114 &980745157811939617
 MonoBehaviour:
@@ -843,9 +808,12 @@ MonoBehaviour:
   _dodgeExpandDuration: 1.2
   _dodgeFadeDuration: 0.6
   _dodgeRingColor: {r: 1, g: 1, b: 1, a: 1}
+  _startPulseRadius: 50
+  _startPulseFadeDuration: 3
   _ringFadeDuration: 0.3
   _glintDuration: 0.35
   _readyVignette: 0.75
+  _chargeVignette: 1
   _perfectDodgeVignette: 0.6
   _normalDodgeVignette: 0
   _dodgeVignetteDuration: 0.4
@@ -882,9 +850,125 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerBulletTimeAudio
   _pitch: 0.6
+  _chargePitch: 0.3
   _lowpassCutoff: 800
   _enterDuration: 0.1
   _exitDuration: 0.3
+--- !u!114 &7253810946217735011
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ecbc2d670254ec6916afd22b6e3e429, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwordWaveLauncher
+  _wavePrefab: {fileID: 8013713205375322848, guid: 0c86a271ec9f4d3eb02235a56501aa56, type: 3}
+  _tiltAngle: 75
+  _spawnDistance: 1
+  _spawnHeightOffset: -0.5
+  _dashDistance: 18
+  _dashDuration: 0.3
+  _dashHitMask:
+    serializedVersion: 2
+    m_Bits: 55
+  _launchFovKick: 30
+  _launchTimeScale: 0.1
+  _launchRiseRatio: 0.15
+--- !u!114 &6618034975521349126
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c004ce25417d4a96a91fa8d362b01160, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwordWaveGuide
+  _lineMaterial: {fileID: 2100000, guid: d9859716a952461db94ff1cc2aacb654, type: 2}
+  _length: 1.3
+  _lineWidth: 3.5
+  _lineColor: {r: 1, g: 1, b: 1, a: 1}
+  _startOffset: 0.5
+  _fadeDuration: 0.15
+  _revealCount: 4
+  _revealColumns: 3
+  _revealRadius: 1
+  _revealHeight: 0.3
+--- !u!114 &7719342256018403921
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4ef227930b4f4bee85f42a20fa403e8f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerBladeBambooCutter
+  _bladeBase: {fileID: 8419536739964497533}
+  _bladeTip: {fileID: 87512033506737446}
+  _normalReach: 4.5
+  _iaidoReach: 4.5
+  _drawSweep: 1
+  _drawDuration: 2
+--- !u!114 &7719342256018403922
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f5abf8fc65014c60b142bf312096ee50, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponReveal
+  _weapon: {fileID: 8362338574495906464}
+  _strength: 1
+--- !u!114 &7719342256018403923
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e2af30b5157e480fa01b3ad156c89eae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwingRipple
+  _ripple:
+    _radius: 14.4
+    _expandDuration: 1.2
+    _ringCount: 1
+    _ringInterval: 0.15
+    _afterimage: 1.2
+    _ringColor: {r: 1, g: 1, b: 1, a: 1}
+--- !u!114 &7719342256018403924
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67eba47dd6c8454692ffd76c037fcca4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateGroundMark
+  _lineColor: {r: 1, g: 1, b: 1, a: 1}
+  _lineWidth: 0.08
+  _maxLength: 60
+  _endFade: 0.05
+  _holdDuration: 2
+  _fadeDuration: 3
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1548,75 +1632,6 @@ ParticleSystem:
   m_CorrespondingSourceObject: {fileID: 3437129320176675894, guid: 641ef78c43feafe4fbcf82c9b47f2227, type: 3}
   m_PrefabInstance: {fileID: 6350052290514714908}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &7719342256018403921
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4ef227930b4f4bee85f42a20fa403e8f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerBladeBambooCutter
-  _bladeBase: {fileID: 8419536739964497533}
-  _bladeTip: {fileID: 87512033506737446}
-  _normalReach: 4.5
-  _iaidoReach: 4.5
-  _drawSweep: 1
-  _drawDuration: 2
---- !u!114 &7719342256018403922
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f5abf8fc65014c60b142bf312096ee50, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponReveal
-  _weapon: {fileID: 8362338574495906464}
-  _strength: 1
---- !u!114 &7719342256018403923
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e2af30b5157e480fa01b3ad156c89eae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerSwingRipple
-  _ripple:
-    _radius: 14.4
-    _expandDuration: 1.2
-    _ringCount: 1
-    _ringInterval: 0.15
-    _afterimage: 1.2
-    _ringColor: {r: 1, g: 1, b: 1, a: 1}
---- !u!114 &7719342256018403924
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 67eba47dd6c8454692ffd76c037fcca4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateGroundMark
-  _lineColor: {r: 1, g: 1, b: 1, a: 1}
-  _lineWidth: 0.08
-  _maxLength: 60
-  _endFade: 0.05
-  _holdDuration: 2
-  _fadeDuration: 3
 --- !u!114 &7719342256018403925
 MonoBehaviour:
   m_ObjectHideFlags: 0

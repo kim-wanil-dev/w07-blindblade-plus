@@ -43,6 +43,7 @@ public sealed class PlayerController : MonoBehaviour
     [SerializeField, Min(0f)] private float _iaidoAttackRange = 2f;
     [SerializeField, Min(0f)] private float _targetStandOff = 0.15f;
     [SerializeField, Min(0f)] private float _attackOriginHeight = 1.1f;
+    [SerializeField, Min(0f)] private float _targetedIaidoMaxDistance = 10f;
 
     [Header("Crouch input")]
     [SerializeField, Min(0f), Tooltip("웅크리기를 다시 시작할 수 있는 최소 간격. 일어서기는 즉시 허용합니다.")]
@@ -482,6 +483,29 @@ public sealed class PlayerController : MonoBehaviour
         return RequestNormalAttack();
     }
 
+    /// <summary>
+    /// actionId의 일반 공격이 연계 가능한 상태인지 확인하고 공개된 돌진 대상을 찾는다.
+    /// 유효하면 현재 공격을 끝내고 strike 타수의 대상 돌진을 시작하며 성공 여부를 반환한다.
+    /// </summary>
+    public bool TryChainTargetedIaidoAttack(int actionId, int strike)
+    {
+        if (_state != PlayerActionState.NormalAttack
+            || actionId != _currentActionId
+            || !_attackImpactResolved
+            || _attackActionFinished
+            || strike < 1
+            || strike > 3
+            || !TrySelectIaidoTarget(
+                out PlayerCombatTarget combatTarget,
+                out Vector3 perceivedPosition,
+                targetedAttack: true))
+            return false;
+
+        FinishAttackAction(0f, _currentAttackOutcome, true);
+        _targetedComboStrike = strike;
+        return BeginTargetedDashAttack(combatTarget, perceivedPosition);
+    }
+
     /// <summary>actionId의 미적중 일반 공격을 취소합니다. skipRecovery는 가드 전환 시 공격 후딜 없이 즉시 상태를 넘깁니다.</summary>
     public bool CancelNormalAttack(int actionId, bool skipRecovery = false)
     {
@@ -618,7 +642,7 @@ public sealed class PlayerController : MonoBehaviour
         if (_state != PlayerActionState.Free
             || strike < 1
             || strike > 3
-            || !TrySelectIaidoTarget(out PlayerCombatTarget combatTarget, out Vector3 perceivedPosition))
+            || !TrySelectIaidoTarget(out PlayerCombatTarget combatTarget, out Vector3 perceivedPosition, targetedAttack: true))
             return false;
 
         _targetedComboStrike = strike;
@@ -656,19 +680,14 @@ public sealed class PlayerController : MonoBehaviour
     private bool BeginTargetedDashAttack(PlayerCombatTarget target, Vector3 perceivedPosition, bool counterAttack = false)
     {
         StartAttack(PlayerActionState.IaidoDash);
+        float maxDistance = counterAttack ? _motor.IaidoMaxDistance : _targetedIaidoMaxDistance;
         _counterDashAttack = counterAttack;
         _targetedDashAttack = true;
         _preferredTargetId = target.TargetId;
         _lockedAttackDirection = Vector3.ProjectOnPlane(perceivedPosition - transform.position, Vector3.up).normalized;
         Publish(PlayerActionStage.DashStarted);
 
-        bool began = _motor != null && _motor.BeginIaidoDash(
-            _preferredTargetId,
-            perceivedPosition,
-            target.HitCollider,
-            target.CollisionRadius,
-            _motor.IaidoMaxDistance,
-            _targetStandOff);
+        bool began = _motor != null && _motor.BeginIaidoDash(_preferredTargetId, perceivedPosition, target.HitCollider, target.CollisionRadius, maxDistance, _targetStandOff);
 
         if (began)
             return true;
@@ -949,14 +968,19 @@ public sealed class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 유효한 감지 대상의 현재 위치로 전방·최대 거리·장애물 없는 경로를 검사한다.
-    /// 가까운 대상과 화면 중심 우선순위로 selected와 perceivedPosition을 출력하고 선택 여부를 반환한다.
+    /// 현재 후보 중 화면 조건·거리·돌진 경로를 만족하는 가장 가까운 적을 선택한다.
+    /// targetedAttack이 참이면 중앙 화면에 걸친 공개 콜라이더와 대상 돌진 거리로 검사하며,
+    /// 선택 결과를 selected와 perceivedPosition에 담고 성공 여부를 반환한다.
     /// </summary>
-    private bool TrySelectIaidoTarget(out PlayerCombatTarget selected, out Vector3 perceivedPosition)
+    private bool TrySelectIaidoTarget(
+        out PlayerCombatTarget selected,
+        out Vector3 perceivedPosition,
+        bool targetedAttack = false)
     {
         selected = default;
         perceivedPosition = Vector3.zero;
-        if (_combatService == null)
+
+        if (_combatService == null || _motor == null)
             return false;
 
         IReadOnlyList<PlayerPerceivedTarget> targets = _perceptionProvider != null
@@ -969,39 +993,69 @@ public sealed class PlayerController : MonoBehaviour
         if (camera == null)
             return false;
 
+        SensoryPerceptionMask mask = null;
+        Plane[] centerPlanes = null;
+        if (targetedAttack)
+        {
+            if (!Game.IsInitialized || Game.Instance.SensoryManager == null)
+                return false;
+
+            mask = Game.Instance.SensoryManager.GetComponent<SensoryPerceptionMask>();
+            if (mask == null)
+                return false;
+
+            // 투영 행렬의 X/Y를 3배로 좁혀 화면 중앙 1/3 영역의 프러스텀을 만든다.
+            Matrix4x4 centerProjection =
+                Matrix4x4.Scale(new Vector3(3f, 3f, 1f)) * camera.projectionMatrix;
+            centerPlanes = GeometryUtility.CalculateFrustumPlanes(
+                centerProjection * camera.worldToCameraMatrix);
+        }
+
         bool found = false;
         float bestCenterOffset = float.MaxValue;
         float bestDistance = float.MaxValue;
         string bestId = null;
         float now = Time.time;
-        float maxDistance = _motor != null ? _motor.IaidoMaxDistance : 0f;
+        float maxDistance = targetedAttack
+            ? _targetedIaidoMaxDistance
+            : _motor.IaidoMaxDistance;
 
         foreach (PlayerPerceivedTarget perceived in targets)
         {
             if (string.IsNullOrEmpty(perceived.TargetId) || now > perceived.ValidUntil)
                 continue;
 
-            if (!_combatService.TryGetTarget(perceived.TargetId, out PlayerCombatTarget combatTarget)
-                || !combatTarget.IsAlive || _motor == null || !_motor.CanDashToTarget(combatTarget))
-                continue;
-
-            Vector3 targetPosition = combatTarget.HitCollider != null
-                ? combatTarget.HitCollider.bounds.center : combatTarget.WorldPosition;
-            Vector3 screen = camera.WorldToViewportPoint(targetPosition);
-            if (screen.z < camera.nearClipPlane || screen.z > camera.farClipPlane
-                || screen.x < 0f || screen.x > 1f || screen.y < 0f || screen.y > 1f)
+            if (!_combatService.TryGetTarget(perceived.TargetId, out PlayerCombatTarget combatTarget) || !combatTarget.IsAlive)
                 continue;
 
             Vector3 toTarget = combatTarget.WorldPosition - transform.position;
             toTarget.y = 0f;
             float distance = toTarget.magnitude;
-            if (distance > maxDistance)
+            if (distance > maxDistance || !_motor.CanDashToTarget(combatTarget))
                 continue;
+
+            Collider hitCollider = combatTarget.HitCollider;
+            Vector3 targetPosition = hitCollider != null ? hitCollider.bounds.center : combatTarget.WorldPosition;
+            Vector3 screen = camera.WorldToViewportPoint(targetPosition);
+
+            if (targetedAttack)
+            {
+                if (hitCollider == null || !GeometryUtility.TestPlanesAABB(centerPlanes, hitCollider.bounds) || !IsColliderRevealed(hitCollider, mask))
+                    continue;
+            }
+            else if (screen.z < camera.nearClipPlane
+                || screen.z > camera.farClipPlane
+                || screen.x < 0f || screen.x > 1f
+                || screen.y < 0f || screen.y > 1f)
+            {
+                continue;
+            }
 
             float centerOffset = Mathf.Abs(screen.x - 0.5f);
             bool isBetter = !found
                 || distance < bestDistance - 0.0001f
-                || (Mathf.Abs(distance - bestDistance) <= 0.0001f && centerOffset < bestCenterOffset - 0.0001f)
+                || (Mathf.Abs(distance - bestDistance) <= 0.0001f
+                    && centerOffset < bestCenterOffset - 0.0001f)
                 || (Mathf.Abs(distance - bestDistance) <= 0.0001f
                     && Mathf.Abs(centerOffset - bestCenterOffset) <= 0.0001f
                     && string.CompareOrdinal(perceived.TargetId, bestId) < 0);
@@ -1018,6 +1072,33 @@ public sealed class PlayerController : MonoBehaviour
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// collider의 중심과 몸체 표면 표본을 mask의 현재 공개도와 비교한다.
+    /// 어느 표본이든 밝혀졌으면 true를 반환하며 상태는 변경하지 않는다.
+    /// </summary>
+    private static bool IsColliderRevealed(
+        Collider collider,
+        SensoryPerceptionMask mask)
+    {
+        Bounds bounds = collider.bounds;
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+
+        return mask.GetVisibility(center) > 0f
+            || mask.GetVisibility(
+                collider.ClosestPoint(center + Vector3.up * extents.y)) > 0f
+            || mask.GetVisibility(
+                collider.ClosestPoint(center + Vector3.down * extents.y)) > 0f
+            || mask.GetVisibility(
+                collider.ClosestPoint(center + Vector3.right * extents.x)) > 0f
+            || mask.GetVisibility(
+                collider.ClosestPoint(center + Vector3.left * extents.x)) > 0f
+            || mask.GetVisibility(
+                collider.ClosestPoint(center + Vector3.forward * extents.z)) > 0f
+            || mask.GetVisibility(
+                collider.ClosestPoint(center + Vector3.back * extents.z)) > 0f;
     }
 
     /// <summary>행동 상태, 충전 완료, 웅크리기 여부로 이동 유형을 반환합니다.</summary>

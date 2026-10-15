@@ -63,7 +63,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     [SerializeField, Min(0f)] private float _normalSheatheDelay = 0.8f;
 
     [Header("발도 시작 2타 연계")]
-    
+
     [SerializeField, Min(0f), InspectorName("1타 후속 입력 예약 시간 (초)")]
     [Tooltip("연계 프레임 전에 미리 입력을 예약할 수 있는 시간입니다. 연계 프레임이 1타 시작 후 약 0.32초라면 0.2초 설정은 약 0.12초부터 입력을 받습니다.")]
     private float _firstAttackInputBufferWindow = 0.2f;
@@ -452,8 +452,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         return Mathf.Max(0f, Mathf.Min(GetChainStart(), duration) - _comboBufferWindow);
     }
 
-/// <summary>1타의 연결 시각과 입력 예약 폭으로 후속 공격 입력을 처음 받을 시각을 반환한다.</summary>
-/// <summary>1타 연결 시각과 예약 폭으로 후속 입력을 받을 시작·종료 시각을 반환한다.</summary>
+    /// <summary>1타의 연결 시각과 입력 예약 폭으로 후속 공격 입력을 처음 받을 시각을 반환한다.</summary>
+    /// <summary>1타 연결 시각과 예약 폭으로 후속 입력을 받을 시작·종료 시각을 반환한다.</summary>
     private void GetFirstAttackBufferWindow(out float start, out float end)
     {
         if (_actionDriver != null)
@@ -474,19 +474,50 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         TryStartQueuedAttack();
         return !_queuedAttack;
     }
-
-    /// <summary>예약된 공격 ID의 판정이 끝났으면 다음 타로 연결한다. 동작 종료 후에는 자유 상태에서 시작하며 실패 시 예약과 타수를 유지한다.</summary>
+    /// <summary>
+    /// 예약된 입력이 실행 가능해지면 공개된 중앙 대상 돌진을 우선 시도한다.
+    /// 대상이 없으면 기존 일반 연계를 실행하고, 성공 시 예약 상태를 비운다.
+    /// </summary>
     private void TryStartQueuedAttack()
     {
         if (_queuedTargetedAttack)
         {
-            // 대상 돌진·이른 연계 예약은 준비 시각에 입력 판단을 처음부터 다시 수행한다.
             ClearQueuedAttack();
             RequestAttack();
             return;
         }
 
         bool wrapToFirstAttack = _queuedWrapToFirstAttack;
+        int nextStrike = wrapToFirstAttack ? 1 : Mathf.Min(_strike + 1, MAX_COMBO_STRIKES);
+
+        if (!_inPlaceAttackRequested)
+        {
+            bool targetedAccepted = false;
+
+            if (_player.CurrentState == PlayerActionState.NormalAttack)
+            {
+                _chainTransition = true;
+                targetedAccepted = _player.TryChainTargetedIaidoAttack(_queuedActionId, nextStrike);
+                _chainTransition = false;
+            }
+            else if (_player.CurrentState == PlayerActionState.Free)
+            {
+                targetedAccepted = _player.RequestTargetedIaidoAttack(nextStrike);
+            }
+
+            if (targetedAccepted)
+            {
+                ClearQueuedAttack();
+                _waiting = false;
+                _waitAfterRecovery = false;
+                return;
+            }
+
+            // 돌진 시작 과정에서 행동이 이미 전환됐다면 일반 공격을 중복 시작하지 않는다.
+            if (!_queuedAttack)
+                return;
+        }
+
         int previousStrike = _strike;
         if (wrapToFirstAttack)
             _strike = 0;
@@ -494,14 +525,16 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         _attackWasDrawn = true;
         _normalRequested = true;
         _chainTransition = true;
+
         bool accepted;
         if (_player.CurrentState == PlayerActionState.Free)
-        {
             accepted = _player.RequestNormalAttack();
-        }
-        else accepted = _player.TryChainNormalAttack(_queuedActionId);
+        else
+            accepted = _player.TryChainNormalAttack(_queuedActionId);
+
         _chainTransition = false;
         _normalRequested = false;
+
         if (accepted)
         {
             ClearQueuedAttack();
