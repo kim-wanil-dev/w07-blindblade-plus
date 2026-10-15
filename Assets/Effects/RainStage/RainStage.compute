@@ -1,0 +1,210 @@
+#pragma kernel Initialize
+#pragma kernel UpdateRain
+
+struct RainDrop
+{
+    float4 PositionState;
+    float4 Data;
+};
+
+struct Sweep
+{
+    float4 A;
+    float4 B;
+    float4 C;
+    float4 D;
+};
+
+RWStructuredBuffer<RainDrop> _Drops;
+StructuredBuffer<Sweep> _HitSweeps;
+StructuredBuffer<Sweep> _TrailSweeps;
+
+int _DropCount;
+int _HitCount;
+int _TrailCount;
+int _Frame;
+float3 _Center;
+float _Radius;
+float _Top;
+float _Bottom;
+float _FallSpeed;
+float _RainDeltaTime;
+float _SplashDeltaTime;
+float _SplashDuration;
+
+uint Hash(uint value)
+{
+    value ^= value >> 16;
+    value *= 0x7feb352du;
+    value ^= value >> 15;
+    value *= 0x846ca68bu;
+    value ^= value >> 16;
+    return value;
+}
+
+float Random01(uint value)
+{
+    return (Hash(value) & 0x00ffffffu) / 16777216.0;
+}
+
+float3 SpawnPosition(uint id, uint sequence)
+{
+    uint seed = id * 747796405u + sequence * 2891336453u;
+    float angle = Random01(seed + 1u) * 6.2831853;
+    float radius = sqrt(Random01(seed + 2u)) * _Radius;
+    float spawnBottom = _Bottom + min(0.5, max(0.0, (_Top - _Bottom) * 0.1));
+    float height = lerp(spawnBottom, _Top, Random01(seed + 3u));
+    return float3(_Center.x + cos(angle) * radius, height,
+        _Center.z + sin(angle) * radius);
+}
+
+float DistanceSqSegment(float3 samplePosition, float3 a, float3 b)
+{
+    float3 ab = b - a;
+    float t = saturate(dot(samplePosition - a, ab) / max(dot(ab, ab), 0.000001));
+    float3 nearest = a + ab * t;
+    return dot(samplePosition - nearest, samplePosition - nearest);
+}
+
+float DistanceSqTriangle(float3 samplePosition, float3 a, float3 b, float3 c)
+{
+    float3 ab = b - a;
+    float3 ac = c - a;
+    float3 normal = cross(ab, ac);
+    float normalSq = dot(normal, normal);
+    if (normalSq < 0.000001)
+        return min(DistanceSqSegment(samplePosition, a, b),
+            min(DistanceSqSegment(samplePosition, b, c), DistanceSqSegment(samplePosition, c, a)));
+
+    float3 ap = samplePosition - a;
+    float d1 = dot(ab, ap);
+    float d2 = dot(ac, ap);
+    if (d1 <= 0 && d2 <= 0) return dot(ap, ap);
+
+    float3 bp = samplePosition - b;
+    float d3 = dot(ab, bp);
+    float d4 = dot(ac, bp);
+    if (d3 >= 0 && d4 <= d3) return dot(bp, bp);
+    float vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0)
+    {
+        float v = d1 / (d1 - d3);
+        float3 delta = samplePosition - (a + v * ab);
+        return dot(delta, delta);
+    }
+
+    float3 cp = samplePosition - c;
+    float d5 = dot(ab, cp);
+    float d6 = dot(ac, cp);
+    if (d6 >= 0 && d5 <= d6) return dot(cp, cp);
+    float vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0)
+    {
+        float w = d2 / (d2 - d6);
+        float3 delta = samplePosition - (a + w * ac);
+        return dot(delta, delta);
+    }
+    float va = d3 * d6 - d5 * d4;
+    if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0)
+    {
+        float w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        float3 delta = samplePosition - (b + w * (c - b));
+        return dot(delta, delta);
+    }
+    float denom = 1.0 / (va + vb + vc);
+    float3 nearest = a + ab * (vb * denom) + ac * (vc * denom);
+    float3 difference = samplePosition - nearest;
+    return dot(difference, difference);
+}
+
+bool TouchesSweep(float3 previous, float3 current, Sweep sweep)
+{
+    float3 a = sweep.A.xyz;
+    float3 b = sweep.B.xyz;
+    float3 c = sweep.C.xyz;
+    float3 d = sweep.D.xyz;
+    float thickness = sweep.A.w;
+    float3 lower = min(min(a, b), min(c, d)) - thickness;
+    float3 upper = max(max(a, b), max(c, d)) + thickness;
+    if (any(max(previous, current) < lower) || any(min(previous, current) > upper))
+        return false;
+
+    float radiusSq = thickness * thickness;
+    int samples = min(24, max(1, (int)ceil(length(current - previous) / max(thickness, 0.04))));
+    [loop]
+    for (int sampleIndex = 0; sampleIndex <= samples; sampleIndex++)
+    {
+        float3 samplePosition = lerp(previous, current, sampleIndex / (float)samples);
+        if (DistanceSqTriangle(samplePosition, a, b, c) <= radiusSq ||
+            DistanceSqTriangle(samplePosition, b, d, c) <= radiusSq)
+            return true;
+    }
+    return false;
+}
+
+bool TouchesAnyTrail(float3 previous, float3 current)
+{
+    [loop]
+    for (int i = 0; i < _TrailCount; i++)
+    {
+        if (TouchesSweep(previous, current, _TrailSweeps[i])) return true;
+    }
+    return false;
+}
+
+[numthreads(64, 1, 1)]
+void Initialize(uint3 threadId : SV_DispatchThreadID)
+{
+    uint id = threadId.x;
+    if (id >= (uint)_DropCount) return;
+    RainDrop drop;
+    drop.PositionState = float4(SpawnPosition(id, 0u), 0);
+    drop.Data = float4(Random01(id + 121u), 0, 0, 0);
+    _Drops[id] = drop;
+}
+
+[numthreads(64, 1, 1)]
+void UpdateRain(uint3 threadId : SV_DispatchThreadID)
+{
+    uint id = threadId.x;
+    if (id >= (uint)_DropCount) return;
+    RainDrop drop = _Drops[id];
+    if (drop.PositionState.w == 1)
+    {
+        drop.Data.y += _SplashDeltaTime;
+        if (drop.Data.y >= _SplashDuration) drop.PositionState.w = 2;
+        _Drops[id] = drop;
+        return;
+    }
+
+    if (drop.PositionState.w == 2)
+    {
+        drop.PositionState.xyz = SpawnPosition(id, (uint)_Frame);
+        if (!TouchesAnyTrail(drop.PositionState.xyz, drop.PositionState.xyz))
+            drop.PositionState.w = 0;
+        _Drops[id] = drop;
+        return;
+    }
+
+    float3 previous = drop.PositionState.xyz;
+    float3 current = previous - float3(0, _FallSpeed * _RainDeltaTime, 0);
+    float2 offset = current.xz - _Center.xz;
+    if (current.y < _Bottom || dot(offset, offset) > (_Radius + 2) * (_Radius + 2))
+    {
+        current = SpawnPosition(id, (uint)_Frame);
+        previous = current;
+    }
+    drop.PositionState.xyz = current;
+
+    [loop]
+    for (int i = 0; i < _HitCount; i++)
+    {
+        if (!TouchesSweep(previous, current, _HitSweeps[i])) continue;
+        drop.PositionState.w = 1;
+        drop.Data.y = 0;
+        _Drops[id] = drop;
+        return;
+    }
+    if (TouchesAnyTrail(previous, current)) drop.PositionState.w = 2;
+    _Drops[id] = drop;
+}
