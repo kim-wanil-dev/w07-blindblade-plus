@@ -201,8 +201,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         foreach (DefenseShuriken projectile in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
         {
             if (!projectile.IsFlying) continue;
-            Managers.Sound.PlayCue(CombatSoundCue.Guard, projectile.transform.position);
-            projectile.Release();
+            projectile.ReleaseBlocked();
         }
     }
 

@@ -229,6 +229,37 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
+    /// start에서 end까지 radius 반경으로 쓸고 지나간 공간에 판정 구가 닿은 적대 비행 수리검을 모두 그 위치에서 가드 성공 소리를 내며 없앤다.
+    /// 플레이어 검기와 돌진이 경로의 수리검을 베어 없앨 때 쓰며, 반사된 수리검은 그대로 둔다.
+    /// </summary>
+    public static void ReleaseInSweep(Vector3 start, Vector3 end, float radius)
+    {
+        Vector3 travel = end - start;
+        float travelLengthSquared = travel.sqrMagnitude;
+        foreach (DefenseShuriken shuriken in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
+        {
+            if (!shuriken._flying)
+                continue;
+            Vector3 position = shuriken.transform.position;
+            float progress = travelLengthSquared > 0f ? Mathf.Clamp01(Vector3.Dot(position - start, travel) / travelLengthSquared) : 0f;
+            float reach = radius + shuriken._hitRadius;
+            if ((position - (start + travel * progress)).sqrMagnitude > reach * reach)
+                continue;
+            shuriken.ReleaseBlocked();
+        }
+    }
+
+    /// <summary>
+    /// 플레이어 공격에 막힌 수리검을 지금 위치에서 가드 성공 소리를 내며 없앤다.
+    /// 궁극기와 검기·돌진이 같은 소리와 해제 경로를 쓰도록 함께 부르며, 비행이 끝나 Released를 알린 뒤 파괴된다.
+    /// </summary>
+    public void ReleaseBlocked()
+    {
+        Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
+        Release();
+    }
+
+    /// <summary>
     /// collider가 자신과 적을 제외한 대상 플레이어 또는 지형이면 true를 반환한다.
     /// 다른 피해 수신자는 통과하여 대상 플레이어에게만 피해를 전달한다.
     /// </summary>
