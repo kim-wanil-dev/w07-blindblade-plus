@@ -625,6 +625,19 @@ public sealed class PlayerController : MonoBehaviour
         return BeginTargetedDashAttack(combatTarget, perceivedPosition);
     }
 
+    /// <summary>
+    /// 지금 좌클릭하면 대상 돌진이 고를 적을 TrySelectIaidoTarget과 같은 규칙으로 조회한다.
+    /// 자유·가드 상태에서만 target에 후보를 출력하고 찾으면 true를 반환하며 행동 상태는 변경하지 않는다.
+    /// </summary>
+    public bool TryGetTargetedDashCandidate(out PlayerCombatTarget target)
+    {
+        target = default;
+        if (_state != PlayerActionState.Free && _state != PlayerActionState.Guarding)
+            return false;
+
+        return TrySelectIaidoTarget(out target, out _);
+    }
+
     /// <summary>targetId의 생존 적에게 기존 대상 대시를 시작한다. 거리·벽 제한을 검사하고 반격 대시의 수락 여부를 반환한다.</summary>
     public bool RequestCounterDashAttack(string targetId)
     {

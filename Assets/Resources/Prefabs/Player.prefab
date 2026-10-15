@@ -259,6 +259,7 @@ GameObject:
   - component: {fileID: 7719342256018403922}
   - component: {fileID: 7719342256018403923}
   - component: {fileID: 7719342256018403924}
+  - component: {fileID: 7719342256018403925}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1328,6 +1329,16 @@ Animator:
   m_CorrespondingSourceObject: {fileID: 3502371185263496807, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
   m_PrefabInstance: {fileID: 4942158160852825287}
   m_PrefabAsset: {fileID: 0}
+--- !u!23 &1746509643972831858 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6677373617046904501, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  m_PrefabInstance: {fileID: 4942158160852825287}
+  m_PrefabAsset: {fileID: 0}
+--- !u!23 &5036744704484886163 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 103598420115649108, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  m_PrefabInstance: {fileID: 4942158160852825287}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &6007029229710333164
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1606,3 +1617,19 @@ MonoBehaviour:
   _endFade: 0.05
   _holdDuration: 2
   _fadeDuration: 3
+--- !u!114 &7719342256018403925
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2303cb48b52a4f4fa911250005b0ac39, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerDashTargetThread
+  _viewCamera: {fileID: 421133909551674746}
+  _scabbard: {fileID: 1746509643972831858}
+  _grip: {fileID: 5036744704484886163}
+  _material: {fileID: 2100000, guid: 9e56680fd30a4ec0b80ad2e97d836f7f, type: 2}
