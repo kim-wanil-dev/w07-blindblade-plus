@@ -541,6 +541,22 @@ MonoBehaviour:
     _combatCue: 0
     _spatialize2D: 0
     _finishNaturally: 0
+  - _id: 38
+    _type: 1
+    _event:
+      Guid:
+        Data1: -1350947531
+        Data2: 1281052315
+        Data3: 48346026
+        Data4: -663705023
+      Path: event:/Bamboo/Bamboo_break
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 1
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _cinematicBusPath: bus:/Cinematic_Bus

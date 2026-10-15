@@ -26,7 +26,7 @@ public sealed class BambooDebrisImpact : MonoBehaviour
         // 접촉면에 수직으로 닿는 속도만 충격 세기로 쓴다.
         ContactPoint contact = collision.GetContact(0);
         float speed = Mathf.Abs(Vector3.Dot(collision.relativeVelocity, contact.normal));
-        _grove.NotifyImpact(contact.point, speed);
+        _grove.NotifyImpact(contact.point, speed, collision.collider != _floor);
     }
 
     /// <summary>충돌을 알릴 grove와 바닥 받침 충돌체 floor를 연결한다.</summary>

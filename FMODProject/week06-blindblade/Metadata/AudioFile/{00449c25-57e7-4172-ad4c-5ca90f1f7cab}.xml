@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{00449c25-57e7-4172-ad4c-5ca90f1f7cab}">
+		<property name="assetPath">
+			<value>158973__cgeffex__chopping-wood_01_[cut_1sec].mp3</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>48</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>1.464</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{eaacc823-8802-44ec-b35a-5bbed5c487d9}</destination>
+		</relationship>
+	</object>
+</objects>

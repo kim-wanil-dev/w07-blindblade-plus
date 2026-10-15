@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{4982624b-6fab-4abb-97bc-6e319856e7e7}">
+		<property name="assetPath">
+			<value>Scaffolding_hit6.ogg.mp3</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.0999985</value>
+		</property>
+		<property name="channelCount">
+			<value>2</value>
+		</property>
+		<property name="length">
+			<value>0.36571428571428571</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{eaacc823-8802-44ec-b35a-5bbed5c487d9}</destination>
+		</relationship>
+	</object>
+</objects>
