@@ -7,9 +7,11 @@ using UnityEngine;
 using BlindBlade.Combat.Contracts;
 
 /// <summary>
-/// 강화 공격을 세계 가르기 한 장면으로 실행한다.
-/// 사선을 따라 큰 곡선 검격이 그어지며 실시간 화면이 둘로 갈라지고, 적이 아직 서 있는 채로 머문 뒤 납도와 함께 닫히며 대상이 동시에 쓰러진다.
-/// 수락 순간 비행 중인 투사체는 연출 없이 사라진다. 연출 시간은 일시정지를 제외한 실시간이며 화면 표현은 EmpowerOverlay가 그린다.
+/// 강화 공격을 암전 속 일섬 한 장면으로 실행한다.
+/// 화면이 암흑으로 덮인 채 사선을 따라 큰 곡선 검격과 갈라진 선이 그어지고, 적이 아직 서 있는 동안 머문 뒤
+/// 납도와 함께 화면이 돌아오며 대상이 동시에 쓰러지고 선이 먹 조각으로 흩어진다.
+/// 수락 순간 비행 중인 투사체는 연출 없이 사라진다. 카메라 출력은 바꾸지 않으며 화면 표현은 EmpowerOverlay가 그린다.
+/// 연출 시간은 일시정지를 제외한 실시간이다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(EmpowerOverlay))]
@@ -17,26 +19,22 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 {
     private const string PATTERN_ID = "EmpowerStrike";
 
-    [Header("세계 가르기")]
-    [SerializeField, Range(-80f, 80f), Tooltip("세계를 가르는 사선의 화면 기울기(도).")]
+    [Header("암전")]
+    [SerializeField, Min(0f), Tooltip("수락부터 납도까지 화면이 암흑으로 덮인 채 검격과 갈라진 선만 보이는 실시간.")]
+    private float _blackoutDuration = 1.53f;
+    [SerializeField, Range(-80f, 80f), Tooltip("갈라진 선과 곡선 검격의 화면 기울기(도).")]
     private float _cutAngle = 24f;
     [SerializeField, Min(1f), Tooltip("사선을 따라 그어지는 곡선 검격 지름(1920×1080 기준 픽셀).")]
     private float _cutSlashSize = 2400f;
-    [SerializeField, Min(0f), Tooltip("갈라진 두 절반이 벌어지는 거리(1920×1080 기준 픽셀).")]
-    private float _splitDistance = 70f;
-    [SerializeField, Min(0.01f)] private float _splitOpenDuration = 0.25f;
-    [SerializeField, Min(0f), Tooltip("갈라진 세계를 보는 동안 적이 아직 서 있는 실시간.")]
-    private float _splitHoldDuration = 1.2f;
     [SerializeField, Min(0.5f)] private float _seamThickness = 4f;
     [SerializeField, Range(0f, 1f)] private float _cutFlash = 0.55f;
-    [SerializeField, Tooltip("갈라지는 순간과 납도 순간 화면이 당겨지는 FOV 변화량(도).")]
+    [SerializeField, Tooltip("납도 순간 화면이 돌아올 때 당겨지는 FOV 변화량(도).")]
     private float _fovPunch = 10f;
     [SerializeField, Min(0.01f)] private float _fovPunchDuration = 0.35f;
-    [SerializeField, Min(0f), Tooltip("갈라진 세계를 보는 동안 카메라가 천천히 앞으로 밀리는 FOV 감소량(도).")]
+    [SerializeField, Min(0f), Tooltip("암전 동안 카메라가 앞으로 밀려 화면이 돌아오는 순간 남아 있는 FOV 감소량(도). 복귀 후 0.25초에 걸쳐 풀린다.")]
     private float _pushInFov = 6f;
 
     [Header("납도")]
-    [SerializeField, Min(0.01f)] private float _splitCloseDuration = 0.08f;
     [SerializeField, Range(0f, 1f)] private float _sheatheFlash = 0.4f;
     [SerializeField, Min(0f)] private float _sheathePause = 0.3f;
     [SerializeField, Min(0)] private int _scatterCount = 48;
@@ -53,7 +51,6 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     private EmpowerOverlay _overlay;
     private PlayerMotor _motor;
     private Camera _camera;
-    private RenderTexture _liveTexture;
     private Coroutine _routine;
     private float _baseFov;
     private float _fovPunchAge = -1f;
@@ -75,11 +72,6 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         Stop();
     }
 
-    void OnDestroy()
-    {
-        ReleaseLiveTexture();
-    }
-
     void Update()
     {
         UpdateFov();
@@ -95,12 +87,11 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         _routine = StartCoroutine(RunSequence(onFinished));
     }
 
-    /// <summary>재생 중인 연출을 멈추고 화면 연출·카메라 출력·FOV를 원래대로 돌린다. onFinished는 호출하지 않는다.</summary>
+    /// <summary>재생 중인 연출을 멈추고 화면 연출과 FOV를 원래대로 돌린다. onFinished는 호출하지 않는다.</summary>
     public void Stop()
     {
         if (_routine != null) StopCoroutine(_routine);
         _routine = null;
-        EndLiveSplit();
         _overlay.ClearAll();
         _fovPunchAge = -1f;
         _pushIn = 0f;
@@ -110,7 +101,8 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// 투사체를 없앤 뒤 세계를 사선으로 갈라 머물고, 납도와 함께 닫으며 대상 적을 동시에 처치한 다음 onFinished를 호출한다.
+    /// 투사체를 없앤 뒤 _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
+    /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 선을 흩뜨린 다음 onFinished를 호출한다.
     /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished)
@@ -118,19 +110,17 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         List<EnemyHealth> targets = CollectFrontEnemies();
         ReleaseProjectiles();
 
-        // 세계 가르기: 큰 곡선 검격과 함께 실시간 세계가 둘로 갈라진 채 적은 아직 서 있다.
+        // 암전: 화면이 검게 덮인 채 곡선 검격과 갈라진 선만 그어지고 적은 아직 서 있다.
+        _overlay.SetVoid(1f);
         SlashAcross();
-        BeginLiveSplit();
         _overlay.ShowCutLine(_cutAngle, _seamThickness, 0.08f);
         _overlay.Flash(_cutFlash, 0.2f);
-        PunchFov();
-        yield return AnimateSplit(0f, _splitDistance, _splitOpenDuration);
-        PushIn(_pushInFov, _splitHoldDuration);
-        yield return WaitReal(_splitHoldDuration);
+        // 암흑 아래에서 카메라를 밀어 두어 화면이 돌아오는 순간 당겨졌다 풀리는 느낌을 준다.
+        PushIn(_pushInFov, _blackoutDuration);
+        yield return WaitReal(_blackoutDuration);
 
-        // 납도: 갈라진 세계가 닫히는 순간 선이 흩어지고 대상 적이 동시에 쓰러진다.
-        yield return AnimateSplit(_splitDistance, 0f, _splitCloseDuration);
-        EndLiveSplit();
+        // 납도: 암흑이 걷히는 순간 선이 흩어지고 대상 적이 동시에 쓰러진다.
+        _overlay.SetVoid(0f);
         StrikeEnemies(targets);
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
         _overlay.Flash(_sheatheFlash, 0.2f);
@@ -152,50 +142,6 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         Vector2 bulge = new Vector2(Mathf.Cos(rotation * Mathf.Deg2Rad), Mathf.Sin(rotation * Mathf.Deg2Rad));
         _overlay.Slash(-bulge * (_cutSlashSize * 0.42f), _cutSlashSize, rotation, false, 0.1f, 0.5f,
             _overlay.AccentColor);
-    }
-
-    /// <summary>카메라가 렌더 텍스처에 그리게 바꾸고 그 실시간 화면을 사선 두 절반으로 오버레이에 보인다. 틈은 암흑으로 검게 보인다.</summary>
-    private void BeginLiveSplit()
-    {
-        ReleaseLiveTexture();
-        _liveTexture = new RenderTexture(Screen.width, Screen.height, 24);
-        _camera.targetTexture = _liveTexture;
-        _overlay.SetVoid(1f);
-        _overlay.SetSplit(_liveTexture, _cutAngle, 0f);
-    }
-
-    /// <summary>separation을 from에서 to로 duration 동안 바꿔 갈라진 두 절반을 벌리거나 닫는다.</summary>
-    private IEnumerator AnimateSplit(float from, float to, float duration)
-    {
-        float elapsed = 0f;
-        while (elapsed < duration)
-        {
-            float t = 1f - Mathf.Pow(1f - Mathf.Clamp01(elapsed / duration), 3f);
-            _overlay.SetSplit(_liveTexture, _cutAngle, Mathf.Lerp(from, to, t));
-            yield return null;
-            elapsed += EmpowerOverlay.RealDeltaTime();
-        }
-        _overlay.SetSplit(_liveTexture, _cutAngle, to);
-    }
-
-    /// <summary>카메라를 다시 화면에 직접 그리게 돌리고 사선 절반과 암흑을 숨긴 뒤 렌더 텍스처를 해제한다.</summary>
-    private void EndLiveSplit()
-    {
-        if (_liveTexture == null) return;
-        _camera.targetTexture = null;
-        _overlay.SetSplit(null, 0f, 0f);
-        _overlay.SetVoid(0f);
-        ReleaseLiveTexture();
-    }
-
-    /// <summary>만든 렌더 텍스처가 있으면 해제·파괴하고 _liveTexture를 비운다.</summary>
-    private void ReleaseLiveTexture()
-    {
-        if (_liveTexture == null) return;
-        if (_camera != null && _camera.targetTexture == _liveTexture) _camera.targetTexture = null;
-        _liveTexture.Release();
-        Destroy(_liveTexture);
-        _liveTexture = null;
     }
 
     /// <summary>seconds만큼 일시정지를 제외한 실시간을 기다린다.</summary>

@@ -5,14 +5,13 @@ using UnityEngine.UI;
 
 /// <summary>
 /// 퍼펙트 패링과 강화 공격의 화면 연출을 그리는 플레이어 전용 오버레이 캔버스다.
-/// 고정 층(비네트·암흑·실시간 사선 절반·섬광·칼날 빛줄기·갈라진 선)과 곡선 검격·먹 조각 같은 작은 UI 입자를 제공한다.
+/// 고정 층(비네트·암흑·섬광·칼날 빛줄기·갈라진 선)과 곡선 검격·먹 조각 같은 작은 UI 입자를 제공한다.
 /// 모든 시간은 일시정지를 제외한 실시간이다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class EmpowerOverlay : MonoBehaviour
 {
     private const int CANVAS_SORTING_ORDER = 100;
-    private const string OPAQUE_UI_SHADER_PATH = "Empower/EmpowerOpaqueUI";
     private static readonly Vector2 REFERENCE_RESOLUTION = new Vector2(1920f, 1080f);
 
     [Header("색")]
@@ -30,11 +29,8 @@ public sealed class EmpowerOverlay : MonoBehaviour
     private GameObject _canvasRoot;
     private RectTransform _canvasRect;
     private RectTransform _effectRoot;
-    private Material _splitMaterial;
     private Image _vignette;
     private Image _void;
-    private EmpowerSplitGraphic _upperHalf;
-    private EmpowerSplitGraphic _lowerHalf;
     private Image _flash;
     private Image _glint;
     private Image _cutLine;
@@ -76,7 +72,6 @@ public sealed class EmpowerOverlay : MonoBehaviour
     void OnDestroy()
     {
         if (_canvasRoot != null) Destroy(_canvasRoot);
-        if (_splitMaterial != null) Destroy(_splitMaterial);
     }
 
     void Update()
@@ -118,7 +113,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _glint.gameObject.SetActive(true);
     }
 
-    /// <summary>화면을 alpha 투명도의 암흑으로 덮는다. 갈라진 세계의 틈을 검게 보이게 할 때 쓴다.</summary>
+    /// <summary>화면을 alpha 투명도의 암흑으로 덮는다. 강화 공격의 암전에 쓰며 HUD보다 위에 그린다.</summary>
     public void SetVoid(float alpha)
     {
         if (_canvasRoot == null) return;
@@ -177,25 +172,6 @@ public sealed class EmpowerOverlay : MonoBehaviour
         ApplyParticle(particle);
     }
 
-    /// <summary>
-    /// texture 화면을 화면 중심을 지나는 angle도 선으로 갈라 두 절반을 separation만큼 벌려 alpha 투명도로 보인다.
-    /// texture가 null이면 두 절반을 숨긴다.
-    /// </summary>
-    public void SetSplit(Texture texture, float angle, float separation, float alpha = 1f)
-    {
-        if (_canvasRoot == null) return;
-        bool visible = texture != null;
-        _upperHalf.gameObject.SetActive(visible);
-        _lowerHalf.gameObject.SetActive(visible);
-        if (!visible) return;
-        _upperHalf.Configure(texture, angle, true);
-        _lowerHalf.Configure(texture, angle, false);
-        _upperHalf.SetSeparation(separation);
-        _lowerHalf.SetSeparation(separation);
-        _upperHalf.color = new Color(1f, 1f, 1f, alpha);
-        _lowerHalf.color = new Color(1f, 1f, 1f, alpha);
-    }
-
     /// <summary>화면 중심을 지나 angle도로 기운 강조색 한 줄을 thickness 두께로 extendDuration 동안 가운데에서 양 끝까지 뻗게 한다.</summary>
     public void ShowCutLine(float angle, float thickness, float extendDuration)
     {
@@ -247,7 +223,6 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _cutFadeAge = -1f;
         _cutLine.gameObject.SetActive(false);
         SetVoid(0f);
-        SetSplit(null, 0f, 0f);
         foreach (Particle particle in _particles) particle.Image.gameObject.SetActive(false);
     }
 
@@ -344,7 +319,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
     }
 
     /// <summary>
-    /// 오버레이 캔버스와 고정 층을 아래부터 비네트·암흑·사선 절반·입자 층·갈라진 선·칼날 빛줄기·섬광 순서로 만든다.
+    /// 오버레이 캔버스와 고정 층을 아래부터 비네트·암흑·입자 층·갈라진 선·칼날 빛줄기·섬광 순서로 만든다.
     /// 캔버스는 HUD보다 위에 그리며 입력을 가로채지 않는다.
     /// </summary>
     private void CreateCanvas()
@@ -363,8 +338,6 @@ public sealed class EmpowerOverlay : MonoBehaviour
         Stretch(_vignette.rectTransform);
         _void = CreateImage("Void", Color.black, null, _canvasRect);
         Stretch(_void.rectTransform);
-        _upperHalf = CreateSplitHalf("SplitUpper");
-        _lowerHalf = CreateSplitHalf("SplitLower");
         GameObject effectRoot = new GameObject("Effects", typeof(RectTransform));
         effectRoot.transform.SetParent(_canvasRect, false);
         _effectRoot = (RectTransform)effectRoot.transform;
@@ -374,27 +347,6 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _flash = CreateImage("Flash", Color.white, null, _canvasRect);
         Stretch(_flash.rectTransform);
         ClearAll();
-    }
-
-    /// <summary>
-    /// objectName의 사선 절반 그래픽을 캔버스 전체 크기로 만들어 반환한다.
-    /// 카메라 렌더 텍스처의 알파가 0이어도 보이도록 텍스처 알파를 무시하는 재질을 쓴다.
-    /// </summary>
-    private EmpowerSplitGraphic CreateSplitHalf(string objectName)
-    {
-        GameObject child = new GameObject(objectName, typeof(RectTransform));
-        child.transform.SetParent(_canvasRect, false);
-        EmpowerSplitGraphic graphic = child.AddComponent<EmpowerSplitGraphic>();
-        graphic.raycastTarget = false;
-        if (_splitMaterial == null)
-        {
-            Shader shader = Resources.Load<Shader>(OPAQUE_UI_SHADER_PATH);
-            if (shader != null) _splitMaterial = new Material(shader);
-            else Debug.LogError("강화 연출 셰이더를 찾을 수 없습니다: " + OPAQUE_UI_SHADER_PATH, this);
-        }
-        graphic.material = _splitMaterial;
-        Stretch(graphic.rectTransform);
-        return graphic;
     }
 
     /// <summary>objectName·color·sprite로 화면 중심에 고정된 이미지를 캔버스 아래에 만들어 반환한다.</summary>
