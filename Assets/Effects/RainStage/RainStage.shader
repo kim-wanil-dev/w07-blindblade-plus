@@ -30,10 +30,14 @@ Shader "BlindBlade/RainStage"
             float3 _CameraUp;
             float _Roundness;
             float _DropSize;
+            float _BulletDropletScale;
             float _StreakLength;
             float _SplashSize;
             float _SplashDuration;
-            float4 _RainColor;
+            float _OutlineWidth;
+            float _OutlineOpacity;
+            float4 _OutlineColor;
+            float4 _SplashColor;
 
             struct Attributes
             {
@@ -58,9 +62,10 @@ Shader "BlindBlade/RainStage"
                 float splashProgress = saturate(drop.Data.y / max(_SplashDuration, 0.0001));
                 float halfWidth = lerp(_DropSize * 0.17, _DropSize, _Roundness);
                 float halfHeight = lerp(_StreakLength * 0.5, _DropSize, _Roundness);
+                float dropletScale = lerp(1.0, _BulletDropletScale, _Roundness);
                 float splashHalfSize = _SplashSize * (0.15 + 0.35 * splashProgress);
-                halfWidth = lerp(halfWidth, splashHalfSize, isSplash);
-                halfHeight = lerp(halfHeight, splashHalfSize, isSplash);
+                halfWidth = lerp(halfWidth * dropletScale, splashHalfSize, isSplash);
+                halfHeight = lerp(halfHeight * dropletScale, splashHalfSize, isSplash);
                 float3 world = drop.PositionState.xyz
                     + _CameraRight * input.positionOS.x * halfWidth
                     + _CameraUp * input.positionOS.y * halfHeight;
@@ -92,14 +97,15 @@ Shader "BlindBlade/RainStage"
                         dots += 1.0 - smoothstep(0.04, 0.12, length(uv - splashPoint));
                     }
                     float alpha = saturate(ring * 0.55 + dots) * (1.0 - progress);
-                    return half4(_RainColor.rgb, alpha * _RainColor.a * 1.8);
+                    return half4(_SplashColor.rgb, saturate(alpha * _SplashColor.a * 1.8));
                 }
 
-                float body = 1.0 - smoothstep(0.65, 1.0, radius);
-                float sphereShade = saturate(0.35 + (1.0 - radius * radius) * 0.45
-                    + (1.0 - smoothstep(0.0, 0.45, length(uv - float2(-0.3, 0.4)))) * 0.65);
-                float brightness = lerp(0.7, sphereShade, _Roundness);
-                return half4(_RainColor.rgb * brightness, body * _RainColor.a);
+                float edgeDistance = abs(radius - 1.0);
+                float edgeAntialias = max(fwidth(radius), 0.002);
+                float outline = 1.0 - smoothstep(_OutlineWidth,
+                    _OutlineWidth + edgeAntialias, edgeDistance);
+                return half4(_OutlineColor.rgb,
+                    outline * _OutlineColor.a * _OutlineOpacity);
             }
             ENDHLSL
         }

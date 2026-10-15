@@ -62301,16 +62301,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RainStageWeather
   _simulation: {fileID: 7200000, guid: cc68cc2feb2c42a1a9747e14885535e9, type: 3}
   _rainMaterial: {fileID: 2100000, guid: d154e75c411545adb66cf2cffecb405f, type: 2}
-  _dropletCount: 3072
+  _dropletCount: 2048
   _nearRadius: 15
   _heightAboveCamera: 7
   _depthBelowCamera: 2
   _fallSpeed: 11
   _dropletSize: 0.055
   _streakLength: 0.24
-  _rainColor: {r: 0.65, g: 0.82, b: 1, a: 0.42}
+  _dropletOutlineColor: {r: 0.82, g: 0.87, b: 0.93, a: 1}
+  _dropletOutlineWidth: 0.055
+  _dropletOutlineOpacity: 0.58
   _bulletRainSpeed: 0.012
   _shapeTransitionTime: 0.12
+  _bulletDropletScale: 0.33
   _bulletSplashSpeed: 0.65
   _bladeThickness: 0.12
   _waveThickness: 0.35
@@ -62319,6 +62322,7 @@ MonoBehaviour:
   _maximumHitsPerFrame: 48
   _splashDuration: 0.3
   _splashSize: 0.35
+  _splashColor: {r: 1, g: 1, b: 1, a: 0.48}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

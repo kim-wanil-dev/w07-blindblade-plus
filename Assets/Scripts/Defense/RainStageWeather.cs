@@ -19,18 +19,21 @@ public sealed class RainStageWeather : MonoBehaviour
     [SerializeField] private Material _rainMaterial;
 
     [Header("비")]
-    [SerializeField, Range(256, 8192)] private int _dropletCount = 3072;
+    [SerializeField, Range(256, 8192)] private int _dropletCount = 2048;
     [SerializeField, Range(3f, 30f)] private float _nearRadius = 15f;
     [SerializeField, Min(1f)] private float _heightAboveCamera = 7f;
     [SerializeField, Min(0f)] private float _depthBelowCamera = 2f;
     [SerializeField, Min(0.1f)] private float _fallSpeed = 11f;
     [SerializeField, Min(0.005f)] private float _dropletSize = 0.055f;
     [SerializeField, Min(0.01f)] private float _streakLength = 0.24f;
-    [SerializeField] private Color _rainColor = new Color(0.65f, 0.82f, 1f, 0.42f);
+    [SerializeField] private Color _dropletOutlineColor = new Color(0.82f, 0.87f, 0.93f, 1f);
+    [SerializeField, Range(0.01f, 0.2f)] private float _dropletOutlineWidth = 0.055f;
+    [SerializeField, Range(0f, 1f)] private float _dropletOutlineOpacity = 0.58f;
 
     [Header("불릿 타임")]
     [SerializeField, Range(0f, 0.1f)] private float _bulletRainSpeed = 0.012f;
     [SerializeField, Min(0.01f)] private float _shapeTransitionTime = 0.12f;
+    [SerializeField, Range(0.1f, 1f)] private float _bulletDropletScale = 0.33f;
     [SerializeField, Range(0.1f, 2f)] private float _bulletSplashSpeed = 0.65f;
 
     [Header("검격과 빈 자국")]
@@ -43,6 +46,7 @@ public sealed class RainStageWeather : MonoBehaviour
     [Header("물 파열")]
     [SerializeField, Min(0.05f)] private float _splashDuration = 0.3f;
     [SerializeField, Min(0.02f)] private float _splashSize = 0.35f;
+    [SerializeField] private Color _splashColor = new Color(1f, 1f, 1f, 0.48f);
 
     private struct Sweep
     {
@@ -139,10 +143,14 @@ public sealed class RainStageWeather : MonoBehaviour
         _properties.SetVector("_CameraUp", cameraUp);
         _properties.SetFloat("_Roundness", _roundness);
         _properties.SetFloat("_DropSize", _dropletSize);
+        _properties.SetFloat("_BulletDropletScale", _bulletDropletScale);
         _properties.SetFloat("_StreakLength", _streakLength);
         _properties.SetFloat("_SplashSize", _splashSize);
         _properties.SetFloat("_SplashDuration", _splashDuration);
-        _properties.SetColor("_RainColor", _rainColor);
+        _properties.SetColor("_OutlineColor", _dropletOutlineColor);
+        _properties.SetFloat("_OutlineWidth", _dropletOutlineWidth);
+        _properties.SetFloat("_OutlineOpacity", _dropletOutlineOpacity);
+        _properties.SetColor("_SplashColor", _splashColor);
         RenderParams render = new RenderParams(_rainMaterial)
         {
             camera = _viewCamera,

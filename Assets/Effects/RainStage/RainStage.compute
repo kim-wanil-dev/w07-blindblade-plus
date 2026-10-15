@@ -47,12 +47,13 @@ float Random01(uint value)
     return (Hash(value) & 0x00ffffffu) / 16777216.0;
 }
 
-float3 SpawnPosition(uint id, uint sequence, bool initial)
+float3 SpawnPosition(uint id, uint sequence)
 {
     uint seed = id * 747796405u + sequence * 2891336453u;
     float angle = Random01(seed + 1u) * 6.2831853;
     float radius = sqrt(Random01(seed + 2u)) * _Radius;
-    float height = initial ? lerp(_Bottom, _Top, Random01(seed + 3u)) : _Top;
+    float spawnBottom = _Bottom + min(0.5, max(0.0, (_Top - _Bottom) * 0.1));
+    float height = lerp(spawnBottom, _Top, Random01(seed + 3u));
     return float3(_Center.x + cos(angle) * radius, height,
         _Center.z + sin(angle) * radius);
 }
@@ -157,7 +158,7 @@ void Initialize(uint3 threadId : SV_DispatchThreadID)
     uint id = threadId.x;
     if (id >= (uint)_DropCount) return;
     RainDrop drop;
-    drop.PositionState = float4(SpawnPosition(id, 0u, true), 0);
+    drop.PositionState = float4(SpawnPosition(id, 0u), 0);
     drop.Data = float4(Random01(id + 121u), 0, 0, 0);
     _Drops[id] = drop;
 }
@@ -178,7 +179,7 @@ void UpdateRain(uint3 threadId : SV_DispatchThreadID)
 
     if (drop.PositionState.w == 2)
     {
-        drop.PositionState.xyz = SpawnPosition(id, (uint)_Frame, false);
+        drop.PositionState.xyz = SpawnPosition(id, (uint)_Frame);
         if (!TouchesAnyTrail(drop.PositionState.xyz, drop.PositionState.xyz))
             drop.PositionState.w = 0;
         _Drops[id] = drop;
@@ -190,7 +191,7 @@ void UpdateRain(uint3 threadId : SV_DispatchThreadID)
     float2 offset = current.xz - _Center.xz;
     if (current.y < _Bottom || dot(offset, offset) > (_Radius + 2) * (_Radius + 2))
     {
-        current = SpawnPosition(id, (uint)_Frame, false);
+        current = SpawnPosition(id, (uint)_Frame);
         previous = current;
     }
     drop.PositionState.xyz = current;
