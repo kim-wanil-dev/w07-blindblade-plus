@@ -34,6 +34,7 @@ public sealed class RainStageWeather : MonoBehaviour
     [SerializeField, Range(0f, 0.1f)] private float _bulletRainSpeed = 0.012f;
     [SerializeField, Min(0.01f)] private float _shapeTransitionTime = 0.12f;
     [SerializeField, Range(0.1f, 1f)] private float _bulletDropletScale = 0.33f;
+    [SerializeField, Range(0f, 0.5f)] private float _bulletWiggleAmplitude = 0.25f;
     [SerializeField, Range(0.1f, 2f)] private float _bulletSplashSpeed = 0.65f;
 
     [Header("검격과 빈 자국")]
@@ -78,6 +79,7 @@ public sealed class RainStageWeather : MonoBehaviour
     private int _updateKernel;
     private int _frame;
     private float _roundness;
+    private float _wiggleTime;
     private bool _initialized;
 
     void OnEnable()
@@ -113,6 +115,7 @@ public sealed class RainStageWeather : MonoBehaviour
         bool paused = _player.IsPaused || Time.timeScale <= 0f;
         if (!paused)
         {
+            _wiggleTime += Time.unscaledDeltaTime;
             bool bulletTime = _empower.IsBulletTimeActive;
             _roundness = Mathf.MoveTowards(_roundness, bulletTime ? 1f : 0f,
                 Time.unscaledDeltaTime / _shapeTransitionTime);
@@ -144,6 +147,8 @@ public sealed class RainStageWeather : MonoBehaviour
         _properties.SetFloat("_Roundness", _roundness);
         _properties.SetFloat("_DropSize", _dropletSize);
         _properties.SetFloat("_BulletDropletScale", _bulletDropletScale);
+        _properties.SetFloat("_WiggleAmplitude", _bulletWiggleAmplitude);
+        _properties.SetFloat("_WiggleTime", _wiggleTime);
         _properties.SetFloat("_StreakLength", _streakLength);
         _properties.SetFloat("_SplashSize", _splashSize);
         _properties.SetFloat("_SplashDuration", _splashDuration);

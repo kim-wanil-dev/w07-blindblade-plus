@@ -31,6 +31,8 @@ Shader "BlindBlade/RainStage"
             float _Roundness;
             float _DropSize;
             float _BulletDropletScale;
+            float _WiggleAmplitude;
+            float _WiggleTime;
             float _StreakLength;
             float _SplashSize;
             float _SplashDuration;
@@ -100,8 +102,19 @@ Shader "BlindBlade/RainStage"
                     return half4(_SplashColor.rgb, saturate(alpha * _SplashColor.a * 1.8));
                 }
 
-                float edgeDistance = abs(radius - 1.0);
-                float edgeAntialias = max(fwidth(radius), 0.002);
+                float angle = atan2(uv.y, uv.x);
+                float frozenAmount = saturate(_Roundness);
+                float seedPhase = input.seed * 6.2831853;
+                float directionUp = max(sin(angle), 0.0);
+                float topTaper = 0.14 * directionUp * directionUp * directionUp * directionUp;
+                float irregularity = 0.07 * sin(angle * 2.0 + seedPhase)
+                    + 0.04 * sin(angle * 3.0 - seedPhase * 1.7);
+                float oscillation = 0.65 * sin(angle * 2.7 + _WiggleTime * 3.5 + seedPhase)
+                    + 0.35 * sin(angle * 4.1 - _WiggleTime * 2.6 + seedPhase * 1.7);
+                float boundary = 1.0 + frozenAmount
+                    * (-topTaper + irregularity + _WiggleAmplitude * oscillation);
+                float edgeDistance = abs(radius - boundary);
+                float edgeAntialias = max(fwidth(edgeDistance), 0.002);
                 float outline = 1.0 - smoothstep(_OutlineWidth,
                     _OutlineWidth + edgeAntialias, edgeDistance);
                 return half4(_OutlineColor.rgb,

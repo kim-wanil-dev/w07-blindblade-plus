@@ -62314,6 +62314,7 @@ MonoBehaviour:
   _bulletRainSpeed: 0.012
   _shapeTransitionTime: 0.12
   _bulletDropletScale: 0.33
+  _bulletWiggleAmplitude: 0.25
   _bulletSplashSpeed: 0.65
   _bladeThickness: 0.12
   _waveThickness: 0.35
