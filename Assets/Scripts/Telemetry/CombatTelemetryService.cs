@@ -42,6 +42,7 @@ namespace BlindBlade.Telemetry
         private int _uploaded;
         private int _failures;
         private string _anonymousPlayerId;
+        private string _configurationSource;
 
         public static CombatTelemetryService Active => _active;
         public string LogDirectory => _store?.Root;
@@ -50,6 +51,7 @@ namespace BlindBlade.Telemetry
         public int AcknowledgedEvents => _uploaded;
         public int BufferedEvents => _buffer.Count + (_writing?.Length ?? 0);
         public string AnonymousPlayerId => _anonymousPlayerId;
+        public string ConfigurationSource => _configurationSource;
 
         /// <summary>최초 recorder의 설정으로 영속 서비스를 만들거나 기존 서비스를 반환한다. 설정은 재도전 때 덮어쓰지 않는다.</summary>
         public static CombatTelemetryService GetOrCreate(int bufferLimit, float flushInterval, int maximumMegabytes,
@@ -129,7 +131,7 @@ namespace BlindBlade.Telemetry
             _writing = null;
         }
 
-        /// <summary>로컬 설정을 읽고 디스크의 미확인 배치를 전송한다. 정확한 사건 키 확인 뒤에만 커서를 이동한다.</summary>
+        /// <summary>로컬 재정의 또는 빌드 기본 설정으로 디스크의 미확인 배치를 전송한다. 정확한 사건 키 확인 뒤에만 커서를 이동한다.</summary>
         private IEnumerator Upload()
         {
             _uploading = true;
@@ -137,17 +139,11 @@ namespace BlindBlade.Telemetry
             JObject configuration;
             try
             {
-                string path = Path.Combine(_store.Root, "upload-config.json");
-                if (!File.Exists(path))
-                {
-                    Directory.CreateDirectory(_store.Root);
-                    File.WriteAllText(path, "{\n  \"enabled\": false,\n  \"endpoint\": \"\",\n  \"token\": \"\"\n}\n");
-                }
-                configuration = JObject.Parse(File.ReadAllText(path));
+                configuration = ReadUploadConfiguration();
                 if (configuration.Value<bool?>("enabled") != true) { _uploading = false; yield break; }
                 if (!Uri.TryCreate(configuration.Value<string>("endpoint"), UriKind.Absolute, out Uri endpoint)
                     || endpoint.Scheme != Uri.UriSchemeHttps || (configuration.Value<string>("token")?.Length ?? 0) < 32)
-                    throw new InvalidDataException("upload-config.json의 HTTPS endpoint와 32자 이상 token을 설정하세요.");
+                    throw new InvalidDataException("전송 설정의 HTTPS endpoint와 32자 이상 token을 설정하세요. 설정 출처: " + _configurationSource);
             }
             catch (Exception exception)
             {
@@ -213,6 +209,19 @@ namespace BlindBlade.Telemetry
             _failures = 0;
             _uploading = false;
             _nextUpload = Time.realtimeSinceStartupAsDouble + 0.5d;
+        }
+
+        /// <summary>로컬 파일이 있으면 그 값을 반환하고 없으면 Resources의 기본값을 반환한다. 출처를 보관하며 CONFIG를 생성하지 않는다.</summary>
+        private JObject ReadUploadConfiguration()
+        {
+            string path = Path.Combine(_store.Root, "upload-config.json");
+            if (File.Exists(path))
+            {
+                _configurationSource = "LocalOverride";
+                return JObject.Parse(File.ReadAllText(path));
+            }
+            _configurationSource = "BuiltIn";
+            return CombatTelemetryUploadSettings.LoadConfiguration();
         }
 
         /// <summary>message를 진단에 남기고 지수 지연 후 재시도한다. 원본과 확인 커서는 변경하지 않는다.</summary>

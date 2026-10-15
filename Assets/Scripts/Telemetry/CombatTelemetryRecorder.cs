@@ -30,7 +30,7 @@ namespace BlindBlade.Telemetry
         [SerializeField, Min(1)] private int _maximumStorageMegabytes = 100;
         [SerializeField, Min(1f)] private float _sampleIntervalSeconds = 5f;
 
-        [Header("Google Sheets 전송 — 접속 정보는 로컬 upload-config.json")]
+        [Header("Google Sheets 전송 — 빌드 기본 설정 / 로컬 CONFIG 재정의")]
         [SerializeField] private bool _allowAutomaticUpload = true;
         [SerializeField, Min(5f)] private float _uploadIntervalSeconds = 20f;
         [SerializeField, Range(1, 100)] private int _batchEventLimit = 100;

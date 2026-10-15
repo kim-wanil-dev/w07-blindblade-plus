@@ -1,7 +1,7 @@
 # 전투·인지·HUD D 진행 기록
 
-- 갱신일: 2026-10-14
-- 현재 상태: **D5 현재 사건 로컬 JSON/JSONL·Google Sheets 자동 전송기·수신 스크립트·CSV 전처리 구현 및 씬 연결. C# 컴파일 성공. 실제 Play 수집/전송/CSV 실행은 미확인. HP·적별 발소리 마커/원호·피격 펄스는 이전 Play 확인 완료. 스태미너 공급자 대기.**
+- 갱신일: 2026-10-15
+- 현재 상태: **D5 로컬 저장·Sheets 전송·CSV 전처리와 CONFIG 없는 PC용 빌드 기본 설정 구현. 로컬 CONFIG 경로에서 Play 전송400건 ACK를 확인했다. 빌드 기본 에셋은 활성 상태로 저장·컴파일했으며 새 PC/Standalone 실행은 미확인. 전체 백로그·장애/재도전·CSV 실행은 미확인. 스태미너 공급자 대기.**
 - 요청: A/B/C 통합에 이어 사용자가 HP·스태미너·발소리 HUD를 임시 이미지로 만들고 나중에 이미지만 교체 가능하게 요청했다. 프로젝트 내부 수정은 기존 상시 지침에 따라 별도 승인 없이 진행한다.
 - 최신 요청 반영: 걸음마다 표시하던 발소리를 적 ID/세대당 하나로 합쳐 현재 적 방향을 추적한다. 저체력 지속 비네팅은 피해 때만 잠깐 나타나는 방식으로 변경했다. 발소리 아이콘 밑에는 수리검과 같은 원호를 추가했다.
 - 작업 경로: `C:\Users\JUNGLE\Documents\w07-blindblade-plus`
@@ -167,3 +167,23 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - 공통 방어 결과에 DodgeId가 없어 해당 접근도 제거했다. defense_resolved의 회피 연결은 0, 별도 dodge_changed의 제공된 DodgeId는 유지하며 임의로 연결하지 않는다.
 - 관련 기능명세와 README의 현재 계약 설명을 갱신했다. 브랜치 feature/log에서 Git CLI/커밋은 사용하지 않는다.
 - 수정 후 Unity 재컴파일 completed/compilationFailed=false, 오류0·경고0을 확인했다. Play·원격 전송은 실행하지 않았다.
+
+### 2026-10-15 Sheets 미전송 원인 확인 및 실제 전송
+
+- 실제 persistentDataPath의 upload-config.json에 URL/token은 있었지만 enabled=false였다. Inspector Allow Automatic Upload만으로는 전송되지 않는다. 사용자 요청에 따라 enabled=true로 수정하고 기존 URL/token은 보존했다. 비밀 값은 Console·문서·도구 출력에 노출하지 않았다.
+- 저장된 실제 로그 1건을 구성된 Apps Script 수신기로 POST하여 HTTP200, ok=true, batchId 일치, 사건 키 ACK1건을 확인했다. 가상 사건을 생성하지 않았으며 수동 요청으로 로컬 커서를 임의 갱신하지 않았다.
+- 처음에는 Editor가 Play 종료 상태였고 서비스도 없었다. 깨끗하게 저장된 BambooDefense에서 Play를 시작하고 GameView를 활성화해 실제 자동 전송을 확인했다.
+- Unity 서비스 관측: AcknowledgedEvents400, BufferedEvents0, DroppedEvents0, LastError=null. URL별 .cursor 파일도 생성됐다. 이 수는 관측 시점의 확인 건수이며 전체 백로그 완료를 뜻하지 않는다.
+- 확인 후 Play를 종료했다. 실제 설정 enabled=true는 유지한다. 미확인 백로그는 다음 실행에서 이어서 전송된다. 런타임 코드·전투 수치·씬 직렬화는 변경하지 않았다.
+- Google Sheets 화면 직접 열람·집계 대조, 인터넷 차단 복구, 재도전 정밀 검증과 CSV 실행은 아직 미확인이다. 전체 D5 완료로 표시하지 않는다. feature/log에서 Git CLI/커밋은 사용하지 않았다.
+
+### 2026-10-15 후속: CONFIG 없는 PC의 빌드 기본 전송
+
+- 사용자 요청: 다른 PC에서 CONFIG 수정 없이 현재 시트로 자동 전송하도록 변경.
+- `CombatTelemetryUploadSettings` ScriptableObject와 Resources 에셋을 추가했다. 현재 정상 동작한 로컬 URL/token/활성 여부를 Editor API로 복사했고 enabled=true로 저장했다. 비밀 값을 출력·문서화하지 않았다.
+- 서비스 설정 우선순위는 기존 로컬 CONFIG > 빌드 기본 에셋. 기존 enabled=false와 잘못된 JSON은 재정의/오류로 존중한다. 파일 부재 시 비활성 CONFIG를 생성하던 코드는 제거했다.
+- 기존 씬 연결 메뉴도 CONFIG를 자동 생성하지 않는다. 새 메뉴 `BlindBlade > 대숲 방어 > 로그 > 현재 로컬 설정을 빌드 기본값으로 저장`으로 URL/token 변경 후 에셋을 갱신할 수 있다. GUID를 보존하고 배포에는 재빌드가 필요하다.
+- 코드: CombatTelemetryService, CombatTelemetryUploadSettings, CombatTelemetryAuthoring, Recorder의 Inspector 안내문. 로그 스키마·Google 수신 코드·전투 공급자·씬 수치는 변경하지 않았다.
+- 개발용 ConfigurationSource는 LocalOverride/BuiltIn을 제공한다. token은 에셋 Inspector에서 숨기지만 클라이언트 배포에 포함되므로 제한된 과제 테스트 용도다. Steam 공개 배포는 별도 수집 서버가 권장된다.
+- 확인: C# 컴파일 오류0·경고0, Editor 에셋 생성 결과 enabled=true/endpointConfigured=true/tokenConfigured=true/saved=true. 이번 수정 후 Play·Standalone 빌드·새 PC 기본값 전송은 실행하지 않았다. 기존 로컬 CONFIG와 원본을 임의 이동/삭제하지 않았다.
+- 다음 작업자: 전체 게임 폴더를 새 빌드로 배포하고 CONFIG 없는 PC에서 기본값 전송을 확인한다. 기존 PC는 CONFIG가 우선하며 이전 disabled 파일을 계속 보관하면 전송이 꺼진다. README의 배포/로컬 재정의 안내를 따른다. feature/log에서 Git CLI/커밋 없음.
