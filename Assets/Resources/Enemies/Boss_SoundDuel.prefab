@@ -170,10 +170,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 100
+  _maxHealth: 200
   _dieOnAnyHit: 0
   _hitCollider: {fileID: 6529499087085923373}
   _cancelAttackOnHit: 0
+  _dashTargetable: 1
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45
   _hitPushDistance: 0.12
@@ -208,10 +209,10 @@ Rigidbody:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1251805882621175175}
-  serializedVersion: 4
+  serializedVersion: 5
   m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -298,7 +299,7 @@ MonoBehaviour:
   _minimumHeartbeatInterval: 1
   _maximumHeartbeatInterval: 1.2
   _postHeartbeatAttackDelay: 0.5
-  _projectilePrefab: {fileID: 2115214498364783961, guid: 2ba542a427653624eb6c9beb63ffa91e, type: 3}
+  _projectilePrefab: {fileID: 2115214498364783961, guid: 5884e76ee1bf02144afab106081fabd4, type: 3}
   _rangedDamage: 15
   _rangedPreparation: 0.8
   _rangedShots: 3
@@ -342,6 +343,14 @@ MonoBehaviour:
     m_Bits: 1
   _footstepSound: 7
   _minimumStepSoundInterval: 0.18
+  _movementRipple:
+    _radius: 8
+    _expandDuration: 0.9
+    _ringCount: 2
+    _ringInterval: 0.12
+    _afterimage: 1.2
+    _ringColor: {r: 1, g: 0.16, b: 0.16, a: 0.85}
+  _movementRippleInterval: 0.45
   _chargeCry: 18
   _chargeCryPitch: 0.85
   _melee: {fileID: 4283722663164136279}
@@ -442,6 +451,8 @@ MeshRenderer:
   m_RayTracingAccelStructBuildFlagsOverride: 0
   m_RayTracingAccelStructBuildFlags: 1
   m_SmallMeshCulling: 1
+  m_ForceMeshLod: -1
+  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -463,9 +474,11 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
+  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!114 &3857691359331162198
 MonoBehaviour:
