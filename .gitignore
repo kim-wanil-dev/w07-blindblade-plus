@@ -129,8 +129,8 @@ InitTestScene*.unity*
 fmod_editor.log
 
 # FMOD Studio - Local generated files
-/FMODProject/.cache/
-/FMODProject/.user/
-/FMODProject/.unsaved/
-/FMODProject/.restore/
+/FMODProject/**/.cache/
+/FMODProject/**/.user/
+/FMODProject/**/.unsaved/
+/FMODProject/**/.restore/
 /Assets/TextMesh Pro

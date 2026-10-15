@@ -42,4 +42,5 @@ public enum SoundId
     EmpowerBlackoutSheathe = 35,
     ShurikenFlight = 36,
     PerfectParryClash = 37,
+    BambooBreak = 38,
 }
