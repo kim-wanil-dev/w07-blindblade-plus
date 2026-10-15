@@ -7,13 +7,16 @@ using BlindBlade.Combat.Contracts;
 /// <summary>
 /// 투척수가 던진 수리검의 예측 조준 비행과 플레이어 적중을 처리한다.
 /// 접촉은 회피 중에도 플레이어 방어 판정에 그대로 전달한다. 일반 패링이면 가장 가까운 근접 적에게 반사하고,
-/// 퍼펙트 패링·가드·회피면 수리검만 소멸한다.
+/// 퍼펙트 패링·가드·회피면 수리검만 소멸한다. 반사한 수리검은 빨간 위협 실루엣 대신 인지와 무관한 흰 윤곽선으로 보인다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class DefenseShuriken : MonoBehaviour
 {
     private const string PATTERN_ID = "DefenseShuriken";
     private const string REFLECT_PATTERN_ID = "DefenseShurikenReflect";
+    private const string REFLECT_SHADER_NAME = "Universal Render Pipeline/Unlit";
+
+    private static Material _reflectMaterial;
 
     [Header("비행")]
     [SerializeField, Min(0.1f)] private float _speed = 13f;
@@ -237,8 +240,29 @@ public sealed class DefenseShuriken : MonoBehaviour
         // 반사 뒤에는 적대 투사체가 아니므로 투척 예산·방향 표시·강화 공격 제거 대상에서 빠진다.
         _flying = false;
         _reflected = true;
+        ShowAsReflected();
         Released?.Invoke(this);
         return true;
+    }
+
+    /// <summary>
+    /// 반사한 수리검을 흰 윤곽선으로 보이게 바꾼다. 빨간 위협 분류(OutlineLayer)를 끄고,
+    /// 자식 렌더러 재질을 흰 Unlit 재질로 바꾼 뒤 인지와 무관하게 보이는 OutlineVFX를 붙인다.
+    /// 재질은 윤곽선 검출에만 쓰이며 처음 반사할 때 한 번 만들어 모든 수리검이 함께 쓴다.
+    /// </summary>
+    private void ShowAsReflected()
+    {
+        if (TryGetComponent(out OutlineLayer threatLayer))
+            threatLayer.enabled = false;
+        if (_reflectMaterial == null)
+        {
+            _reflectMaterial = new Material(Shader.Find(REFLECT_SHADER_NAME)) { name = "DefenseShurikenReflect" };
+            _reflectMaterial.SetColor("_BaseColor", Color.white);
+        }
+        // 어두운 장면에서 원래 Lit 재질은 검게 그려져 흰 윤곽선이 검출되지 않으므로 Unlit 흰색으로 바꾼다.
+        foreach (Renderer target in GetComponentsInChildren<Renderer>())
+            target.sharedMaterial = _reflectMaterial;
+        gameObject.AddComponent<OutlineVFX>().IgnorePerception = true;
     }
 
     /// <summary>

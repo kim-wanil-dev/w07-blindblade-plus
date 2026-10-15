@@ -21,7 +21,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 
     [Header("암전")]
     [SerializeField, Min(0f), Tooltip("수락부터 납도까지 화면이 암흑으로 덮인 채 검격과 갈라진 선만 보이는 실시간.")]
-    private float _blackoutDuration = 1.53f;
+    private float _blackoutDuration = 1f;
     [SerializeField, Range(-80f, 80f), Tooltip("갈라진 선과 곡선 검격의 화면 기울기(도).")]
     private float _cutAngle = 24f;
     [SerializeField, Min(1f), Tooltip("사선을 따라 그어지는 곡선 검격 지름(1920×1080 기준 픽셀).")]
