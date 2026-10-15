@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 1001}
   - component: {fileID: 1002}
   - component: {fileID: 1003}
+  - component: {fileID: 5683312233864376629}
   m_Layer: 0
   m_Name: SensoryManager
   m_TagString: Untagged
@@ -62,7 +63,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 042477b7c21e43da89a3fc7e6646d8a7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _playerRadius: 4
+  _playerRadius: 0
   _soundRadius: 12
   _soundLifetime: 1.2
+  _soundFadeDuration: 0.6
   _edgeFade: 0.75
+--- !u!114 &5683312233864376629
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3ee424c94cc50044a31de9cc1b7a714, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PerceptionRevealMap
+  _updateShader: {fileID: 4800000, guid: bcb6ff4bdb6820245ac78291c0d9016c, type: 3}
+  _minimum: {x: -40, y: -40}
+  _size: {x: 80, y: 80}
+  _resolution: 512
+  _edgeFade: 0.5
+  _ringPrefab: {fileID: 402, guid: 2363502e95a345d2b96fbe5cf9542e60, type: 3}
+  _laterRingAlpha: 0.7

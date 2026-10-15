@@ -75,6 +75,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8382106560393218092, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3448438092924526987}
+    - targetCorrespondingSourceObject: {fileID: 8382106560393218092, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3960347396053785730}
   m_SourcePrefab: {fileID: 100100000, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
 --- !u!1 &2678292632270529432 stripped
 GameObject:
@@ -95,3 +98,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DefenseChaser
   _alertInterval: 0.25
   _alertDuration: 1
+--- !u!114 &3960347396053785730
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2678292632270529432}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40de629554af347458460838fed1f5b9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FootstepRipple
+  _ripple:
+    _radius: 2.8799999
+    _expandDuration: 0.6
+    _ringCount: 3
+    _ringInterval: 0.12
+    _afterimage: 1.2
+    _ringColor: {r: 1, g: 1, b: 1, a: 1}
+  _stepsPerRipple: 2
