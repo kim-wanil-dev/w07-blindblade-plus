@@ -48,6 +48,12 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private float _glintDuration = 0.35f;
     [SerializeField, Range(0f, 1f), Tooltip("강화 준비 중 화면 가장자리 먹 번짐 진하기.")]
     private float _readyVignette = 0.75f;
+    [SerializeField, Range(0f, 1f), Tooltip("극한 회피 순간 화면 가장자리에 짧게 번지는 먹 비네트 진하기. 0이면 내지 않는다.")]
+    private float _perfectDodgeVignette = 0.6f;
+    [SerializeField, Range(0f, 1f), Tooltip("일반 회피(회피 무적 구간에서 공격을 피함) 순간 짧게 번지는 먹 비네트 진하기. 0이면 내지 않는다.")]
+    private float _normalDodgeVignette = 0f;
+    [SerializeField, Min(0.01f), Tooltip("회피 비네트가 번졌다 사라지는 실시간.")]
+    private float _dodgeVignetteDuration = 0.4f;
 
     [Header("상태")]
     private PlayerEmpower _empower;
@@ -169,6 +175,17 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         if (_running && _perfectRunning) return false;
         StartPulse(_dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration, _dodgeRingColor, false);
         return true;
+    }
+
+    /// <summary>
+    /// perfect가 참이면 극한 회피, 거짓이면 일반 회피 진하기로 화면 가장자리에 짧은 먹 비네트를 _dodgeVignetteDuration 동안 띄운다.
+    /// 진하기가 0이면 아무것도 하지 않으며, 강화 준비 비네트와 겹치면 오버레이가 더 진한 쪽을 보인다.
+    /// </summary>
+    public void PlayDodgeVignette(bool perfect)
+    {
+        float strength = perfect ? _perfectDodgeVignette : _normalDodgeVignette;
+        if (strength <= 0f) return;
+        _overlay.PulseVignette(strength, _dodgeVignetteDuration);
     }
 
     /// <summary>

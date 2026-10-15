@@ -36,6 +36,10 @@ public sealed class EmpowerOverlay : MonoBehaviour
     private Image _cutLine;
     private readonly List<Particle> _particles = new List<Particle>();
     private float _vignetteTarget;
+    private float _vignetteBase;
+    private float _vignettePulseStrength;
+    private float _vignettePulseDuration;
+    private float _vignettePulseAge;
     private float _flashStrength;
     private float _flashDuration;
     private float _flashAge;
@@ -77,7 +81,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
     void Update()
     {
         float dt = RealDeltaTime();
-        SetAlpha(_vignette, Mathf.MoveTowards(_vignette.color.a, _vignetteTarget, dt / _vignetteBlendTime));
+        UpdateVignette(dt);
         UpdateFlash(dt);
         UpdateGlint(dt);
         UpdateCutLine(dt);
@@ -94,6 +98,18 @@ public sealed class EmpowerOverlay : MonoBehaviour
     public void SetVignette(float target)
     {
         _vignetteTarget = Mathf.Clamp01(target);
+    }
+
+    /// <summary>
+    /// strength(0~1) 진하기의 비네트를 duration 실시간 동안 짧게 번졌다 사라지게 한다. SetVignette의 진하기와 겹치면 큰 쪽을 보인다.
+    /// 진행 중인 짧은 비네트보다 약하면 무시하며 _vignettePulseStrength·_vignettePulseDuration·_vignettePulseAge를 바꾼다.
+    /// </summary>
+    public void PulseVignette(float strength, float duration)
+    {
+        if (strength <= 0f || strength < CurrentVignettePulse()) return;
+        _vignettePulseStrength = Mathf.Clamp01(strength);
+        _vignettePulseDuration = Mathf.Max(0.01f, duration);
+        _vignettePulseAge = 0f;
     }
 
     /// <summary>흰 섬광을 strength 투명도로 띄우고 duration 동안 사라지게 한다. 진행 중인 섬광보다 약하면 무시한다.</summary>
@@ -214,6 +230,8 @@ public sealed class EmpowerOverlay : MonoBehaviour
     {
         if (_canvasRoot == null) return;
         _vignetteTarget = 0f;
+        _vignetteBase = 0f;
+        _vignettePulseStrength = 0f;
         SetAlpha(_vignette, 0f);
         _flashStrength = 0f;
         SetAlpha(_flash, 0f);
@@ -224,6 +242,26 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _cutLine.gameObject.SetActive(false);
         SetVoid(0f);
         foreach (Particle particle in _particles) particle.Image.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// 지속 비네트 진하기를 _vignetteTarget으로 dt만큼 옮기고, 짧은 비네트 나이를 늘린 뒤 둘 중 큰 진하기를 비네트 이미지에 적용한다.
+    /// </summary>
+    private void UpdateVignette(float dt)
+    {
+        _vignetteBase = Mathf.MoveTowards(_vignetteBase, _vignetteTarget, dt / _vignetteBlendTime);
+        _vignettePulseAge += dt;
+        SetAlpha(_vignette, Mathf.Max(_vignetteBase, CurrentVignettePulse()));
+    }
+
+    /// <summary>짧은 비네트의 현재 진하기를 반환한다. 앞 15% 동안 빠르게 번지고 나머지 동안 부드럽게 사라지며 끝나면 0이다.</summary>
+    private float CurrentVignettePulse()
+    {
+        if (_vignettePulseStrength <= 0f || _vignettePulseAge >= _vignettePulseDuration) return 0f;
+        float t = _vignettePulseAge / _vignettePulseDuration;
+        float rise = Mathf.Clamp01(t / 0.15f);
+        float fall = 1f - Mathf.Clamp01((t - 0.15f) / 0.85f);
+        return _vignettePulseStrength * rise * fall * fall;
     }
 
     /// <summary>섬광 나이를 dt만큼 늘리고 남은 세기를 적용한다.</summary>
