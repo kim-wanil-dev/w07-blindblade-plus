@@ -116,6 +116,7 @@ GameObject:
   - component: {fileID: 1875933646171428057}
   - component: {fileID: 7485631522553340014}
   - component: {fileID: 5956031840736666487}
+  - component: {fileID: 1691402994248898522}
   m_Layer: 0
   m_Name: DefenseShuriken
   m_TagString: Untagged
@@ -176,3 +177,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OutlineLayer
   _kind: 1
+--- !u!114 &1691402994248898522
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8929191895000301599}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b98596fb4d737ae44b0eaadb94789a37, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MovingPerceptionReveal
+  _radius: 2.5
+  _afterimage: 0.3
