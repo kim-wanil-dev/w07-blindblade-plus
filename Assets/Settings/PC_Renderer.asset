@@ -80,6 +80,7 @@ MonoBehaviour:
   _shader: {fileID: 4800000, guid: c7c52e823b854534adfb6cc98ed70499, type: 3}
   _transparentDepthShader: {fileID: 4800000, guid: a93ad5573676a1a4fbb7f81bd5031075, type: 3}
   _layerMaskShader: {fileID: 4800000, guid: 250a1a1f07798ef49bdfc7a908c6c983, type: 3}
+  _forcedRevealShader: {fileID: 4800000, guid: 3c49ba37317a45faa9b52e681afef212, type: 3}
 --- !u!114 &7833122117494664109
 MonoBehaviour:
   m_ObjectHideFlags: 0
