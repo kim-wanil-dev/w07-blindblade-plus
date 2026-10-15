@@ -965,7 +965,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         if (parriedEnemy != null && parriedEnemy.IsAlive
             && parriedEnemy.TryGetComponent(out EnemyAttackSelector selector))
             selector.Stagger(_parryStaggerDuration);
-        DefenseSucceeded?.Invoke(new KatanaDefenseResult(incoming, point, parry));
+        DefenseSucceeded?.Invoke(new KatanaDefenseResult(incoming, point, parry, outcome == DefenseOutcome.PerfectParry));
         if (parry)
         {
             Publish(KatanaStage.ParrySucceeded, incoming.PatternId, true);
@@ -1000,12 +1000,14 @@ public readonly struct KatanaDefenseResult
     public DamageContext Incoming { get; }
     public Vector3 Point { get; }
     public bool IsParry { get; }
+    public bool IsPerfectParry { get; }
 
-    /// <summary>incoming·point·isParry를 저장한다. 피해나 공격 상태를 직접 변경하지 않는다.</summary>
-    public KatanaDefenseResult(DamageContext incoming, Vector3 point, bool isParry)
+    /// <summary>incoming·point·isParry·isPerfectParry를 저장한다. 피해나 공격 상태를 직접 변경하지 않는다.</summary>
+    public KatanaDefenseResult(DamageContext incoming, Vector3 point, bool isParry, bool isPerfectParry = false)
     {
         Incoming = incoming;
         Point = point;
         IsParry = isParry;
+        IsPerfectParry = isPerfectParry;
     }
 }

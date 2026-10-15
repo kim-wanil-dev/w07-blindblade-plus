@@ -226,9 +226,10 @@ Managers.Sound.Clear();
 
 - Play, PlayAttached, PlayAttachedWithLabel, PlayBgm은 성공하면 true를 반환한다. 이벤트 누락, 사운드 종류 불일치, 비활성 발음체 등은 false와 영어 경고로 전달한다. 기존 이동 제한에 의해 거부된 요청은 false를 반환하며 경고를 반복 출력하지 않는다.
 - Play와 PlayAttached에는 단발 이벤트만 등록한다. 루프 효과음을 이 API로 재생하면 거부한다.
+- 2026-10-15 `PlayAttachedLoop(soundId, source, volume)`를 추가했다. 루프 구간이 있는 효과음을 source에 붙여 재생한다. `StopFor(source, soundId, ...)`로 멈추거나, source가 비활성·파괴되면 기존 소유자 정리로 멈춘다. 수리검 비행음(`ShurikenFlight`)이 사용한다. 기존 단발 API의 동작은 바꾸지 않았다.
 - BGM 반복은 Studio의 Loop Region을 사용한다. 같은 BGM은 중복 생성하지 않으며, 페이드 정지 중 같은 ID의 재생 요청은 false를 반환한다.
 - BGM을 다른 곡으로 전환할 때 이전 음악은 즉시 정지한다. 크로스페이드는 지원하지 않는다.
-- PlayAttachedWithLabel은 Labeled Parameter를 start 전에 설정한다. Label이 잘못되면 재생하지 않고 false와 영어 오류를 반환한다. 재생 중 파라미터 변경, BGM 외의 지속 효과음, 재생 한 건의 일시정지 API는 제공하지 않는다.
+- PlayAttachedWithLabel은 Labeled Parameter를 start 전에 설정한다. Label이 잘못되면 재생하지 않고 false와 영어 오류를 반환한다. 재생 중 파라미터 변경과 재생 한 건의 일시정지 API는 제공하지 않는다. BGM 외의 지속 효과음은 PlayAttachedLoop만 지원한다.
 - `Stop(SoundType)`은 기존 호출과의 호환을 위해 유지한다. 새 호출부는 의미가 드러나는 StopBgm 또는 StopEffects를 사용한다.
 
 #### 사운드 담당자의 등록 방법
