@@ -14,7 +14,7 @@ using BlindBlade.Combat.Contracts;
 /// 연출 시간은 일시정지를 제외한 실시간이다.
 /// </summary>
 [DisallowMultipleComponent]
-[RequireComponent(typeof(EmpowerOverlay))]
+[RequireComponent(typeof(EmpowerOverlay), typeof(PlayerUltimateGroundMark))]
 public sealed class PlayerEmpowerStrike : MonoBehaviour
 {
     private const string PATTERN_ID = "EmpowerStrike";
@@ -59,6 +59,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 
     [Header("상태")]
     private EmpowerOverlay _overlay;
+    private PlayerUltimateGroundMark _groundMark;
     private PlayerMotor _motor;
     private Camera _camera;
     private Coroutine _routine;
@@ -74,6 +75,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     void Awake()
     {
         _overlay = GetComponent<EmpowerOverlay>();
+        _groundMark = GetComponent<PlayerUltimateGroundMark>();
         _motor = GetComponent<PlayerMotor>();
         _camera = GetComponentInChildren<Camera>();
         _baseFov = _camera.fieldOfView;
@@ -122,7 +124,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     /// <summary>
     /// _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
     /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 비행 중인 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
-    /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다.
+    /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다. 같은 선을 따라 땅에 흰 흔적을 남긴다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished)
     {
@@ -147,6 +149,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         PlaySound(_sheatheSound);
         StrikeEnemies(targets);
         BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
+        _groundMark.Show(bambooCutPoint, bambooCutNormal, bambooView);
         // 암전 동안은 강화 공격 무적이라 투사체를 그대로 두고, 화면이 돌아오는 순간 한꺼번에 막아 낸다.
         ReleaseProjectiles();
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
