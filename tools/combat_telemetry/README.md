@@ -5,7 +5,14 @@
 - 정식 `BambooDefense` 씬의 `GameSceneInitializer`에 `CombatTelemetryRecorder`를 연결한다.
 - 설치/참조 복구 메뉴: `BlindBlade > 대숲 방어 > 로그 > D5 로컬 로그 연결`. 열린 정식 씬에서만 동작하고 기존 수치·참조를 재생성하지 않는다.
 - 기본 로컬 기록 ON. 배포용 기본 설정 에셋에 자동 전송이 활성화되어 있으며 새 PC는 CONFIG 작성 없이 전송한다. 로컬 CONFIG가 있으면 그 파일이 우선한다. 추가 SDK·서비스 계정·Python은 필요 없다.
-- JSON은 스키마 `0.2.0`, 계약은 `0.2.0`이다. 이전 `0.1.0` 파일을 이 전처리기에 섞지 않는다.
+- JSON은 스키마 `0.2.0`, 계약은 `0.2.0`이다. KST 벽시각 필드는 0.2.0의 선택적 추가 필드라 예전 로그와 기존 미전송 백로그도 처리할 수 있다. 이전 `0.1.0` 파일을 이 전처리기에 섞지 않는다.
+
+## 시간 표기
+
+- 새 사건은 `occurredAtKst`, `recordedAtKst`와 `payload.startedKst`에 한국 표준시를 ISO 8601 형식으로 기록한다. 예: `2026-10-15T13:20:45.123+09:00`. PC의 시간대 설정과 무관하게 +09:00을 사용하며 사건 발생 시각은 해당 기록의 realtime 차이로 계산한다.
+- `occurredAt`/`recordedAt` 안의 `realtimeSeconds`, `gameplaySeconds`, `activeUnscaledSeconds`는 플레이 시간 분석용 경과 초이며 변경하지 않는다.
+- Google Apps Script는 `Events.received_kst`, `Events.occurred_at_kst`, `Events.recorded_at_kst`, `Sessions.started_kst`를 사용한다. 기존 시트의 `received_utc`와 `started_utc` 값은 KST로 변환해 같은 위치에 저장하고 UTC 열 이름은 제거한다. 앞선 버전에서 오른쪽에 추가된 중복 KST 열도 합친다.
+- 이전 JSONL 원본은 수정하지 않는다. 이전 세션의 `startedUtc`는 CSV 전처리에서 `started_kst`로 변환한다. 이전 사건의 발생 KST 시각은 기록된 적이 없으므로 빈 값으로 둔다.
 
 ## 저장 위치와 파일
 
@@ -32,7 +39,7 @@ C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetr
 6. `/exec`로 끝나는 배포 URL을 복사한다. `/dev`는 편집자용이므로 게임에 사용하지 않는다.
 7. 수신 코드를 수정한 뒤에는 `배포 관리 > 수정 > 새 버전`으로 갱신한다. 같은 배포 URL을 유지할 수 있다.
 
-`setupSheets`는 헤더가 다르면 기존 데이터를 덮어쓰지 않고 오류를 낸다. 다른 스키마의 탭을 재사용하지 말고 새 스프레드시트로 시작한다.
+`setupSheets`는 이전 UTC 헤더를 KST로 바꾸면서 기존 UTC 시각을 +09:00 문자열로 변환한다. 앞선 버전의 추가 KST 열이 있으면 값을 옮긴 뒤 중복 열을 제거한다. 사건 키와 다른 데이터 열은 유지한다. 다른 헤더나 해석할 수 없는 시각은 오류로 알리며 값을 버리지 않는다. 코드 변경 뒤에는 `setupSheets`를 다시 실행하고 웹 앱을 새 버전으로 재배포한다.
 
 ## Unity/테스터 PC 설정
 
@@ -97,11 +104,11 @@ Windows PowerShell 5.1 이상에서 플레이를 마친 원본의 사본을 대�
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\combat_telemetry\Export-Telemetry.ps1 -LogDirectory "C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetry" -OutputDirectory ".\UserSettings\CombatTelemetryAnalysis"
 ```
 
-- `events.csv`: 사건 평탄화, 기존 ID·시계·payload 보존.
-- `sessions.csv`: 요약과 정상 종료 여부. 종료 사건 없는 세션을 클리어/사망/정상 플레이시간으로 단정하지 않는다.
+- `events.csv`: 사건 평탄화, `occurred_at_kst`/`recorded_at_kst`, 기존 ID·경과 시계·payload 보존.
+- `sessions.csv`: `started_kst` 요약과 정상 종료 여부. 이전 `startedUtc`도 KST로 변환한다. 종료 사건 없는 세션을 클리어/사망/정상 플레이시간으로 단정하지 않는다.
 - `diagnostics.csv`: 스키마 미지원, 파싱 실패/잘린 끝줄, 중복 사건 키, 순번 누락·역전, 종료 누락.
 - `explicit-links.csv`: 공급자의 InputId가 있는 사건만 보존한다. 후보 매칭이나 성공 판정을 생성하지 않는다.
-- `analysis-manifest.json`: 분석 버전·시각·입력 SHA256·건수.
+- `analysis-manifest.json`: 분석 버전·`generated_kst`·입력 SHA256·건수.
 
 Google Sheets에는 원본 업로드 기준 `Events`와 최신 요약 `Sessions`가 쌓인다. CSV와 같은 지표 정의로 피벗/차트를 만든다. 전처리 도구는 원본을 수정하지 않는다. 빈 자료의 CSV가 비어 있을 수 있다. 전처리는 분석 분모를 대신 결정하지 않는다.
 
@@ -126,7 +133,9 @@ Google Sheets에는 원본 업로드 기준 `Events`와 최신 요약 `Sessions`
 5. 잘못된 token, HTML 응답, 타임아웃, 저장 경로 접근 실패에서 게임이 지속되고 실패가 진단되는지 확인한다.
 6. 실제 전송/전처리 자료로 5~10분 지표·손상 로그·누락 분모를 확인한다.
 
-2026-10-15 로컬 CONFIG 경로의 실제 전송은 기존 로그1건 POST와 Unity Play 자동 전송400건에서 서버 ACK·커서 생성으로 확인했다. 이후 CONFIG 없는 PC를 위한 빌드 기본 설정 기능을 구현하고 활성 에셋을 Editor API로 저장했다. 새 기능은 C# 컴파일과 에셋 저장까지 확인했으며 CONFIG 없는 실제 PC/Standalone 실행은 미확인이다. 새 동작 확인을 위해 기존 CONFIG를 임의 삭제하거나 새 Play를 실행하지 않았다. Sheets 화면 집계 대조·전체 백로그·장애/재도전·CSV 실행도 미확인이다.
+2026-10-15 로컬 CONFIG 경로의 실제 전송은 기존 로그 1건 POST와 Unity Play 자동 전송 400건에서 서버 ACK·커서 생성으로 확인했다. 이후 CONFIG 없는 PC를 위한 빌드 기본 설정 기능을 구현하고 활성 에셋을 Editor API로 저장했다. 새 기능은 C# 컴파일과 에셋 저장까지 확인했으며 CONFIG 없는 실제 PC/Standalone 실행은 미확인이다. 새 동작 확인을 위해 기존 CONFIG를 임의 삭제하거나 새 Play를 실행하지 않았다. 전체 백로그·장애/재도전은 미확인이다.
+
+2026-10-15 KST 확인: `Code.gs` 운영 웹 앱을 동일 URL의 버전 2로 갱신하고 `setupSheets`를 실행했다. 기존 `Events.received_utc` 값은 `received_kst`의 +09:00 문자열로 변환됐다. 실제 로컬 `session_started` 전송은 HTTP 200/ACK 1건을 받았고, 시트 `Events!B7817`의 수신 KST, `V7817`의 발생 KST, `W7817`의 기록 KST와 `Sessions!D7`의 시작 KST를 직접 확인했다. 이전 배포에서 시작 KST가 누락된 두 세션은 원본 시작 사건을 재전송해 채웠다. CSV 내보내기는 사건 12,783건/세션 6건/진단 0건이며 UTC 출력 열이 없다. 과거 사건의 발생·기록 KST를 당시 수신하지 않았다면 그 셀은 빈 값으로 남는다.
 
 ## 참고
 

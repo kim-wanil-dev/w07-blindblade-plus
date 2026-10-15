@@ -187,3 +187,19 @@ Unity CLI의 component property 조회로 컴포넌트와 기본 Inspector 값 �
 - 개발용 ConfigurationSource는 LocalOverride/BuiltIn을 제공한다. token은 에셋 Inspector에서 숨기지만 클라이언트 배포에 포함되므로 제한된 과제 테스트 용도다. Steam 공개 배포는 별도 수집 서버가 권장된다.
 - 확인: C# 컴파일 오류0·경고0, Editor 에셋 생성 결과 enabled=true/endpointConfigured=true/tokenConfigured=true/saved=true. 이번 수정 후 Play·Standalone 빌드·새 PC 기본값 전송은 실행하지 않았다. 기존 로컬 CONFIG와 원본을 임의 이동/삭제하지 않았다.
 - 다음 작업자: 전체 게임 폴더를 새 빌드로 배포하고 CONFIG 없는 PC에서 기본값 전송을 확인한다. 기존 PC는 CONFIG가 우선하며 이전 disabled 파일을 계속 보관하면 전송이 꺼진다. README의 배포/로컬 재정의 안내를 따른다. feature/log에서 Git CLI/커밋 없음.
+
+### 2026-10-15 후속: 로그 벽시각을 한국시간으로 표기
+
+- 사용자 요청: 로그가 UTC 대신 한국시간으로 보이도록 변경.
+- 새 JSONL 사건에 `occurredAtKst`와 `recordedAtKst`, 세션 시작 payload에 `startedKst`를 기록하도록 했다. 각 기록 시점의 KST와 realtime 차이로 사건 시각을 계산하고 ISO 8601 `+09:00` 오프셋을 포함한다. 기존 경과 시계 필드는 분석 호환을 위해 유지한다.
+- CSV에는 사건 발생/수신 KST 열, 세션 시작 KST, manifest 생성 KST를 추가했다. 과거 UTC 세션 열은 과거 로그 호환을 위해 남겼다.
+- Apps Script는 새 Events/Sessions KST 열을 기존 열 오른쪽에 추가하며 UTC 과거 데이터는 보존한다. 새 수신의 UTC 열은 비우고 KST 열을 채운다.
+- 확인 범위: 코드와 문서를 갱신했다. 이번 변경 후 Unity 컴파일/Play, CSV 실행, Google Apps Script 재배포 및 실제 Sheets 표시를 검증하지 않았다. 사용자는 Apps Script 편집본을 새 버전으로 배포하고 `setupSheets`를 실행해야 한다.
+
+### 2026-10-15 후속: UTC 출력 열 제거 및 KST 저장 확인
+
+- 최신 로컬 JSONL `6746c8285eac452481fb58fcaffcd586.jsonl`의 2,236건을 확인했다. 시작 사건 `occurredAtKst=2026-10-15T13:59:50.074+09:00`, 종료 사건 `recordedAtKst=2026-10-15T14:01:17.798+09:00`이며 세션 시작 payload도 `startedKst`를 가졌다. 새 원본에는 `startedUtc`가 없었다.
+- 사용자가 본 UTC는 Sheets/CSV에 남긴 옛 열 이름이 원인으로 판단했다. 수신 스크립트와 CSV 출력에서 UTC 열을 없애고, 시트의 기존 UTC 값을 +09:00으로 변환하는 마이그레이션을 추가했다. 과거 JSONL 원본은 수정하지 않는다.
+- Google Apps Script의 `setupSheets` 실행을 완료하고 운영 웹 앱을 동일 URL의 버전 2로 갱신했다. `Events!B1=received_kst`, `Sessions!D1=started_kst`이며 기존 `Events!B7816` 값은 `05:01:15.951Z`에서 `14:01:15.951+09:00`으로 변환됐다.
+- 실제 최신 세션의 원본 `session_started` 1건을 전송해 HTTP 200, `ok=true`, 정확한 batchId, ACK 1건을 받았다. 새 `Events!A7817=6746c8285eac452481fb58fcaffcd586:1`, `B7817=2026-10-15T14:11:25.273+09:00`, `V7817=W7817=2026-10-15T13:59:50.074+09:00` 및 `Sessions!D7=2026-10-15T13:59:50.067+09:00`을 시트에서 확인했다. 이전 배포 때문에 비었던 `Sessions!D5:D6`도 각각 원본 시작 사건을 재전송해 `13:48:16.958+09:00`, `13:48:41.148+09:00`으로 채웠다.
+- 로컬 전처리: 실제 사건 12,783건/세션 6건/진단 0건. `events.csv`와 `sessions.csv`에는 UTC 열이 없고, 세션 시작시각 6건이 모두 `+09:00`이다. Apps Script 문법 검사 통과, Unity 재컴파일 up_to_date 및 오류·경고 0건. 과거에 시트가 받지 않은 사건별 발생·기록 KST는 비어 있을 수 있다. 새 PC에서 CONFIG 없이 실제 자동 전송되는지, 전체 백로그와 장애 복구는 별도 검증이 필요하다. 브랜치 `feature/log`이므로 Git CLI와 커밋은 수행하지 않았다.
