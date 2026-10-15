@@ -118,3 +118,4 @@ MonoBehaviour:
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
   _stepsPerRipple: 2
+  _hideOwner: 1
