@@ -264,20 +264,33 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 위치에서 가장 가까운 생존 근접 적을 찾아 owner 소유의 반사 비행으로 바꾸고 true를 반환한다.
-    /// 적대 비행은 이 순간 끝나므로 Released를 한 번 알리며, 대상이 없으면 아무것도 바꾸지 않고 false를 반환한다.
+    /// owner의 수평 시선 방향으로 수리검을 반사한다.
+    /// 화면에서 인지된 적이 있으면 그 적을 목표로 저장하고,
+    /// 반사 상태와 적대 비행 종료를 확정한 뒤 true를 반환한다.
     /// </summary>
     private bool TryReflect(GameObject owner)
     {
-        if (!_director.TryFindNearestMelee(transform.position, out EnemyHealth target))
-            return false;
+        PlayerMotor motor = owner.GetComponent<PlayerMotor>();
+        Camera viewCamera = owner.GetComponentInChildren<Camera>();
+        SensoryPerceptionMask perceptionMask = Game.Instance.SensoryManager.GetComponent<SensoryPerceptionMask>();
 
         _reflectOwner = owner;
-        _reflectTarget = target;
-        _reflectTargetCollider = target.CreateCombatTarget().HitCollider;
+        _reflectTarget = null;
+        _reflectTargetCollider = null;
+        _direction = motor.ViewForward.normalized;
+
+        if (_director.TryFindDetectedMelee(transform.position, viewCamera, perceptionMask, out EnemyHealth target))
+        {
+            _reflectTarget = target;
+            _reflectTargetCollider = target.CreateCombatTarget().HitCollider;
+            AimAtReflectTarget();
+        }
+        else
+        {
+            transform.rotation = Quaternion.LookRotation(_direction);
+        }
+
         _elapsed = 0f;
-        AimAtReflectTarget();
-        // 반사 뒤에는 적대 투사체가 아니므로 투척 예산·방향 표시·강화 공격 제거 대상에서 빠진다.
         _flying = false;
         _reflected = true;
         // 반사 비행은 더 빨라 같은 비행음을 쓰지 않는다.
@@ -320,11 +333,11 @@ public sealed class DefenseShuriken : MonoBehaviour
             Destroy(gameObject);
             return;
         }
-        if (_reflectTarget != null && _reflectTarget.IsAlive)
-            AimAtReflectTarget();
+        if (_reflectTarget != null && _reflectTarget.IsAlive) AimAtReflectTarget();
 
-        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts,
-            _collisionMask, QueryTriggerInteraction.Ignore);
+        int reflectedMask = _collisionMask.value | Physics.IgnoreRaycastLayer;
+
+        int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts, reflectedMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps; i++)
         {
             if (!CanHitReflected(_contacts[i]))
@@ -334,8 +347,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         }
 
         float distance = _speed * _reflectSpeedMultiplier * Time.deltaTime;
-        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
-            distance, _collisionMask, QueryTriggerInteraction.Ignore);
+        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits, distance, reflectedMask, QueryTriggerInteraction.Ignore);
         int closest = -1;
         float closestDistance = float.PositiveInfinity;
         for (int i = 0; i < count; i++)
@@ -366,17 +378,22 @@ public sealed class DefenseShuriken : MonoBehaviour
     }
 
     /// <summary>
-    /// collider가 반사 수리검이 멈출 대상이면 true를 반환한다. 생존 적과 지형에서 멈추고
-    /// 자신·플레이어·죽은 적·적이 아닌 다른 피해 수신자는 통과한다.
+    /// collider가 반사 수리검에 맞을 수 있는 생존 적 또는 기존 지형인지 판정한다.
+    /// 자신, 플레이어, 투척수는 제외하고 추가 검색한 레이어의 비적 대상도 통과시킨다.
     /// </summary>
     private bool CanHitReflected(Collider collider)
     {
-        if (collider.transform.IsChildOf(transform) || collider.GetComponentInParent<PlayerHealth>() != null)
+        if (collider.transform.IsChildOf(transform)
+            || collider.GetComponentInParent<PlayerHealth>() != null
+            || collider.GetComponentInParent<BambooThrower>() != null)
             return false;
+
         EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
         if (enemy != null)
             return enemy.IsAlive;
-        return collider.GetComponentInParent<IDamageable>() == null;
+
+        int layerBit = 1 << collider.gameObject.layer;
+        return (_collisionMask.value & layerBit) != 0 && collider.GetComponentInParent<IDamageable>() == null;
     }
 
     /// <summary>
