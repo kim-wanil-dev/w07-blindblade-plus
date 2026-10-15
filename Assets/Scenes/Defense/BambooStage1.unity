@@ -52280,6 +52280,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1968806060}
     m_Modifications:
+    - target: {fileID: 932319107663727525, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0.000015258789
+      objectReference: {fileID: 0}
     - target: {fileID: 1012769593652945470, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: _provider
       value: 
@@ -52287,6 +52291,10 @@ PrefabInstance:
     - target: {fileID: 1138209146400131558, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 2945568411076688482, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0.000015258789
       objectReference: {fileID: 0}
     - target: {fileID: 4215774086827740307, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_LocalPosition.x
@@ -52355,6 +52363,10 @@ PrefabInstance:
     - target: {fileID: 7585884103523774683, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
+      objectReference: {fileID: 0}
+    - target: {fileID: 8227192258335351465, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0.000015258789
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -60039,6 +60051,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2091614580}
   - component: {fileID: 2091614581}
+  - component: {fileID: 2091614582}
   m_Layer: 0
   m_Name: BambooForest
   m_TagString: Untagged
@@ -60740,6 +60753,33 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OutlineLayer
   _kind: 0
+--- !u!114 &2091614582
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2091614579}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c32cabbcaebf418899195098337659a9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BambooGrove
+  _minimumStumpHeight: 0.3
+  _minimumTopLength: 1
+  _minimumPieceLength: 0.3
+  _pushSpeed: 1
+  _tipSpeed: 0.5
+  _cutFaceFriction: 0.1
+  _massPerMeter: 1
+  _fadeDuration: 3
+  _regrowDuration: 3
+  _impactMinimumSpeed: 1
+  _impactRadiusPerSpeed: 0.3
+  _impactMaximumRadius: 3
+  _impactExpandDuration: 0.25
+  _impactAfterimage: 0.3
+  _impactStrength: 0.15
 --- !u!1 &2097606468
 GameObject:
   m_ObjectHideFlags: 0

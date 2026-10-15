@@ -59,6 +59,26 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _warning.interactable = false;
     }
 
+    void Start()
+    {
+        if (!BambooStage1Progress.BossCheckpointReached) return;
+
+        PlayerController player = Game.Player;
+        Vector3 forward = Vector3.ProjectOnPlane(player.GetComponent<PlayerMotor>().ViewForward, Vector3.up);
+        if (!TryFindBossRetryPosition(forward, out Vector3 bossPosition))
+        {
+            Debug.LogError("BambooStage1 보스 재도전 위치를 NavMesh에서 찾지 못했습니다.", this);
+            return;
+        }
+
+        _director.StopWave();
+        Vector3 center = _arena.transform.position;
+        player.transform.position = new Vector3(center.x, player.transform.position.y, center.z);
+        player.GetComponent<PlayerPerfectPulse>().SuppressStartPulse();
+        ActivateBoss(bossPosition, false);
+        player.GetComponent<PlayerMotor>().FaceTarget(_boss.transform.position + Vector3.up);
+    }
+
     void OnEnable()
     {
         _bossHealth.Died += HandleBossDied;
@@ -125,6 +145,15 @@ public sealed class BambooStage1Controller : MonoBehaviour
             yield break;
         }
 
+        ActivateBoss(position, true);
+    }
+
+    /// <summary>
+    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정한다.
+    /// 등장 파동은 첫 진입과 재도전 모두 시작하며 shakeCamera가 참인 첫 진입에서만 카메라를 흔든다.
+    /// </summary>
+    private void ActivateBoss(Vector3 position, bool shakeCamera)
+    {
         Vector3 toPlayer = Game.Player.transform.position - position;
         toPlayer.y = 0f;
         _boss.transform.SetPositionAndRotation(position,
@@ -132,9 +161,43 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _boss.GetComponent<BossController>().ConfigureArena(_arena, _edgeInset);
         _boss.SetActive(true);
         _phase = StagePhase.Boss;
+        BambooStage1Progress.MarkBossCheckpointReached();
         _entranceWaveRoutine = StartCoroutine(PlayEntranceWaves(position));
+        if (!shakeCamera) return;
         _playerCamera = Game.Player.GetComponentInChildren<Camera>();
         _shakeElapsed = 0f;
+    }
+
+    /// <summary>
+    /// forward 방향 공터 끝에서 중심 플레이어까지 NavMesh 경로가 연결된 위치를 찾는다.
+    /// 가장 바깥쪽 유효 지점을 position으로 반환하며 탐색 실패 시 false를 반환한다.
+    /// </summary>
+    private bool TryFindBossRetryPosition(Vector3 forward, out Vector3 position)
+    {
+        position = default;
+        Vector3 center = _arena.transform.position;
+        forward.Normalize();
+        if (forward.sqrMagnitude < 0.0001f
+            || !NavMesh.SamplePosition(center, out NavMeshHit playerHit, _spawnSampleRadius, NavMesh.AllAreas))
+            return false;
+
+        float outerRadius = Mathf.Max(1f, _arena.Radius - _edgeInset);
+        NavMeshPath path = new NavMeshPath();
+        for (int ring = 0; ring < 3; ring++)
+        {
+            float radius = Mathf.Max(1f, outerRadius - ring * _spawnSampleRadius);
+            Vector3 candidate = center + forward * radius;
+            if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, _spawnSampleRadius, NavMesh.AllAreas))
+                continue;
+            Vector3 offset = Vector3.ProjectOnPlane(hit.position - center, Vector3.up);
+            if (offset.magnitude > outerRadius || Vector3.Dot(offset.normalized, forward) < 0.98f
+                || !NavMesh.CalculatePath(hit.position, playerHit.position, NavMesh.AllAreas, path)
+                || path.status != NavMeshPathStatus.PathComplete)
+                continue;
+            position = hit.position;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>arena의 중심과 반경을 사용해 플레이어에서 가장 먼 유효 NavMesh 위치를 position에 반환한다.</summary>
