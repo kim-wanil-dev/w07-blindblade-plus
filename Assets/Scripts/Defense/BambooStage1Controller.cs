@@ -18,7 +18,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
     [SerializeField] private CanvasGroup _warning;
 
     [Header("보스 등장 조건과 위치")]
-    [SerializeField, Min(1)] private int _requiredKills = 10;
+    [SerializeField, Min(1)] private int _requiredKills = 5;
     [SerializeField, Min(0f)] private float _warningDuration = 2f;
     [SerializeField, Min(0f)] private float _edgeInset = 2f;
     [SerializeField, Min(0.1f)] private float _spawnSampleRadius = 2f;
@@ -55,6 +55,9 @@ public sealed class BambooStage1Controller : MonoBehaviour
     void Awake()
     {
         _bossHealth = _boss.GetComponent<EnemyHealth>();
+        // 보스 출현에 필요한 처치 수보다 많은 근접 적은 내보내지 않는다.
+        _director.SetMeleeSpawnLimit(_requiredKills);
+        _director.SetKillGoal(_requiredKills);
         _warning.alpha = 0f;
         _warning.blocksRaycasts = false;
         _warning.interactable = false;
@@ -164,6 +167,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _boss.GetComponent<BossController>().ConfigureArena(_arena, _edgeInset);
         BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2");
         _boss.SetActive(true);
+        _director.HideRecord();
         _phase = StagePhase.Boss;
         BambooStage1Progress.MarkBossCheckpointReached();
         _entranceWaveRoutine = StartCoroutine(PlayEntranceWaves(position));
