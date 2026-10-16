@@ -18,20 +18,36 @@ public sealed class OnboardingHud : MonoBehaviour
         [SerializeField, TextArea(1, 2)] private string _keyboardHint;
         [SerializeField, TextArea(1, 2)] private string _gamepadHint;
         [SerializeField] private Sprite _keyboardIcon;
+        [SerializeField, TextArea(1, 2)] private string _followUpKeyboardHint;
+        [SerializeField, TextArea(1, 2)] private string _followUpGamepadHint;
+        [SerializeField] private Sprite _followUpKeyboardIcon;
         [SerializeField, TextArea(1, 2)] private string[] _objectives;
 
         /// <summary>keyboardHint, gamepadHint, keyboardIcon, objectives로 교체 가능한 단계 안내를 만든다.</summary>
         public Prompt(string keyboardHint, string gamepadHint, Sprite keyboardIcon, params string[] objectives)
+            : this(keyboardHint, gamepadHint, keyboardIcon, objectives, null, null, null)
+        {
+        }
+
+        /// <summary>두 목표 단계에 입력 장치별 후속 안내와 선택 아이콘을 추가해 Inspector 편집 가능한 단계 안내를 만든다.</summary>
+        public Prompt(string keyboardHint, string gamepadHint, Sprite keyboardIcon, string[] objectives,
+            string followUpKeyboardHint, string followUpGamepadHint, Sprite followUpKeyboardIcon)
         {
             _keyboardHint = keyboardHint;
             _gamepadHint = gamepadHint;
             _keyboardIcon = keyboardIcon;
+            _followUpKeyboardHint = followUpKeyboardHint;
+            _followUpGamepadHint = followUpGamepadHint;
+            _followUpKeyboardIcon = followUpKeyboardIcon;
             _objectives = objectives;
         }
 
-        /// <summary>현재 입력 장치에 맞는 단계 안내 문구를 반환한다.</summary>
-        public string GetHint(bool gamepad)
+        /// <summary>gamepad와 objectiveIndex에 맞는 현재 목표의 입력 안내 문구를 반환한다.</summary>
+        public string GetHint(bool gamepad, int objectiveIndex)
         {
+            if (objectiveIndex > 0 && !string.IsNullOrEmpty(_followUpKeyboardHint))
+                return gamepad && !string.IsNullOrEmpty(_followUpGamepadHint)
+                    ? _followUpGamepadHint : _followUpKeyboardHint;
             return gamepad && !string.IsNullOrEmpty(_gamepadHint) ? _gamepadHint : _keyboardHint;
         }
 
@@ -41,10 +57,11 @@ public sealed class OnboardingHud : MonoBehaviour
             return _objectives != null && index >= 0 && index < _objectives.Length ? _objectives[index] : string.Empty;
         }
 
-        /// <summary>키보드·마우스 안내 이미지 스프라이트를 반환한다.</summary>
-        public Sprite GetIcon()
+        /// <summary>objectiveIndex에 해당하는 키보드·마우스 안내 스프라이트를 반환한다.</summary>
+        public Sprite GetIcon(int objectiveIndex)
         {
-            return _keyboardIcon;
+            return objectiveIndex > 0 && !string.IsNullOrEmpty(_followUpKeyboardHint)
+                ? _followUpKeyboardIcon : _keyboardIcon;
         }
 
         /// <summary>현재 단계에 등록된 순차 목표 문구 수를 반환한다.</summary>
@@ -53,6 +70,8 @@ public sealed class OnboardingHud : MonoBehaviour
 
     private const float REFERENCE_WIDTH = 1920f;
     private const float REFERENCE_HEIGHT = 1080f;
+    private const float OBJECTIVE_SHINE_DURATION = 0.62f;
+    private const float OBJECTIVE_SHINE_PEAK_ALPHA = 0.42f;
 
     [Header("표시 자산")]
     [SerializeField] private TMP_FontAsset _font;
@@ -63,15 +82,20 @@ public sealed class OnboardingHud : MonoBehaviour
         new Prompt("좌클릭 - 공격", "RB - 공격", null, "근접 적 처치 1회"),
         new Prompt("극한 회피 - SPACE", "극한 회피 - A 버튼", null, "수리검 극한 회피 1회"),
         new Prompt("우클릭 - 방어", "LB - 방어", null, "가드 1회", "가드를 놓고 퍼펙트 패링 1회"),
-        new Prompt("좌클릭 - 검기", "RB - 검기", null, "검기 실제 발사"),
+        new Prompt("우클릭 - 패링", "LB - 패링", null,
+            new[] { "수리검 퍼펙트 패링 1회", "검기 실제 발사" }, "좌클릭 - 검기", "RB - 검기", null),
         new Prompt("우클릭 - 방어", "LB - 방어", null, "가드 1회", "가드를 놓고 퍼펙트 패링 1회"),
-        new Prompt("좌클릭 - 검기", "RB - 검기", null, "검기 실제 발사"),
-        new Prompt("좌클릭 홀드 - 궁극기", "RB 홀드 - 궁극기", null, "궁극기 완료")
+        new Prompt("우클릭 - 패링", "LB - 패링", null,
+            new[] { "수리검 퍼펙트 패링 1회", "검기 실제 발사" }, "좌클릭 - 검기", "RB - 검기", null),
+        new Prompt("우클릭 - 패링", "LB - 패링", null,
+            new[] { "수리검 퍼펙트 패링 1회", "궁극기로 적 8명 처치" },
+            "좌클릭 홀드 - 궁극기", "RB 홀드 - 궁극기", null)
     };
 
     private Canvas _canvas;
     private Image _guidePanel;
     private Image _objectivePanel;
+    private Image _objectiveShine;
     private Image _instructionIcon;
     private TextMeshProUGUI _instructionText;
     private TextMeshProUGUI _objectiveTitle;
@@ -81,6 +105,7 @@ public sealed class OnboardingHud : MonoBehaviour
     private Image _guardTimingFill;
     private CanvasGroup _stageFade;
     private CanvasGroup _completionGroup;
+    private Coroutine _objectiveShineRoutine;
     private TextMeshProUGUI _completionTitle;
     private TextMeshProUGUI _completionDetail;
     private int _currentStage = -1;
@@ -110,8 +135,8 @@ public sealed class OnboardingHud : MonoBehaviour
         ApplyResponsiveLayout();
     }
 
-    /// <summary>stage와 objectiveIndex의 교체 안내, 목표, 클릭 아이콘을 화면에 표시한다.</summary>
-    public void ShowObjective(int stage, int objectiveIndex)
+    /// <summary>stage와 objectiveIndex의 교체 안내, 목표, 클릭 아이콘을 표시하고 필요하면 목표 패널을 한 번 강조한다.</summary>
+    public void ShowObjective(int stage, int objectiveIndex, bool emphasizeChange = false)
     {
         if (_prompts == null || stage < 0 || stage >= _prompts.Length) return;
         if (_currentStage == stage && _currentObjective == objectiveIndex)
@@ -125,9 +150,16 @@ public sealed class OnboardingHud : MonoBehaviour
         Prompt prompt = _prompts[stage];
         _objectiveTitle.text = "목표";
         _objectiveText.text = prompt.GetObjective(objectiveIndex);
-        _instructionIcon.sprite = prompt.GetIcon();
+        _instructionIcon.sprite = prompt.GetIcon(objectiveIndex);
         _instructionIcon.enabled = _instructionIcon.sprite != null && !InputDeviceDisplay.IsGamepad;
         RefreshDevicePrompt();
+
+        if (_objectiveShineRoutine != null) StopCoroutine(_objectiveShineRoutine);
+        _objectiveShineRoutine = null;
+        Color shineColor = _objectiveShine.color;
+        shineColor.a = 0f;
+        _objectiveShine.color = shineColor;
+        if (emphasizeChange) _objectiveShineRoutine = StartCoroutine(AnimateObjectiveShine());
     }
 
     /// <summary>visible, guarding, heldTime과 실제 방어 판정 및 시간창으로 가드 유지 시간과 현재 판정을 표시한다.</summary>
@@ -156,12 +188,6 @@ public sealed class OnboardingHud : MonoBehaviour
         yield return FadeStageOverlay(1f, 0.12f);
         onBlack?.Invoke();
         yield return FadeStageOverlay(0f, 0.12f);
-    }
-
-    /// <summary>같은 단계의 목표가 완료됐음을 짧게 보여 주고 다음 목표 안내로 넘어갈 시간을 반환한다.</summary>
-    public IEnumerator ShowObjectiveCompletion()
-    {
-        yield return ShowCompletion("목표 완료", "다음 목표", 0.35f);
     }
 
     /// <summary>완료된 stage 번호와 다음 온보딩 단계 여부를 사용해 단계 전환 화면을 표시한다.</summary>
@@ -195,6 +221,12 @@ public sealed class OnboardingHud : MonoBehaviour
 
         _objectivePanel = CreateImage("ObjectivePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
         SetAnchoredRect(_objectivePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-140f, 120f), new Vector2(400f, 170f));
+        _objectivePanel.gameObject.AddComponent<RectMask2D>();
+        _objectiveShine = CreateImage("ObjectiveShine", _objectivePanel.transform, new Color(0.94f, 0.97f, 1f, 0f));
+        _objectiveShine.raycastTarget = false;
+        SetAnchoredRect(_objectiveShine.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(34f, 230f));
+        _objectiveShine.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -18f);
         _objectiveTitle = CreateText("ObjectiveTitle", _objectivePanel.transform, 23f, TextAlignmentOptions.MidlineLeft);
         SetAnchoredRect(_objectiveTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(22f, -14f), new Vector2(-44f, 34f));
         _objectiveText = CreateText("CurrentObjective", _objectivePanel.transform, 29f, TextAlignmentOptions.MidlineLeft);
@@ -234,6 +266,32 @@ public sealed class OnboardingHud : MonoBehaviour
         _stageFade.alpha = 0f;
         _stageFade.blocksRaycasts = false;
         _stageFade.interactable = false;
+    }
+
+    /// <summary>목표 상자 안에서 단색 UI 광택을 왼쪽에서 오른쪽으로 한 번 이동시킨다.</summary>
+    private IEnumerator AnimateObjectiveShine()
+    {
+        RectTransform shineRect = _objectiveShine.rectTransform;
+        float panelWidth = _objectivePanel.rectTransform.rect.width;
+        float startX = -panelWidth * 0.8f;
+        float endX = panelWidth * 0.8f;
+        float elapsed = 0f;
+        while (elapsed < OBJECTIVE_SHINE_DURATION)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float progress = Mathf.Clamp01(elapsed / OBJECTIVE_SHINE_DURATION);
+            float movement = Mathf.SmoothStep(0f, 1f, progress);
+            shineRect.anchoredPosition = new Vector2(Mathf.Lerp(startX, endX, movement), 0f);
+            Color shineColor = _objectiveShine.color;
+            shineColor.a = Mathf.Sin(progress * Mathf.PI) * OBJECTIVE_SHINE_PEAK_ALPHA;
+            _objectiveShine.color = shineColor;
+            yield return null;
+        }
+
+        Color finalColor = _objectiveShine.color;
+        finalColor.a = 0f;
+        _objectiveShine.color = finalColor;
+        _objectiveShineRoutine = null;
     }
 
     /// <summary>좁은 화면에서는 중앙 안내와 우하단 목표 패널을 줄여 서로 겹치지 않게 배치한다.</summary>
@@ -330,8 +388,8 @@ public sealed class OnboardingHud : MonoBehaviour
         if (_currentStage < 0 || _currentStage >= _prompts.Length) return;
         Prompt prompt = _prompts[_currentStage];
         bool gamepad = InputDeviceDisplay.IsGamepad;
-        _instructionText.text = prompt.GetHint(gamepad);
-        _instructionIcon.sprite = prompt.GetIcon();
+        _instructionText.text = prompt.GetHint(gamepad, _currentObjective);
+        _instructionIcon.sprite = prompt.GetIcon(_currentObjective);
         _instructionIcon.enabled = _instructionIcon.sprite != null && !gamepad;
     }
 

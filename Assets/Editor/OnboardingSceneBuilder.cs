@@ -182,10 +182,10 @@ public static class OnboardingSceneBuilder
             new[] { "좌클릭 - 공격", "" },
             new[] { "극한 회피 - SPACE", "" },
             new[] { "우클릭 - 방어", "" },
-            new[] { "좌클릭 - 검기", "" },
+            new[] { "우클릭 - 패링", "" },
             new[] { "우클릭 - 방어", "" },
-            new[] { "좌클릭 - 검기", "" },
-            new[] { "좌클릭 홀드 - 궁극기", "" }
+            new[] { "우클릭 - 패링", "" },
+            new[] { "우클릭 - 패링", "" }
         };
         string[][] gamepadHints =
         {
@@ -194,10 +194,18 @@ public static class OnboardingSceneBuilder
             new[] { "RB - 공격", "" },
             new[] { "극한 회피 - A 버튼", "" },
             new[] { "LB - 방어", "" },
-            new[] { "RB - 검기", "" },
+            new[] { "LB - 패링", "" },
             new[] { "LB - 방어", "" },
-            new[] { "RB - 검기", "" },
-            new[] { "RB 홀드 - 궁극기", "" }
+            new[] { "LB - 패링", "" },
+            new[] { "LB - 패링", "" }
+        };
+        string[] followUpKeyboardHints =
+        {
+            "", "", "", "", "", "좌클릭 - 검기", "", "좌클릭 - 검기", "좌클릭 홀드 - 궁극기"
+        };
+        string[] followUpGamepadHints =
+        {
+            "", "", "", "", "", "RB - 검기", "", "RB - 검기", "RB 홀드 - 궁극기"
         };
         string[][] objectives =
         {
@@ -206,25 +214,30 @@ public static class OnboardingSceneBuilder
             new[] { "근접 적 처치 1회" },
             new[] { "수리검 극한 회피 1회" },
             new[] { "가드 1회", "가드를 놓고 퍼펙트 패링 1회" },
-            new[] { "검기 실제 발사" },
+            new[] { "수리검 퍼펙트 패링 1회", "검기 실제 발사" },
             new[] { "가드 1회", "가드를 놓고 퍼펙트 패링 1회" },
-            new[] { "검기 실제 발사" },
-            new[] { "궁극기 완료" }
+            new[] { "수리검 퍼펙트 패링 1회", "검기 실제 발사" },
+            new[] { "수리검 퍼펙트 패링 1회", "궁극기로 적 8명 처치" }
         };
         Sprite leftMouse = AssetDatabase.LoadAssetAtPath<Sprite>(LEFT_MOUSE);
         Sprite rightMouse = AssetDatabase.LoadAssetAtPath<Sprite>(RIGHT_MOUSE);
-        int[] leftIconStages = { 2, 5, 7, 8 };
-        int[] rightIconStages = { 4, 6 };
+        int[] leftIconStages = { 2 };
+        int[] rightIconStages = { 4, 5, 6, 7, 8 };
+        int[] followUpIconStages = { 5, 7, 8 };
 
         for (int i = 0; i < prompts.arraySize; i++)
         {
             SerializedProperty prompt = prompts.GetArrayElementAtIndex(i);
             prompt.FindPropertyRelative("_keyboardHint").stringValue = keyboardHints[i][0];
             prompt.FindPropertyRelative("_gamepadHint").stringValue = gamepadHints[i][0];
+            prompt.FindPropertyRelative("_followUpKeyboardHint").stringValue = followUpKeyboardHints[i];
+            prompt.FindPropertyRelative("_followUpGamepadHint").stringValue = followUpGamepadHints[i];
             SerializedProperty icon = prompt.FindPropertyRelative("_keyboardIcon");
             if (System.Array.IndexOf(leftIconStages, i) >= 0) icon.objectReferenceValue = leftMouse;
             else if (System.Array.IndexOf(rightIconStages, i) >= 0) icon.objectReferenceValue = rightMouse;
             else icon.objectReferenceValue = null;
+            SerializedProperty followUpIcon = prompt.FindPropertyRelative("_followUpKeyboardIcon");
+            followUpIcon.objectReferenceValue = System.Array.IndexOf(followUpIconStages, i) >= 0 ? leftMouse : null;
 
             SerializedProperty objectiveArray = prompt.FindPropertyRelative("_objectives");
             objectiveArray.arraySize = objectives[i].Length;
