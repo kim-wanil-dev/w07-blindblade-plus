@@ -56,6 +56,8 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private readonly Dictionary<EnemyHealth, MeleeUnit> _meleeByHealth = new Dictionary<EnemyHealth, MeleeUnit>();
     private NavMeshPath _meleePath;
     private float _nextMeleeSpawnAt;
+    private int _meleeSpawnLimit;
+    private int _meleeSpawned;
     private readonly Plane[] _reflectCameraPlanes = new Plane[6];
 
     [Header("세션 연결")]
@@ -109,6 +111,12 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             return;
         UpdateThrowers(elapsed);
         UpdateMelee(elapsed);
+    }
+
+    /// <summary>이번 세션에서 생성할 근접 적의 총수를 limit로 제한한다. 0 이하이면 제한하지 않는다.</summary>
+    internal void SetMeleeSpawnLimit(int limit)
+    {
+        _meleeSpawnLimit = Mathf.Max(0, limit);
     }
 
     /// <summary>입력 없이 현재 투척수·근접 적을 대기 풀로 되돌리고 이후 스폰을 막는다. 처치 사건은 만들지 않는다.</summary>
@@ -173,10 +181,12 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     /// <summary>
     /// 근접 적 스폰 시각이 되면 다음 시각을 생존 시간에 비례해 당기고 숲 가장자리의 도달 가능한 위치에 근접 적을 배치한다.
     /// 분당 스폰 수는 시작값에 분당 증가량을 선형으로 더하며 동시 생존 상한을 넘으면 이번 스폰을 건너뛴다.
+    /// 총 생성 제한이 있으면 _meleeSpawned가 제한에 닿은 뒤로는 더 생성하지 않는다.
     /// </summary>
     private void UpdateMelee(float elapsed)
     {
-        if (_meleePrefab == null || Time.time < _nextMeleeSpawnAt)
+        if (_meleePrefab == null || Time.time < _nextMeleeSpawnAt
+            || (_meleeSpawnLimit > 0 && _meleeSpawned >= _meleeSpawnLimit))
             return;
         float minutes = Mathf.Max(0f, elapsed - _meleeStartTime) / 60f;
         float spawnsPerMinute = _meleeSpawnsPerMinute + _meleeSpawnGrowthPerMinute * minutes;
@@ -193,6 +203,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         unit.Root.SetActive(true);
         unit.Controller.SetTarget(Game.Player.transform);
         _activeMelee.Add(unit);
+        _meleeSpawned++;
     }
 
     /// <summary>
