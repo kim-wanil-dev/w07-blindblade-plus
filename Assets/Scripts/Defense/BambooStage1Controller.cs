@@ -153,11 +153,13 @@ public sealed class BambooStage1Controller : MonoBehaviour
     }
 
     /// <summary>
-    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정한다.
+    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정하며 플레이어 체력을 최대로 회복한다.
     /// 등장 파동은 첫 진입과 재도전 모두 시작하며 shakeCamera가 참인 첫 진입에서만 카메라를 흔든다.
     /// </summary>
     private void ActivateBoss(Vector3 position, bool shakeCamera)
     {
+        PlayerHealth playerHealth = Game.Player.GetComponent<PlayerHealth>();
+        playerHealth.Heal(playerHealth.MaxHealth);
         Vector3 toPlayer = Game.Player.transform.position - position;
         toPlayer.y = 0f;
         _boss.transform.SetPositionAndRotation(position,
