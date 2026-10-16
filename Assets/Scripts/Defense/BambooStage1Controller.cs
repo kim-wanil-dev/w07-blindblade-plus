@@ -65,6 +65,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 
     void Start()
     {
+        BambooStage1Progress.MarkStage1Started();
         if (!BambooStage1Progress.BossCheckpointReached) return;
 
         PlayerController player = Game.Player;

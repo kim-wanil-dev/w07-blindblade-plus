@@ -4,9 +4,20 @@
 
 1. 새 빌드 또는 갱신된 Unity 프로젝트에서 BambooStage1을 플레이한다. Intro 시작 버튼은 Onboarding을 거쳐 이 씬을 연다.
 2. 로컬 경로: `%USERPROFILE%\AppData\LocalLow\DefaultCompany\w07-blindblade+\CombatTelemetry`.
-3. `*.jsonl` 한 줄이 Events의 한 행이다. 현재 온보딩은 `stageId=0-1~0-7`, 일반 구간은 `1-1`, 보스 구간은 `1-2`다. 보스 재도전은 `1-2`만 기록한다.
-4. 기본 전송 설정은 Resources에 포함된다. 기존 URL·token은 유지했으므로 새 PC의 별도 CONFIG는 필요 없다. 로컬 `upload-config.json`이 있으면 그 설정이 우선한다.
-5. 전송은 기본 20초마다 시작하고, 밀린 배치는 ACK 후 이어서 보낸다. 큐가 저장·전송될 시간을 두고 종료한다. 시트가 비어 있으면 Console의 전송 오류와 아래 배포 상태를 확인한다.
+3. 빌드 실행 중 CSV 파일은 만들지 않는다. 원본은 세션별 JSONL이며, 아래 Export 명령으로 Events·Sessions·OnboardingSteps 등의 CSV를 만든다.
+4. `*.jsonl` 한 줄이 Events의 한 행이다. 현재 온보딩은 `stageId=0-1~0-7`, 일반 구간은 `1-1`, 보스 구간은 `1-2`다. 보스 재도전은 `1-2`만 기록한다.
+5. 기본 전송 설정은 Resources에 포함된다. 기존 URL·token은 유지했으므로 새 PC의 별도 CONFIG는 필요 없다. 로컬 `upload-config.json`이 있으면 그 설정이 우선한다.
+6. 일반 로그는 기본 20초마다 전송을 시작하고, 온보딩 목표 결과는 목표가 닫힐 때 즉시 업로드를 요청한다. 밀린 배치는 ACK 후 이어서 보낸다. 시트가 비어 있으면 최신 로컬 JSONL, ACK 커서, Player.log의 전송 오류를 확인한다.
+
+## 다른 PC에서 시트가 비어 있을 때
+
+- `로컬 로그 용량 한도` 오류가 있으면 네트워크 전송 이전에 저장이 실패한 것이다. 2026-10-16 수정본부터 구버전 스키마의 보관 파일은 현재 스키마의 100MiB 저장 예산에서 제외한다. 기존 파일은 삭제하지 않는다. 현재 스키마 자체의 용량 한도는 유지한다.
+
+1. 배포한 빌드 폴더의 `Export-CombatTelemetryDiagnostics.cmd`를 실행하고 `Y`로 진단 파일 생성에 동의한다. 바탕화면에 `Blindblade-Telemetry-Diagnostics-*.zip`이 생긴다. 이 파일을 담당자에게 전달한다. 실행한 PC의 로그만 수집하며, 전송 토큰이 들어갈 수 있는 `upload-config.json`은 제외한다.
+2. `Player.log`의 `CombatTelemetry upload acknowledged`가 있으면 서버가 최소 한 배치를 확인했다. `Google Sheets upload was not acknowledged`가 있으면 HTTP 상태, transport, server, client 값을 확인한다. 게임은 실패한 배치를 로컬에 남기고 다음 실행에서 다시 시도한다.
+3. `CombatTelemetry`의 `*.jsonl`은 원본이다. 같은 이름에 목적지 해시가 붙은 `*.cursor`의 숫자가 JSONL 바이트 길이와 같으면 그 파일의 모든 사건이 ACK된 것이다. 커서가 없거나 더 작으면 아직 미확인 사건이 남아 있다.
+4. 빌드에 포함된 주소와 토큰만 사용하므로 참가자 PC마다 CONFIG 파일이나 Google 계정 로그인은 필요 없다. 이 PC에서 검증한 빌드 폴더 전체를 전달한다. 앱은 Windows의 사용자별 `LocalLow`에 쓰므로 빌드 시 폴더 접근 권한 요청은 필요하지 않다. 진단 ZIP 생성은 사용자가 직접 동의해야 한다.
+5. 정상 종료 요청이 들어오면 마지막 세션 기록을 저장·전송할 수 있도록 최대 20초 대기한다. 전송이 실패하거나 시간이 지나도 원본은 남고, 다음 실행에서 재전송한다. 강제 종료나 전원 차단에는 이 대기 시간이 적용되지 않는다.
 
 ## Events와 Sessions
 
@@ -99,7 +110,7 @@ Events/Sessions 헤더를 수동으로 바꾸면 header_mismatch로 저장을 �
 - **Events**: 온보딩 입력 한 번의 최종 처리 결과는 `onboarding_attempt`, 목표 종료 결과는 `onboarding_step`이다. 두 목표가 있는 방어 단계는 `objective_index=0/1`로 구분한다.
 - **stageId 대응**: 0→`0-1` 이동, 1→`0-2` 돌진, 2→`0-3` 근접 적 처치, 3→`0-4` 수리검 극한 회피, 4→`0-5` 근접 가드·패링, 5→`0-6` 원거리 가드·패링·검기, 6→`0-7` 수리검 패링·궁극기.
 - **Sessions**: 온보딩 단계마다 도전 행 하나다. `run_id`로 7단계와 이후 Stage1 전투를 묶고, `exit_step_index`와 `exit_objective_index`로 마지막 진행 지점을 본다. 같은 PC에서 같은 온보딩을 재시작해도 `run_id`가 달라지므로 별도 실행이다.
-- **OnboardingSteps / OnboardingSteps.csv**: 목표당 1행. `active_seconds`는 목표 입력이 열린 시간, `first_input_seconds`는 처음 추적된 이동/전투 입력까지 그 활성 시간이다. 이 입력은 기대 행동이거나 성공 판정일 필요가 없다. `attempts`는 필요한 행동 시도, `wrong_attempts`는 다른 전투 입력이다. `retry_count`는 해당 단계의 사망 후 재진입 횟수이고 `reason`은 completed/death/scene_unloaded/application_quit이다.
+- **OnboardingSteps / OnboardingSteps.csv**: 목표당 1행. 목표가 진행 중일 때는 아직 행이 없고, 완료·사망·이탈로 닫힐 때 로컬에 기록하고 즉시 업로드를 요청한다. `active_seconds`는 목표 입력이 열린 시간, `first_input_seconds`는 처음 추적된 이동/전투 입력까지 그 활성 시간이다. 이 입력은 기대 행동이거나 성공 판정일 필요가 없다. `attempts`는 필요한 행동 시도, `wrong_attempts`는 다른 전투 입력이다. `retry_count`는 해당 단계의 사망 후 재진입 횟수이고 `reason`은 completed/death/scene_unloaded/application_quit이다.
 - 이동 목표는 이동을 멈춘 뒤 다시 시작할 때 새 시도로 센다. 공격·방어·회피 입력은 고유 InputId로 세고 누르고 있기·놓기·버퍼 후 Started는 중복 계산하지 않는다. 입력 결과는 Started/Rejected/BufferDropped/Buffered이며 실제 목표 성공은 step의 `reason=completed`로 확인한다.
 - 사망 후 다시 진입하면 새 `session_id`와 `stage_attempt_id` 행이 생기지만 `run_id`는 유지된다. Intro에서 새로 시작하면 `run_id`와 단계별 재시도 횟수가 초기화된다.
 - 이전 설정(`config_version=onboarding-2026-10-16`)의 `0-1`·`0-2`는 각각 여러 단계가 합쳐진 과거 구간이다. 행은 보존하며 새 설정(`onboarding-2026-10-16-stage-ids-7`)의 7단계 데이터와 합쳐 비율을 계산하지 않는다. 대시보드는 기본으로 과거 행을 제외하고, `이전 2구간 온보딩 로그 포함`을 켜면 이전 기록임을 표시한다. OnboardingSteps CSV만 있으면 구버전 설정을 판별할 수 없으므로 Sessions도 함께 불러온다.

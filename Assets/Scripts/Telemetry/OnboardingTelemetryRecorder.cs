@@ -162,6 +162,7 @@ namespace BlindBlade.Telemetry
             _sessionId = _runtime.Session.SessionId;
             _service = CombatTelemetryService.GetOrCreate(_bufferLimit, _flushIntervalSeconds, _maximumStorageMegabytes,
                 _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds, _maximumRetrySeconds);
+            _service.QuitRequested += HandleQuitRequested;
             _health = Game.Player.GetComponent<PlayerHealth>();
             _health.Died += HandleDeath;
             _motor = Game.Player.GetComponent<PlayerMotor>();
@@ -185,7 +186,7 @@ namespace BlindBlade.Telemetry
             Record("stage_started", SectionSummary("started"));
         }
 
-        /// <summary>입력 ID당 최종 상태 한 건만 기록하고 목표 완료·사망·이탈 요약을 만든다.</summary>
+        /// <summary>입력 ID당 최종 상태와 목표 결과를 기록하고 목표 로그의 즉시 업로드를 요청한다.</summary>
         private void CloseStep(string reason)
         {
             if (!_stepOpen) return;
@@ -209,6 +210,7 @@ namespace BlindBlade.Telemetry
                 ["rejectedInputs"] = rejected, ["bufferedInputs"] = buffered, ["droppedInputs"] = dropped,
                 ["reason"] = reason });
             _stepOpen = false;
+            _service.RequestFlush();
         }
 
         /// <summary>현재 온보딩 단계의 마지막 목표와 누적값을 저장하고 전송을 요청한다.</summary>
@@ -307,13 +309,28 @@ namespace BlindBlade.Telemetry
 
         void OnApplicationQuit()
         {
-            CloseSection("application_quit");
+            CloseRecording("application_quit");
+        }
+
+        /// <summary>플레이어 종료 요청 때 현재 목표와 구간을 닫는다. 마지막 결과가 종료 전 업로드 대상에 포함된다.</summary>
+        private void HandleQuitRequested() { CloseRecording("application_quit"); }
+
+        /// <summary>reason으로 남은 목표와 구간을 닫고 세션 종료 사건을 기록한다. 이후 입력 기록을 막고 최종 업로드를 요청한다.</summary>
+        private void CloseRecording(string reason)
+        {
+            if (_closing) return;
+            CloseSection(reason);
+            if (_bound)
+            {
+                Record("session_ended", new JObject { ["reason"] = reason });
+                _service.RequestFlush();
+            }
+            _closing = true;
         }
 
         void OnDisable()
         {
-            CloseSection(_health != null && !_health.IsAlive ? "death" : "scene_unloaded");
-            _closing = true;
+            CloseRecording(_health != null && !_health.IsAlive ? "death" : "scene_unloaded");
             if (_flow != null)
             {
                 _flow.ObjectiveEntered -= HandleObjectiveEntered;
@@ -323,6 +340,7 @@ namespace BlindBlade.Telemetry
                 _flow.ObjectiveDefenseResolved -= HandleDefense;
             }
             if (!_bound) return;
+            _service.QuitRequested -= HandleQuitRequested;
             _health.Died -= HandleDeath;
             _combat.Events.InputResolved -= HandleInput;
             _bound = false;

@@ -12,7 +12,7 @@
 
 ## 읽기 시작점
 
-- 정식 게임은 **Intro(빌드 0) → (새 게임에서 온보딩 선택) → BambooStage1 → 게임오버·재도전 또는 게임 클리어**다. 이어 하기는 저장된 Stage1 보스 체크포인트를 불러온다. 온보딩 씬은 BambooDefense를 복제해 사용하며, 직접 확인이 필요한 기존 방어 동작은 [대숲 방어](features/대숲_방어.md)와 [플레이어 시스템 인수인계](features/플레이어_시스템_인수인계.md)부터 읽는다.
+- 정식 게임은 **Intro(빌드 0) → (새 게임에서 온보딩 선택) → BambooStage1 → 게임오버·재도전 또는 게임 클리어**다. 이어 하기는 저장된 진행에 따라 1-1 웨이브 또는 1-2 보스전을 연다. 온보딩 씬은 BambooDefense를 복제해 사용하며, 직접 확인이 필요한 기존 방어 동작은 [대숲 방어](features/대숲_방어.md)와 [플레이어 시스템 인수인계](features/플레이어_시스템_인수인계.md)부터 읽는다.
 - 2026-10-14 BambooDefense 리팩토링 S7에서 기존 모드 씬(Build의 Stage·Boss, Map, LevelDesign_HP, TestScene, TutoScene, EndingScene)을 삭제했다. 각 명세에 남은 해당 씬 이름은 그 시점의 검증 기록이며 현재 씬이 아니다. 진행 기록과 복구 방법은 [진행 문서](plans/BambooDefense_refactoring_progress.md)의 S7 절을 따른다.
 
 ## 게임 내 표시 용어
@@ -40,6 +40,7 @@
 | 대숲 스테이지 1 | [명세](features/대숲_스테이지1.md) |
 | 인트로 메뉴 | [명세](features/인트로_메뉴.md) |
 | 게임오버 재도전 | [명세](features/게임오버_재도전.md) |
+| 게임 클리어 화면 | [명세](features/게임_클리어_화면.md) |
 | 매니저 싱글턴 | [명세](features/매니저_싱글턴.md) |
 | 게임 씬 공통 구성 | [명세](features/게임_씬_공통_구성.md) |
 | 플레이어 시스템 | [명세](features/플레이어_시스템.md) |

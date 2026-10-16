@@ -18,6 +18,7 @@ namespace BlindBlade.Telemetry
     public sealed class CombatTelemetryService : MonoBehaviour
     {
         private const int MAXIMUM_BATCH_BYTES = 196608;
+        private const float QUIT_UPLOAD_GRACE_SECONDS = 20f;
         private static CombatTelemetryService _active;
 
         private readonly List<string> _buffer = new List<string>();
@@ -36,8 +37,12 @@ namespace BlindBlade.Telemetry
         private bool _allowUpload;
         private bool _uploading;
         private bool _quitting;
-        private bool _warned;
+        private bool _quitRequested;
+        private bool _quitReady;
+        private bool _uploadIdle;
+        private bool _reportedUploadSuccess;
         private string _lastError;
+        private string _lastWarnedError;
         private int _dropped;
         private int _uploaded;
         private int _failures;
@@ -52,6 +57,7 @@ namespace BlindBlade.Telemetry
         public int BufferedEvents => _buffer.Count + (_writing?.Length ?? 0);
         public string AnonymousPlayerId => _anonymousPlayerId;
         public string ConfigurationSource => _configurationSource;
+        public event Action QuitRequested;
 
         /// <summary>최초 recorder의 설정으로 영속 서비스를 만들거나 기존 서비스를 반환한다. 설정은 재도전 때 덮어쓰지 않는다.</summary>
         public static CombatTelemetryService GetOrCreate(int bufferLimit, float flushInterval, int maximumMegabytes,
@@ -70,6 +76,7 @@ namespace BlindBlade.Telemetry
             _active._timeout = Mathf.Clamp(timeout, 5, 120);
             _active._maximumRetry = Mathf.Max(30f, maximumRetry);
             _active._allowUpload = allowUpload;
+            if (!Application.isEditor) Application.wantsToQuit += _active.HandleWantsToQuit;
             _active._anonymousPlayerId = Guid.NewGuid().ToString("N");
             try
             {
@@ -129,6 +136,11 @@ namespace BlindBlade.Telemetry
             }
             _write = null;
             _writing = null;
+            if (_quitRequested)
+            {
+                _uploadIdle = false;
+                _nextUpload = 0d;
+            }
         }
 
         /// <summary>로컬 재정의 또는 빌드 기본 설정으로 디스크의 미확인 배치를 전송한다. 정확한 사건 키 확인 뒤에만 커서를 이동한다.</summary>
@@ -165,7 +177,13 @@ namespace BlindBlade.Telemetry
             }
             if (!string.IsNullOrEmpty(_store.ReadError)) ReportError(_store.ReadError);
             UploadBatch batch = read.Result;
-            if (batch == null) { _uploading = false; yield break; }
+            if (batch == null)
+            {
+                _uploadIdle = true;
+                _uploading = false;
+                yield break;
+            }
+            _uploadIdle = false;
             JObject body = new JObject { ["protocolVersion"] = "1", ["token"] = configuration.Value<string>("token"),
                 ["batchId"] = batch.BatchId, ["records"] = batch.Records };
             using (UnityWebRequest request = new UnityWebRequest(configuration.Value<string>("endpoint"), "POST"))
@@ -178,11 +196,13 @@ namespace BlindBlade.Telemetry
                 request.redirectLimit = 5;
                 yield return request.SendWebRequest();
                 bool accepted = false;
+                string responseError = null;
                 if (request.result == UnityWebRequest.Result.Success)
                 {
                     try
                     {
                         JObject response = JObject.Parse(request.downloadHandler.text);
+                        responseError = response.Value<string>("error");
                         HashSet<string> acknowledged = new HashSet<string>(response["acknowledgedEventIds"]?.Values<string>()
                             ?? Array.Empty<string>());
                         accepted = response.Value<bool?>("ok") == true && response.Value<string>("batchId") == batch.BatchId;
@@ -194,7 +214,9 @@ namespace BlindBlade.Telemetry
                 _request = null;
                 if (!accepted)
                 {
-                    FailUpload("Google Sheets가 배치 저장을 확인하지 않았습니다. HTTP " + request.responseCode);
+                    FailUpload("Google Sheets upload was not acknowledged. HTTP " + request.responseCode
+                        + ", transport=" + request.result + ", server=" + (responseError ?? "none")
+                        + ", client=" + (request.error ?? "none"));
                     yield break;
                 }
             }
@@ -207,6 +229,12 @@ namespace BlindBlade.Telemetry
             }
             _uploaded += batch.Records.Count;
             _failures = 0;
+            _lastError = null;
+            if (!_reportedUploadSuccess)
+            {
+                _reportedUploadSuccess = true;
+                Debug.Log("CombatTelemetry upload acknowledged. Configuration=" + _configurationSource, this);
+            }
             _uploading = false;
             _nextUpload = Time.realtimeSinceStartupAsDouble + 0.5d;
         }
@@ -238,9 +266,35 @@ namespace BlindBlade.Telemetry
         private void ReportError(string message)
         {
             _lastError = message;
-            if (_warned) return;
-            _warned = true;
+            if (_lastWarnedError == message) return;
+            _lastWarnedError = message;
             Debug.LogWarning("전투 로그: " + message, this);
+        }
+
+        /// <summary>플레이어 종료 요청 때 기록자를 닫고 로컬 로그 전송을 기다린다. 전송 완료 또는 제한 시간 경과 후 종료를 허용한다.</summary>
+        private bool HandleWantsToQuit()
+        {
+            if (_quitReady || !_allowUpload) return true;
+            if (_quitRequested) return false;
+            _quitRequested = true;
+            _uploadIdle = false;
+            QuitRequested?.Invoke();
+            RequestFlush();
+            StartCoroutine(WaitForUploadBeforeQuit());
+            return false;
+        }
+
+        /// <summary>남은 로그가 확인될 때까지 최대 제한 시간만 기다린다. 미확인 로그는 디스크에 남겨 다음 실행에서 재전송한다.</summary>
+        private IEnumerator WaitForUploadBeforeQuit()
+        {
+            double deadline = Time.realtimeSinceStartupAsDouble + QUIT_UPLOAD_GRACE_SECONDS;
+            while (Time.realtimeSinceStartupAsDouble < deadline)
+            {
+                if (_uploadIdle && !_uploading && _write == null && _buffer.Count == 0) break;
+                yield return null;
+            }
+            _quitReady = true;
+            Application.Quit();
         }
 
         void OnApplicationPause(bool paused)
@@ -255,6 +309,7 @@ namespace BlindBlade.Telemetry
 
         void OnDestroy()
         {
+            if (!Application.isEditor) Application.wantsToQuit -= HandleWantsToQuit;
             _quitting = true;
             _request?.Abort();
             // 종료 시 네트워크를 기다리지 않고 남은 원본 저장만 짧게 기다린다.

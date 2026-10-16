@@ -93,15 +93,23 @@ public sealed class GameStateManager : MonoBehaviour
         StateChanged?.Invoke(state);
     }
 
-    /// <summary>게임오버가 요청한 정지를 해제하고 진입 전에 보관한 커서 상태를 복구한다.</summary>
+    /// <summary>게임 정지를 해제하고 Cleared면 커서를 표시하며 그 외에는 진입 전 상태를 복구한다.</summary>
     private void RestoreTimeAndCursor()
     {
         if (!_frozen) return;
         CombatSessionRuntime runtime = CombatSessionRuntime.Active;
         if (runtime != null)
             runtime.SetFrozen(false);
-        Cursor.lockState = _previousCursorLock;
-        Cursor.visible = _previousCursorVisible;
+        if (State == GameplayState.Cleared)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+        else
+        {
+            Cursor.lockState = _previousCursorLock;
+            Cursor.visible = _previousCursorVisible;
+        }
         _frozen = false;
     }
 
