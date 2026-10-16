@@ -277,7 +277,7 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     /// <summary>
     /// collider의 point에 공격 ID와 Projectile 종류를 붙여 A의 단일 방어 판정에 전달한다.
-    /// 일반 패링이면 반사 비행으로 바꾸고, 그 외 결과나 반사할 적이 없으면 수리검을 소멸한다.
+    /// 퍼펙트 패링이면 반사 비행으로 바꾸고, 그 외 결과나 반사할 적이 없으면 수리검을 소멸한다.
     /// 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
     /// </summary>
     private void ProcessHit(Collider collider, Vector3 point)
@@ -291,7 +291,7 @@ public sealed class DefenseShuriken : MonoBehaviour
             if (resolver != null)
             {
                 DefenseResolution resolution = resolver.ResolveIncomingAttack(context);
-                if (resolution.Outcome == DefenseOutcome.NormalParry && TryReflect(player.gameObject))
+                if (resolution.Outcome == DefenseOutcome.PerfectParry && TryReflect(player.gameObject))
                     return;
             }
             else
