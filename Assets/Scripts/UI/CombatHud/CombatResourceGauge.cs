@@ -25,12 +25,23 @@ namespace BlindBlade.UI.CombatHud
                     Time.unscaledDeltaTime / _transitionDuration);
         }
 
-        /// <summary>current와 maximum을 텍스트·채움 목표에 반영하고 immediate이면 즉시 표시한다. 원본 자원은 변경하지 않는다.</summary>
-        public void SetValue(float current, float maximum, bool immediate = false)
+        /// <summary>
+        /// current와 maximum으로 게이지 비율과 숫자 표시를 갱신한다.
+        /// showPositiveSubOneAsOne이 참이고 current가 0 초과 1 이하이면 숫자만 1로 표시하며, immediate이면 채움을 즉시 반영한다.
+        /// </summary>
+        public void SetValue(
+            float current,
+            float maximum,
+            bool immediate = false,
+            bool showPositiveSubOneAsOne = false)
         {
             _targetFill = maximum > 0f ? Mathf.Clamp01(current / maximum) : 0f;
             _group.alpha = 1f;
-            _valueText.SetText("{0:0} / {1:0}", Mathf.Max(0f, current), Mathf.Max(0f, maximum));
+
+            float displayedCurrent = showPositiveSubOneAsOne && current > 0f && current <= 1f ? 1f : Mathf.Max(0f, current);
+
+            _valueText.SetText("{0:0} / {1:0}", displayedCurrent, Mathf.Max(0f, maximum));
+
             if (immediate)
                 _fill.fillAmount = _targetFill;
         }
