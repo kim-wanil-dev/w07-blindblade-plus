@@ -557,6 +557,22 @@ MonoBehaviour:
     _combatCue: 0
     _spatialize2D: 0
     _finishNaturally: 1
+  - _id: 39
+    _type: 1
+    _event:
+      Guid:
+        Data1: 1984245173
+        Data2: 1151964277
+        Data3: -1652372574
+        Data4: -380512219
+      Path: event:/Enemy/DefenseMeleeWarning
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 1
+    _spatialize2D: 0
+    _finishNaturally: 1
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _cinematicBusPath: bus:/Cinematic_Bus
