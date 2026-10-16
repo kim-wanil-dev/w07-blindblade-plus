@@ -161,6 +161,25 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 검기 연습에 들어갈 때 준비 상태를 유지하거나 다시 시작한다.
+    /// 토큰을 검기 사용 범위인 1~MAX_TOKENS-1개로 맞추고 준비 만료를 막는다.
+    /// </summary>
+    public void EnsureOnboardingSwordWaveReady()
+    {
+        if (IsStriking) return;
+        _tokens = Mathf.Clamp(_tokens, 1, MAX_TOKENS - 1);
+        if (IsReady)
+        {
+            _onboardingReadyHeld = true;
+            return;
+        }
+
+        if (_active) End(PlayerEmpowerEndReason.SessionEnded);
+        _onboardingReadyHeld = true;
+        BeginReady(0);
+    }
+
+    /// <summary>
     /// 온보딩 궁극기 연습을 위해 토큰을 정확히 MAX_TOKENS로 맞추고 준비 상태로 진입한다.
     /// 기존 준비를 끝낸 뒤 집중 파동과 불릿 타임을 시작하고 준비 만료를 잠근다.
     /// </summary>

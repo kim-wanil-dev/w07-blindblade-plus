@@ -52,6 +52,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private KatanaCombatCoordinator _combat;
     private BambooDefenseDirector _director;
     private GameStateManager _gameState;
+    private InputManager _inputManager;
     private GameObject _trainingEnemy;
     private EnemyHealth _trainingEnemyHealth;
     private EnemyAttackSelector _trainingEnemyAttacks;
@@ -64,6 +65,10 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private bool _dodgeWasStarted;
     private bool _advanceQueued;
     private bool _restartQueued;
+    private bool _recoveryQueued;
+    private bool _transitionInputLocked;
+    private bool _inputWasEnabledBeforeTransition;
+    private bool _completingOnboarding;
     private float _nextThrowAt;
 
     /// <summary>새 Intro 시작을 위해 이번 온보딩 실행의 단계 기록과 재시도 플래그를 초기화한다.</summary>
@@ -81,6 +86,9 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     void OnDisable()
     {
+        if (!_completingOnboarding && _transitionInputLocked && _inputManager != null && _gameState != null
+            && _gameState.State == GameplayState.Playing)
+            UnlockTransitionInput();
         UnbindEvents();
         CleanupTrainingContent();
     }
@@ -96,7 +104,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             return;
         }
 
-        if (_advanceQueued || _restartQueued) return;
+        if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked) return;
         if (_stage == 0 && HorizontalDistance(_player.transform.position, _moveTarget) <= TARGET_ARRIVAL_RADIUS)
             CompleteCurrentObjective();
         else if (_stage == 1 && _dodgeWasStarted && !_motor.IsDodging)
@@ -123,6 +131,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _swordWave = _player.GetComponent<PlayerSwordWaveLauncher>();
         _combat = _player.GetComponent<KatanaCombatCoordinator>();
         _director = FindFirstObjectByType<BambooDefenseDirector>();
+        _inputManager = Game.Instance.InputManager;
         SuppressGameOverScreen();
         if (_arenaCenter == null)
         {
@@ -133,7 +142,9 @@ public sealed class OnboardingFlowController : MonoBehaviour
         BindEvents();
         _stage = _retryPending ? _restartStage : _savedRunStage;
         _retryPending = false;
+        LockTransitionInput();
         EnterStage(_stage);
+        yield return ReadyStageAndUnlockInput();
     }
 
     /// <summary>실제 플레이어·투척수 사건에 구독해 전투 사실을 온보딩 목표에 연결한다.</summary>
@@ -337,7 +348,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>실제 적 접촉의 DefenseResolved 결과로 현재 회피·가드·패링 목표만 한 번 집계한다.</summary>
     private void HandleDefenseResolved(DefenseResolution resolution)
     {
-        if (_advanceQueued || _restartQueued) return;
+        if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked) return;
         if (resolution.AttackId != 0 && resolution.HitId != 0)
         {
             long hitKey = ((long)resolution.AttackId << 32) | (uint)resolution.HitId;
@@ -375,7 +386,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>현재 회피 ID를 저장하고 실제 극한 회피 사건을 이번 실행 안에서 기록한다.</summary>
     private void HandleDodgeChanged(PlayerDodgeEvent dodgeEvent)
     {
-        if (_advanceQueued || _restartQueued) return;
+        if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked) return;
         if (dodgeEvent.Stage == PlayerDodgeStage.Started)
             _activeDodgeId = dodgeEvent.DodgeId;
         else if (dodgeEvent.Stage == PlayerDodgeStage.Ended && _activeDodgeId == dodgeEvent.DodgeId)
@@ -392,34 +403,39 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>기존 회피 이동의 실제 시작을 기록해 종료 뒤에만 돌진 연습을 완료한다.</summary>
     private void HandleDodgeStarted()
     {
-        if (_stage == 1) _dodgeWasStarted = true;
+        if (!_transitionInputLocked && _stage == 1) _dodgeWasStarted = true;
     }
 
-    /// <summary>실제 EmpowerChanged 완료 사건으로 궁극기 연습을 끝내고 다른 강화 사건은 무시한다.</summary>
+    /// <summary>현재 강화 종료 이유를 읽어 궁극기 완료를 집계하거나 잘못 쓴 기술의 준비를 복구한다.</summary>
     private void HandleEmpowerChanged(PlayerEmpowerEvent empowerEvent)
     {
-        if (_stage == FINAL_STAGE && empowerEvent.Stage == PlayerEmpowerStage.Ended
-            && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
+        if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked
+            || empowerEvent.Stage != PlayerEmpowerStage.Ended) return;
+        if (_stage == FINAL_STAGE && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
             QueueAdvance();
+        else if ((_stage == 5 || _stage == 7) && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
+            StartCoroutine(RecoverWrongEmpowerUse());
+        else if (_stage == FINAL_STAGE && empowerEvent.EndReason == PlayerEmpowerEndReason.SwordWave)
+            StartCoroutine(RecoverWrongEmpowerUse());
     }
 
     /// <summary>검기 런처가 실제 DefenseSwordWave를 생성한 사건으로 검기 목표를 완료한다.</summary>
     private void HandleSwordWaveLaunched(DefenseSwordWave wave)
     {
-        if (_stage == 5 || _stage == 7) QueueAdvance();
+        if (!_transitionInputLocked && (_stage == 5 || _stage == 7)) QueueAdvance();
     }
 
     /// <summary>극한 회피·원거리 방어 중 실제 발사된 수리검 공격 ID를 기록한다.</summary>
     private void HandleShurikenLaunched(DefenseShuriken shuriken)
     {
-        if ((_stage != 3 && _stage != 6) || shuriken == null) return;
+        if (_transitionInputLocked || (_stage != 3 && _stage != 6) || shuriken == null) return;
         _launchedShurikenAttackIds.Add(shuriken.AttackId);
     }
 
     /// <summary>실제 처치 가능 대상이 사망한 경우 공격 대상 처치 목표를 한 번 진행한다.</summary>
     private void HandleTrainingEnemyDied(EnemyHealth health)
     {
-        if (_stage == 2 && health == _trainingEnemyHealth) CompleteCurrentObjective();
+        if (!_transitionInputLocked && _stage == 2 && health == _trainingEnemyHealth) CompleteCurrentObjective();
     }
 
     /// <summary>목표를 완료하고 다음 목표 문구 또는 다음 온보딩 단계로 진행한다.</summary>
@@ -440,11 +456,14 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>nextObjective 앞에서 현재 목표 완료 표시를 보여 주고 같은 단계의 다음 목표 문구로 바꾼다.</summary>
     private IEnumerator AdvanceToNextObjective(int nextObjective)
     {
-        yield return null;
+        yield return new WaitForEndOfFrame();
+        LockTransitionInput();
         yield return _hud.ShowObjectiveCompletion();
+        if (_restartQueued) yield break;
         _objectiveIndex = nextObjective;
         _hud.ShowObjective(_stage, _objectiveIndex);
         _advanceQueued = false;
+        UnlockTransitionInput();
     }
 
     /// <summary>중복 이벤트를 막고 다음 단계 이동 코루틴을 예약한다.</summary>
@@ -455,13 +474,15 @@ public sealed class OnboardingFlowController : MonoBehaviour
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 
-    /// <summary>실제 판정 호출이 끝난 다음 프레임에 준비 상태를 유지하고 재배치가 필요한 단계로 이동한다.</summary>
+    /// <summary>실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 표시와 필요한 재배치를 진행한다.</summary>
     private IEnumerator AdvanceAfterResolvedEvent()
     {
-        yield return null;
+        yield return new WaitForEndOfFrame();
+        LockTransitionInput();
         if (_stage == 4 || _stage == 6) _empower.HoldOnboardingReady();
         int nextStage = _stage + 1;
         yield return _hud.ShowStageCompletion(_stage, nextStage <= FINAL_STAGE);
+        if (_restartQueued) yield break;
         if (nextStage > FINAL_STAGE)
         {
             CompleteOnboarding();
@@ -472,12 +493,68 @@ public sealed class OnboardingFlowController : MonoBehaviour
             yield return _hud.FadeForReposition(() => EnterStage(nextStage));
         else
             EnterStage(nextStage);
+        if (_restartQueued) yield break;
         _perfectPulse.ReplayStartPulseForOnboarding();
+        yield return ReadyStageAndUnlockInput();
+    }
+
+    /// <summary>전환 카드와 재배치가 끝날 때까지 입력을 끄고 현재 입력 허용 상태를 기억한다.</summary>
+    private void LockTransitionInput()
+    {
+        if (_transitionInputLocked) return;
+        _inputWasEnabledBeforeTransition = _inputManager.IsGameplayInputEnabled;
+        _transitionInputLocked = true;
+        _inputManager.SetGameplayInputEnabled(false);
+    }
+
+    /// <summary>전환 전 입력 허용 상태를 복원하고 새 목표의 판정 입력을 다시 받는다.</summary>
+    private void UnlockTransitionInput()
+    {
+        if (!_transitionInputLocked) return;
+        _inputManager.SetGameplayInputEnabled(_inputWasEnabledBeforeTransition);
+        _transitionInputLocked = false;
+    }
+
+    /// <summary>검기·궁극기 단계의 준비와 불릿 타임을 확인한 뒤 잠근 입력을 복원한다.</summary>
+    private IEnumerator ReadyStageAndUnlockInput()
+    {
+        while (_stage == 5 || _stage == 7 || _stage == FINAL_STAGE)
+        {
+            if (_restartQueued || _gameState.State != GameplayState.Playing || !_health.IsAlive) yield break;
+            if (_stage == FINAL_STAGE)
+            {
+                if ((!_empower.IsReady || _empower.Tokens != _empower.MaxTokens)
+                    && !_empower.IsStriking) _empower.BeginOnboardingUltimate();
+            }
+            else
+                _empower.EnsureOnboardingSwordWaveReady();
+            if (_empower.IsReady && _empower.IsBulletTimeActive && _player.CurrentState == PlayerActionState.Free
+                && (_stage == FINAL_STAGE ? _empower.Tokens == _empower.MaxTokens
+                    : _empower.Tokens < _empower.MaxTokens)) break;
+            yield return null;
+        }
+        UnlockTransitionInput();
+    }
+
+    /// <summary>검기·궁극기를 목표와 다르게 사용하면 현재 행동 종료 뒤 해당 단계의 집중과 토큰을 다시 채운다.</summary>
+    private IEnumerator RecoverWrongEmpowerUse()
+    {
+        _recoveryQueued = true;
+        yield return new WaitForEndOfFrame();
+        LockTransitionInput();
+        while (_player.CurrentState != PlayerActionState.Free)
+        {
+            if (_restartQueued || _gameState.State != GameplayState.Playing || !_health.IsAlive) yield break;
+            yield return null;
+        }
+        yield return ReadyStageAndUnlockInput();
+        _recoveryQueued = false;
     }
 
     /// <summary>온보딩 완료 후 0.5초 암전에서 보스 체크포인트를 지우고 BambooStage1을 처음부터 연다.</summary>
     private void CompleteOnboarding()
     {
+        _completingOnboarding = true;
         _retryPending = false;
         SceneTransitionOverlay.TransitionToScene(_stage1SceneName, STAGE1_FADE_DURATION, () =>
         {
