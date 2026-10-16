@@ -100,6 +100,8 @@ public sealed class BossController : MonoBehaviour
     private float _barrageTopAimHeight = 3.2f;
     [SerializeField, Tooltip("마지막 묶음이 조준하는 플레이어 발 기준 높이(미터)")]
     private float _barrageBottomAimHeight = 0.2f;
+    private int[] _barrageAttackIds;
+    private bool[] _barrageAttackLaunched;
     private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
 
     [Header("돌진")]
@@ -369,15 +371,56 @@ public sealed class BossController : MonoBehaviour
         if (TryGetEscapePosition(out Vector3 position) && _agent.Warp(position))
             Teleported?.Invoke();
         ChangeState(BossState.Ranged);
+        BeginBarrageTelemetry();
         RangedPreparing?.Invoke();
         yield return PrepareAttack(Mathf.Max(0.1f, _barragePreparation), false);
+        if (!_preparationSucceeded)
+        {
+            CancelPendingBarrageAttacks();
+            yield break;
+        }
         for (int volley = 0; volley < _barrageVolleys; volley++)
         {
             FireBarrageVolley(volley);
             if (volley + 1 < _barrageVolleys) yield return new WaitForSeconds(_barrageInterval);
         }
+        CancelPendingBarrageAttacks();
         if (_health.IsAlive && _playerHealth.IsAlive) yield return RunBattle(BossState.Charging);
         _routine = null;
+    }
+
+    /// <summary>
+    /// 모든 난사 투사체의 공격 ID를 전조 시점에 발급한다.
+    /// _barrageVolleys와 플레이어 위치를 사용하며 ID 배열을 초기화한다.
+    /// </summary>
+    private void BeginBarrageTelemetry()
+    {
+        CancelPendingBarrageAttacks();
+        int attackCount = _barrageVolleys * 3;
+        _barrageAttackIds = new int[attackCount];
+        _barrageAttackLaunched = new bool[attackCount];
+        Vector3 origin = transform.position + Vector3.up;
+        Vector3 aim = _player.transform.position;
+        for (int index = 0; index < attackCount; index++)
+            _barrageAttackIds[index] = BlindBlade.Telemetry.CombatTelemetrySignals.Begin(
+                "BossEscapeBarrage", "Projectile", origin, aim);
+    }
+
+    /// <summary>
+    /// 아직 발사하지 않은 난사 공격을 Cancelled로 끝내고 현재 추적 배열을 비운다.
+    /// 발사된 투사체는 자체 적중·빗나감 사건으로 결과를 기록한다.
+    /// </summary>
+    private void CancelPendingBarrageAttacks()
+    {
+        if (_barrageAttackIds == null) return;
+        for (int index = 0; index < _barrageAttackIds.Length; index++)
+        {
+            if (_barrageAttackLaunched[index]) continue;
+            BlindBlade.Telemetry.CombatTelemetrySignals.End(
+                _barrageAttackIds[index], "Cancelled", transform.position);
+        }
+        _barrageAttackIds = null;
+        _barrageAttackLaunched = null;
     }
 
     /// <summary>
@@ -400,7 +443,12 @@ public sealed class BossController : MonoBehaviour
         {
             Vector3 direction = Quaternion.AngleAxis(shot * _barrageSpreadAngle, Vector3.up) * center;
             EnemyProjectile projectile = Instantiate(_projectilePrefab, origin, Quaternion.LookRotation(direction));
-            projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction, "BossRanged"),
+            int attackIndex = volley * 3 + shot + 1;
+            int attackId = _barrageAttackIds[attackIndex];
+            BlindBlade.Telemetry.CombatTelemetrySignals.Commit(attackId, origin);
+            _barrageAttackLaunched[attackIndex] = true;
+            projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction,
+                    "BossEscapeBarrage", attackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Projectile),
                 direction, _player.transform);
         }
     }
@@ -648,6 +696,7 @@ public sealed class BossController : MonoBehaviour
     private void HandleBossDamaged(DamageContext context)
     {
         if (!_health.IsAlive) return;
+        CancelPendingBarrageAttacks();
         switch (_state)
         {
             case BossState.Idle: _resumeState = _nextPattern; break;
@@ -753,6 +802,7 @@ public sealed class BossController : MonoBehaviour
     /// <summary>실행 중인 공격·이동·코루틴을 중지하고 피격·사망·플레이어 불릿 타임 사건 구독을 정리한다.</summary>
     private void StopBattle()
     {
+        CancelPendingBarrageAttacks();
         if (_routine != null) StopCoroutine(_routine);
         _routine = null;
         PreparationCancelled?.Invoke();

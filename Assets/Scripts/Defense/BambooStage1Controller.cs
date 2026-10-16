@@ -289,6 +289,8 @@ public sealed class BambooStage1Controller : MonoBehaviour
         {
             _phase = StagePhase.Complete;
             BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2", true);
+            BambooStage1Progress.MarkBossCheckpointReached();
+            Game.Instance.GameStateManager.RequestGameClear();
         }
     }
 }

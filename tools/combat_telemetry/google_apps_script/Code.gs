@@ -12,7 +12,7 @@ const METRICS = ['deaths','kills','damageTaken','damageHitCount','dodgeAttempts'
   'enemyGuardCount','enemyMissCount','enemyInvulnerableCount','enemyIgnoredCount','enemyDestroyedCount',
   'enemyCancelledCount','enemyInterruptedCount','reactionCount','reactionMeanSeconds','enemyHitRate',
   'serviceDroppedEventsTotal'];
-['ranged','melee','bossRanged','bossCharge'].forEach(group =>
+['ranged','melee','bossRanged','bossEscapeBarrage','bossCharge'].forEach(group =>
   ['Attempts','Resolved','Hits','Dodges','Parries','PerfectParries','Damage','HitRate','DamageShare'].forEach(metric => METRICS.push(group+metric)));
 const SESSION_HEADERS = ['stage_attempt_id','session_id','stage_id','anonymous_player_id','build_version',
   'config_version','started_kst','last_event_sequence','status','realtime_seconds','gameplay_seconds',
@@ -146,13 +146,13 @@ function dashboardSnapshot(body, properties) {
       ]),
       Sessions:dashboardRows(book.getSheetByName('Sessions'),[
         'stage_attempt_id','session_id','stage_id','build_version','config_version','started_kst','status',
-        'active_play_seconds','deaths','damageHitCount','dodgeAttempts','dodgeRejected','dodgeStarted',
+        'active_play_seconds','kills','deaths','damageHitCount','dodgeAttempts','dodgeRejected','dodgeStarted',
         'guardAttempts','guardRejected','guardAttemptsWithContact','guardAttemptsWithoutContact',
         'guardHitCount','guardGuardCount','guardNormalParryCount','guardPerfectParryCount',
         'enemyAttackCount','enemyResolvedCount','enemyHitCount','enemyDodgeCount','enemyNormalParryCount',
         'enemyPerfectParryCount','enemyGuardCount','enemyMissCount','enemyInvulnerableCount',
         'enemyIgnoredCount','enemyDestroyedCount','enemyCancelledCount','enemyInterruptedCount',
-        'reactionMeanSeconds','rangedDamage','meleeDamage','bossRangedDamage','bossChargeDamage'
+        'reactionMeanSeconds','rangedDamage','meleeDamage','bossRangedDamage','bossEscapeBarrageDamage','bossChargeDamage'
       ]),
       OnboardingSteps:dashboardRows(book.getSheetByName('OnboardingSteps'),[
         'received_kst','run_id','session_id','stage_id','stage_attempt_id','step_index','objective_index',
