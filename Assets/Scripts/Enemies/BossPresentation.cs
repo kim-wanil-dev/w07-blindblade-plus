@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -9,6 +10,11 @@ using FMODUnity;
 [RequireComponent(typeof(BossController))]
 public sealed class BossPresentation : MonoBehaviour
 {
+    private static readonly HashSet<BossPresentation> _activeChargeWarnings = new HashSet<BossPresentation>();
+    private static readonly int _baseMapId = Shader.PropertyToID("_BaseMap");
+    private static readonly int _baseColorId = Shader.PropertyToID("_BaseColor");
+    private static readonly int _warningIntensityId = Shader.PropertyToID("_MeleeWarningIntensity");
+
     [Header("외형")]
     [SerializeField] private Renderer[] _bodyRenderers;
     private BossController _boss;
@@ -54,9 +60,23 @@ public sealed class BossPresentation : MonoBehaviour
     [SerializeField] private BossMeleeAttack _melee;
     [SerializeField] private SoundId _strikeCue = SoundId.EnemySwordSwing;
 
+    [Header("돌진 붉은 테두리")]
+    [SerializeField, Tooltip("돌진 패턴 동안 근접 전조와 같은 붉은 테두리를 적용할 연기 몸체 렌더러")]
+    private Renderer[] _chargeWarningRenderers;
+    [SerializeField, Min(0.01f), Tooltip("돌진 패턴 진입 시 붉은색이 되는 시간(초)")]
+    private float _chargeWarningFadeIn = 0.15f;
+    [SerializeField, Min(0.01f), Tooltip("돌진 패턴 종료 시 흰색으로 돌아가는 시간(초)")]
+    private float _chargeWarningFadeOut = 0.12f;
+    private MaterialPropertyBlock _warningProperties;
+
+    internal static IReadOnlyCollection<BossPresentation> ActiveChargeWarnings => _activeChargeWarnings;
+    public IReadOnlyList<Renderer> ChargeWarningRenderers => _chargeWarningRenderers;
+    public float ChargeWarningIntensity { get; private set; }
+
     void Awake()
     {
         _boss = GetComponent<BossController>();
+        _warningProperties = new MaterialPropertyBlock();
     }
 
     void Start()
@@ -86,10 +106,15 @@ public sealed class BossPresentation : MonoBehaviour
         ResetSteps();
         HandleState(_boss.State);
         _overlayRoutine = StartCoroutine(HideDebugOverlay());
+        ChargeWarningIntensity = 0f;
+        _activeChargeWarnings.Add(this);
     }
 
     void OnDisable()
     {
+        _activeChargeWarnings.Remove(this);
+        ChargeWarningIntensity = 0f;
+        PublishChargeWarning();
         if (_perceptionMask != null) _perceptionMask.SetSoundRadius(_previousSoundRadius);
         _perceptionMask = null;
         if (_overlayRoutine != null) StopCoroutine(_overlayRoutine);
@@ -122,6 +147,7 @@ public sealed class BossPresentation : MonoBehaviour
 
     void LateUpdate()
     {
+        UpdateChargeWarning();
         ApplySoundRadius();
         Vector3 movement = Vector3.ProjectOnPlane(transform.position - _previousPosition, Vector3.up);
         _previousPosition = transform.position;
@@ -143,6 +169,37 @@ public sealed class BossPresentation : MonoBehaviour
         {
             _nextMovementRippleTime = Time.time + _movementRippleInterval;
             EmitMovementRipple();
+        }
+    }
+
+    /// <summary>
+    /// 돌진 상태이면 _chargeWarningFadeIn 동안 붉은 세기를 1로, 그 외 상태에서는 _chargeWarningFadeOut 동안 0으로 옮긴다.
+    /// 변경된 ChargeWarningIntensity를 연기 몸체 렌더러의 경고 마스크 입력으로 전달한다.
+    /// </summary>
+    private void UpdateChargeWarning()
+    {
+        bool charging = IsChargeState();
+        float duration = charging ? _chargeWarningFadeIn : _chargeWarningFadeOut;
+        ChargeWarningIntensity = Mathf.MoveTowards(ChargeWarningIntensity, charging ? 1f : 0f,
+            Time.deltaTime / Mathf.Max(0.01f, duration));
+        PublishChargeWarning();
+    }
+
+    /// <summary>
+    /// 연결된 연기 몸체 렌더러의 파티클 텍스처·기본색과 현재 ChargeWarningIntensity를 속성 블록으로 전달한다.
+    /// 근접 전조와 같은 경고 마스크 입력을 사용하며 렌더러의 기존 속성 블록 값은 보존한다.
+    /// </summary>
+    private void PublishChargeWarning()
+    {
+        foreach (Renderer renderer in _chargeWarningRenderers)
+        {
+            Material source = renderer.sharedMaterial;
+            if (source == null || !source.HasProperty(_baseMapId) || !source.HasProperty(_baseColorId)) continue;
+            renderer.GetPropertyBlock(_warningProperties);
+            _warningProperties.SetTexture(_baseMapId, source.GetTexture(_baseMapId));
+            _warningProperties.SetColor(_baseColorId, source.GetColor(_baseColorId));
+            _warningProperties.SetFloat(_warningIntensityId, ChargeWarningIntensity);
+            renderer.SetPropertyBlock(_warningProperties);
         }
     }
 

@@ -56,6 +56,8 @@ MonoBehaviour:
     m_Bits: 4294967295
   _homingTurnRate: 20
   _homingStopDistance: 3
+  _flightSound: 36
+  _clearedByPlayerAttacks: 1
   _showAttackGizmos: 1
 --- !u!114 &681678070729298543
 MonoBehaviour:

@@ -14,6 +14,10 @@ public class EnemyProjectile : MonoBehaviour
     private float _homingTurnRate;
     [SerializeField, Min(0f), Tooltip("목표와 이 거리 안에서는 유도를 멈추고 직진한다.")]
     private float _homingStopDistance = 3f;
+    [SerializeField, Tooltip("적대 비행 동안 투사체를 따라 반복하는 비행음. None이면 재생하지 않으며 반사·소멸하면 멈춘다.")]
+    private SoundId _flightSound = SoundId.None;
+    [SerializeField, Tooltip("켜면 플레이어 검기·검기 돌진·궁극기가 적대 비행 중인 이 투사체를 없앤다.")]
+    private bool _clearedByPlayerAttacks;
     private DamageContext _damage;
     private Transform _target;
     private PlayerMotor _targetMotor;
@@ -103,7 +107,7 @@ public class EnemyProjectile : MonoBehaviour
 
     /// <summary>
     /// damage와 direction 및 target을 저장하고 이동 방향, 수명 누적 및 비행 상태를 초기화한다.
-    /// 풀에서 재사용하는 경우에도 호출하며 초기 방향으로 이동을 시작한다.
+    /// 풀에서 재사용하는 경우에도 호출하며 초기 방향으로 이동을 시작하고 _flightSound가 있으면 비행음을 반복 재생한다.
     /// </summary>
     public virtual void Initialize(DamageContext damage, Vector3 direction, Transform target = null)
     {
@@ -118,7 +122,12 @@ public class EnemyProjectile : MonoBehaviour
 #endif
         _isFlying = _direction.sqrMagnitude > 0f;
         if (_isFlying)
+        {
             transform.rotation = Quaternion.LookRotation(_direction);
+            // 소멸하면 소유자 파괴로 SoundManager가 정지하고, 반사는 Reflect에서 직접 멈춘다.
+            if (_flightSound != SoundId.None)
+                Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
+        }
         else
             Release();
     }
@@ -179,10 +188,12 @@ public class EnemyProjectile : MonoBehaviour
 
     /// <summary>
     /// defender를 새 공격자로 지정하고 원래 피해량으로 투사체를 반대 방향에 반사한다.
-    /// 적 충돌을 허용하고 지정 대상 제한과 수명을 초기화하며 비행을 유지한다.
+    /// 적 충돌을 허용하고 지정 대상 제한과 수명을 초기화하며 비행을 유지한다. 적대 비행음은 멈춘다.
     /// </summary>
     private void Reflect(GameObject defender)
     {
+        if (_flightSound != SoundId.None)
+            Managers.Sound.StopFor(gameObject, _flightSound, true, true);
         _direction = -_direction;
         _damage = new DamageContext(_damage.Amount, defender, transform.position,
             _direction, "ReflectedProjectile");
@@ -192,6 +203,46 @@ public class EnemyProjectile : MonoBehaviour
         _elapsedTime = 0f;
         transform.rotation = Quaternion.LookRotation(_direction);
         _isFlying = true;
+    }
+
+    /// <summary>
+    /// start에서 end까지 radius 반경으로 쓸고 지나간 공간에 닿은 제거 가능 적대 투사체를 가드 성공 소리와 함께 없앤다.
+    /// 플레이어 검기와 검기 돌진이 경로의 투사체를 벨 때 쓰며 반사된 투사체와 제거 설정이 꺼진 투사체는 유지한다.
+    /// </summary>
+    public static void ReleaseInSweep(Vector3 start, Vector3 end, float radius)
+    {
+        Vector3 travel = end - start;
+        float travelLengthSquared = travel.sqrMagnitude;
+        foreach (EnemyProjectile projectile in FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None))
+        {
+            if (!projectile.IsClearable) continue;
+            Vector3 position = projectile.transform.position;
+            float progress = travelLengthSquared > 0f
+                ? Mathf.Clamp01(Vector3.Dot(position - start, travel) / travelLengthSquared) : 0f;
+            float reach = radius + projectile._hitRadius;
+            if ((position - (start + travel * progress)).sqrMagnitude > reach * reach) continue;
+            projectile.ReleaseBlocked();
+        }
+    }
+
+    /// <summary>
+    /// 현재 적대 비행 중인 제거 가능 투사체를 모두 그 위치에서 가드 성공 소리와 함께 없앤다.
+    /// 궁극기가 사용하며 반사된 투사체와 제거 설정이 꺼진 투사체는 유지한다.
+    /// </summary>
+    public static void ReleaseAllClearable()
+    {
+        foreach (EnemyProjectile projectile in FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None))
+            if (projectile.IsClearable) projectile.ReleaseBlocked();
+    }
+
+    /// <summary>_clearedByPlayerAttacks가 켜져 있고 반사되지 않은 채 비행 중인지 반환한다.</summary>
+    private bool IsClearable => _clearedByPlayerAttacks && _isFlying && !_reflected;
+
+    /// <summary>플레이어 공격에 막힌 투사체를 현재 위치에서 가드 성공 소리를 내며 비행 종료·해제한다.</summary>
+    private void ReleaseBlocked()
+    {
+        Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
+        Release();
     }
 
     /// <summary>

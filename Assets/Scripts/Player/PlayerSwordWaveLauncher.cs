@@ -202,6 +202,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         float distance = Mathf.Max(travel.magnitude, MIN_SWEEP_DISTANCE);
         Vector3 direction = travel.sqrMagnitude > 0.0001f ? travel.normalized : _motor.ViewForward;
         DefenseShuriken.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
+        EnemyProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         int count = Physics.SphereCastNonAlloc(_dashLastCenter, _wavePrefab.HitRadius, direction, _dashHits,
             distance, _dashHitMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)

@@ -772,7 +772,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 활성 전조 컴포넌트에서 붉은색 세기가 있는 몸체 렌더러를 수집한다.
+        /// 활성 전조 컴포넌트와 돌진 중인 보스에서 붉은색 세기가 있는 몸체 렌더러를 수집한다.
         /// 현재 카메라 패스에서 사용할 중복 없는 렌더러 배열을 반환한다.
         /// </summary>
         private static Renderer[] CollectRenderers()
@@ -788,6 +788,21 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     continue;
 
                 foreach (Renderer renderer in warning.BodyRenderers)
+                {
+                    if (renderer != null &&
+                        renderer.enabled &&
+                        renderer.gameObject.activeInHierarchy)
+                        collected.Add(renderer);
+                }
+            }
+
+            // 돌진 패턴 중인 보스의 연기 몸체도 같은 붉은 테두리 마스크에 그린다.
+            foreach (BossPresentation boss in BossPresentation.ActiveChargeWarnings)
+            {
+                if (boss == null || !boss.isActiveAndEnabled || boss.ChargeWarningIntensity <= 0f)
+                    continue;
+
+                foreach (Renderer renderer in boss.ChargeWarningRenderers)
                 {
                     if (renderer != null &&
                         renderer.enabled &&
