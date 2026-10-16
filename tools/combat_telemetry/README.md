@@ -21,6 +21,8 @@
 
 ## Events와 Sessions
 
+- 전송 완료된 **종료 세션**은 서버 ACK 확인 후 JSONL·JSON·커서를 자동 삭제한다. 플레이 중인 세션이나 미전송 기록은 보존한다. 이전 실행의 완전 ACK 기록도 다음 업로드 점검 때 정리한다. 따라서 로컬 파일이 없다는 사실만으로 수집 실패로 판단하지 말고 시트와 Player.log를 함께 확인한다. 전송 완료 자료의 CSV·백업은 시트에서 내려받는다.
+
 - **Events**: 사건별 원본. stage_id, stage_attempt_id, input_id, attack_id와 함께 종류·패턴·결과·피해량·좌표·반응 시간을 열로 제공한다. 기타 정보는 payload_json에 남긴다.
 - **Sessions**: 세션 전체가 아니라 **스테이지 도전당 1행**. 한 플레이에서 웨이브와 보스를 하면 2행, 보스 재도전은 1행이다. status=started/in_progress/cleared/death/application_quit/scene_unloaded.
 - 같은 사건 재전송은 event_key로 중복 제거한다. Sessions는 최신 event_sequence의 누적값으로 갱신한다.
