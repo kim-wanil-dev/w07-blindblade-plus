@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Stage1 combat telemetry 0.3.0",
-  "description": "Stage attempts, player inputs, authoritative enemy attack lifecycles, world XZ samples. Contract API remains 0.2.0.",
+  "title": "Onboarding and Stage1 telemetry 0.3.0",
+  "description": "Onboarding 0-1/0-2 objective attempts and Stage1 combat attempts. Contract API remains 0.2.0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -80,7 +80,9 @@
         "reaction_candidate",
         "enemy_attack_started",
         "enemy_attack_committed",
-        "enemy_attack_resolved"
+        "enemy_attack_resolved",
+        "onboarding_attempt",
+        "onboarding_step"
       ]
     },
     "occurredAt": {
@@ -186,6 +188,8 @@
     },
     "stageId": {
       "enum": [
+        "0-1",
+        "0-2",
         "1-1",
         "1-2",
         "unassigned"
@@ -193,7 +197,7 @@
     },
     "stageAttemptId": {
       "type": "string",
-      "pattern": "^[0-9a-f]{32}:(1-1|1-2|unassigned)$"
+      "pattern": "^[0-9a-f]{32}:(0-1|0-2|1-1|1-2|unassigned)$"
     }
   }
 }

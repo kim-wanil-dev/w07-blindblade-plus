@@ -6636,7 +6636,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 230596786}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cb7f1e590a50d01429f3245d811b87d2, type: 3}
   m_Name: 
@@ -6650,7 +6650,8 @@ MonoBehaviour:
   _bufferLimit: 4096
   _flushIntervalSeconds: 2
   _maximumStorageMegabytes: 100
-  _sampleIntervalSeconds: 5
+  _movementSampleIntervalSeconds: 1
+  _summaryIntervalSeconds: 15
   _allowAutomaticUpload: 1
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100
@@ -55840,7 +55841,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.16666667
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: cf336a3533adb1245942337987058d95, type: 2}
+  m_NavMeshData: {fileID: 0}
   m_BuildHeightMesh: 0
 --- !u!114 &1943110757
 MonoBehaviour:
@@ -58761,6 +58762,7 @@ GameObject:
   - component: {fileID: 2058950797}
   - component: {fileID: 2058950796}
   - component: {fileID: 2058950795}
+  - component: {fileID: 2058950798}
   m_Layer: 0
   m_Name: OnboardingFlow
   m_TagString: Untagged
@@ -58863,6 +58865,30 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2058950798
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2058950794}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3cf5a20e5afc64d49ab501c26551c16c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.OnboardingTelemetryRecorder
+  _secondSectionStartStage: 4
+  _configVersion: onboarding-2026-10-16
+  _summaryIntervalSeconds: 15
+  _recordingEnabled: 1
+  _allowAutomaticUpload: 1
+  _bufferLimit: 4096
+  _flushIntervalSeconds: 2
+  _maximumStorageMegabytes: 100
+  _uploadIntervalSeconds: 20
+  _batchEventLimit: 100
+  _requestTimeoutSeconds: 30
+  _maximumRetrySeconds: 300
 --- !u!1 &2060859382
 GameObject:
   m_ObjectHideFlags: 0

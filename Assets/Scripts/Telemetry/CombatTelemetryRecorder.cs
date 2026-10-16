@@ -16,9 +16,7 @@ namespace BlindBlade.Telemetry
     {
         [Header("사건 공급자")]
         [SerializeField] private PlayerHealth _health;
-        [SerializeField] private BambooDefenseDirector _director;
         [SerializeField] private DefenseEnemySpawner _spawner;
-        [SerializeField] private CombatThreatPresentationProvider _presentation;
 
         [Header("원본 저장")]
         [SerializeField] private bool _recordingEnabled = true;
@@ -26,8 +24,8 @@ namespace BlindBlade.Telemetry
         [SerializeField, Min(64)] private int _bufferLimit = 4096;
         [SerializeField, Min(0.2f)] private float _flushIntervalSeconds = 2f;
         [SerializeField, Min(1)] private int _maximumStorageMegabytes = 100;
-        [SerializeField, Min(0.1f)] private float _movementSampleIntervalSeconds = 0.5f;
-        [SerializeField, Min(1f)] private float _summaryIntervalSeconds = 5f;
+        [SerializeField, Min(0.1f)] private float _movementSampleIntervalSeconds = 1f;
+        [SerializeField, Min(1f)] private float _summaryIntervalSeconds = 15f;
 
         [Header("Google Sheets 자동 전송")]
         [SerializeField] private bool _allowAutomaticUpload = true;
@@ -89,10 +87,8 @@ namespace BlindBlade.Telemetry
             Record("session_started", new JObject {
                 ["scene"] = gameObject.scene.path, ["isEditor"] = Application.isEditor,
                 ["startedKst"] = _stageStartedKst, ["movementIntervalSeconds"] = _movementSampleIntervalSeconds,
-                ["reactionClock"] = "frameRealtime; deviceTime is retained separately",
-                ["positionSpace"] = "Unity world XZ, metres",
-                ["sessionSettings"] = new JObject { ["health"] = JsonUtility.ToJson(_health),
-                    ["combat"] = JsonUtility.ToJson(_combat), ["director"] = _director != null ? JsonUtility.ToJson(_director) : "" } });
+                ["reactionClock"] = "frameRealtime",
+                ["positionSpace"] = "Unity world XZ, metres" });
             _service.RequestFlush();
         }
 
@@ -170,7 +166,7 @@ namespace BlindBlade.Telemetry
             double duration = Math.Max(0, _activeSeconds - _lastMovementActive);
             if (duration <= 0) return;
             Record("movement_sample", new JObject { ["position"] = TelemetryJson.Position(_health.transform.position),
-                ["durationSeconds"] = duration, ["health"] = _health.CurrentHealth });
+                ["durationSeconds"] = duration });
             _lastMovementActive = _activeSeconds;
         }
 
@@ -182,7 +178,7 @@ namespace BlindBlade.Telemetry
             string kst = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
             long sequence = ++_sequence;
             _service.Enqueue(new JObject { ["schemaVersion"] = TelemetryJson.SCHEMA_VERSION,
-                ["contractVersion"] = "0.2.0", ["configVersion"] = _configVersion,
+                ["contractVersion"] = "0.2.0", ["configVersion"] = Application.isEditor ? _configVersion + "-editor" : _configVersion,
                 ["buildVersion"] = Application.version, ["sessionId"] = _sessionId,
                 ["anonymousPlayerId"] = _service.AnonymousPlayerId, ["sessionGeneration"] = _runtime.Session.Generation,
                 ["stageId"] = _stageId, ["stageAttemptId"] = _sessionId + ":" + _stageId,
@@ -281,7 +277,7 @@ namespace BlindBlade.Telemetry
             Record("enemy_attack_resolved", payload, id, inputId);
         }
 
-        /// <summary>input의 고유 누름만 시도로 합산하고 예약 후 시작은 중복 집계하지 않는다. 전조 후보별 반응 시간은 별도 사건으로 기록한다.</summary>
+        /// <summary>input의 고유 누름만 시도로 합산하고 예약 후 시작은 중복 집계하지 않는다.</summary>
         private void HandleInput(PlayerInputRecord input)
         {
             if (_stageClosed) return;
@@ -300,26 +296,14 @@ namespace BlindBlade.Telemetry
             if (input.Status == PlayerInputStatus.Rejected) Add(_counts, kind + "Rejected");
             if (input.Kind == PlayerInputKind.GuardPress) _guardInputId = input.InputId;
             if (input.Kind == PlayerInputKind.Dodge && input.Status == PlayerInputStatus.Started) _dodgeInputId = input.InputId;
-            if (kind == "attack") return;
-            int candidates = 0;
-            foreach (JObject attack in _attacks.Values)
-                if ((bool?)attack["resolved"] != true) candidates++;
-            foreach (KeyValuePair<int, JObject> pair in _attacks)
-            {
-                if ((bool?)pair.Value["resolved"] == true) continue;
-                double reaction = input.FrameRealTime - (double)pair.Value["telegraphRealtime"];
-                if (reaction < 0) continue;
-                Record("reaction_candidate", new JObject { ["reactionSeconds"] = reaction,
-                    ["candidateCount"] = candidates, ["association"] = "temporal_candidate_not_causal",
-                    ["kind"] = kind, ["patternId"] = pair.Value["patternId"] }, pair.Key, input.InputId);
-            }
         }
 
-        /// <summary>value의 실제 회피 시작과 성공 단계만 기록한다. 입력 시도 수와 실행 수를 분리한다.</summary>
+        /// <summary>value의 실제 회피 시작과 퍼펙트 회피만 기록한다. 종료 사건은 전송하지 않는다.</summary>
         private void HandleDodge(PlayerDodgeEvent value)
         {
             if (_stageClosed) return;
             if (value.Stage == PlayerDodgeStage.Started) Add(_counts, "dodgeStarted");
+            if (value.Stage != PlayerDodgeStage.Started && value.Stage != PlayerDodgeStage.PerfectDodge) return;
             Record("dodge_changed", new JObject { ["stage"] = value.Stage.ToString(),
                 ["position"] = TelemetryJson.Position(value.Position) }, value.AttackId, dodgeId: value.DodgeId);
         }
@@ -332,12 +316,11 @@ namespace BlindBlade.Telemetry
             Record("player_died", new JObject { ["position"] = TelemetryJson.Position(health.transform.position) });
         }
 
-        /// <summary>게임 state를 기록하고 일시정지 전후 이동 표본의 시간 가중치를 분리한다.</summary>
+        /// <summary>게임 상태가 바뀌면 마지막 위치 표본을 닫아 일시정지 시간을 제외한다.</summary>
         private void HandleState(GameplayState state)
         {
             if (_stageClosed) return;
             RecordMovement();
-            Record("state_changed", new JObject { ["state"] = state.ToString() });
         }
 
         /// <summary>일반 적 처치 사건을 현재 구간의 kills에 더한다.</summary>
@@ -413,6 +396,8 @@ namespace BlindBlade.Telemetry
             }
             summary["patterns"] = _patterns.DeepClone();
             summary["serviceDroppedEventsTotal"] = _service.DroppedEvents;
+            if (gameObject.scene.name == "BambooStage1" && !string.IsNullOrEmpty(OnboardingTelemetryRecorder.CompletedRunId))
+                summary["runId"] = OnboardingTelemetryRecorder.CompletedRunId;
             return summary;
         }
 

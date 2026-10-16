@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.AI;
 
 using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
 
 /// <summary>BambooDefense 복제 씬의 순차 연습, 전투 판정 집계, 재시도와 BambooStage1 전환을 관리한다.</summary>
 [DisallowMultipleComponent]
@@ -71,12 +72,21 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private bool _completingOnboarding;
     private float _nextThrowAt;
 
+    public event Action<int, int> ObjectiveEntered;
+    public event Action<int, int> ObjectiveCompleted;
+    public event Action<int> StageRetrying;
+    public event Action OnboardingCompleted;
+    public event Action<DefenseResolution> ObjectiveDefenseResolved;
+    public bool IsObjectiveInputAvailable => !_transitionInputLocked && !_advanceQueued && !_restartQueued
+        && !_recoveryQueued && _gameState != null && _gameState.State == GameplayState.Playing;
+
     /// <summary>새 Intro 시작을 위해 이번 온보딩 실행의 단계 기록과 재시도 플래그를 초기화한다.</summary>
     public static void StartNewRun()
     {
         _savedRunStage = 0;
         _restartStage = 0;
         _retryPending = false;
+        OnboardingTelemetryRecorder.BeginNewRun();
     }
 
     void Start()
@@ -201,6 +211,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
         PositionPlayerForStage(_stage);
         _hud.ShowObjective(_stage, _objectiveIndex);
+        ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
         UpdateGuardTiming();
 
         if (_stage == 0)
@@ -354,6 +365,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             long hitKey = ((long)resolution.AttackId << 32) | (uint)resolution.HitId;
             if (!_resolvedHitIds.Add(hitKey)) return;
         }
+        ObjectiveDefenseResolved?.Invoke(resolution);
 
         if (_stage == 3 && _activeDodgeId != 0 && _launchedShurikenAttackIds.Contains(resolution.AttackId))
         {
@@ -447,6 +459,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (nextObjective < prompt.ObjectiveCount)
         {
             _advanceQueued = true;
+            ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
             StartCoroutine(AdvanceToNextObjective(nextObjective));
             return;
         }
@@ -462,6 +475,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_restartQueued) yield break;
         _objectiveIndex = nextObjective;
         _hud.ShowObjective(_stage, _objectiveIndex);
+        ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
         _advanceQueued = false;
         UnlockTransitionInput();
     }
@@ -471,6 +485,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     {
         if (_advanceQueued) return;
         _advanceQueued = true;
+        ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 
@@ -555,6 +570,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private void CompleteOnboarding()
     {
         _completingOnboarding = true;
+        OnboardingCompleted?.Invoke();
         _retryPending = false;
         SceneTransitionOverlay.TransitionToScene(_stage1SceneName, STAGE1_FADE_DURATION, () =>
         {
@@ -568,6 +584,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private IEnumerator RestartCurrentStage()
     {
         _restartQueued = true;
+        StageRetrying?.Invoke(_stage);
         _restartStage = _stage;
         _retryPending = true;
         Game.Instance.UIManager.Hide<GameOverUI>();

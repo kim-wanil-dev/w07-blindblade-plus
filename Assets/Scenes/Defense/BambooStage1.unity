@@ -6748,8 +6748,8 @@ MonoBehaviour:
   _bufferLimit: 4096
   _flushIntervalSeconds: 2
   _maximumStorageMegabytes: 100
-  _movementSampleIntervalSeconds: 0.5
-  _summaryIntervalSeconds: 5
+  _movementSampleIntervalSeconds: 1
+  _summaryIntervalSeconds: 15
   _allowAutomaticUpload: 1
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100
