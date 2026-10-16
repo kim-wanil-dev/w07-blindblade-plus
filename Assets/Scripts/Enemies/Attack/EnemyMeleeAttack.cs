@@ -186,7 +186,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         if (receiver == null || IsBlocked(context, point, receiver)) { BeginRecovery(); return; }
         Vector3 direction = (BladeTip - _previousTip).normalized;
         if (direction.sqrMagnitude < 0.001f) direction = _swingForward;
-        receiver.TakeDamage(new DamageContext(_damage, gameObject, point, direction, context.PatternId));
+        receiver.TakeDamage(new DamageContext(_damage, gameObject, point, direction, context.PatternId, context.AttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         if (Phase == EnemyAttackPhase.Active) BeginRecovery();
     }
 

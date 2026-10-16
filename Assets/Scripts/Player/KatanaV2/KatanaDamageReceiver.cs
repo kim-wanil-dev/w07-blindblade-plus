@@ -277,6 +277,9 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
             defended ? _combat.GuardInputId : 0, appliedDamage, context.Point,
             Time.time, Time.realtimeSinceStartupAsDouble);
         _combat.Events.RaiseDefenseResolved(resolution);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Contact(context, resolution,
+            _dodgeActive && (outcome == DefenseOutcome.DodgeAvoided ||
+                (outcome == DefenseOutcome.Invulnerable && TryGetDodgeOutcome(out _))));
         return resolution;
     }
 

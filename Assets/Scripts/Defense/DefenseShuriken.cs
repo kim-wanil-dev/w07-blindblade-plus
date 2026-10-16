@@ -130,6 +130,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (!_flying)
             return;
         _flying = false;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Cancelled", transform.position);
         Released?.Invoke(this);
     }
 
@@ -138,7 +139,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     /// 활성 전투 세션에서 공격 ID와 투사체 ID를 발급받아 비행 상태에 저장한다.
     /// </summary>
     public void Launch(GameObject instigator, PlayerHealth target, float damage, Vector3 direction,
-        BambooDefenseDirector director)
+        BambooDefenseDirector director, int attackId = 0)
     {
         _instigator = instigator;
         _target = target;
@@ -147,7 +148,8 @@ public sealed class DefenseShuriken : MonoBehaviour
         _damage = damage;
         _direction = direction.normalized;
         CombatSessionRuntime session = CombatSessionRuntime.Active;
-        _attackId = session.AllocateAttackId();
+        _attackId = attackId != 0 ? attackId : BlindBlade.Telemetry.CombatTelemetrySignals.Begin(PATTERN_ID, "Projectile", transform.position, target.transform.position);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_attackId, transform.position);
         _projectileId = session.AllocateProjectileId();
         _elapsed = 0f;
         _terminalFlight = false;
@@ -224,6 +226,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (!_flying)
             return;
         _flying = false;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Miss", transform.position);
         Released?.Invoke(this);
         Destroy(gameObject);
     }
@@ -255,6 +258,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     /// </summary>
     public void ReleaseBlocked()
     {
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Destroyed", transform.position);
         Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
         Release();
     }
@@ -330,6 +334,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (_flightSound != SoundId.None)
             Managers.Sound.StopFor(gameObject, _flightSound, true, true);
         ShowAsReflected();
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Miss", transform.position);
         Released?.Invoke(this);
         return true;
     }

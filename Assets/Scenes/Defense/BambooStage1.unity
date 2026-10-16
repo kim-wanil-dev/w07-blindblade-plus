@@ -6744,11 +6744,12 @@ MonoBehaviour:
   _spawner: {fileID: 1968806062}
   _presentation: {fileID: 1968806063}
   _recordingEnabled: 1
-  _configVersion: bamboo-2026-10-14
+  _configVersion: stage1-analysis-v3
   _bufferLimit: 4096
   _flushIntervalSeconds: 2
   _maximumStorageMegabytes: 100
-  _sampleIntervalSeconds: 5
+  _movementSampleIntervalSeconds: 1
+  _summaryIntervalSeconds: 15
   _allowAutomaticUpload: 1
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100

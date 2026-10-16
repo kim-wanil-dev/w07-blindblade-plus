@@ -60,6 +60,8 @@ public sealed class BossController : MonoBehaviour
     [SerializeField, Min(1)] private int _rangedShots = 3;
     [SerializeField, Min(0.1f), Tooltip("발사 후 다음 전조까지의 휴식 시간(초)")]
     private float _rangedInterval = 0.8f;
+    private int _telemetryAttackId;
+
     public event Action RangedPreparing;
     public event Action RangedFiring;
 
@@ -227,6 +229,8 @@ public sealed class BossController : MonoBehaviour
         _motor.Stop();
         for (int i = 0; i < _rangedShots; i++)
         {
+            _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BossRanged", "Projectile",
+                transform.position + Vector3.up, _player.transform.position);
             RangedPreparing?.Invoke();
             yield return PrepareAttack(Mathf.Max(0.1f, _rangedPreparation), false);
             if (!_preparationSucceeded) yield break;
@@ -234,10 +238,12 @@ public sealed class BossController : MonoBehaviour
             Vector3 direction = (_playerMotor.ViewOrigin - Vector3.up * 0.1f - origin).normalized;
             if (direction.sqrMagnitude < 0.0001f) yield break;
             transform.rotation = Quaternion.LookRotation(direction);
+            BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_telemetryAttackId, origin);
             RangedFiring?.Invoke();
             EnemyProjectile projectile = Instantiate(_projectilePrefab, origin, Quaternion.LookRotation(direction));
-            projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction, "BossRanged"),
+            projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction, "BossRanged", _telemetryAttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Projectile),
                 direction, _player.transform);
+            _telemetryAttackId = 0;
             if (i + 1 < _rangedShots) yield return new WaitForSeconds(_rangedInterval);
         }
     }
@@ -246,6 +252,8 @@ public sealed class BossController : MonoBehaviour
     private IEnumerator Charge()
     {
         _motor.Stop();
+        _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BossCharge", "Charge",
+            transform.position, _player.transform.position);
         ChargePreparing?.Invoke();
         yield return PrepareAttack(GetPreparationDuration(_chargePreparation));
         if (!_preparationSucceeded) yield break;
@@ -254,6 +262,7 @@ public sealed class BossController : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(direction);
         float remaining = _chargeDistance;
         float until = Time.time + _chargeDuration;
+        BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_telemetryAttackId, transform.position);
         ChargeStarted?.Invoke();
         while (Time.time < until && remaining > 0.01f)
         {
@@ -277,7 +286,7 @@ public sealed class BossController : MonoBehaviour
             {
                 _agent.Move(direction * Mathf.Max(0f, contactDistance - 0.05f));
                 _motor.Stop();
-                _playerHealth.TakeDamage(new DamageContext(_chargeDamage, gameObject, point, direction, "BossCharge"));
+                _playerHealth.TakeDamage(new DamageContext(_chargeDamage, gameObject, point, direction, "BossCharge", _telemetryAttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Charge));
                 if (_playerHealth.IsAlive)
                     _playerMotor.ApplyCombatPush(direction, _chargePushDistance, _chargePushDuration);
                 yield break;
@@ -287,6 +296,8 @@ public sealed class BossController : MonoBehaviour
             if (distance < 0.01f || (transform.position - previous).sqrMagnitude < 0.000001f) break;
             yield return null;
         }
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Miss", transform.position);
+        _telemetryAttackId = 0;
         _motor.Stop();
     }
 
@@ -504,6 +515,8 @@ public sealed class BossController : MonoBehaviour
     private void ChangeState(BossState state)
     {
         if (_state == state) return;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Cancelled", transform.position);
+        _telemetryAttackId = 0;
         _state = state;
         StateChanged?.Invoke(state);
     }

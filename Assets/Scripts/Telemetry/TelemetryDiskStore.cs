@@ -76,6 +76,14 @@ namespace BlindBlade.Telemetry
                     {
                         try
                         {
+                            // 이전 빌드의 세션은 새 수신기에 재전송하지 않는다.
+                            using (StreamReader reader = new StreamReader(path, Encoding.UTF8))
+                            {
+                                string first = reader.ReadLine();
+                                if (string.IsNullOrWhiteSpace(first)
+                                    || (string)JObject.Parse(first)["schemaVersion"] != TelemetryJson.SCHEMA_VERSION)
+                                    continue;
+                            }
                             string cursorPath = path + "." + destination + ".cursor";
                             long offset = File.Exists(cursorPath) ? long.Parse(File.ReadAllText(cursorPath)) : 0L;
                             JArray rows = new JArray();
