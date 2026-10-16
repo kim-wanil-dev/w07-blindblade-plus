@@ -1734,6 +1734,6 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
-  _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAD81\uADF9\uAE30"
-  _gamepadHint: "RB \uD640\uB4DC - \uAD81\uADF9\uAE30"
+  _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
+  _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
   _fadeDuration: 0.15

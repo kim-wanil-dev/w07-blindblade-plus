@@ -101,15 +101,15 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField] private Prompt[] _prompts =
     {
         new Prompt("이동 - WASD", "이동 - 왼쪽 스틱", null, "파동 중심 1m 이내 도착"),
-        new Prompt("돌진/회피 - SPACE", "돌진/회피 - A 버튼", null, "돌진 1회"),
-        new Prompt("좌클릭 - 공격", "RB - 공격", null, "근접 적 처치 1회"),
+        new Prompt("회피 - SPACE", "회피 - A 버튼", null, "회피 1회"),
+        new Prompt("좌클릭 - 발도", "RB - 발도", null, "발도로 적 1명 처치"),
         new Prompt("극한 회피 - SPACE", "극한 회피 - A 버튼", null, "수리검 극한 회피 1회"),
-        new Prompt("우클릭 - 방어", "LB - 방어", null, "가드 1회", "가드를 놓고 패링 1회"),
-        new Prompt("우클릭 - 방어", "LB - 방어", null,
-            new[] { "가드 1회", "가드를 놓고 패링 1회", "검기 실제 발사" }, "좌클릭 - 검기", "RB - 검기", null, 2),
-        new Prompt("우클릭 - 패링", "LB - 패링", null,
-            new[] { "수리검 패링 1회", "궁극기로 적 8명 처치" },
-            "좌클릭 홀드 - 궁극기", "RB 홀드 - 궁극기", null, 1, "기운 3개를 모으면 궁극기를 쓸 수 있습니다")
+        new Prompt("우클릭 - 막기 / 쳐내기", "LB - 막기 / 쳐내기", null, "막기 1회", "정확한 시점에 막아서 공격 쳐내기 1회"),
+        new Prompt("우클릭 - 막기 / 쳐내기", "LB - 막기 / 쳐내기", null,
+            new[] { "막기 1회", "정확한 시점에 막아서 공격 쳐내기 1회", "일섬 발동 1회" }, "좌클릭 - 일섬", "RB - 일섬", null, 2),
+        new Prompt("우클릭 - 쳐내기", "LB - 쳐내기", null,
+            new[] { "수리검 쳐내기 1회", "거합으로 적 8명 처치" },
+            "좌클릭 홀드 - 거합", "RB 홀드 - 거합", null, 1, "기운 3개를 모으면 거합을 쓸 수 있습니다")
     };
 
     private Canvas _canvas;
@@ -206,8 +206,8 @@ public sealed class OnboardingHud : MonoBehaviour
         if (!visible) return;
 
         string judgement = !guarding ? "대기"
-            : outcome == DefenseOutcome.PerfectParry ? "패링" : "가드";
-        _guardTimingLabel.text = $"가드 {heldTime:0.00}초 · {judgement}";
+            : outcome == DefenseOutcome.PerfectParry ? "쳐내기" : "막기";
+        _guardTimingLabel.text = $"막기 {heldTime:0.00}초 · {judgement}";
         _guardTimingFill.fillAmount = guarding && windowDuration > 0f
             ? Mathf.Clamp01(heldTime / windowDuration) : 0f;
         _guardTimingFill.color = outcome == DefenseOutcome.PerfectParry
