@@ -477,42 +477,13 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     max(max(warningFirst, warningSecond),
                         max(warningThird, warningFourth))));
 
-                float transparentBrightness = max(
-                    transparentEdge.r,
-                    max(transparentEdge.g, transparentEdge.b));
+                float transparentBrightness = max(transparentEdge.r, max(transparentEdge.g, transparentEdge.b));
 
-                // 마스크 경계뿐 아니라 마스크 주변의 실루엣 테두리 전체를 물들인다.
+            // 연기에서 검출된 테두리 픽셀에만 전조 색을 적용한다.
                 edge = max(edge, transparentEdge);
                 float edgeBrightness = max(edge.r, max(edge.g, edge.b));
-                float outlineTint = warningAmount
-                    * step(0.0001, transparentBrightness);
-                edge = lerp(
-                    edge,
-                    _MeleeWarningColor.rgb * _MeleeWarningColor.a * edgeBrightness,
-                    outlineTint);
-
-                // 기존 캡처에서 버려지던 연기 입자 내부도 전조 중 붉게 합성한다.
-                float3 smokeSource = SAMPLE_TEXTURE2D_X(
-                    _OutlineOpaqueColor, sampler_LinearClamp, uv).rgb;
-                float smokeBrightness = saturate(max(
-                    abs(smokeSource.r),
-                    max(abs(smokeSource.g), abs(smokeSource.b))));
-
-                float smokeDepth = SAMPLE_TEXTURE2D_X(
-                    _OutlineTransparentDepth, sampler_PointClamp, uv).r;
-                float smokeCoverage = TransparentCoverage(uv);
-                float3 smokePerception = PerceptionColor(
-                    uv, smokeDepth, smokeCoverage, 0.0, 0.0, float4(0, 0, 0, 0));
-                float smokeVisibility = saturate(max(
-                    smokePerception.r,
-                    max(smokePerception.g, smokePerception.b)));
-
-                float3 redSmoke = _MeleeWarningColor.rgb
-                    * _MeleeWarningColor.a
-                    * smokeBrightness
-                    * warningCenter
-                    * smokeVisibility;
-                edge = max(edge, redSmoke);
+                float outlineTint = warningAmount * step(0.0001, transparentBrightness);
+                edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a * edgeBrightness, outlineTint);
                 edge *= 1.0 - AlwaysVisibleCoverage(uv);
                 float foregroundEdge = saturate(max(
                     abs(AlwaysVisibleCoverage(firstUv) - AlwaysVisibleCoverage(secondUv)),
