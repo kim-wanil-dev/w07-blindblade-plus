@@ -14,6 +14,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Defense/BambooStage1.unity
     guid: 29bc612417d10514c8df40709f9ada9e
+  - enabled: 1
+    path: Assets/Scenes/Onboarding/Onboarding.unity
+    guid: 8e215c1a463124540be9a39499b9daaa
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

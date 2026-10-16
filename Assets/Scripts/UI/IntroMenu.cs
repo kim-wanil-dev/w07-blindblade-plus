@@ -31,6 +31,7 @@ public class IntroMenu : MonoBehaviour
     private Shader _sliceShader;
     private readonly List<TMP_Text> _slicedTexts = new List<TMP_Text>();
     private VolumeControlUI _volumeControl;
+    private IntroOnboardingTransition _onboardingTransition;
     private Coroutine _sliceRoutine;
     private bool _isSlicing;
 
@@ -38,6 +39,7 @@ public class IntroMenu : MonoBehaviour
     {
         _sliceShader = Resources.Load<Shader>("Effects/IntroTextSlice");
         _volumeControl = GetComponent<VolumeControlUI>();
+        _onboardingTransition = GetComponent<IntroOnboardingTransition>();
     }
 
     void OnEnable()
@@ -89,6 +91,12 @@ public class IntroMenu : MonoBehaviour
         }
 
         PlayerPrefs.Save();
+        if (_onboardingTransition != null)
+        {
+            _onboardingTransition.Begin(_gameSceneName);
+            return;
+        }
+
         SceneManager.LoadScene(_gameSceneName);
     }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using UnityEngine;
@@ -79,6 +80,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     public float DashDistance => _dashDistance;
     public bool IsLaunchSlowActive => _launchElapsed >= 0f;
+    public event Action<DefenseSwordWave> SwordWaveLaunched;
 
     void Awake()
     {
@@ -168,6 +170,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         // 검기는 위치만 직선 이동하므로 발사 뒤 바꾼 회전이 그대로 유지된다.
         wave.transform.rotation = Quaternion.LookRotation(direction)
             * Quaternion.Euler(0f, 0f, _ultimate.CutAngle) * Quaternion.Euler(_tiltAngle, 0f, 0f);
+        SwordWaveLaunched?.Invoke(wave);
         if (_dashDistance <= 0f) _launchElapsed = 0f;
     }
 
