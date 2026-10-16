@@ -567,7 +567,7 @@ MonoBehaviour:
         Data4: -380512219
       Path: event:/Enemy/DefenseMeleeWarning
     _enabled: 1
-    _volumeMultiplier: 1
+    _volumeMultiplier: 2
     _pitchMultiplier: 1
     _useCallerLabel: 0
     _combatCue: 1
