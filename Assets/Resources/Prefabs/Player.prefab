@@ -616,6 +616,8 @@ MonoBehaviour:
   _bladeBase: {fileID: 8419536739964497533}
   _bladeTip: {fileID: 87512033506737446}
   _useViewModelReach: 1
+  _normalAttackAngleScale: 1.5
+  _normalAttackViewPull: 0.7
   _showAttackGizmos: 1
   _gizmoDuration: 2
 --- !u!114 &5463530082543962319
@@ -917,6 +919,9 @@ MonoBehaviour:
   _bladeTip: {fileID: 87512033506737446}
   _normalReach: 4.5
   _iaidoReach: 4.5
+  _normalViewPull: 1
+  _normalAngleScale: 1.25
+  _normalLeadTime: 0.09
   _drawSweep: 1
   _drawDuration: 2
 --- !u!114 &7719342256018403922
