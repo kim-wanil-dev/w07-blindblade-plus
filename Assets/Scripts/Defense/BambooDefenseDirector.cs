@@ -40,6 +40,8 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     public float Countdown => _countdown;
     public float SurvivalTime => _elapsed;
     public int Kills => _kills;
+    public int KillGoal { get; private set; }
+    public bool IsRecordHidden { get; private set; }
     public Vector3 PlayerVelocity => _playerVelocity;
     public event Action<Vector3, float> ThrowTelegraphed;
     public event Action<DefenseShuriken> ShurikenLaunched;
@@ -144,6 +146,24 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private void HandleEnemyKilled()
     {
         _kills++;
+    }
+
+    /// <summary>기록 표시에 쓸 목표 처치 수를 goal로 저장한다. 0 이하이면 목표 없이 생존 시간과 처치 수를 표시한다.</summary>
+    public void SetKillGoal(int goal)
+    {
+        KillGoal = Mathf.Max(0, goal);
+    }
+
+    /// <summary>보스전처럼 처치 기록이 더 필요 없을 때 기록 표시를 숨기도록 IsRecordHidden을 켠다.</summary>
+    public void HideRecord()
+    {
+        IsRecordHidden = true;
+    }
+
+    /// <summary>이번 세션의 근접 적 총 생성 수를 limit로 제한하도록 스폰 담당자에게 전달한다. 0 이하이면 제한하지 않는다.</summary>
+    public void SetMeleeSpawnLimit(int limit)
+    {
+        _spawner.SetMeleeSpawnLimit(limit);
     }
 
     /// <summary>스테이지 전환 때 현재 웨이브의 스폰·투척 예약·비행 수리검을 종료하고 처치 수는 보존한다.</summary>
