@@ -28,6 +28,35 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
     private AnimationClip _counterSourceClip;
     private AnimationClip _counterDefaultClip;
 
+    [Header("퍼펙트 패링 모션")]
+    [SerializeField, InspectorName("퍼펙트 패링 AnimationClip")]
+    [Tooltip("퍼펙트 패링 직후 가드 자세에서 이어지는 흘리기·튕겨내기 클립입니다. Sword·Saya 경로를 사용하며 Coordinator의 퍼펙트 패링 모션 시간에 맞춰 늘어납니다. 빈 슬롯이면 아래 절차 모션을 사용합니다.")]
+    private AnimationClip _perfectParryClip;
+    [SerializeField, Min(0f), InspectorName("절차 모션 궤적 오른쪽 거리 (m)")]
+    [Tooltip("클립이 없을 때 가드 자세에서 궤적 끝까지 검이 화면 오른쪽으로 이동하는 거리입니다. 카메라 기준이며 크면 화면 밖으로 나갑니다.")]
+    private float _perfectParryArcWidth = 0.3f;
+    [SerializeField, Min(0.01f), InspectorName("절차 모션 궤적 최고 높이 (m)")]
+    [Tooltip("궤적 꼭짓점에서 가드 자세보다 위로 올라가는 높이입니다.")]
+    private float _perfectParryArcPeakHeight = 0.22f;
+    [SerializeField, InspectorName("절차 모션 궤적 끝 높이 (m)")]
+    [Tooltip("궤적 끝에서 가드 자세보다 위에 있는 높이입니다. 최고 높이보다 낮을수록 꼭짓점 뒤에서 더 가파르게 떨어집니다.")]
+    private float _perfectParryArcEndHeight = 0.1f;
+    [SerializeField, Range(0.05f, 0.95f), InspectorName("절차 모션 꼭짓점 위치")]
+    [Tooltip("오른쪽 거리 중 가장 높이 올라가는 지점의 비율입니다. 0.75면 오른쪽 3/4 지점이 가장 높습니다.")]
+    private float _perfectParryArcPeakPosition = 0.75f;
+    [SerializeField, InspectorName("절차 모션 궤적 앞뒤 거리 (m)")]
+    [Tooltip("궤적 끝에서 검이 카메라 앞쪽으로 이동하는 거리입니다. 음수면 카메라 쪽으로 당겨집니다.")]
+    private float _perfectParryArcDepth = 0f;
+    [SerializeField, InspectorName("절차 모션 칼날 회전 (도)")]
+    [Tooltip("궤적 끝에서 칼날이 제자리에서 도는 각도입니다. 카메라 기준 x는 앞뒤 기울기, y는 좌우 방향, z는 화면상 기울기입니다.")]
+    private Vector3 _perfectParryBladeAngles = new Vector3(0f, 0f, -20f);
+    [SerializeField, Range(0.05f, 0.95f), InspectorName("절차 모션 궤적 끝 도달 진행도")]
+    [Tooltip("모션 시간 중 검이 궤적 끝에 도달하는 지점입니다. 그 뒤 남은 시간 동안 가드 자세로 곧게 돌아옵니다.")]
+    private float _perfectParryPeakProgress = 0.6f;
+    private Transform _viewSpace;
+    private AnimationClip _perfectParrySourceClip;
+    private AnimationClip _perfectParryDefaultClip;
+
     [Header("1·2타 애니메이션 교체")]
     [SerializeField, InspectorName("1타 AnimationClip")]
     [Tooltip("일반 공격·대상 돌진의 1타 IaidoDoubleSlash를 교체합니다. 빈 슬롯과 충전 발도는 기존 클립을 사용합니다.")]
@@ -146,6 +175,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
         _animator.fireEvents = false;
         _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
         _poseTargets = new[] { _animator.transform.Find("Sword"), _animator.transform.Find("Saya") };
+        _viewSpace = _animator.transform.parent;
         _blendPositions = new Vector3[_poseTargets.Length];
         _blendRotations = new Quaternion[_poseTargets.Length];
         _renderers = _animator.GetComponentsInChildren<Renderer>(true);
@@ -210,13 +240,18 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
                 _counterSourceClip = pair.Key;
                 _counterDefaultClip = pair.Value != null ? pair.Value : pair.Key;
             }
+            else if (pair.Key.name == "PerfectParry")
+            {
+                _perfectParrySourceClip = pair.Key;
+                _perfectParryDefaultClip = pair.Value != null ? pair.Value : pair.Key;
+            }
         }
         _animator.runtimeAnimatorController = _attackController;
         ApplyAttackClips();
     }
 
     /// <summary>
-    /// Inspector의 Idle·1·2타 클립을 해당 원본 클립에 대응시킨다.
+    /// Inspector의 Idle·1·2타·퍼펙트 패링 클립을 해당 원본 클립에 대응시킨다.
     /// firstAttack이면 1타를 교체하고 반격 Normal2에 전용 클립을 적용한다. 빈 슬롯은 기본 클립으로 복원한다.
     /// </summary>
     private void ApplyAttackClips(bool firstAttack = false)
@@ -233,6 +268,8 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
                 clip = _secondAttackClip != null ? _secondAttackClip : _secondDefaultClip;
             else if (pair.Key == _counterSourceClip)
                 clip = _counterAttackClip != null ? _counterAttackClip : _counterDefaultClip;
+            else if (pair.Key == _perfectParrySourceClip)
+                clip = _perfectParryClip != null ? _perfectParryClip : _perfectParryDefaultClip;
             _attackOverrides[i] = new KeyValuePair<AnimationClip, AnimationClip>(pair.Key, clip);
         }
         _attackController.ApplyOverrides(_attackOverrides);
@@ -260,6 +297,8 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             }
             else _animator.SetFloat(ActionProgressId, 1f);
         }
+        else if (_motion == "PerfectParry")
+            _animator.SetFloat(ActionProgressId, Mathf.Clamp01(_elapsed / Mathf.Max(0.01f, _duration)));
         else if (_motion == "Rest" && _idleClip != null)
             _animator.SetFloat(ActionProgressId, Mathf.Repeat(_elapsed / Mathf.Max(0.001f, _idleClip.length), 1f));
         else if (_openingSheathing)
@@ -320,7 +359,41 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
             _firstAttackClip.SampleAnimation(_animator.gameObject, Mathf.Min(5f / _firstAttackClip.frameRate, _firstAttackClip.length));
             if (_combat.TryStartFirstAttackFollowup()) _animator.Update(0f);
         }
+        ApplyPerfectParryFallback();
         ApplyAttackDeflection();
+    }
+
+    /// <summary>
+    /// 퍼펙트 패링 클립이 비어 있을 때 가드 자세의 검을 화면 우측으로 완만하게 올려 꼭짓점을 찍고 가파르게 조금 내려온 뒤 곧게 되돌린다.
+    /// ActionProgress와 _perfectParryPeakProgress로 궤적 진행과 복귀 가중치를 구하고, 카메라 기준 궤적 오프셋과 _perfectParryBladeAngles를 검 Transform에 더한다.
+    /// </summary>
+    private void ApplyPerfectParryFallback()
+    {
+        if (_motion != "PerfectParry" || _perfectParryClip != null) return;
+        float progress = _animator.GetFloat(ActionProgressId);
+        float t = 1f;
+        float returnWeight = 1f;
+        if (progress < _perfectParryPeakProgress)
+        {
+            // 튕겨낸 직후가 가장 빠르고 궤적 끝에 가까울수록 느려진다.
+            float u = progress / _perfectParryPeakProgress;
+            t = 1f - (1f - u) * (1f - u);
+        }
+        else
+            returnWeight = 1f - Mathf.SmoothStep(0f, 1f,
+                (progress - _perfectParryPeakProgress) / (1f - _perfectParryPeakProgress));
+
+        // 꼭짓점까지는 사인 곡선으로 완만하게 오르고, 꼭짓점 뒤에는 제곱 곡선으로 점점 가파르게 내려온다.
+        float peak = _perfectParryArcPeakPosition;
+        float height = t < peak
+            ? _perfectParryArcPeakHeight * Mathf.Sin(t / peak * Mathf.PI * 0.5f)
+            : Mathf.Lerp(_perfectParryArcPeakHeight, _perfectParryArcEndHeight, Mathf.Pow((t - peak) / (1f - peak), 2f));
+        Vector3 offset = new Vector3(_perfectParryArcWidth * t, height, _perfectParryArcDepth * t) * returnWeight;
+        Quaternion viewRotation = _viewSpace.rotation;
+        Quaternion bladeTurn = viewRotation * Quaternion.Euler(_perfectParryBladeAngles * (t * returnWeight))
+            * Quaternion.Inverse(viewRotation);
+        Transform sword = _poseTargets[0];
+        sword.SetPositionAndRotation(sword.position + _viewSpace.TransformVector(offset), bladeTurn * sword.rotation);
     }
 
     /// <summary>
@@ -385,6 +458,12 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
                 Play("GuardDeflect", _blendTime);
                 _duration = 0.16f;
                 break;
+            case KatanaStage.ParryMotionStarted:
+                _parry = false;
+                Play("PerfectParry", _blendTime);
+                _duration = _combat.PerfectParryMotionDuration;
+                _animator.SetFloat(ActionProgressId, 0f);
+                break;
             case KatanaStage.GuardStarted:
                 _attack = false;
                 _parry = false;
@@ -434,7 +513,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
                 }
                 string sheath = _motion == "IaidoDoubleSlash" ? "SheatheIaido" : _motion == "Normal2" ? "Sheathe2" : "Sheathe1";
                 Play(sheath, _motion == "GuardHold" || _motion == "GuardEnter" || _motion == "GuardDeflect"
-                    ? _guardTransitionBlendTime : _blendTime);
+                    || _motion == "PerfectParry" ? _guardTransitionBlendTime : _blendTime);
                 _animator.SetFloat(ActionProgressId, 0f);
                 break;
             case KatanaStage.SheatheEnded:
@@ -470,7 +549,8 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
         ApplyAttackClips(firstAttack);
         bool customFirstAttack = firstAttack && _firstAttackClip != null;
         bool matchedSecondAttack = name == "Normal1" && UsesOpeningTimingForSecondAttack;
-        bool transitioningFromGuard = _motion == "GuardHold" || _motion == "GuardEnter" || _motion == "GuardDeflect";
+        bool transitioningFromGuard = _motion == "GuardHold" || _motion == "GuardEnter" || _motion == "GuardDeflect"
+            || _motion == "PerfectParry";
         float blend = transitioningFromGuard ? _guardTransitionBlendTime
             : kind == PlayerAttackKind.Normal && !opening && !_combat.IsCounterAttack
                 ? Mathf.Max(_blendTime, _comboBlendTime) : _blendTime;

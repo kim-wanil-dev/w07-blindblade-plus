@@ -22,6 +22,13 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     [SerializeField] private Transform _bladeBase;
     [SerializeField] private Transform _bladeTip;
     [SerializeField] private bool _useViewModelReach = true;
+    [SerializeField, Min(1f), InspectorName("일반 공격 판정 각도 배율")]
+    [Tooltip("일반 1·2타의 칼날 판정을 시점 정면 기준 좌우 각도로 이 배율만큼 벌립니다. 보이는 칼, 판정 높이와 공격 시간은 그대로이며 반격에는 적용하지 않습니다.")]
+    private float _normalAttackAngleScale = 1.5f;
+    [SerializeField, Range(0f, 1f), InspectorName("일반 공격 판정 카메라 쪽 당김")]
+    [Tooltip("일반 1·2타 칼날 판정의 손잡이 쪽 끝을 카메라 쪽으로 이 비율만큼 당깁니다. 1이면 카메라 위치에서 시작해 화면 가운데 아주 가까운 적도 벱니다. 칼끝 사거리와 보이는 칼은 그대로입니다.")]
+    private float _normalAttackViewPull = 0.7f;
+    private KatanaCombatCoordinator _katana;
     private int _sweepActionId = -1;
     private Vector3 _previousBladeBase;
     private Vector3 _previousBladeTip;
@@ -47,6 +54,11 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     /// 접촉이 없으면 Collider는 null이며 동일 ActionId의 캐시 조회에는 다시 알리지 않는다.
     /// </summary>
     public event Action<PlayerAttackRequest, Collider, Vector3, bool> AttackContactResolved;
+
+    void Awake()
+    {
+        _katana = GetComponent<KatanaCombatCoordinator>();
+    }
 
     void OnEnable()
     {
@@ -324,6 +336,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         Vector3 currentBase = _bladeBase.position;
         Vector3 currentTip = _bladeTip.position;
         if (_useViewModelReach) currentTip = GetWorldBladeTip(request.Origin, currentBase, currentTip, request.Range);
+        ShapeNormalAttackBlade(request.Origin, request.Direction, ref currentBase, ref currentTip);
         if (_sweepActionId != request.ActionId)
         {
             _sweepActionId = request.ActionId;
@@ -376,6 +389,44 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         float fraction = delta.sqrMagnitude > 0.000001f
             ? Mathf.Clamp01(Vector3.Dot(incomingPoint - _bladeBase.position, delta) / delta.sqrMagnitude) : 0f;
         return _bladeBase.position + delta * fraction;
+    }
+
+    /// <summary>
+    /// 일반 1·2타의 적 판정 칼날 양 끝 bladeBase·bladeTip을 시선 원점 origin과 시점 방향 direction 기준으로 보정한다.
+    /// _normalAttackViewPull·_normalAttackAngleScale을 사용하며 반격 중이면 바꾸지 않는다.
+    /// </summary>
+    public void ShapeNormalAttackBlade(Vector3 origin, Vector3 direction, ref Vector3 bladeBase, ref Vector3 bladeTip)
+    {
+        ShapeNormalAttackBlade(origin, direction, _normalAttackViewPull, _normalAttackAngleScale, ref bladeBase, ref bladeTip);
+    }
+
+    /// <summary>
+    /// 일반 1·2타의 칼날 양 끝 bladeBase·bladeTip을 시선 원점 origin과 시점 방향 direction 기준으로 보정한다.
+    /// 손잡이 쪽 끝을 viewPull 비율만큼 카메라로 당기고 두 끝의 좌우 각도를 angleScale배로 벌린다. 반격 중이면 바꾸지 않는다.
+    /// 대나무 베기처럼 적 판정과 다른 값을 쓰는 호출자가 사용한다.
+    /// </summary>
+    public void ShapeNormalAttackBlade(Vector3 origin, Vector3 direction, float viewPull, float angleScale,
+        ref Vector3 bladeBase, ref Vector3 bladeTip)
+    {
+        if (_katana.IsCounterAttack) return;
+        // 칼끝 사거리를 정한 뒤 손잡이 쪽 끝만 카메라로 당겨 화면 가운데 가까운 대상까지 칼날 구간에 넣는다.
+        bladeBase = WidenBladeAngle(origin, direction, Vector3.Lerp(bladeBase, origin, viewPull), angleScale);
+        bladeTip = WidenBladeAngle(origin, direction, bladeTip, angleScale);
+    }
+
+    /// <summary>
+    /// point가 origin에서 수평 시점 방향 direction과 벌어진 좌우 각도를 angleScale배로 벌린 위치를 반환한다.
+    /// 높이와 origin까지의 거리는 유지하며 벌린 각도는 뒤쪽 180도를 넘지 않는다.
+    /// </summary>
+    private static Vector3 WidenBladeAngle(Vector3 origin, Vector3 direction, Vector3 point, float angleScale)
+    {
+        Vector3 forward = Vector3.ProjectOnPlane(direction, Vector3.up);
+        Vector3 offset = point - origin;
+        Vector3 horizontal = Vector3.ProjectOnPlane(offset, Vector3.up);
+        if (forward.sqrMagnitude < 0.000001f || horizontal.sqrMagnitude < 0.000001f) return point;
+        float yaw = Vector3.SignedAngle(forward, horizontal, Vector3.up);
+        float widened = Mathf.Clamp(yaw * angleScale, -180f, 180f);
+        return origin + Quaternion.AngleAxis(widened - yaw, Vector3.up) * offset;
     }
 
     /// <summary>origin·bladeBase·viewTip의 칼날 방향을 유지하고 range로 축소된 1인칭 뷰모델의 월드 사거리를 보정한다.</summary>
