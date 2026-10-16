@@ -58827,10 +58827,14 @@ MonoBehaviour:
     _objectives:
     - "\uAC00\uB4DC 1\uD68C"
     - "\uAC00\uB4DC\uB97C \uB193\uACE0 \uD37C\uD399\uD2B8 \uD328\uB9C1 1\uD68C"
-  - _keyboardHint: "\uC88C\uD074\uB9AD - \uAC80\uAE30"
-    _gamepadHint: "RB - \uAC80\uAE30"
+  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uD328\uB9C1"
+    _gamepadHint: "LB - \uD328\uB9C1"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: "\uC88C\uD074\uB9AD - \uAC80\uAE30"
+    _followUpGamepadHint: "RB - \uAC80\uAE30"
+    _followUpKeyboardIcon: {fileID: 0}
     _objectives:
+    - "\uC218\uB9AC\uAC80 \uD37C\uD399\uD2B8 \uD328\uB9C1 1\uD68C"
     - "\uAC80\uAE30 \uC2E4\uC81C \uBC1C\uC0AC"
   - _keyboardHint: "\uC6B0\uD074\uB9AD - \uBC29\uC5B4"
     _gamepadHint: "LB - \uBC29\uC5B4"
@@ -58838,16 +58842,24 @@ MonoBehaviour:
     _objectives:
     - "\uAC00\uB4DC 1\uD68C"
     - "\uAC00\uB4DC\uB97C \uB193\uACE0 \uD37C\uD399\uD2B8 \uD328\uB9C1 1\uD68C"
-  - _keyboardHint: "\uC88C\uD074\uB9AD - \uAC80\uAE30"
-    _gamepadHint: "RB - \uAC80\uAE30"
+  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uD328\uB9C1"
+    _gamepadHint: "LB - \uD328\uB9C1"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: "\uC88C\uD074\uB9AD - \uAC80\uAE30"
+    _followUpGamepadHint: "RB - \uAC80\uAE30"
+    _followUpKeyboardIcon: {fileID: 0}
     _objectives:
+    - "\uC218\uB9AC\uAC80 \uD37C\uD399\uD2B8 \uD328\uB9C1 1\uD68C"
     - "\uAC80\uAE30 \uC2E4\uC81C \uBC1C\uC0AC"
-  - _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAD81\uADF9\uAE30"
-    _gamepadHint: "RB \uD640\uB4DC - \uAD81\uADF9\uAE30"
+  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uD328\uB9C1"
+    _gamepadHint: "LB - \uD328\uB9C1"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAD81\uADF9\uAE30"
+    _followUpGamepadHint: "RB \uD640\uB4DC - \uAD81\uADF9\uAE30"
+    _followUpKeyboardIcon: {fileID: 0}
     _objectives:
-    - "\uAD81\uADF9\uAE30 \uC644\uB8CC"
+    - "\uC218\uB9AC\uAC80 \uD37C\uD399\uD2B8 \uD328\uB9C1 1\uD68C"
+    - "\uAD81\uADF9\uAE30\uB85C \uC801 8\uBA85 \uCC98\uCE58"
 --- !u!4 &2058950797
 Transform:
   m_ObjectHideFlags: 0

@@ -18,20 +18,36 @@ public sealed class OnboardingHud : MonoBehaviour
         [SerializeField, TextArea(1, 2)] private string _keyboardHint;
         [SerializeField, TextArea(1, 2)] private string _gamepadHint;
         [SerializeField] private Sprite _keyboardIcon;
+        [SerializeField, TextArea(1, 2)] private string _followUpKeyboardHint;
+        [SerializeField, TextArea(1, 2)] private string _followUpGamepadHint;
+        [SerializeField] private Sprite _followUpKeyboardIcon;
         [SerializeField, TextArea(1, 2)] private string[] _objectives;
 
         /// <summary>keyboardHint, gamepadHint, keyboardIcon, objectives로 교체 가능한 단계 안내를 만든다.</summary>
         public Prompt(string keyboardHint, string gamepadHint, Sprite keyboardIcon, params string[] objectives)
+            : this(keyboardHint, gamepadHint, keyboardIcon, objectives, null, null, null)
+        {
+        }
+
+        /// <summary>두 목표 단계에 입력 장치별 후속 안내와 선택 아이콘을 추가해 Inspector 편집 가능한 단계 안내를 만든다.</summary>
+        public Prompt(string keyboardHint, string gamepadHint, Sprite keyboardIcon, string[] objectives,
+            string followUpKeyboardHint, string followUpGamepadHint, Sprite followUpKeyboardIcon)
         {
             _keyboardHint = keyboardHint;
             _gamepadHint = gamepadHint;
             _keyboardIcon = keyboardIcon;
+            _followUpKeyboardHint = followUpKeyboardHint;
+            _followUpGamepadHint = followUpGamepadHint;
+            _followUpKeyboardIcon = followUpKeyboardIcon;
             _objectives = objectives;
         }
 
-        /// <summary>현재 입력 장치에 맞는 단계 안내 문구를 반환한다.</summary>
-        public string GetHint(bool gamepad)
+        /// <summary>gamepad와 objectiveIndex에 맞는 현재 목표의 입력 안내 문구를 반환한다.</summary>
+        public string GetHint(bool gamepad, int objectiveIndex)
         {
+            if (objectiveIndex > 0 && !string.IsNullOrEmpty(_followUpKeyboardHint))
+                return gamepad && !string.IsNullOrEmpty(_followUpGamepadHint)
+                    ? _followUpGamepadHint : _followUpKeyboardHint;
             return gamepad && !string.IsNullOrEmpty(_gamepadHint) ? _gamepadHint : _keyboardHint;
         }
 
@@ -41,10 +57,11 @@ public sealed class OnboardingHud : MonoBehaviour
             return _objectives != null && index >= 0 && index < _objectives.Length ? _objectives[index] : string.Empty;
         }
 
-        /// <summary>키보드·마우스 안내 이미지 스프라이트를 반환한다.</summary>
-        public Sprite GetIcon()
+        /// <summary>objectiveIndex에 해당하는 키보드·마우스 안내 스프라이트를 반환한다.</summary>
+        public Sprite GetIcon(int objectiveIndex)
         {
-            return _keyboardIcon;
+            return objectiveIndex > 0 && !string.IsNullOrEmpty(_followUpKeyboardHint)
+                ? _followUpKeyboardIcon : _keyboardIcon;
         }
 
         /// <summary>현재 단계에 등록된 순차 목표 문구 수를 반환한다.</summary>
@@ -63,10 +80,14 @@ public sealed class OnboardingHud : MonoBehaviour
         new Prompt("좌클릭 - 공격", "RB - 공격", null, "근접 적 처치 1회"),
         new Prompt("극한 회피 - SPACE", "극한 회피 - A 버튼", null, "수리검 극한 회피 1회"),
         new Prompt("우클릭 - 방어", "LB - 방어", null, "가드 1회", "가드를 놓고 퍼펙트 패링 1회"),
-        new Prompt("좌클릭 - 검기", "RB - 검기", null, "검기 실제 발사"),
+        new Prompt("우클릭 - 패링", "LB - 패링", null,
+            new[] { "수리검 퍼펙트 패링 1회", "검기 실제 발사" }, "좌클릭 - 검기", "RB - 검기", null),
         new Prompt("우클릭 - 방어", "LB - 방어", null, "가드 1회", "가드를 놓고 퍼펙트 패링 1회"),
-        new Prompt("좌클릭 - 검기", "RB - 검기", null, "검기 실제 발사"),
-        new Prompt("좌클릭 홀드 - 궁극기", "RB 홀드 - 궁극기", null, "궁극기 완료")
+        new Prompt("우클릭 - 패링", "LB - 패링", null,
+            new[] { "수리검 퍼펙트 패링 1회", "검기 실제 발사" }, "좌클릭 - 검기", "RB - 검기", null),
+        new Prompt("우클릭 - 패링", "LB - 패링", null,
+            new[] { "수리검 퍼펙트 패링 1회", "궁극기로 적 8명 처치" },
+            "좌클릭 홀드 - 궁극기", "RB 홀드 - 궁극기", null)
     };
 
     private Canvas _canvas;
@@ -125,7 +146,7 @@ public sealed class OnboardingHud : MonoBehaviour
         Prompt prompt = _prompts[stage];
         _objectiveTitle.text = "목표";
         _objectiveText.text = prompt.GetObjective(objectiveIndex);
-        _instructionIcon.sprite = prompt.GetIcon();
+        _instructionIcon.sprite = prompt.GetIcon(objectiveIndex);
         _instructionIcon.enabled = _instructionIcon.sprite != null && !InputDeviceDisplay.IsGamepad;
         RefreshDevicePrompt();
     }
@@ -330,8 +351,8 @@ public sealed class OnboardingHud : MonoBehaviour
         if (_currentStage < 0 || _currentStage >= _prompts.Length) return;
         Prompt prompt = _prompts[_currentStage];
         bool gamepad = InputDeviceDisplay.IsGamepad;
-        _instructionText.text = prompt.GetHint(gamepad);
-        _instructionIcon.sprite = prompt.GetIcon();
+        _instructionText.text = prompt.GetHint(gamepad, _currentObjective);
+        _instructionIcon.sprite = prompt.GetIcon(_currentObjective);
         _instructionIcon.enabled = _instructionIcon.sprite != null && !gamepad;
     }
 
