@@ -159,6 +159,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _boss.transform.SetPositionAndRotation(position,
             toPlayer.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(toPlayer) : Quaternion.identity);
         _boss.GetComponent<BossController>().ConfigureArena(_arena, _edgeInset);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2");
         _boss.SetActive(true);
         _phase = StagePhase.Boss;
         BambooStage1Progress.MarkBossCheckpointReached();
@@ -278,6 +279,9 @@ public sealed class BambooStage1Controller : MonoBehaviour
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         if (bossHealth == _bossHealth && _phase == StagePhase.Boss)
+        {
             _phase = StagePhase.Complete;
+            BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2", true);
+        }
     }
 }

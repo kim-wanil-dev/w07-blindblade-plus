@@ -98,6 +98,7 @@ public class EnemyProjectile : MonoBehaviour
 
     void OnDisable()
     {
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_damage.AttackId, "Cancelled", transform.position);
         _isFlying = false;
     }
 
@@ -157,7 +158,7 @@ public class EnemyProjectile : MonoBehaviour
     protected virtual void ProcessHit(Collider collider, Vector3 point)
     {
         DamageContext damage = new DamageContext(_damage.Amount, _damage.Instigator,
-            point, _direction, _damage.PatternId);
+            point, _direction, _damage.PatternId, _damage.AttackId, _damage.HitId, _damage.Kind);
         IDamageable receiver = collider.GetComponentInParent<IDamageable>();
         bool parried = false;
         bool defended = receiver is KatanaDamageReceiver katana
@@ -201,6 +202,7 @@ public class EnemyProjectile : MonoBehaviour
     public virtual void Release()
     {
         _isFlying = false;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_damage.AttackId, "Miss", transform.position);
         Destroy(gameObject);
     }
 

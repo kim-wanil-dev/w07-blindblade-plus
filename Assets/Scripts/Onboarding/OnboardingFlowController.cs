@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.AI;
 
 using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
 
 /// <summary>BambooDefense 복제 씬의 순차 연습, 전투 판정 집계, 재시도와 BambooStage1 전환을 관리한다.</summary>
 [DisallowMultipleComponent]
@@ -51,6 +52,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     private readonly HashSet<long> _resolvedHitIds = new HashSet<long>();
     private readonly HashSet<int> _launchedShurikenAttackIds = new HashSet<int>();
+    private readonly HashSet<int> _trainingEnemyAttackIds = new HashSet<int>();
     private readonly HashSet<int> _perfectDodgeAttackIds = new HashSet<int>();
     private readonly HashSet<int> _pendingPerfectDodgeAttackIds = new HashSet<int>();
     private readonly List<GameObject> _ultimateTargets = new List<GameObject>();
@@ -86,12 +88,21 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private bool _playOpening;
     private float _nextThrowAt;
 
+    public event Action<int, int> ObjectiveEntered;
+    public event Action<int, int> ObjectiveCompleted;
+    public event Action<int> StageRetrying;
+    public event Action OnboardingCompleted;
+    public event Action<DefenseResolution> ObjectiveDefenseResolved;
+    public bool IsObjectiveInputAvailable => !_transitionInputLocked && !_advanceQueued && !_restartQueued
+        && !_recoveryQueued && _gameState != null && _gameState.State == GameplayState.Playing;
+
     /// <summary>새 Intro 시작을 위해 이번 온보딩 실행의 단계 기록과 재시도 플래그를 초기화한다.</summary>
     public static void StartNewRun()
     {
         _savedRunStage = 0;
         _restartStage = 0;
         _retryPending = false;
+        OnboardingTelemetryRecorder.BeginNewRun();
     }
 
     void Start()
@@ -232,6 +243,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
         PositionPlayerForStage(_stage);
         _hud.ShowObjective(_stage, _objectiveIndex);
+        ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
         UpdateGuardTiming();
 
         if (_stage == 0)
@@ -301,7 +313,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
     }
 
-    /// <summary>기존 근접 적을 플레이어 앞 distance에 배치하고 killable·attacksPlayer 상태를 설정한다.</summary>
+    /// <summary>기존 근접 적을 플레이어 앞 distance에 배치하고 killable·attacksPlayer를 설정한다. 공격 적이면 AttackCommitted를 구독한다.</summary>
     private void CreateTrainingEnemy(bool killable, bool attacksPlayer, float distance = PRACTICE_ENEMY_DISTANCE)
     {
         Vector3 forward = Vector3.ProjectOnPlane(_motor.ViewForward, Vector3.up).normalized;
@@ -310,6 +322,11 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _trainingEnemyHealth = _trainingEnemy.GetComponent<EnemyHealth>();
         if (_trainingEnemyHealth != null)
             _trainingEnemyHealth.Died += HandleTrainingEnemyDied;
+        if (attacksPlayer)
+        {
+            foreach (EnemyAttackBehaviour attack in _trainingEnemy.GetComponents<EnemyAttackBehaviour>())
+                attack.AttackCommitted += HandleTrainingEnemyAttackCommitted;
+        }
     }
 
     /// <summary>position의 NavMesh에 근접 적을 만들고 killable·attacksPlayer에 맞춰 피해와 공격·추적을 설정해 반환한다.</summary>
@@ -502,6 +519,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             long hitKey = ((long)resolution.AttackId << 32) | (uint)resolution.HitId;
             if (!_resolvedHitIds.Add(hitKey)) return;
         }
+        ObjectiveDefenseResolved?.Invoke(resolution);
 
         if (_stage == 3 && _activeDodgeId != 0 && _launchedShurikenAttackIds.Contains(resolution.AttackId))
         {
@@ -529,11 +547,18 @@ public sealed class OnboardingFlowController : MonoBehaviour
             CompleteCurrentObjective();
     }
 
-    /// <summary>현재 근접 적 또는 2초 주기 투척수가 시작한 공격 ID인지 확인한다.</summary>
+    /// <summary>원거리 단계의 발사 ID 또는 훈련 적이 실제 실행한 공격 ID인지 확인한다.</summary>
     private bool IsCurrentStageAttack(int attackId)
     {
         if (_stage == RANGED_STAGE) return _launchedShurikenAttackIds.Contains(attackId);
-        return attackId == 0 && _trainingEnemy != null && _trainingEnemy.activeInHierarchy;
+        return _trainingEnemy != null && _trainingEnemy.activeInHierarchy
+            && _trainingEnemyAttackIds.Contains(attackId);
+    }
+
+    /// <summary>훈련 적의 AttackCommitted context에서 AttackId를 받아 접촉 판정에서 출처를 확인하도록 저장한다.</summary>
+    private void HandleTrainingEnemyAttackCommitted(EnemyAttackContext context)
+    {
+        _trainingEnemyAttackIds.Add(context.AttackId);
     }
 
     /// <summary>현재 연계 단계에서 패링 목표의 순번을 반환한다. 원거리 방어는 가드 다음, 궁극기는 첫 목표다.</summary>
@@ -619,6 +644,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (nextObjective < prompt.ObjectiveCount)
         {
             _advanceQueued = true;
+            ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
             StartCoroutine(AdvanceToNextObjective(nextObjective));
             return;
         }
@@ -639,6 +665,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             _empower.PrepareOnboardingFollowUp(_empower.Tokens);
         _objectiveIndex = nextObjective;
         _hud.ShowObjective(_stage, _objectiveIndex, true);
+        ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
         _advanceQueued = false;
         yield return ReadyStageAndUnlockInput();
     }
@@ -648,6 +675,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     {
         if (_advanceQueued) return;
         _advanceQueued = true;
+        ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 
@@ -749,6 +777,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private void CompleteOnboarding()
     {
         _completingOnboarding = true;
+        OnboardingCompleted?.Invoke();
         _retryPending = false;
         SceneTransitionOverlay.TransitionToScene(_stage1SceneName, STAGE1_FADE_DURATION, () =>
         {
@@ -762,6 +791,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private IEnumerator RestartCurrentStage()
     {
         _restartQueued = true;
+        StageRetrying?.Invoke(_stage);
         _restartStage = _stage;
         _retryPending = true;
         Game.Instance.UIManager.Hide<GameOverUI>();
@@ -811,11 +841,17 @@ public sealed class OnboardingFlowController : MonoBehaviour
                 shuriken.Release();
     }
 
-    /// <summary>현재 근접 적의 사망 구독을 해제하고 씬에서 제거한다.</summary>
+    /// <summary>현재 근접 적의 사망·AttackCommitted 구독을 해제하고 추적한 공격 ID를 지운 뒤 제거한다.</summary>
     private void DestroyTrainingEnemy()
     {
         if (_trainingEnemyHealth != null) _trainingEnemyHealth.Died -= HandleTrainingEnemyDied;
-        if (_trainingEnemy != null) Destroy(_trainingEnemy);
+        if (_trainingEnemy != null)
+        {
+            foreach (EnemyAttackBehaviour attack in _trainingEnemy.GetComponents<EnemyAttackBehaviour>())
+                attack.AttackCommitted -= HandleTrainingEnemyAttackCommitted;
+            Destroy(_trainingEnemy);
+        }
+        _trainingEnemyAttackIds.Clear();
         _trainingEnemy = null;
         _trainingEnemyHealth = null;
     }
