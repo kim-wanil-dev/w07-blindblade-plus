@@ -9,18 +9,17 @@ using BlindBlade.Combat.Contracts;
 
 namespace BlindBlade.Telemetry
 {
-    /// <summary>온보딩 목표별 입력과 재시도, 0-1·0-2 구간 결과를 기존 로컬 저장·업로드 서비스에 기록한다.</summary>
+    /// <summary>온보딩 7단계의 목표별 입력과 재시도 결과를 기존 로컬 저장·업로드 서비스에 기록한다.</summary>
     [DisallowMultipleComponent]
     public sealed class OnboardingTelemetryRecorder : MonoBehaviour
     {
-        private const int STAGE_COUNT = 9;
+        private const int STAGE_COUNT = 7;
         private static string _runId;
         private static bool _completed;
         private static readonly int[] _retryCounts = new int[STAGE_COUNT];
 
-        [Header("온보딩 분석 구간")]
-        [SerializeField, Range(1, 8)] private int _secondSectionStartStage = 4;
-        [SerializeField] private string _configVersion = "onboarding-2026-10-16";
+        [Header("온보딩 단계 로그")]
+        [SerializeField] private string _configVersion = "onboarding-2026-10-16-stage-ids-7";
         [SerializeField, Min(5f)] private float _summaryIntervalSeconds = 15f;
 
         [Header("로컬 저장과 자동 전송")]
@@ -112,8 +111,9 @@ namespace BlindBlade.Telemetry
         private void HandleObjectiveEntered(int stepIndex, int objectiveIndex)
         {
             if (!_recordingEnabled) return;
+            if (stepIndex < 0 || stepIndex >= STAGE_COUNT) return;
             if (!_bound && !BindSources()) return;
-            string nextSection = stepIndex < _secondSectionStartStage ? "0-1" : "0-2";
+            string nextSection = "0-" + (stepIndex + 1);
             if (_sectionOpen && nextSection != _sectionId) CloseSection("cleared");
             _stage = stepIndex;
             _objective = objectiveIndex;
@@ -211,7 +211,7 @@ namespace BlindBlade.Telemetry
             _stepOpen = false;
         }
 
-        /// <summary>현재 0-1 또는 0-2 구간의 마지막 목표와 누적값을 저장하고 전송을 요청한다.</summary>
+        /// <summary>현재 온보딩 단계의 마지막 목표와 누적값을 저장하고 전송을 요청한다.</summary>
         private void CloseSection(string reason)
         {
             if (!_sectionOpen) return;
@@ -257,8 +257,12 @@ namespace BlindBlade.Telemetry
         private bool IsExpectedInput(PlayerInputKind kind)
         {
             if (_stage == 1 || _stage == 3) return kind == PlayerInputKind.Dodge;
-            if (_stage == 4 || _stage == 6) return kind == PlayerInputKind.GuardPress;
-            if (_stage == 2 || _stage == 5 || _stage == 7 || _stage == 8) return kind == PlayerInputKind.Attack;
+            if (_stage == 4) return kind == PlayerInputKind.GuardPress;
+            if (_stage == 5) return (kind == PlayerInputKind.Attack && _objective == 2)
+                || (kind == PlayerInputKind.GuardPress && _objective < 2);
+            if (_stage == 6) return (kind == PlayerInputKind.Attack && _objective == 1)
+                || (kind == PlayerInputKind.GuardPress && _objective == 0);
+            if (_stage == 2) return kind == PlayerInputKind.Attack;
             return false;
         }
 

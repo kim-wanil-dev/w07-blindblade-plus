@@ -56,7 +56,7 @@ function repairStageIds(book) {
     if (count<=0) return;
     const ids=sheet.getRange(2,keyColumn,count,1).getValues();
     const stages=ids.map(([id])=>{
-      const match=String(id).match(/:(0-1|0-2|1-1|1-2|unassigned)$/);
+      const match=String(id).match(/:(0-[1-7]|1-1|1-2|unassigned)$/);
       return [match ? match[1] : ''];
     });
     sheet.getRange(2,stageColumn,count,1).setValues(stages);
@@ -179,7 +179,7 @@ function dashboardRows(sheet, allowedHeaders) {
 function validateRecord(r) {
   if (!r || r.schemaVersion !== '0.3.0' || r.contractVersion !== '0.2.0'
       || !/^[0-9a-f]{32}$/.test(r.sessionId) || !/^[0-9a-f]{32}$/.test(r.anonymousPlayerId)
-      || !['0-1','0-2','1-1','1-2','unassigned'].includes(r.stageId) || r.stageAttemptId !== r.sessionId + ':' + r.stageId
+      || !['0-1','0-2','0-3','0-4','0-5','0-6','0-7','1-1','1-2','unassigned'].includes(r.stageId) || r.stageAttemptId !== r.sessionId + ':' + r.stageId
       || !Number.isSafeInteger(r.eventSequence) || r.eventSequence < 1 || !EVENT_TYPES.has(r.eventType)
       || typeof r.buildVersion !== 'string' || typeof r.configVersion !== 'string'
       || !r.payload || Array.isArray(r.payload) || typeof r.payload !== 'object') throw new Error('invalid_record');

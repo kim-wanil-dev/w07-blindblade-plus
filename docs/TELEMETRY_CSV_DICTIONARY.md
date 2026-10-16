@@ -2,6 +2,8 @@
 
 이 문서는 `tools/combat_telemetry/Export-Telemetry.ps1`가 생성하는 CSV의 열 의미와 기본 분석 절차를 설명한다. 현재 변환기는 스키마 `0.3.0`, 공통 계약 `0.2.0` JSONL을 처리한다.
 
+> 최신 스프레드시트 열 전체 사전과 웹 대시보드 지표 해석은 [텔레메트리 README](../tools/combat_telemetry/README.md)를 기준으로 한다. CSV 가져오기와 전처리 절차는 이 문서를 참고한다.
+
 ## 분석용 CSV 생성
 
 게임 로그는 기본적으로 아래 경로에 JSONL 형식으로 저장된다. 한 줄이 이벤트 하나다.
@@ -47,7 +49,7 @@ node .\tools\combat_telemetry\Export-Telemetry.cjs `
 1. Google Sheets에서 **파일 → 가져오기 → 업로드**를 선택하고 CSV를 하나씩 가져온다. 각 파일은 별도 시트로 넣는다.
 2. 가져오기 설정에서 **텍스트를 숫자·날짜·수식으로 변환** 옵션을 끈다. 특히 `stage_id`의 `1-1`, `1-2`가 날짜로 바뀌지 않게 한다.
 3. 참가자 데이터만 볼 때는 `config_version` 값이 `-editor`로 끝나는 Editor 실행 행을 제외한다.
-4. 구간 비교는 `stage_id`로 나눈다. `0-1`·`0-2`는 온보딩, `1-1`은 일반 적 구간, `1-2`는 보스전이다.
+4. 구간 비교는 `stage_id`로 나눈다. 현재 온보딩은 `0-1`~`0-7`, `1-1`은 일반 적 구간, `1-2`는 보스전이다. 기존 `onboarding-2026-10-16` 설정의 `0-1`·`0-2`는 여러 단계를 묶은 과거 데이터이므로 현재 7단계 기록과 합쳐 비교하지 않는다.
 5. 전체 비율을 여러 세션에서 합칠 때 세션별 비율의 평균을 내지 않는다. 예를 들어 적중률은 `적중 횟수 합 ÷ 판정된 공격 수 합`으로 계산한다.
 6. Heatmaps는 `stage_id`, `stage_attempt_id`, `layer`로 필터링하고 `grid_z`를 행, `grid_x`를 열, `weight` 합계를 값으로 하는 피벗 테이블을 만든 뒤 색상 척도를 적용한다.
 7. `Diagnostics.csv`에 행이 있으면 해당 로그 줄은 다른 CSV 집계에 포함되지 않았을 수 있으므로 `problem`을 확인한다.
@@ -57,7 +59,7 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 ## 공통 해석 규칙
 
 - 빈칸은 값이 0이라는 뜻이 아니다. 해당 이벤트에 적용되지 않거나, 표본 또는 분모가 없거나, 측정할 수 없었다는 뜻이다.
-- `stage_id`는 `0-1`, `0-2`, `1-1`, `1-2` 또는 미지정 구간이다. `stage_attempt_id`는 한 구간의 한 도전을 식별한다.
+- 현재 `stage_id`는 온보딩 `0-1`~`0-7`, 일반 전투 `1-1`, 보스전 `1-2` 또는 미지정 구간이다. `stage_attempt_id`는 한 구간의 한 도전을 식별한다.
 - `session_id`는 씬 실행을 식별한다. `run_id`는 온보딩 완료와 이어지는 전투 실행을 연결한다. 온보딩 없이 Stage1을 직접 실행하면 `run_id`가 비어 있을 수 있다.
 - 시간은 초, 위치는 월드 XZ 좌표(미터)다. `realtime_seconds`는 실제 경과, `gameplay_seconds`는 게임 시간, `active_play_seconds`는 실제 플레이 활성 시간이다.
 - CSV 값은 원시 카운트와 비율을 함께 제공한다. 비율 열은 `0~1` 범위이며 분모가 0이면 빈칸이다. 퍼센트로 표시할 때는 100을 곱한다.
@@ -76,7 +78,7 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `build_version` | 게임 빌드 버전 |
 | `config_version` | 텔레메트리 설정 버전. Editor 실행은 `-editor` 접미사 포함 |
 | `session_id` | 씬 실행 ID |
-| `stage_id` | 구간 ID: `0-1`, `0-2`, `1-1`, `1-2` 등 |
+| `stage_id` | 현재 온보딩 구간 `0-1`~`0-7`, 일반 전투 `1-1`, 보스전 `1-2` 등 |
 | `stage_attempt_id` | 구간 도전 ID |
 | `anonymous_player_id` | 익명 PC 식별자. 개인 계정 ID가 아님 |
 | `event_sequence` | 세션 내 이벤트 순서 번호 |
@@ -215,7 +217,7 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `received_kst` | 서버 수신 한국시간. 로컬 CSV에서는 빈칸 |
 | `run_id` | 온보딩과 이후 스테이지를 연결하는 ID |
 | `session_id` | 씬 실행 ID |
-| `stage_id` | 온보딩 구간 `0-1` 또는 `0-2` |
+| `stage_id` | 현재 온보딩 단계 `0-1`~`0-7`; 기존 설정의 2구간 데이터는 README의 구버전 분리 지침을 따른다. |
 | `stage_attempt_id` | 구간 도전 ID |
 | `step_index` | 온보딩 단계 번호(현재 0~8) |
 | `objective_index` | 한 단계의 세부 목표 번호 |

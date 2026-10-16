@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Onboarding and Stage1 telemetry 0.3.0",
-  "description": "Onboarding 0-1/0-2 objective attempts and Stage1 combat attempts. Contract API remains 0.2.0.",
+  "description": "Onboarding stages 0-1 through 0-7, objective attempts, and Stage1 combat attempts. Contract API remains 0.2.0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -190,6 +190,11 @@
       "enum": [
         "0-1",
         "0-2",
+        "0-3",
+        "0-4",
+        "0-5",
+        "0-6",
+        "0-7",
         "1-1",
         "1-2",
         "unassigned"
@@ -197,7 +202,7 @@
     },
     "stageAttemptId": {
       "type": "string",
-      "pattern": "^[0-9a-f]{32}:(0-1|0-2|1-1|1-2|unassigned)$"
+      "pattern": "^[0-9a-f]{32}:(0-[1-7]|1-1|1-2|unassigned)$"
     }
   }
 }
