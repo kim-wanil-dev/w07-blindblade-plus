@@ -12,9 +12,6 @@ namespace BlindBlade.UI.CombatHud
     [DefaultExecutionOrder(150)]
     public sealed class CombatPerfectParryTokenHud : MonoBehaviour
     {
-        private const int ORBIT_THREAD_COUNT = 2;
-        private const float TWO_PI = Mathf.PI * 2f;
-
         [Header("원본 연결")]
         [SerializeField, Tooltip("토큰을 읽을 PlayerEmpower. 비우면 Game.Player에서 한 번 찾습니다.")]
         private PlayerEmpower _empower;
@@ -40,11 +37,8 @@ namespace BlindBlade.UI.CombatHud
         [SerializeField, Tooltip("찬 토큰을 이루는 실 구체의 크기·궤도·모양·흐름")]
         private CombatTokenOrbitStyle _orbitStyle = new CombatTokenOrbitStyle();
         private CombatTokenOrbitThread[] _orbitThreads;
+        private ThreadSphereFlow[] _orbitFlows;
         private float[] _orbitVisibilities;
-        private float[] _orbitAngles;
-        private float[] _orbitVelocities;
-        private float[] _orbitNextTugs;
-        private float[] _orbitDampings;
         private float _orbitTime;
 
         void Awake()
@@ -91,18 +85,14 @@ namespace BlindBlade.UI.CombatHud
         }
 
         /// <summary>
-        /// _slots마다 실 구체를 그리는 그래픽을 슬롯 자식으로 만들어 슬롯 크기에 맞춘다.
-        /// 실마다 시작 각도를 무작위로 정해 흐름 배열을 초기화한다.
+        /// _slots마다 실 구체를 그리는 그래픽을 슬롯 자식으로 만들어 슬롯 크기에 맞추고, 구체마다 다른 잡음 줄의 흐름을 만든다.
         /// </summary>
         private void CreateOrbitThreads()
         {
             int count = _slots.Length;
             _orbitThreads = new CombatTokenOrbitThread[count];
+            _orbitFlows = new ThreadSphereFlow[count];
             _orbitVisibilities = new float[count];
-            _orbitAngles = new float[count * ORBIT_THREAD_COUNT];
-            _orbitVelocities = new float[count * ORBIT_THREAD_COUNT];
-            _orbitNextTugs = new float[count * ORBIT_THREAD_COUNT];
-            _orbitDampings = new float[count * ORBIT_THREAD_COUNT];
             for (int i = 0; i < count; i++)
             {
                 RectTransform slot = _slots[i].rectTransform;
@@ -117,23 +107,7 @@ namespace BlindBlade.UI.CombatHud
                 thread.anchorMax = Vector2.one;
                 thread.offsetMin = Vector2.zero;
                 thread.offsetMax = Vector2.zero;
-                ResetOrbitFlow(i);
-            }
-        }
-
-        /// <summary>
-        /// slot 토큰의 두 실 시작 각도를 무작위로 정하고(두 실은 반 바퀴 떨어짐) 속도·다음 당김 시각·감속을 초기화한다.
-        /// </summary>
-        private void ResetOrbitFlow(int slot)
-        {
-            float start = Random.value * TWO_PI;
-            for (int thread = 0; thread < ORBIT_THREAD_COUNT; thread++)
-            {
-                int index = slot * ORBIT_THREAD_COUNT + thread;
-                _orbitAngles[index] = start + thread * Mathf.PI;
-                _orbitVelocities[index] = 0f;
-                _orbitNextTugs[index] = _orbitTime + Random.Range(0.1f, _orbitStyle.TugMeanInterval);
-                _orbitDampings[index] = 3f;
+                _orbitFlows[i] = new ThreadSphereFlow(i * 2f);
             }
         }
 
@@ -150,41 +124,15 @@ namespace BlindBlade.UI.CombatHud
                 float previous = _orbitVisibilities[i];
                 bool filled = i < tokens;
                 if (filled && previous <= 0f)
-                    ResetOrbitFlow(i);
+                    _orbitFlows[i].Reset(_orbitStyle, _orbitTime);
 
                 _orbitVisibilities[i] = Mathf.MoveTowards(previous, filled ? 1f : 0f, deltaTime / _orbitStyle.FadeDuration);
                 if (_orbitVisibilities[i] <= 0f && previous <= 0f)
                     continue;
 
-                int first = i * ORBIT_THREAD_COUNT;
-                UpdateOrbitFlow(first, 1f, deltaTime);
-                UpdateOrbitFlow(first + 1, _orbitStyle.CounterSpeedRatio, deltaTime);
-                _orbitThreads[i].SetState(_orbitVisibilities[i], _orbitTime, _orbitAngles[first], _orbitAngles[first + 1]);
+                _orbitFlows[i].Step(_orbitStyle, _orbitTime, deltaTime);
+                _orbitThreads[i].SetState(_orbitVisibilities[i], _orbitTime, _orbitFlows[i]);
             }
-        }
-
-        /// <summary>
-        /// index 실의 공전 각도를 deltaTime만큼 진행한다. 잡음 표류에 지수 분포 간격의 무작위 당김을 더해 일정한 속도로 돌지 않는다.
-        /// speedScale은 평균 속도 배율이며 실마다 평균 속도가 따로 천천히 오르내린다. 결과는 _orbitAngles[index]에 저장한다.
-        /// </summary>
-        private void UpdateOrbitFlow(int index, float speedScale, float deltaTime)
-        {
-            float time = _orbitTime;
-            speedScale *= 1f + _orbitStyle.SpeedWander * (Mathf.PerlinNoise(time * 0.12f, 61.7f + index * 19.3f) - 0.5f) * 2f;
-            float baseSpeed = _orbitStyle.OrbitSpeed * TWO_PI * speedScale;
-            float drift = baseSpeed * (0.4f + 1.2f * Mathf.PerlinNoise(time * 0.31f, 4.2f + index * 37.1f));
-            _orbitVelocities[index] = Mathf.Lerp(_orbitVelocities[index], drift, 1f - Mathf.Exp(-_orbitDampings[index] * deltaTime));
-            if (time >= _orbitNextTugs[index])
-            {
-                _orbitVelocities[index] += baseSpeed * _orbitStyle.TugStrength * Random.Range(0.3f, 1.2f);
-                _orbitDampings[index] = Random.Range(1.5f, 5f);
-                // 지수 분포 간격이라 당김이 몰려서 오거나 오래 쉬기도 한다.
-                float interval = -Mathf.Log(1f - Random.value * 0.999f) * _orbitStyle.TugMeanInterval;
-                _orbitNextTugs[index] = time + Mathf.Clamp(interval, 0.15f, 4f);
-            }
-
-            // 궤도면 회전이 진행 각도에 비례하므로 2π로 감지 않고 누적한다. 토큰을 새로 얻을 때마다 다시 시작한다.
-            _orbitAngles[index] += _orbitVelocities[index] * deltaTime;
         }
     }
 }

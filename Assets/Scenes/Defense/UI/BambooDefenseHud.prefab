@@ -2355,6 +2355,29 @@ MonoBehaviour:
   _filledColor: {r: 0.86, g: 0.1, b: 0.1, a: 1}
   _emptyColor: {r: 0.62, g: 0.62, b: 0.64, a: 0.85}
   _chargeScale: 1.5
+  _orbitStyle:
+    _sphereScale: 1
+    _axisRoll: 20
+    _axisPitch: 25
+    _inclination: 65
+    _twist: 0.3
+    _precessionSpeed: 0.4
+    _counterAzimuth: 90
+    _segments: 64
+    _mainWidth: 1.2
+    _branchWidthRatio: 0.2
+    _strokeLength: 0.75
+    _thicknessVariation: 0.35
+    _branchSpread: 0.75
+    _backOpacity: 0.3
+    _feather: 0.8
+    _color: {r: 1, g: 1, b: 1, a: 1}
+    _orbitSpeed: 0.32
+    _counterSpeedRatio: 0.8
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
+    _fadeDuration: 0.25
 --- !u!1 &7706114903086575250
 GameObject:
   m_ObjectHideFlags: 0

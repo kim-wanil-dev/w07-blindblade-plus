@@ -30,7 +30,7 @@ namespace BlindBlade.UI.CombatHud
         [Header("모양")]
         [SerializeField, Range(16, 128), Tooltip("실 하나를 나누는 점 개수")]
         private int _segments = 64;
-        [SerializeField, Range(0.05f, 1.5f), Tooltip("굵은 줄기의 가장 굵은 곳 폭(구 반지름 대비, 구 표면 위). 클수록 두 실이 구를 넓게 덮는다.")]
+        [SerializeField, Range(0.05f, 3f), Tooltip("굵은 줄기의 가장 굵은 곳 폭(구 반지름 대비, 구 표면 위). 클수록 두 실이 구를 넓게 덮는다.")]
         private float _mainWidth = 1.2f;
         [SerializeField, Range(0.05f, 1f), Tooltip("굵은 줄기 대비 잔가지 두께")]
         private float _branchWidthRatio = 0.2f;
@@ -42,7 +42,7 @@ namespace BlindBlade.UI.CombatHud
         private float _branchSpread = 0.75f;
         [SerializeField, Range(0f, 1f), Tooltip("구 가장 뒤쪽을 지날 때의 농도")]
         private float _backOpacity = 0.3f;
-        [SerializeField, Min(0f), Tooltip("획 가장자리를 부드럽게 흐리는 폭(캔버스 픽셀)")]
+        [SerializeField, Min(0f), Tooltip("획 가장자리를 부드럽게 흐리는 폭. 토큰 HUD는 캔버스 픽셀, 칼 구슬은 구 반지름 대비 비율이다.")]
         private float _feather = 0.8f;
         [SerializeField] private Color _color = Color.white;
 
@@ -82,5 +82,20 @@ namespace BlindBlade.UI.CombatHud
         public float TugMeanInterval => _tugMeanInterval;
         public float SpeedWander => _speedWander;
         public float FadeDuration => _fadeDuration;
+
+        /// <summary>토큰 HUD 기본값으로 만든다.</summary>
+        public CombatTokenOrbitStyle()
+        {
+        }
+
+        /// <summary>
+        /// 다른 용도(칼 구슬 등)의 기본값으로 만든다. mainWidth·strokeLength·feather만 바꾸고 나머지는 토큰 HUD 기본값을 쓴다.
+        /// </summary>
+        public CombatTokenOrbitStyle(float mainWidth, float strokeLength, float feather)
+        {
+            _mainWidth = mainWidth;
+            _strokeLength = strokeLength;
+            _feather = feather;
+        }
     }
 }
