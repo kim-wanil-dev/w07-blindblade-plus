@@ -43,4 +43,5 @@ public enum SoundId
     ShurikenFlight = 36,
     PerfectParryClash = 37,
     BambooBreak = 38,
+    EnemyMeleeWarning = 39,
 }
