@@ -94,6 +94,11 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineImpactRipples[MAX_IMPACT_RIPPLES];
             // x: 확산 시간, y: 잔상 시간, z: 세기, w: 시작 시각
             float4 _OutlineImpactRippleParams[MAX_IMPACT_RIPPLES];
+            // RainyStage 빗방울 파동이 화면 픽셀마다 남긴 공개 정도다. Enabled가 0이면 읽지 않는다.
+            TEXTURE2D(_OutlineRainReveal);
+            float _OutlineRainRevealEnabled;
+
+            #include "Assets/Shaders/PerceptionSphereRipples.hlsl"
 
             // 약한 충격 파동이 구 모양으로 퍼진 전선이 지나간 뒤 잔상 동안 흐려지는 세기를 모두 더해 반환한다. 겹치면 더 밝아진다.
             float ImpactRippleVisibility(float3 position)
@@ -228,6 +233,10 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     _OutlinePulseRegion.w) * _OutlinePulseVisibility);
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));
                 visibility = max(visibility, ImpactRippleVisibility(position));
+                visibility = max(visibility, SphereRippleVisibility(position, _OutlinePerceptionTime, _OutlineEdgeFade));
+                if (_OutlineRainRevealEnabled > 0.5)
+                    visibility = max(visibility,
+                        saturate(SAMPLE_TEXTURE2D_LOD(_OutlineRainReveal, sampler_PointClamp, uv, 0).r));
                 if (forced.b > 0.5)
                     visibility = lerp(visibility * forced.r, forced.r, forced.g);
                 float memoryVisibility = 0.0;

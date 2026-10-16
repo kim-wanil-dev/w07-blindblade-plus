@@ -7,6 +7,12 @@ struct RainDrop
     float4 Data;
 };
 
+struct GroundRipple
+{
+    float4 PositionStart;
+    float4 Data;
+};
+
 struct Sweep
 {
     float4 A;
@@ -18,8 +24,12 @@ struct Sweep
 RWStructuredBuffer<RainDrop> _Drops;
 StructuredBuffer<Sweep> _HitSweeps;
 StructuredBuffer<Sweep> _TrailSweeps;
+RWStructuredBuffer<GroundRipple> _GroundRipples;
+RWStructuredBuffer<uint> _GroundRippleCounter;
 
 int _DropCount;
+int _NearDropCount;
+float _FarRadius;
 int _HitCount;
 int _TrailCount;
 int _Frame;
@@ -31,6 +41,12 @@ float _FallSpeed;
 float _RainDeltaTime;
 float _SplashDeltaTime;
 float _SplashDuration;
+int _GroundRippleCapacity;
+float _GroundY;
+float _GroundRippleChance;
+float _GroundRippleRadiusMin;
+float _GroundRippleRadiusMax;
+float _RainClock;
 
 uint Hash(uint value)
 {
@@ -47,11 +63,19 @@ float Random01(uint value)
     return (Hash(value) & 0x00ffffffu) / 16777216.0;
 }
 
+// 앞쪽 _NearDropCount개는 카메라 주변 원, 나머지는 그 바깥 _FarRadius까지의 고리를 맡는다.
+float OuterRadius(uint id)
+{
+    return id < (uint)_NearDropCount ? _Radius : _FarRadius;
+}
+
 float3 SpawnPosition(uint id, uint sequence)
 {
     uint seed = id * 747796405u + sequence * 2891336453u;
     float angle = Random01(seed + 1u) * 6.2831853;
-    float radius = sqrt(Random01(seed + 2u)) * _Radius;
+    float innerRadius = id < (uint)_NearDropCount ? 0.0 : _Radius;
+    float outerRadius = OuterRadius(id);
+    float radius = sqrt(lerp(innerRadius * innerRadius, outerRadius * outerRadius, Random01(seed + 2u)));
     float spawnBottom = _Bottom + min(0.5, max(0.0, (_Top - _Bottom) * 0.1));
     float height = lerp(spawnBottom, _Top, Random01(seed + 3u));
     return float3(_Center.x + cos(angle) * radius, height,
@@ -189,7 +213,25 @@ void UpdateRain(uint3 threadId : SV_DispatchThreadID)
     float3 previous = drop.PositionState.xyz;
     float3 current = previous - float3(0, _FallSpeed * _RainDeltaTime, 0);
     float2 offset = current.xz - _Center.xz;
-    if (current.y < _Bottom || dot(offset, offset) > (_Radius + 2) * (_Radius + 2))
+    float outerRadius = OuterRadius(id);
+    if (current.y < _GroundY && previous.y >= _GroundY)
+    {
+        // 지면을 지난 방울은 가까운 원과 바깥 고리 모두에서 확률에 따라 땅 파동을 남기고 비 영역 위쪽에서 다시 떨어진다.
+        uint seed = id * 1664525u + (uint)_Frame * 1013904223u;
+        if (Random01(seed + 7u) < _GroundRippleChance)
+        {
+            uint slot;
+            InterlockedAdd(_GroundRippleCounter[0], 1u, slot);
+            GroundRipple ripple;
+            ripple.PositionStart = float4(current.x, _GroundY, current.z, _RainClock);
+            ripple.Data = float4(lerp(_GroundRippleRadiusMin, _GroundRippleRadiusMax, Random01(seed + 8u)),
+                Random01(seed + 9u), 0, 0);
+            _GroundRipples[slot % (uint)_GroundRippleCapacity] = ripple;
+        }
+        current = SpawnPosition(id, (uint)_Frame);
+        previous = current;
+    }
+    else if (current.y < _Bottom || dot(offset, offset) > (outerRadius + 2) * (outerRadius + 2))
     {
         current = SpawnPosition(id, (uint)_Frame);
         previous = current;

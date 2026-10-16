@@ -330,6 +330,31 @@ public sealed class BambooGrove : MonoBehaviour
     }
 
     /// <summary>
+    /// center에서 수평 range 안에 서 있는 대나무 하나를 무작위로 골라 maximumHeight 아래 줄기의 무작위 높이를 point로 반환한다.
+    /// 쓰러지는 대나무는 고르지 않으며, 활성 대숲이 없거나 몇 번 골라도 범위 안 대나무가 없으면 false를 반환한다.
+    /// </summary>
+    public static bool TryGetRainHitPoint(Vector3 center, float range, float maximumHeight, out Vector3 point)
+    {
+        point = default;
+        if (_active == null || _active._stalks.Length == 0)
+            return false;
+        // 모든 줄기를 훑지 않도록 무작위로 몇 번만 골라 본다.
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            Stalk stalk = _active._stalks[Random.Range(0, _active._stalks.Length)];
+            if (stalk.State == StalkState.Falling
+                || Vector3.ProjectOnPlane(stalk.Base - center, Vector3.up).magnitude > range)
+                continue;
+            float top = Mathf.Min(stalk.Height, maximumHeight - stalk.Base.y);
+            if (top <= 0f)
+                continue;
+            point = stalk.Base + stalk.Up * Random.Range(0f, top);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// point가 from에서 direction으로 length만큼 이어진 수평 경로 구간 안이고 좌우 halfWidth 안이면 true와 오른쪽(right) 기준 부호 있는 옆 거리 lateral을 반환한다.
     /// </summary>
     private static bool TryGetPathOffset(Vector3 point, Vector3 from, Vector3 direction, Vector3 right,
