@@ -21,10 +21,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float _memoryDuration = 3f;
     [SerializeField, Tooltip("끄면 공격 범위 밖이나 돌진 경로가 막힌 경우 걸어서 접근하지 않고 대기합니다.")]
     private bool _allowWalkingChase = true;
+    [SerializeField, Min(0f)] private float _meleeAttackStoppingDistance = 1.2f;
+
     private EnemySensor _sensor;
     private EnemyMotor _motor;
     private EnemyAttackSelector _attackSelector;
     private EnemyPatrol _patrol;
+    private EnemyMeleeWarningVisual _meleeWarningVisual;
     private bool _hasVisibleTarget;
     private EnemyState _state;
     private Vector3 _lastKnownPosition;
@@ -52,6 +55,7 @@ public class EnemyController : MonoBehaviour
         _motor = GetComponent<EnemyMotor>();
         _attackSelector = GetComponent<EnemyAttackSelector>();
         _patrol = GetComponent<EnemyPatrol>();
+        _meleeWarningVisual = GetComponent<EnemyMeleeWarningVisual>();
     }
 
     protected virtual void OnEnable()
@@ -81,15 +85,31 @@ public class EnemyController : MonoBehaviour
             ChangeState(EnemyState.Attacking);
             return;
         }
+
+        if (_meleeWarningVisual != null && _meleeWarningVisual.HoldPosition)
+        {
+            ChangeState(EnemyState.Attacking);
+            _motor.Stop();
+            return;
+        }
+
         if (_attackSelector.IsBusy)
         {
-            if (_attackSelector.CurrentAttack.Phase == EnemyAttackPhase.Recovery)
-            {
-                UpdateRecoveryPursuit();
+            EnemyAttackBehaviour attack = _attackSelector.CurrentAttack;
+            if (attack.Phase == EnemyAttackPhase.Recovery)
+            {               
+                if (attack is EnemyMeleeAttack && _meleeWarningVisual != null)
+                    UpdateMeleeAttackPursuit();
+                else
+                    UpdateRecoveryPursuit();
+
                 return;
             }
+
             ChangeState(EnemyState.Attacking);
-            if (!_attackSelector.CurrentAttack.AllowsMovement)
+            if (attack is EnemyMeleeAttack)
+                UpdateMeleeAttackPursuit();
+            else if (!attack.AllowsMovement)
                 _motor.Stop();
             return;
         }
@@ -116,13 +136,20 @@ public class EnemyController : MonoBehaviour
 
         if (_state == EnemyState.Attacking)
         {
-            _motor.Stop();
-            if (_attackSelector.TryAttack(_sensor.Target, _openingAttackPending)
-                && _openingAttackPending && _attackSelector.CurrentAttack is EnemyMeleeAttack)
-            {
-                _openingAttackPending = false;
-                _openingAttackPerformed = true;
-            }
+            if (_attackSelector.MeleeOnly)
+                UpdateMeleeAttackPursuit();
+            else
+                _motor.Stop();
+
+            // 첫 추격 후 즉시 베기 제외함
+            // if (_attackSelector.TryAttack(_sensor.Target, _openingAttackPending)
+            //     && _openingAttackPending && _attackSelector.CurrentAttack is EnemyMeleeAttack)
+            // {
+            //     _openingAttackPending = false;
+            //     _openingAttackPerformed = true;
+            // }
+
+            _attackSelector.TryAttack(_sensor.Target);
             return;
         }
 
@@ -210,6 +237,29 @@ public class EnemyController : MonoBehaviour
         _nextPerceptionTime = 0f;
         if (!_attackSelector.IsBusy)
             ChangeState(EnemyState.Searching);
+    }
+
+    /// <summary>
+    /// 센서의 현재 대상을 확인해 근접 공격 정지 거리까지 추적한다.
+    /// 대상 위치를 사용하여 EnemyMotor의 이동 경로 또는 바라보는 방향을 갱신한다.
+    /// </summary>
+    private void UpdateMeleeAttackPursuit()
+    {
+        Transform target = _sensor.Target;
+        if (target == null || !_sensor.CanSeeTarget())
+        {
+            _motor.Stop();
+            return;
+        }
+
+        if (Time.time >= _nextRepathTime)
+        {
+            _nextRepathTime = Time.time + _repathInterval;
+            _motor.MoveTo(target.position, _meleeAttackStoppingDistance);
+        }
+
+        if (_motor.HasArrived)
+            _motor.FaceTarget(target.position);
     }
 
     /// <summary>
