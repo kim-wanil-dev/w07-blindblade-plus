@@ -55255,7 +55255,7 @@ MonoBehaviour:
   _arena: {fileID: 1943110757}
   _boss: {fileID: 350192290}
   _warning: {fileID: 132706044}
-  _requiredKills: 5
+  _requiredKills: 10
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
