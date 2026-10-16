@@ -91,6 +91,20 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
     }
 
     /// <summary>
+    /// 온보딩 씬에서 전달한 amount만큼 회복 대기와 시간 배율에 관계없이 스태미너를 회복한다.
+    /// 최대치를 넘기지 않고 Current 및 HUD 구독 상태를 갱신하며 다른 씬의 자연 회복 규칙은 바꾸지 않는다.
+    /// </summary>
+    public void RestoreForOnboarding(float amount)
+    {
+        float restored = Mathf.Min(Mathf.Max(0f, amount), _maxStamina - _current);
+        if (restored <= 0f) return;
+        _current += restored;
+        _pendingRegen += restored;
+        Changed?.Invoke(new StaminaSnapshot(_current, _maxStamina));
+        if (_current >= _maxStamina) FlushRegen();
+    }
+
+    /// <summary>
     /// 회피 사건 dodgeEvent를 받아 Started이면 회피 비용을 쓰고, PerfectDodge이면 그 회피에서 쓴 비용을 돌려준다.
     /// 환불은 비용을 낸 DodgeId와 같을 때 한 번만 하며 _paidDodgeId와 _paidDodgeCost를 갱신한다.
     /// </summary>

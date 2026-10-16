@@ -198,6 +198,17 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 단계가 바뀌면 시작 파동의 반경·확산·페이드·링 색으로 발밑 시야를 다시 밝힌다.
+    /// 현재 시작 파동 설정을 사용하며 자동 시작 파동은 중복 재생하지 않도록 표시한다.
+    /// </summary>
+    public void ReplayStartPulseForOnboarding()
+    {
+        _startPulsePlayed = true;
+        if (_startPulseRadius <= 0f) return;
+        StartPulse(_startPulseRadius, _dodgeExpandDuration, _startPulseFadeDuration, _dodgeRingColor, false);
+    }
+
+    /// <summary>
     /// 게임 상태가 처음 Playing이 되면 발밑에서 _startPulseRadius 반경의 회피 파동을 한 번 내 맵 전체를 밝힌다.
     /// 다 퍼진 뒤에는 _startPulseFadeDuration 동안 천천히 흐려진다.
     /// 한 번 시도하면 _startPulsePlayed를 참으로 바꾸며, 반경이 0이면 파동 없이 끝낸다.

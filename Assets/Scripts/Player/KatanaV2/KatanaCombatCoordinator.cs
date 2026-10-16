@@ -157,6 +157,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     public event Action<KatanaDefenseResult> DefenseSucceeded;
     public PlayerCombatEvents Events => _events;
     public int GuardInputId => _guardInputId;
+    public float GuardHeldTime => _player.IsGuarding ? Mathf.Max(0f, _playerClock.Now - _parryOpenedAt) : 0f;
+    public float GuardTimingWindow => Mathf.Max(_perfectParryEnd, _normalParryEnd);
     public PlayerController Player => _player;
     public KatanaWeaponState WeaponState => _weaponState;
     public int Strike => _strike;
