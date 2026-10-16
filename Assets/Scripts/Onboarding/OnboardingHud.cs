@@ -179,12 +179,6 @@ public sealed class OnboardingHud : MonoBehaviour
         yield return FadeStageOverlay(0f, 0.12f);
     }
 
-    /// <summary>같은 단계의 목표가 완료됐음을 짧게 보여 주고 다음 목표 안내로 넘어갈 시간을 반환한다.</summary>
-    public IEnumerator ShowObjectiveCompletion()
-    {
-        yield return ShowCompletion("목표 완료", "다음 목표", 0.35f);
-    }
-
     /// <summary>완료된 stage 번호와 다음 온보딩 단계 여부를 사용해 단계 전환 화면을 표시한다.</summary>
     public IEnumerator ShowStageCompletion(int stage, bool hasNextStage)
     {

@@ -574,7 +574,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         QueueAdvance();
     }
 
-    /// <summary>nextObjective 앞에서 현재 목표 완료 표시를 보여 주고 같은 단계의 다음 목표 문구로 바꾼다.</summary>
+    /// <summary>현재 목표를 완료한 뒤 완료 카드를 생략하고 같은 단계의 다음 목표 문구로 바꾼다.</summary>
     private IEnumerator AdvanceToNextObjective(int nextObjective)
     {
         yield return new WaitForEndOfFrame();
@@ -586,8 +586,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
         else if ((_stage == 4 || _stage == 6) && _empower.IsReady)
             _empower.PrepareOnboardingFollowUp(_empower.Tokens);
-        yield return _hud.ShowObjectiveCompletion();
-        if (_restartQueued) yield break;
         _objectiveIndex = nextObjective;
         _hud.ShowObjective(_stage, _objectiveIndex);
         _advanceQueued = false;
