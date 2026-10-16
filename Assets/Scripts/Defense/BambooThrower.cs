@@ -79,6 +79,46 @@ public sealed class BambooThrower : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 지시를 받아 기존 전조·조준·수리검 발사 흐름으로 한 발을 예약한다.
+    /// director가 투척 예산을 허용하면 전조 코루틴을 시작하고 성공 여부를 반환한다.
+    /// </summary>
+    public bool TryThrowForOnboarding(BambooDefenseDirector director)
+    {
+        if (director == null || !isActiveAndEnabled || _routine != null) return false;
+        _director = director;
+        _spawned = true;
+        FacePlayer();
+        if (!IsPlayerInThrowRange() || !_director.TryReserveThrow()) return false;
+
+        _reserved = true;
+        _director.NotifyThrowTelegraph(_signalPoint.position, _telegraphDuration);
+        _routine = StartCoroutine(RunOnboardingThrow());
+        return true;
+    }
+
+    /// <summary>
+    /// 기존 투척수의 전조 시간을 기다린 뒤 발사 조건을 확인하고 수리검 한 발을 발사한다.
+    /// 예약을 취소해야 하는 경우 예산을 반환하고 코루틴 상태를 비운다.
+    /// </summary>
+    private IEnumerator RunOnboardingThrow()
+    {
+        if (_telegraphSound != SoundId.None)
+            Managers.Sound.PlayAttached(_telegraphSound, gameObject);
+        yield return new WaitForSeconds(_telegraphDuration);
+        if (!CanThrow())
+        {
+            CancelReservation();
+            _routine = null;
+            yield break;
+        }
+
+        Throw();
+        if (_revealDuration > 0f)
+            yield return new WaitForSeconds(_revealDuration);
+        _routine = null;
+    }
+
+    /// <summary>
     /// 기존 투척 코루틴과 예약을 정리한 뒤 새 투척을 시작한다.
     /// 시작한 코루틴을 _routine에 저장한다.
     /// </summary>

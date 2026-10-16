@@ -73,6 +73,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     private int _sourceAttackId;
     private float _readyElapsed;
     private float _hitStopRemaining;
+    private bool _onboardingReadyHeld;
 
     public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready;
     public bool IsStriking => _active && _stage == PlayerEmpowerStage.Started;
@@ -126,7 +127,7 @@ public sealed class PlayerEmpower : MonoBehaviour
             return;
         }
         // 차징 중에는 궁극기 발동이나 차징 취소로 끝나도록 준비 만료를 미룬다.
-        if (_readyElapsed >= _readyDuration) End(PlayerEmpowerEndReason.Expired);
+        if (!_onboardingReadyHeld && _readyElapsed >= _readyDuration) End(PlayerEmpowerEndReason.Expired);
     }
 
     /// <summary>
@@ -146,6 +147,57 @@ public sealed class PlayerEmpower : MonoBehaviour
             return false;
         }
 
+        BeginReady(attackId);
+        return true;
+    }
+
+    /// <summary>
+    /// 현재 준비를 온보딩 연습이 끝날 때까지 유지한다.
+    /// 실제 퍼펙트 패링으로 시작한 준비의 토큰과 집중 상태를 그대로 보존한다.
+    /// </summary>
+    public void HoldOnboardingReady()
+    {
+        if (IsReady) _onboardingReadyHeld = true;
+    }
+
+    /// <summary>
+    /// 온보딩 검기 연습에 들어갈 때 준비 상태를 유지하거나 다시 시작한다.
+    /// 토큰을 검기 사용 범위인 1~MAX_TOKENS-1개로 맞추고 준비 만료를 막는다.
+    /// </summary>
+    public void EnsureOnboardingSwordWaveReady()
+    {
+        if (IsStriking) return;
+        _tokens = Mathf.Clamp(_tokens, 1, MAX_TOKENS - 1);
+        if (IsReady)
+        {
+            _onboardingReadyHeld = true;
+            return;
+        }
+
+        if (_active) End(PlayerEmpowerEndReason.SessionEnded);
+        _onboardingReadyHeld = true;
+        BeginReady(0);
+    }
+
+    /// <summary>
+    /// 온보딩 궁극기 연습을 위해 토큰을 정확히 MAX_TOKENS로 맞추고 준비 상태로 진입한다.
+    /// 기존 준비를 끝낸 뒤 집중 파동과 불릿 타임을 시작하고 준비 만료를 잠근다.
+    /// </summary>
+    public void BeginOnboardingUltimate()
+    {
+        if (IsStriking) return;
+        if (_active) End(PlayerEmpowerEndReason.SessionEnded);
+        _tokens = MAX_TOKENS;
+        _onboardingReadyHeld = true;
+        BeginReady(0);
+    }
+
+    /// <summary>
+    /// attackId를 원인으로 새 준비를 시작하고 히트스톱·불릿 타임·퍼펙트 파동을 적용한다.
+    /// 준비 시각과 강화 ID를 갱신하고 EmpowerChanged를 발행한다.
+    /// </summary>
+    private void BeginReady(int attackId)
+    {
         _active = true;
         _stage = PlayerEmpowerStage.Ready;
         _empowerId++;
@@ -158,7 +210,6 @@ public sealed class PlayerEmpower : MonoBehaviour
             ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
         _pulse.Begin();
         Publish(PlayerEmpowerStage.Ready, PlayerEmpowerEndReason.None);
-        return true;
     }
 
     /// <summary>
@@ -196,6 +247,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     public void CompleteWithSwordWave(int previousActionId)
     {
         if (!IsReady) return;
+        _onboardingReadyHeld = false;
         _swordWave.Arm(previousActionId);
         End(PlayerEmpowerEndReason.SwordWave);
     }
@@ -210,6 +262,7 @@ public sealed class PlayerEmpower : MonoBehaviour
         if (!IsUltimateChargeComplete || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
 
         _tokens = 0;
+        _onboardingReadyHeld = false;
         _charging = false;
         _stage = PlayerEmpowerStage.Started;
         _hitStopRemaining = 0f;
@@ -241,6 +294,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     {
         if (IsStriking && reason != PlayerEmpowerEndReason.Completed) _strike.Stop();
         _active = false;
+        _onboardingReadyHeld = false;
         _stage = PlayerEmpowerStage.Ended;
         _hitStopRemaining = 0f;
         _charging = false;
