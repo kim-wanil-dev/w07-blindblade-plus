@@ -109,6 +109,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
     private void StrikeAlong(float step)
     {
         DefenseShuriken.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
+        EnemyProjectile.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
 
         int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
             step, _hitMask, QueryTriggerInteraction.Ignore);
