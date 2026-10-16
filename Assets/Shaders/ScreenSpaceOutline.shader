@@ -10,6 +10,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
         _SceneryColor ("Scenery Color", Color) = (0.3, 0.3, 0.3, 1)
         _ThreatColor ("Threat Color", Color) = (1, 0.1, 0.06, 1)
         _ThreatFillOpacity ("Threat Fill Opacity", Float) = 0.6
+        _MeleeWarningColor ("Melee Warning Color", Color) = (1, 0.1, 0.06, 1)
     }
 
     SubShader
@@ -45,6 +46,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 half4 _SceneryColor;
                 half4 _ThreatColor;
                 float _ThreatFillOpacity;
+                half4 _MeleeWarningColor;
             CBUFFER_END
 
             TEXTURE2D_X(_OutlineOpaqueColor);
@@ -52,6 +54,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             TEXTURE2D_X(_OutlineTransparentDepth);
             TEXTURE2D_X(_OutlineSceneryMask);
             TEXTURE2D_X(_OutlineThreatMask);
+            TEXTURE2D_X(_OutlineMeleeWarningMask);
             TEXTURE2D_X(_OutlineForcedReveal);
             TEXTURE2D_X(_ThreatPresentationColor);
             TEXTURE2D_X(_ThreatPresentationData);
@@ -458,7 +461,29 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 edge *= 1.0 - TransparentCoverage(uv);
                 float3 transparentEdge = max(TransparentEdgeBetween(firstUv, secondUv),
                     TransparentEdgeBetween(thirdUv, fourthUv));
+                float warningCenter = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, uv).r;
+                float warningFirst = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, firstUv).r;
+                float warningSecond = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, secondUv).r;
+                float warningThird = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, thirdUv).r;
+                float warningFourth = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, fourthUv).r;
+
+                float warningAmount = saturate(max(
+                    warningCenter,
+                    max(max(warningFirst, warningSecond),
+                        max(warningThird, warningFourth))));
+
+                float transparentBrightness = max(transparentEdge.r, max(transparentEdge.g, transparentEdge.b));
+
+            // 연기에서 검출된 테두리 픽셀에만 전조 색을 적용한다.
                 edge = max(edge, transparentEdge);
+                float edgeBrightness = max(edge.r, max(edge.g, edge.b));
+                float outlineTint = warningAmount * step(0.0001, transparentBrightness);
+                edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a * edgeBrightness, outlineTint);
                 edge *= 1.0 - AlwaysVisibleCoverage(uv);
                 float foregroundEdge = saturate(max(
                     abs(AlwaysVisibleCoverage(firstUv) - AlwaysVisibleCoverage(secondUv)),
