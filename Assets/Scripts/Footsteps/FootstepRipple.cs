@@ -16,11 +16,13 @@ public sealed class FootstepRipple : MonoBehaviour
     private PlayerController _player;
     private FootstepEmitter _emitter;
     private PerceptionRevealMap _revealMap;
+    private EnemyMeleeAttack[] _meleeAttacks;
 
     void Awake()
     {
         _player = GetComponent<PlayerController>();
         _emitter = GetComponent<FootstepEmitter>();
+        _meleeAttacks = GetComponents<EnemyMeleeAttack>();
     }
 
     void OnEnable()
@@ -29,6 +31,11 @@ public sealed class FootstepRipple : MonoBehaviour
             _player.FootstepEmitted += HandlePlayerFootstep;
         if (_emitter != null)
             _emitter.OnFootstepEmitted += HandleGroundContact;
+        foreach (EnemyMeleeAttack attack in _meleeAttacks)
+        {
+            attack.FirstHeartbeatPlayed += HandleMeleeTelegraph;
+            attack.AttackCommitted += HandleMeleeAttack;
+        }
     }
 
     void OnDisable()
@@ -37,6 +44,11 @@ public sealed class FootstepRipple : MonoBehaviour
             _player.FootstepEmitted -= HandlePlayerFootstep;
         if (_emitter != null)
             _emitter.OnFootstepEmitted -= HandleGroundContact;
+        foreach (EnemyMeleeAttack attack in _meleeAttacks)
+        {
+            attack.FirstHeartbeatPlayed -= HandleMeleeTelegraph;
+            attack.AttackCommitted -= HandleMeleeAttack;
+        }
     }
 
     /// <summary>플레이어 발걸음 step의 착지 위치에서 파동을 낸다.</summary>
@@ -52,6 +64,24 @@ public sealed class FootstepRipple : MonoBehaviour
     }
 
     /// <summary>
+    /// context의 첫 박동 전조음 재생 직후 적 발밑에서 근접 공격 파동을 낸다.
+    /// 공격 위치와 발생자 참조를 사용하여 이동 파동과 같은 시야 효과를 적용한다.
+    /// </summary>
+    private void HandleMeleeTelegraph(EnemyAttackContext context)
+    {
+        EmitRipple(context.Origin, context.Source);
+    }
+
+    /// <summary>
+    /// context의 근접 공격 확정 시 검격 표시와 같은 프레임에 적 발밑 파동을 낸다.
+    /// 고정된 공격 원점과 발생자 참조로 파동 중심과 자기 몸 제외를 유지한다.
+    /// </summary>
+    private void HandleMeleeAttack(EnemyAttackContext context)
+    {
+        EmitRipple(context.Origin, context.Source);
+    }
+
+    /// <summary>
     /// 걸음을 _stepCount에 세어 _stepsPerRipple번째 걸음마다 시야 맵에 position 중심의 _ripple 파동을 등록한다.
     /// hiddenOwner가 있으면 그 몸체를 이 파동으로 밝히지 않는다. 시야 맵이 없으면 무시한다.
     /// </summary>
@@ -60,6 +90,15 @@ public sealed class FootstepRipple : MonoBehaviour
         _stepCount = (_stepCount + 1) % _stepsPerRipple;
         if (_stepCount != 0)
             return;
+        EmitRipple(position, hiddenOwner);
+    }
+
+    /// <summary>
+    /// position과 hiddenOwner를 사용해 기존 _ripple 설정으로 시야 파동을 등록한다.
+    /// 이동·공격 모두 걸음 횟수와 독립적으로 같은 PerceptionRevealMap 효과를 사용한다.
+    /// </summary>
+    private void EmitRipple(Vector3 position, Transform hiddenOwner)
+    {
         if (_revealMap == null)
         {
             if (!Game.IsInitialized || Game.Instance.SensoryManager == null)

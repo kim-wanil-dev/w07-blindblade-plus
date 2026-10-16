@@ -173,6 +173,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         if (!IsAvailable || !CanAttack(target) || target != _sensor.Target || !_sensor.CanSeeTarget())
             return false;
 
+        _heartbeatsPlayed = 0;
+        _attackVoicePlayed = false;
         if (_playingHeartbeatSounds.Count > 0) StopActionSound(true);
         _useHeartbeatForCurrentAttack = UsesHeartbeatTelegraph || attackImmediately;
         _currentHeartbeatCount = HeartbeatCount;
