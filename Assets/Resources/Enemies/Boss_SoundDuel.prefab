@@ -170,7 +170,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 200
+  _maxHealth: 150
   _dieOnAnyHit: 0
   _hitCollider: {fileID: 6529499087085923373}
   _cancelAttackOnHit: 0
@@ -304,6 +304,18 @@ MonoBehaviour:
   _rangedPreparation: 0.8
   _rangedShots: 3
   _rangedInterval: 0.8
+  _rangedBackstepDistance: 10
+  _rangedBackstepSpeed: 12
+  _burstDamageWindow: 4
+  _burstDamageThreshold: 30
+  _escapeMinDistance: 10
+  _escapeMaxDistance: 45
+  _barragePreparation: 0.6
+  _barrageVolleys: 4
+  _barrageInterval: 0.5
+  _barrageSpreadAngle: 20
+  _barrageTopAimHeight: 3.2
+  _barrageBottomAimHeight: 0.2
   _chargePreparation: 0.9
   _chargeSpeed: 14
   _chargeDistance: 12
@@ -355,6 +367,11 @@ MonoBehaviour:
   _chargeCryPitch: 0.85
   _melee: {fileID: 4283722663164136279}
   _strikeCue: 9
+  _chargeWarningRenderers:
+  - {fileID: 8681956277035011038}
+  - {fileID: 2961610450630845464}
+  _chargeWarningFadeIn: 0.15
+  _chargeWarningFadeOut: 0.12
 --- !u!114 &900100100
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -553,5 +570,15 @@ PrefabInstance:
 --- !u!4 &2245708082452978754 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4934395196125393724, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+  m_PrefabInstance: {fileID: 6579800647072739198}
+  m_PrefabAsset: {fileID: 0}
+--- !u!199 &8681956277035011038 stripped
+ParticleSystemRenderer:
+  m_CorrespondingSourceObject: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+  m_PrefabInstance: {fileID: 6579800647072739198}
+  m_PrefabAsset: {fileID: 0}
+--- !u!199 &2961610450630845464 stripped
+ParticleSystemRenderer:
+  m_CorrespondingSourceObject: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
   m_PrefabInstance: {fileID: 6579800647072739198}
   m_PrefabAsset: {fileID: 0}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -13,6 +14,11 @@ public enum BossState { Idle, Roaming, Charging, ChainCharge, Duel, Stunned, Dea
 public sealed class BossController : MonoBehaviour
 {
     private const float MAX_RHYTHM_DELAY = 0.1f;
+    private const float BACKSTEP_ANGLE_STEP = 30f;
+    private const int BACKSTEP_CANDIDATE_COUNT = 9;
+    private const float MIN_BACKSTEP_GAIN = 0.5f;
+    private const int ESCAPE_DIRECTION_COUNT = 32;
+    private const float ESCAPE_RING_STEP = 2f;
 
     [Header("전투 연결")]
     [SerializeField, Min(0f), Tooltip("피격 후 다음 패턴으로 넘어가기 전 회복 시간(초)")]
@@ -25,6 +31,8 @@ public sealed class BossController : MonoBehaviour
     private PlayerController _player;
     private PlayerMotor _playerMotor;
     private PlayerHealth _playerHealth;
+    private KatanaCombatCoordinator _playerCombat;
+    private PlayerEmpower _playerEmpower;
     private Coroutine _routine;
     private BossState _state;
     private bool _started;
@@ -64,6 +72,35 @@ public sealed class BossController : MonoBehaviour
 
     public event Action RangedPreparing;
     public event Action RangedFiring;
+
+    [Header("원거리 백스텝")]
+    [SerializeField, Min(0f), Tooltip("원거리 패턴 시작 시 플레이어에게서 멀어지는 거리(미터). 0이면 백스텝하지 않는다.")]
+    private float _rangedBackstepDistance = 10f;
+    [SerializeField, Min(0.1f), Tooltip("백스텝 이동 속도(미터/초)")]
+    private float _rangedBackstepSpeed = 12f;
+
+    [Header("연속 피해 도주 난사")]
+    [SerializeField, Min(0.1f), Tooltip("이 시간(초) 안의 누적 피해로 도주 난사 발동을 판단한다.")]
+    private float _burstDamageWindow = 4f;
+    [SerializeField, Min(1f), Tooltip("시간 안에 이 피해 이상을 받으면 먼 곳으로 순간이동해 난사한다.")]
+    private float _burstDamageThreshold = 30f;
+    [SerializeField, Min(1f), Tooltip("도주 위치가 플레이어와 가져야 하는 최소 수평 거리(미터)")]
+    private float _escapeMinDistance = 10f;
+    [SerializeField, Min(1f), Tooltip("도주 위치를 찾는 플레이어 기준 최대 수평 거리(미터)")]
+    private float _escapeMaxDistance = 45f;
+    [SerializeField, Min(0.1f), Tooltip("순간이동 후 첫 난사까지의 준비 시간(초)")]
+    private float _barragePreparation = 0.6f;
+    [SerializeField, Min(1), Tooltip("왼쪽·가운데·오른쪽 3발 묶음의 발사 횟수")]
+    private int _barrageVolleys = 4;
+    [SerializeField, Min(0.05f), Tooltip("난사 묶음 사이 간격(초)")]
+    private float _barrageInterval = 0.5f;
+    [SerializeField, Range(0f, 90f), Tooltip("가운데 수리검 기준 좌우 수리검의 수평 각도(도)")]
+    private float _barrageSpreadAngle = 20f;
+    [SerializeField, Tooltip("첫 묶음이 조준하는 플레이어 발 기준 높이(미터)")]
+    private float _barrageTopAimHeight = 3.2f;
+    [SerializeField, Tooltip("마지막 묶음이 조준하는 플레이어 발 기준 높이(미터)")]
+    private float _barrageBottomAimHeight = 0.2f;
+    private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
 
     [Header("돌진")]
     [SerializeField, Min(0.1f), Tooltip("박동 전조를 끈 경우 사용하는 돌진 준비 시간(초)")]
@@ -159,6 +196,8 @@ public sealed class BossController : MonoBehaviour
         {
             _playerHealth = _player.GetComponent<PlayerHealth>();
             _playerMotor = _player.GetComponent<PlayerMotor>();
+            _playerCombat = _player.GetComponent<KatanaCombatCoordinator>();
+            _playerEmpower = _player.GetComponent<PlayerEmpower>();
         }
         if (_projectilePrefab == null || _player == null || _playerMotor == null || _playerHealth == null || !_motor.IsReady)
         {
@@ -170,6 +209,7 @@ public sealed class BossController : MonoBehaviour
         _health.Damaged += HandleBossDamaged;
         _health.DamageBlocked += HandleBossDamageBlocked;
         _health.Died += HandleBossDied;
+        _playerCombat.Events.EmpowerChanged += HandlePlayerEmpowerChanged;
         _routine = StartCoroutine(RunBattle());
     }
 
@@ -222,11 +262,16 @@ public sealed class BossController : MonoBehaviour
         RestoreAfterDisappearance();
     }
 
-    /// <summary>설정 횟수와 준비 시간을 사용해 플레이어 시점보다 0.1m 아래로 투사체를 발사한다. 비행 유도는 투사체 프리팹이 설정한다.</summary>
+    /// <summary>
+    /// 패턴 시작 시 플레이어에게서 멀어지는 위치로 한 번 백스텝한 뒤 설정 횟수와 준비 시간을 사용해 플레이어 시점보다 0.1m 아래로 투사체를 발사한다.
+    /// 비행 유도는 투사체 프리팹이 설정한다.
+    /// </summary>
     private IEnumerator Ranged()
     {
         ChangeState(BossState.Ranged);
         _motor.Stop();
+        if (TryGetBackstepDestination(out Vector3 backstep))
+            yield return Backstep(backstep);
         for (int i = 0; i < _rangedShots; i++)
         {
             _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BossRanged", "Projectile",
@@ -246,6 +291,166 @@ public sealed class BossController : MonoBehaviour
             _telemetryAttackId = 0;
             if (i + 1 < _rangedShots) yield return new WaitForSeconds(_rangedInterval);
         }
+    }
+
+    /// <summary>
+    /// 플레이어 반대 방향을 기준으로 좌우 30도 간격 후보를 검사해 백스텝 목적지를 destination으로 반환한다.
+    /// _rangedBackstepDistance와 직선 NavMesh 경로·빈 공간을 사용하며 플레이어와 가장 멀어지는 후보를 고른다.
+    /// 구석에 몰려 전체 거리 후보가 없으면 절반 거리로 다시 찾고, 멀어지는 후보가 없으면 false를 반환한다.
+    /// </summary>
+    private bool TryGetBackstepDestination(out Vector3 destination)
+    {
+        destination = transform.position;
+        if (_rangedBackstepDistance <= 0f) return false;
+        Vector3 playerPosition = _player.transform.position;
+        Vector3 away = Vector3.ProjectOnPlane(transform.position - playerPosition, Vector3.up);
+        float currentDistance = away.magnitude;
+        if (away.sqrMagnitude < 0.0001f) away = Vector3.ProjectOnPlane(-transform.forward, Vector3.up);
+        if (away.sqrMagnitude < 0.0001f) return false;
+        away.Normalize();
+        bool found = false;
+        float bestDistance = currentDistance + MIN_BACKSTEP_GAIN;
+        for (int pass = 0; pass < 2 && !found; pass++)
+        {
+            float stepDistance = pass == 0 ? _rangedBackstepDistance : _rangedBackstepDistance * 0.5f;
+            for (int i = 0; i < BACKSTEP_CANDIDATE_COUNT; i++)
+            {
+                // 정반대 방향부터 좌우를 번갈아 넓혀 구석에서도 옆으로 빠질 수 있게 한다.
+                float angle = BACKSTEP_ANGLE_STEP * ((i + 1) / 2) * (i % 2 == 0 ? 1f : -1f);
+                Vector3 desired = transform.position + Quaternion.Euler(0f, angle, 0f) * away * stepDistance;
+                if (!TrySamplePosition(desired, out Vector3 position) || _agent.Raycast(position, out _)
+                    || !TryPlace(position)) continue;
+                float distance = Vector3.ProjectOnPlane(position - playerPosition, Vector3.up).magnitude;
+                if (distance <= bestDistance) continue;
+                bestDistance = distance;
+                destination = position;
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// destination까지 직선으로 _rangedBackstepSpeed만큼 이동하며 플레이어를 계속 바라본다.
+    /// 이동 중 IsRepositioning을 켜 발소리·발자국을 표현하고 막히면 그 자리에서 멈춘다.
+    /// </summary>
+    private IEnumerator Backstep(Vector3 destination)
+    {
+        _motor.Stop();
+        IsRepositioning = true;
+        try
+        {
+            while (Vector3.ProjectOnPlane(destination - transform.position, Vector3.up).sqrMagnitude > 0.0025f)
+            {
+                Vector3 previous = transform.position;
+                Vector3 next = LimitToArena(Vector3.MoveTowards(previous, destination, _rangedBackstepSpeed * Time.deltaTime));
+                _agent.Move(next - previous);
+                Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - transform.position, Vector3.up);
+                if (toPlayer.sqrMagnitude > 0.000001f)
+                    transform.rotation = Quaternion.LookRotation(toPlayer);
+                if (Time.deltaTime > 0f && (transform.position - previous).sqrMagnitude < 0.000001f)
+                    yield break;
+                yield return null;
+            }
+        }
+        finally
+        {
+            IsRepositioning = false;
+            _motor.Stop();
+        }
+    }
+
+    /// <summary>
+    /// 먼 곳으로 순간이동한 뒤 준비 시간을 거쳐 3발 묶음 수리검을 _barrageInterval 간격으로 _barrageVolleys번 발사한다.
+    /// 난사 중에는 무적이 아니며 피격되면 기존 피격 흐름으로 취소된다. 끝나면 돌진부터 기존 순환을 재개한다.
+    /// </summary>
+    private IEnumerator EscapeBarrage()
+    {
+        if (TryGetEscapePosition(out Vector3 position) && _agent.Warp(position))
+            Teleported?.Invoke();
+        ChangeState(BossState.Ranged);
+        RangedPreparing?.Invoke();
+        yield return PrepareAttack(Mathf.Max(0.1f, _barragePreparation), false);
+        for (int volley = 0; volley < _barrageVolleys; volley++)
+        {
+            FireBarrageVolley(volley);
+            if (volley + 1 < _barrageVolleys) yield return new WaitForSeconds(_barrageInterval);
+        }
+        if (_health.IsAlive && _playerHealth.IsAlive) yield return RunBattle(BossState.Charging);
+        _routine = null;
+    }
+
+    /// <summary>
+    /// volley 순번으로 위에서 아래로 낮아지는 조준 높이를 정하고 왼쪽·가운데·오른쪽 수리검 3발을 동시에 발사한다.
+    /// _barrageSpreadAngle과 기존 원거리 피해 _rangedDamage를 사용하며 보스를 플레이어 쪽으로 회전시킨다.
+    /// </summary>
+    private void FireBarrageVolley(int volley)
+    {
+        Vector3 origin = transform.position + Vector3.up;
+        float progress = _barrageVolleys > 1 ? volley / (float)(_barrageVolleys - 1) : 0f;
+        Vector3 aim = _player.transform.position
+            + Vector3.up * Mathf.Lerp(_barrageTopAimHeight, _barrageBottomAimHeight, progress);
+        Vector3 center = aim - origin;
+        if (center.sqrMagnitude < 0.0001f) return;
+        center.Normalize();
+        Vector3 facing = Vector3.ProjectOnPlane(center, Vector3.up);
+        if (facing.sqrMagnitude > 0.000001f) transform.rotation = Quaternion.LookRotation(facing);
+        RangedFiring?.Invoke();
+        for (int shot = -1; shot <= 1; shot++)
+        {
+            Vector3 direction = Quaternion.AngleAxis(shot * _barrageSpreadAngle, Vector3.up) * center;
+            EnemyProjectile projectile = Instantiate(_projectilePrefab, origin, Quaternion.LookRotation(direction));
+            projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction, "BossRanged"),
+                direction, _player.transform);
+        }
+    }
+
+    /// <summary>
+    /// 플레이어 주변 32방향을 최대 거리부터 2m 간격으로 검사해 가장 먼 유효 지면을 destination으로 반환한다.
+    /// 공터 범위·빈 공간·완전한 NavMesh 경로를 확인하며 _escapeMinDistance 이상인 후보가 없으면 false를 반환한다.
+    /// </summary>
+    private bool TryGetEscapePosition(out Vector3 destination)
+    {
+        destination = transform.position;
+        Vector3 playerPosition = _player.transform.position;
+        float minimum = _escapeMinDistance;
+        float bestDistance = minimum;
+        bool found = false;
+        for (float radius = Mathf.Max(minimum, _escapeMaxDistance); radius >= minimum; radius -= ESCAPE_RING_STEP)
+        {
+            // 안쪽 고리는 이미 찾은 후보보다 멀어질 수 없으므로 검사를 마친다.
+            if (found && radius <= bestDistance) break;
+            for (int i = 0; i < ESCAPE_DIRECTION_COUNT; i++)
+            {
+                Vector3 offset = Quaternion.Euler(0f, 360f * i / ESCAPE_DIRECTION_COUNT, 0f) * Vector3.forward * radius;
+                if (!TrySamplePosition(playerPosition + offset, out Vector3 position)) continue;
+                float distance = Vector3.ProjectOnPlane(position - playerPosition, Vector3.up).magnitude;
+                if (distance < bestDistance || !TryPlace(position) || !_agent.CalculatePath(position, _path)
+                    || _path.status != NavMeshPathStatus.PathComplete || !IsPathInsideArena(_path)) continue;
+                bestDistance = distance;
+                destination = position;
+                found = true;
+            }
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// amount를 현재 시각과 함께 기록하고 _burstDamageWindow보다 오래된 기록을 지운다.
+    /// 남은 누적 피해가 _burstDamageThreshold 이상이면 기록을 비우고 true를 반환한다.
+    /// </summary>
+    private bool RegisterBurstDamage(float amount)
+    {
+        float now = Time.time;
+        _recentDamage.Enqueue((now, amount));
+        while (_recentDamage.Count > 0 && now - _recentDamage.Peek().At > _burstDamageWindow)
+            _recentDamage.Dequeue();
+        float total = 0f;
+        foreach ((float At, float Amount) record in _recentDamage)
+            total += record.Amount;
+        if (total < _burstDamageThreshold) return false;
+        _recentDamage.Clear();
+        return true;
     }
 
     /// <summary>준비 시간 뒤 목표 방향을 고정하고 시작 사건을 알린 후 장애물 경계까지 돌진하며 접촉 피해를 한 번 적용한다.</summary>
@@ -435,7 +640,11 @@ public sealed class BossController : MonoBehaviour
         return center + Vector3.ClampMagnitude(offset, radius) + Vector3.up * (position.y - center.y);
     }
 
-    /// <summary>context의 실제 피격 시 행동을 취소하고 외형을 유지한 채 무적으로 다음 패턴을 준비한다.</summary>
+    /// <summary>
+    /// context의 실제 피격 시 행동을 취소하고 외형을 유지한 채 무적으로 다음 패턴을 준비한다.
+    /// 짧은 시간의 누적 피해가 기준 이상이면 기존 회복 대신 무적 없이 도주 난사를 시작한다.
+    /// 플레이어 불릿 타임(강화 준비·강화 공격) 중에는 무적과 쳐내기 창 없이 회복한다.
+    /// </summary>
     private void HandleBossDamaged(DamageContext context)
     {
         if (!_health.IsAlive) return;
@@ -453,7 +662,18 @@ public sealed class BossController : MonoBehaviour
         IsRepositioning = false;
         ChangeState(BossState.Idle);
         _health.SetInvulnerable(true);
-        _hitDeflectUntil = Time.time + _hitDeflectDuration;
+        if (RegisterBurstDamage(context.Amount))
+        {
+            // 도주 난사는 무적 없이 진행하므로 피격 무적과 쳐내기 창을 바로 해제한다.
+            RestoreAfterDisappearance(true);
+            _routine = StartCoroutine(EscapeBarrage());
+            return;
+        }
+        // 플레이어 불릿 타임이 이어지는 동안에는 피격 후 무적과 쳐내기 창을 만들지 않는다.
+        if (_playerEmpower.IsReady || _playerEmpower.IsStriking)
+            RestoreAfterDisappearance(true);
+        else
+            _hitDeflectUntil = Time.time + _hitDeflectDuration;
         _routine = StartCoroutine(RecoverFromHit());
     }
 
@@ -477,6 +697,15 @@ public sealed class BossController : MonoBehaviour
         Game.Instance.EffectManager.Play(EffectId.ParryClash, context.Point, Quaternion.LookRotation(direction));
         Managers.Sound.Play(SoundId.ParryClash, context.Point, 1f, gameObject);
         _routine = StartCoroutine(RunBattle(_resumeState));
+    }
+
+    /// <summary>
+    /// empowerEvent가 플레이어의 불릿 타임 준비 시작이면 피격 후 무적과 쳐내기 창을 즉시 끝낸다.
+    /// 진행 중인 행동과 예약된 다음 패턴은 그대로 유지한다.
+    /// </summary>
+    private void HandlePlayerEmpowerChanged(PlayerEmpowerEvent empowerEvent)
+    {
+        if (empowerEvent.Stage == PlayerEmpowerStage.Ready) RestoreAfterDisappearance(true);
     }
 
     /// <summary>
@@ -521,18 +750,21 @@ public sealed class BossController : MonoBehaviour
         StateChanged?.Invoke(state);
     }
 
-    /// <summary>실행 중인 공격·이동·코루틴을 중지하고 피격·사망 사건 구독을 정리한다.</summary>
+    /// <summary>실행 중인 공격·이동·코루틴을 중지하고 피격·사망·플레이어 불릿 타임 사건 구독을 정리한다.</summary>
     private void StopBattle()
     {
         if (_routine != null) StopCoroutine(_routine);
         _routine = null;
         PreparationCancelled?.Invoke();
         IsRepositioning = false;
+        _recentDamage.Clear();
         RestoreAfterDisappearance(true);
         _motor.Stop();
         _health.Damaged -= HandleBossDamaged;
         _health.DamageBlocked -= HandleBossDamageBlocked;
         _health.Died -= HandleBossDied;
+        // 연결 누락으로 전투를 시작하지 못한 경우에는 구독한 적이 없다.
+        if (_playerCombat != null) _playerCombat.Events.EmpowerChanged -= HandlePlayerEmpowerChanged;
         if (_state != BossState.Dead) ChangeState(BossState.Idle);
     }
 

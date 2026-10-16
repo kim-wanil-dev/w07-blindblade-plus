@@ -4,7 +4,8 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>일반 적 처치 수에 따라 보스 경고, 원형 공터 가장자리 등장 연출과 스테이지 완료를 관리한다.</summary>
-[DefaultExecutionOrder(1000)]
+// 등장 흔들림은 PlayerMotor(0)와 GameSceneInitializer(100) 뒤, 칼 궤적(200)·돌진 대상 실(300)·칼 구슬(310) 앞에 적용한다.
+[DefaultExecutionOrder(120)]
 [DisallowMultipleComponent]
 public sealed class BambooStage1Controller : MonoBehaviour
 {
@@ -104,7 +105,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         float phase = _shakeElapsed * _cameraShakeFrequency * Mathf.PI * 2f;
         Vector3 offset = new Vector3(Mathf.Sin(phase), Mathf.Cos(phase * 1.37f), 0f)
             * (_cameraShakeAmplitude * fade);
-        // PlayerMotor가 같은 프레임에 카메라 기본 위치를 갱신한 뒤 등장 흔들림을 더한다.
+        // PlayerMotor가 카메라 기본 위치를 갱신한 뒤, 칼 실처럼 월드 좌표로 그리는 표현보다 먼저 흔들림을 더한다.
         _playerCamera.transform.localPosition += offset;
     }
 
