@@ -12,11 +12,18 @@ namespace BlindBlade.UI.CombatHud
     [RequireComponent(typeof(CanvasRenderer))]
     public sealed class CombatTokenOrbitThread : MaskableGraphic
     {
+        private const int GLOW_SEGMENTS = 32;
+        // 빛무리 고리 반지름(구 반지름 대비, 마지막은 바깥 끝 배율로 대체)과 고리별 농도다.
+        private static readonly float[] GLOW_RING_RADII = { 0f, 0.6f, 1f, 1.3f, 1f };
+        private static readonly float[] GLOW_RING_ALPHAS = { 0.55f, 0.45f, 0.3f, 0.12f, 0f };
+
         [Header("상태")]
         private CombatTokenOrbitStyle _style;
         private ThreadSphere _sphere;
         private Quaternion _orientation;
         private float _visibility;
+        private float _glow;
+        private float _glowRadius;
         private Vector2 _center;
         private float _radius;
 
@@ -32,17 +39,20 @@ namespace BlindBlade.UI.CombatHud
         }
 
         /// <summary>
-        /// 보임 정도 visibility(0~1)를 저장하고 flow의 두 실 진행 각도와 시각 time으로 구체 경로를 계산한 뒤 메시를 다시 그리게 한다.
+        /// 보임 정도 visibility(0~1), 빛무리 세기 glow(0이면 없음)와 바깥 끝 반지름 glowRadius(구 반지름 대비)를 저장하고,
+        /// flow의 두 실 진행 각도와 시각 time으로 구체 경로를 계산한 뒤 메시를 다시 그리게 한다.
         /// </summary>
-        public void SetState(float visibility, float time, ThreadSphereFlow flow)
+        public void SetState(float visibility, float time, ThreadSphereFlow flow, float glow, float glowRadius)
         {
             _visibility = visibility;
+            _glow = glow;
+            _glowRadius = glowRadius;
             _sphere.Sample(flow, time);
             SetVerticesDirty();
         }
 
         /// <summary>
-        /// 구 뒤쪽 구간, 앞쪽 구간 순서로 두 실의 줄기·잔가지를 vh에 띠 메시로 채운다.
+        /// 빛무리가 있으면 먼저 구 뒤에 깔고, 구 뒤쪽 구간, 앞쪽 구간 순서로 두 실의 줄기·잔가지를 vh에 띠 메시로 채운다.
         /// 화면상 구 반지름은 RectTransform 크기(토큰 지름) × SphereScale의 절반이다. 초기화 전이나 보이지 않으면 비운다.
         /// </summary>
         protected override void OnPopulateMesh(VertexHelper vh)
@@ -55,6 +65,8 @@ namespace BlindBlade.UI.CombatHud
             Rect rect = rectTransform.rect;
             _center = rect.center;
             _radius = Mathf.Min(rect.width, rect.height) * 0.5f * _style.SphereScale;
+            if (_glow > 0f)
+                BuildGlow(vh);
 
             // 앞쪽 구간이 뒤쪽 구간을 덮도록 레이어 순서대로 그린다.
             for (int pass = 0; pass < 2; pass++)
@@ -64,6 +76,40 @@ namespace BlindBlade.UI.CombatHud
                 {
                     BuildStroke(vh, thread, false, front);
                     BuildStroke(vh, thread, true, front);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 구 중심에서 바깥으로 갈수록 옅어지는 둥근 빛무리를 GLOW_RING_RADII·GLOW_RING_ALPHAS 고리로 vh에 추가한다.
+        /// 바깥 끝 반지름은 구 반지름 × _glowRadius이고, 농도에는 _glow와 _visibility를 곱한다.
+        /// </summary>
+        private void BuildGlow(VertexHelper vh)
+        {
+            Color tint = _style.Color * color;
+            int ringCount = GLOW_RING_RADII.Length;
+            int first = vh.currentVertCount;
+            for (int ring = 0; ring < ringCount; ring++)
+            {
+                float radius = _radius * (ring == ringCount - 1 ? _glowRadius : GLOW_RING_RADII[ring]);
+                Color ringColor = tint;
+                ringColor.a *= GLOW_RING_ALPHAS[ring] * _glow * _visibility;
+                for (int segment = 0; segment < GLOW_SEGMENTS; segment++)
+                {
+                    float angle = Mathf.PI * 2f * segment / GLOW_SEGMENTS;
+                    vh.AddVert(_center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius, ringColor, Vector4.zero);
+                }
+            }
+
+            for (int ring = 0; ring < ringCount - 1; ring++)
+            {
+                int inner = first + ring * GLOW_SEGMENTS;
+                int outer = inner + GLOW_SEGMENTS;
+                for (int segment = 0; segment < GLOW_SEGMENTS; segment++)
+                {
+                    int next = (segment + 1) % GLOW_SEGMENTS;
+                    vh.AddTriangle(inner + segment, outer + segment, outer + next);
+                    vh.AddTriangle(inner + segment, outer + next, inner + next);
                 }
             }
         }

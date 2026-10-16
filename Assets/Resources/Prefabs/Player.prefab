@@ -1713,3 +1713,9 @@ MonoBehaviour:
     _tugMeanInterval: 1.2
     _speedWander: 0.4
     _fadeDuration: 0.25
+  _fullSpeedMultiplier: 2.5
+  _fullGlowStrength: 1
+  _fullGlowRadius: 1.7
+  _fullGlowPulseDepth: 0.35
+  _fullGlowPulseSpeed: 1.2
+  _fullTransitionDuration: 0.3

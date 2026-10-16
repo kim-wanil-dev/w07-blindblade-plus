@@ -41,6 +41,22 @@ namespace BlindBlade.UI.CombatHud
         private float[] _orbitVisibilities;
         private float _orbitTime;
 
+        [Header("가득 참")]
+        [SerializeField, Min(1f), Tooltip("토큰이 모두 찼을 때 실 구체가 도는 속도 배율")]
+        private float _fullSpeedMultiplier = 2.5f;
+        [SerializeField, Min(0f), Tooltip("토큰이 모두 찼을 때 실 구체 뒤에 퍼지는 빛무리 세기")]
+        private float _fullGlowStrength = 1f;
+        [SerializeField, Min(1f), Tooltip("빛무리 바깥 끝 반지름(구 반지름 대비)")]
+        private float _fullGlowRadius = 1.7f;
+        [SerializeField, Range(0f, 1f), Tooltip("빛무리가 맥동하며 옅어지는 정도. 0이면 맥동하지 않는다.")]
+        private float _fullGlowPulseDepth = 0.35f;
+        [SerializeField, Min(0f), Tooltip("빛무리 맥동 속도(초당 횟수)")]
+        private float _fullGlowPulseSpeed = 1.2f;
+        [SerializeField, Min(0.01f), Tooltip("가득 찬 상태로 바뀌거나 풀릴 때 빛·속도가 바뀌는 실시간(초)")]
+        private float _fullTransitionDuration = 0.3f;
+        private float _fullBlend;
+        private float _glowTime;
+
         void Awake()
         {
             CreateOrbitThreads();
@@ -114,11 +130,18 @@ namespace BlindBlade.UI.CombatHud
         /// <summary>
         /// tokens보다 앞의 찬 슬롯은 실을 실시간 FadeDuration에 걸쳐 나타내고, 빈 슬롯은 같은 시간에 걸쳐 숨긴다.
         /// 새로 나타나는 슬롯은 흐름을 다시 시작하고, 보이는 슬롯은 두 실의 흐름을 적분해 실 구체 그래픽에 넘긴다.
+        /// 모든 슬롯이 차면 _fullTransitionDuration에 걸쳐 공전 속도를 _fullSpeedMultiplier배로 올리고 맥동하는 빛무리를 켠다.
         /// </summary>
         private void UpdateOrbitThreads(int tokens)
         {
             float deltaTime = Time.unscaledDeltaTime;
-            _orbitTime += deltaTime;
+            _fullBlend = Mathf.MoveTowards(_fullBlend, tokens >= _slots.Length ? 1f : 0f, deltaTime / _fullTransitionDuration);
+            // 공전·궤도면 회전·두께 변화를 모두 빠르게 하도록 실 구체의 시계를 배율만큼 빨리 돌린다.
+            float orbitDelta = deltaTime * Mathf.Lerp(1f, _fullSpeedMultiplier, _fullBlend);
+            _orbitTime += orbitDelta;
+            _glowTime += deltaTime;
+            float pulse = 0.5f + 0.5f * Mathf.Sin(_glowTime * _fullGlowPulseSpeed * Mathf.PI * 2f);
+            float glow = _fullBlend * _fullGlowStrength * (1f - _fullGlowPulseDepth * pulse);
             for (int i = 0; i < _slots.Length; i++)
             {
                 float previous = _orbitVisibilities[i];
@@ -130,8 +153,8 @@ namespace BlindBlade.UI.CombatHud
                 if (_orbitVisibilities[i] <= 0f && previous <= 0f)
                     continue;
 
-                _orbitFlows[i].Step(_orbitStyle, _orbitTime, deltaTime);
-                _orbitThreads[i].SetState(_orbitVisibilities[i], _orbitTime, _orbitFlows[i]);
+                _orbitFlows[i].Step(_orbitStyle, _orbitTime, orbitDelta);
+                _orbitThreads[i].SetState(_orbitVisibilities[i], _orbitTime, _orbitFlows[i], glow, _fullGlowRadius);
             }
         }
     }

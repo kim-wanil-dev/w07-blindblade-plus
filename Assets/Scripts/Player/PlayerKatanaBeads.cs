@@ -9,6 +9,7 @@ using BlindBlade.UI.CombatHud;
 /// 1인칭 칼 핸드가드(Tsuba) 밑쪽에 끈-구슬-끈-구슬-끈-구슬로 매달린 구슬 세 개를 퍼펙트 패링 토큰의 다이제틱 UI로 그린다.
 /// 끈과 구슬은 시점 기준 공간에서 중력·관성·거리 제약으로 흔들려, 가드·납도 등 칼 움직임과 시점 회전을 물리적으로 따라간다.
 /// 구슬 껍질은 살짝 금이 간 텅 빈 회색 유리 구슬이고, 토큰이 찰 때마다 위 구슬부터 토큰 HUD와 같은 굵은 실 두 가닥이 공전하며 속을 구체로 채운다.
+/// 구슬이 모두 차면 토큰 HUD처럼 실 구체가 더 빠르게 돌고 구슬 뒤에 맥동하는 빛무리가 퍼진다.
 /// 모든 움직임은 플레이어 시계를 따른다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -24,6 +25,10 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     private const float CRACK_TURN = 0.7f;
     private const float CRACK_LIFT = 1.004f;
     private const float MAX_DELTA_TIME = 1f / 30f;
+    private const int GLOW_SEGMENTS = 24;
+    // 빛무리 고리 반지름(구슬 반지름 대비, 마지막은 바깥 끝 배율로 대체)과 고리별 농도다. 토큰 HUD 빛무리와 같다.
+    private static readonly float[] GLOW_RING_RADII = { 0f, 0.6f, 1f, 1.3f, 1f };
+    private static readonly float[] GLOW_RING_ALPHAS = { 0.55f, 0.45f, 0.3f, 0.12f, 0f };
 
     [Header("연결")]
     [SerializeField, Tooltip("1인칭 칼을 자식으로 둔 시점(Player Camera) Transform. 끈 물리와 메시를 이 공간에서 계산한다.")]
@@ -83,6 +88,20 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     [SerializeField, Tooltip("찬 구슬 속을 채우는 실 구체. 토큰 HUD와 같은 실이지만 더 굵고 길어 구를 완전히 이룬다. Feather는 구 반지름 대비 비율이다.")]
     private CombatTokenOrbitStyle _sphereStyle = new CombatTokenOrbitStyle(2.2f, 0.85f, 0.08f);
 
+    [Header("가득 참")]
+    [SerializeField, Min(1f), Tooltip("구슬이 모두 찼을 때 실 구체가 도는 속도 배율")]
+    private float _fullSpeedMultiplier = 2.5f;
+    [SerializeField, Min(0f), Tooltip("구슬이 모두 찼을 때 구슬 뒤에 퍼지는 빛무리 세기")]
+    private float _fullGlowStrength = 1f;
+    [SerializeField, Min(1f), Tooltip("빛무리 바깥 끝 반지름(구슬 반지름 대비)")]
+    private float _fullGlowRadius = 1.7f;
+    [SerializeField, Range(0f, 1f), Tooltip("빛무리가 맥동하며 옅어지는 정도. 0이면 맥동하지 않는다.")]
+    private float _fullGlowPulseDepth = 0.35f;
+    [SerializeField, Min(0f), Tooltip("빛무리 맥동 속도(초당 횟수)")]
+    private float _fullGlowPulseSpeed = 1.2f;
+    [SerializeField, Min(0.01f), Tooltip("가득 찬 상태로 바뀌거나 풀릴 때 빛·속도가 바뀌는 시간(초, 플레이어 시간)")]
+    private float _fullTransitionDuration = 0.3f;
+
     [Header("상태")]
     private PlayerController _player;
     private PlayerClock _clock;
@@ -112,6 +131,9 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     private Quaternion _previousViewRotation;
     private bool _hanging;
     private float _time;
+    private float _fullBlend;
+    private float _glowTime;
+    private float _glow;
 
     void Awake()
     {
@@ -398,12 +420,19 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
 
     /// <summary>
     /// PlayerEmpower.Tokens만큼 위 구슬부터 실 구체를 FadeDuration(플레이어 시간)에 걸쳐 채우고, 나머지는 같은 시간에 걸쳐 비운다.
-    /// 새로 차는 구슬은 흐름을 다시 시작하고, 보이는 구슬은 두 실의 흐름을 deltaTime만큼 적분한다. 결과는 _fills에 저장한다.
+    /// 새로 차는 구슬은 흐름을 다시 시작하고, 보이는 구슬은 두 실의 흐름을 적분한다. 결과는 _fills에 저장한다.
+    /// 구슬이 모두 차면 _fullTransitionDuration에 걸쳐 실 구체를 _fullSpeedMultiplier배로 빠르게 돌리고, 맥동하는 빛무리 세기를 _glow에 저장한다.
     /// </summary>
     private void UpdateFills(float deltaTime)
     {
-        _time += deltaTime;
         int tokens = _empower.Tokens;
+        _fullBlend = Mathf.MoveTowards(_fullBlend, tokens >= BEAD_COUNT ? 1f : 0f, deltaTime / _fullTransitionDuration);
+        // 공전·궤도면 회전·두께 변화를 모두 빠르게 하도록 실 구체의 시계를 배율만큼 빨리 돌린다.
+        float orbitDelta = deltaTime * Mathf.Lerp(1f, _fullSpeedMultiplier, _fullBlend);
+        _time += orbitDelta;
+        _glowTime += deltaTime;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(_glowTime * _fullGlowPulseSpeed * Mathf.PI * 2f);
+        _glow = _fullBlend * _fullGlowStrength * (1f - _fullGlowPulseDepth * pulse);
         for (int bead = 0; bead < BEAD_COUNT; bead++)
         {
             float previous = _fills[bead];
@@ -413,7 +442,7 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
 
             _fills[bead] = Mathf.MoveTowards(previous, filled ? 1f : 0f, deltaTime / _sphereStyle.FadeDuration);
             if (_fills[bead] > 0f)
-                _flows[bead].Step(_sphereStyle, _time, deltaTime);
+                _flows[bead].Step(_sphereStyle, _time, orbitDelta);
         }
     }
 
@@ -490,7 +519,7 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     }
 
     /// <summary>
-    /// bead 구슬의 껍질 뒤쪽 삼각형, 찬 정도만큼의 실 구체, 껍질 앞쪽 삼각형, 금 선을 차례로 추가한다.
+    /// bead 구슬의 빛무리(구슬이 모두 찼을 때), 껍질 뒤쪽 삼각형, 찬 정도만큼의 실 구체, 껍질 앞쪽 삼각형, 금 선을 차례로 추가한다.
     /// 껍질 삼각형은 시점을 향하는지로 앞·뒤를 나누며, 껍질 색은 셰이더가 가장자리 밝기로 정한다.
     /// </summary>
     private void AppendBead(int bead)
@@ -498,6 +527,9 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
         Vector3 center = _positions[_beadNodes[bead]];
         Quaternion rotation = _beadRotations[bead];
         Vector3 toView = -center.normalized;
+        float glow = _glow * _fills[bead];
+        if (glow > 0f)
+            AppendGlow(center, glow);
 
         int shellStart = _vertices.Count;
         for (int i = 0; i < _shellUnit.Length; i++)
@@ -609,6 +641,41 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
             {
                 int a = first + i * 2;
                 AddQuad(a, a + 1, a + 3, a + 2);
+            }
+        }
+    }
+
+    /// <summary>
+    /// center 구슬 뒤에 화면과 나란한 둥근 빛무리를 GLOW_RING_RADII·GLOW_RING_ALPHAS 고리로 추가한다.
+    /// 바깥 끝 반지름은 구슬 반지름 × _fullGlowRadius이고, 농도에는 실 구체 색과 glow를 곱한다.
+    /// </summary>
+    private void AppendGlow(Vector3 center, float glow)
+    {
+        int ringCount = GLOW_RING_RADII.Length;
+        int first = _vertices.Count;
+        Vector3 normal = -center.normalized;
+        for (int ring = 0; ring < ringCount; ring++)
+        {
+            float radius = _beadRadius * (ring == ringCount - 1 ? _fullGlowRadius : GLOW_RING_RADII[ring]);
+            Color ringColor = _sphereStyle.Color;
+            ringColor.a *= GLOW_RING_ALPHAS[ring] * glow;
+            for (int segment = 0; segment < GLOW_SEGMENTS; segment++)
+            {
+                float angle = Mathf.PI * 2f * segment / GLOW_SEGMENTS;
+                // 시점 공간의 가로·세로 축으로 펼쳐 화면과 나란한 원이 된다.
+                Vector3 offset = new Vector3(Mathf.Cos(angle), Mathf.Sin(angle), 0f) * radius;
+                AddVertex(center + offset, normal, ringColor, 0f);
+            }
+        }
+
+        for (int ring = 0; ring < ringCount - 1; ring++)
+        {
+            int inner = first + ring * GLOW_SEGMENTS;
+            int outer = inner + GLOW_SEGMENTS;
+            for (int segment = 0; segment < GLOW_SEGMENTS; segment++)
+            {
+                int next = (segment + 1) % GLOW_SEGMENTS;
+                AddQuad(inner + segment, outer + segment, outer + next, inner + next);
             }
         }
     }
