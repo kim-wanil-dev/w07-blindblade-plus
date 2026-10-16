@@ -1,17 +1,23 @@
 using System;
 using System.Collections;
+using System.IO;
 
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+using FMODUnity;
+
 /// <summary>씬 사이에 검은 화면을 유지하고 지정된 페이드와 오디오 대기를 수행한다.</summary>
 public sealed class SceneTransitionOverlay : MonoBehaviour
 {
+    private const string TORCH_STREAMING_FILE = "Onboarding/TorchTransition.wav";
+
     private static SceneTransitionOverlay _instance;
 
     private CanvasGroup _canvasGroup;
-    private AudioSource _audioSource;
+    private FMOD.Sound _torchSound;
+    private FMOD.Channel _torchChannel;
     private Coroutine _transitionRoutine;
     private bool _transitioning;
 
@@ -54,6 +60,7 @@ public sealed class SceneTransitionOverlay : MonoBehaviour
 
     void OnDestroy()
     {
+        ReleaseTorchSound();
         if (_instance == this) _instance = null;
     }
 
@@ -82,30 +89,23 @@ public sealed class SceneTransitionOverlay : MonoBehaviour
         rect.offsetMax = Vector2.zero;
     }
 
-    /// <summary>횃불 소리를 시작하고 0.5초 암전 뒤 재생 종료까지 기다린 다음 onboarding 씬을 연다.</summary>
+    /// <summary>torchClip의 길이를 확인하고 FMOD로 횃불 WAV를 재생하며 암전 뒤 소리가 끝나면 sceneName을 연다.</summary>
     private IEnumerator RunIntroTransition(AudioClip torchClip, string sceneName, float fadeDuration)
     {
         _transitioning = true;
-        _audioSource = GetComponent<AudioSource>();
-        if (_audioSource == null) _audioSource = gameObject.AddComponent<AudioSource>();
-        _audioSource.playOnAwake = false;
-        _audioSource.spatialBlend = 0f;
-        _audioSource.ignoreListenerPause = true;
-        _audioSource.loop = false;
-        _audioSource.clip = torchClip;
         float soundStartedAt = Time.unscaledTime;
-        if (torchClip != null)
-            _audioSource.Play();
-        else
-            Debug.LogError("온보딩 진입 횃불 오디오 클립이 연결되지 않았습니다.", this);
+        bool soundStarted = TryPlayTorchSound(torchClip, out float soundDuration);
 
         yield return FadeTo(1f, fadeDuration);
-        if (torchClip != null)
+        if (soundStarted)
         {
-            float soundDuration = torchClip.length;
-            while (Time.unscaledTime - soundStartedAt < soundDuration)
+            while (Time.unscaledTime - soundStartedAt < soundDuration + 0.25f)
+            {
+                if (_torchChannel.isPlaying(out bool playing) != FMOD.RESULT.OK || !playing) break;
                 yield return null;
+            }
         }
+        ReleaseTorchSound();
 
         if (!Application.CanStreamedLevelBeLoaded(sceneName))
         {
@@ -120,9 +120,67 @@ public sealed class SceneTransitionOverlay : MonoBehaviour
         SceneManager.LoadScene(sceneName);
         yield return null;
         yield return FadeTo(0f, fadeDuration);
-        _audioSource.Stop();
         _transitioning = false;
         _transitionRoutine = null;
+    }
+
+    /// <summary>StreamingAssets의 횃불 WAV를 FMOD 2D 채널로 시작하고 클립 또는 파일 길이를 soundDuration에 반환한다.</summary>
+    private bool TryPlayTorchSound(AudioClip torchClip, out float soundDuration)
+    {
+        soundDuration = torchClip != null ? torchClip.length : 0f;
+        string path = Path.Combine(Application.streamingAssetsPath, TORCH_STREAMING_FILE);
+        if (!File.Exists(path))
+        {
+            Debug.LogError("온보딩 횃불 FMOD 음원 파일을 찾지 못했습니다: " + path, this);
+            return false;
+        }
+
+        try
+        {
+            FMOD.System system = RuntimeManager.CoreSystem;
+            FMOD.RESULT result = system.createSound(path, FMOD.MODE._2D | FMOD.MODE.CREATESTREAM, out _torchSound);
+            if (result != FMOD.RESULT.OK)
+            {
+                Debug.LogError("온보딩 횃불 FMOD 음원 생성 실패: " + result, this);
+                ReleaseTorchSound();
+                return false;
+            }
+
+            if (_torchSound.getLength(out uint lengthMilliseconds, FMOD.TIMEUNIT.MS) == FMOD.RESULT.OK)
+                soundDuration = lengthMilliseconds / 1000f;
+            result = system.playSound(_torchSound, default, true, out _torchChannel);
+            if (result != FMOD.RESULT.OK)
+            {
+                Debug.LogError("온보딩 횃불 FMOD 재생 실패: " + result, this);
+                ReleaseTorchSound();
+                return false;
+            }
+
+            result = _torchChannel.setVolume(Managers.Sound.EffectVolume);
+            if (result == FMOD.RESULT.OK) result = _torchChannel.setPaused(false);
+            if (result != FMOD.RESULT.OK)
+            {
+                Debug.LogError("온보딩 횃불 FMOD 채널 시작 실패: " + result, this);
+                ReleaseTorchSound();
+                return false;
+            }
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogError("온보딩 횃불 FMOD 초기화 실패: " + exception.Message, this);
+            ReleaseTorchSound();
+            return false;
+        }
+    }
+
+    /// <summary>현재 횃불 FMOD 채널을 정지하고 스트리밍 음원을 해제해 다음 씬에 재생 상태를 남기지 않는다.</summary>
+    private void ReleaseTorchSound()
+    {
+        if (_torchChannel.hasHandle()) _torchChannel.stop();
+        if (_torchSound.hasHandle()) _torchSound.release();
+        _torchChannel = default;
+        _torchSound = default;
     }
 
     /// <summary>검게 페이드한 뒤 beforeLoad를 실행하고 지정된 씬을 연 다음 화면을 밝힌다.</summary>

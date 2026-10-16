@@ -161,6 +161,16 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 연계 단계에 들어가기 전에 활성 집중을 끝내고 토큰을 startingTokens개로 설정한다.
+    /// 새 퍼펙트 패링이 실제로 일어나기 전에는 준비와 불릿 타임을 시작하지 않는다.
+    /// </summary>
+    public void PrepareOnboardingFollowUp(int startingTokens)
+    {
+        if (_active) End(PlayerEmpowerEndReason.SessionEnded);
+        _tokens = Mathf.Clamp(startingTokens, 0, MAX_TOKENS);
+    }
+
+    /// <summary>
     /// 온보딩 검기 연습에 들어갈 때 준비 상태를 유지하거나 다시 시작한다.
     /// 토큰을 검기 사용 범위인 1~MAX_TOKENS-1개로 맞추고 준비 만료를 막는다.
     /// </summary>

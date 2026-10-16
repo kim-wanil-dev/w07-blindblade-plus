@@ -47,7 +47,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     private float _postHeartbeatAttackDelay = 0.2f;
     [SerializeField, Min(0f), Tooltip("공격 시작보다 기합을 먼저 재생할 시간입니다. 마지막 박동 이후로 제한합니다.")]
     private float _attackVoiceLeadTime = 0.05f;
-    private bool _usesHeartbeatForCurrentAttack;
+    private bool _useHeartbeatForCurrentAttack;
     private int _heartbeatsPlayed;
     private int _currentHeartbeatCount;
     private bool _attackVoicePlayed;
@@ -68,6 +68,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     public bool IsAvailable => isActiveAndEnabled && !IsBusy && Time.time >= _nextAttackTime;
     public virtual bool AllowsMovement => false;
     public EnemyAttackContext Context => _context;
+    public float FirstHeartbeatAt { get; private set; }
     public float LastHeartbeatInterval { get; private set; }
     public int HeartbeatCount => Mathf.Max(1, _heartbeatCount);
     public float ExecutionDuration => ActiveDuration;
@@ -80,6 +81,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         ? Mathf.Clamp01(1f - (_phaseEndTime - Time.time) / Mathf.Max(0.1f, _context.TelegraphDuration)) : 1f;
     public event Action<Transform> AttackPerformed;
     public event Action<EnemyAttackContext> TelegraphStarted;
+    public event Action<EnemyAttackContext> FirstHeartbeatPlayed;
     public event Action<EnemyAttackContext> AttackCommitted;
     public event Action<EnemyAttackContext> AttackEnded;
     public event Action<EnemyAttackContext> AttackCompleted;
@@ -102,14 +104,14 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     {
         _phase = EnemyAttackPhase.Ready;
         _nextAttackTime = 0f;
-        _usesHeartbeatForCurrentAttack = false;
+        _useHeartbeatForCurrentAttack = false;
         _heartbeatsPlayed = 0;
         _attackVoicePlayed = false;
     }
 
     protected virtual void Update()
     {
-        if (_usesHeartbeatForCurrentAttack && Time.timeScale <= 0f)
+        if (_useHeartbeatForCurrentAttack && Time.timeScale <= 0f)
         {
             if (_phase == EnemyAttackPhase.Telegraph) CancelAttack();
             return;
@@ -123,7 +125,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
                 return;
             }
 
-            if (_usesHeartbeatForCurrentAttack)
+            if (_useHeartbeatForCurrentAttack)
                 UpdateHeartbeatTelegraph();
             else if (Time.time >= _phaseEndTime)
                 CommitAttack();
@@ -171,13 +173,15 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         if (!IsAvailable || !CanAttack(target) || target != _sensor.Target || !_sensor.CanSeeTarget())
             return false;
 
+        _heartbeatsPlayed = 0;
+        _attackVoicePlayed = false;
         if (_playingHeartbeatSounds.Count > 0) StopActionSound(true);
-        _usesHeartbeatForCurrentAttack = UsesHeartbeatTelegraph || attackImmediately;
+        _useHeartbeatForCurrentAttack = UsesHeartbeatTelegraph || attackImmediately;
         _currentHeartbeatCount = HeartbeatCount;
         LastHeartbeatInterval = UsesHeartbeatTelegraph && !attackImmediately && _currentHeartbeatCount > 1
             ? UnityEngine.Random.Range(MinimumHeartbeatInterval, MaximumHeartbeatInterval) : 0f;
         float telegraphDuration = attackImmediately ? 0f
-            : (_usesHeartbeatForCurrentAttack
+            : (_useHeartbeatForCurrentAttack
                 ? FirstHeartbeatDelay + (_currentHeartbeatCount - 1) * LastHeartbeatInterval + PostHeartbeatAttackDelay
                 : Mathf.Max(0.1f, _telegraphDuration));
         _context = new EnemyAttackContext(this, target, telegraphDuration);
@@ -194,12 +198,11 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
             CommitAttack();
             return true;
         }
-        if (_usesHeartbeatForCurrentAttack)
+        if (_useHeartbeatForCurrentAttack)
         {
             _nextHeartbeatTime = Time.time + FirstHeartbeatDelay;
+            FirstHeartbeatAt = _nextHeartbeatTime;
             _attackVoiceTime = _phaseEndTime - Mathf.Clamp(_attackVoiceLeadTime, 0f, PostHeartbeatAttackDelay * 0.5f);
-            _heartbeatsPlayed = 0;
-            _attackVoicePlayed = false;
         }
         else
             PlayActionSound(EnemySoundStage.Telegraph);
@@ -222,8 +225,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         EnemyAttackContext context = _context;
         bool wasTelegraph = _phase == EnemyAttackPhase.Telegraph;
         _phase = EnemyAttackPhase.Ready;
-        StopActionSound(_usesHeartbeatForCurrentAttack || _playingHeartbeatSounds.Count > 0);
-        _usesHeartbeatForCurrentAttack = false;
+        StopActionSound(_useHeartbeatForCurrentAttack || _playingHeartbeatSounds.Count > 0);
+        _useHeartbeatForCurrentAttack = false;
         _heartbeatsPlayed = 0;
         _attackVoicePlayed = false;
         _nextHeartbeatTime = 0f;
@@ -251,6 +254,9 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
             _heartbeatsPlayed++;
             _nextHeartbeatTime += LastHeartbeatInterval;
             PlayActionSound(EnemySoundStage.Heartbeat);
+
+            if (_heartbeatsPlayed == 1)
+                FirstHeartbeatPlayed?.Invoke(_context);
         }
         if (now >= _phaseEndTime && now - _phaseEndTime > MAX_RHYTHM_DELAY)
         {
@@ -285,8 +291,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         _phase = EnemyAttackPhase.Active;
         _phaseEndTime = Time.time + ActiveDuration;
         EnemyAttackContext context = _context;
-        if (SoundAction == EnemySoundAction.Melee && !_usesHeartbeatForCurrentAttack) StopActionSound();
-        if (!_usesHeartbeatForCurrentAttack && (SoundAction == EnemySoundAction.Melee || SoundAction == EnemySoundAction.Ranged))
+        if (SoundAction == EnemySoundAction.Melee && !_useHeartbeatForCurrentAttack) StopActionSound();
+        if (!_useHeartbeatForCurrentAttack && (SoundAction == EnemySoundAction.Melee || SoundAction == EnemySoundAction.Ranged))
             PlayActionSound(EnemySoundStage.AttackVoice);
         PlayActionSound(EnemySoundStage.Action);
         BlindBlade.Telemetry.CombatTelemetrySignals.Commit(context.AttackId, transform.position);
@@ -311,7 +317,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         _phase = EnemyAttackPhase.Recovery;
         _phaseEndTime = Time.time + Mathf.Max(_recoveryDuration, minimumDuration);
         EnemyAttackContext context = _context;
-        if (SoundAction == EnemySoundAction.Melee && !_usesHeartbeatForCurrentAttack) StopActionSound();
+        if (SoundAction == EnemySoundAction.Melee && !_useHeartbeatForCurrentAttack) StopActionSound();
         OnAttackEnded(context, false);
         if (!(this is EnemyRangedAttack))
             BlindBlade.Telemetry.CombatTelemetrySignals.End(context.AttackId, "Miss", transform.position);
@@ -324,9 +330,9 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     /// </summary>
     private void PlayActionSound(EnemySoundStage stage)
     {
-        SoundId soundId = EnemySoundSettings.GetSound(SoundAction, stage);
+        SoundId soundId = ResolveActionSound(stage);
         if (soundId == SoundId.None) return;
-        if (_usesHeartbeatForCurrentAttack || stage == EnemySoundStage.AttackVoice || _playingHeartbeatSounds.Count > 0)
+        if (_useHeartbeatForCurrentAttack || stage == EnemySoundStage.AttackVoice || _playingHeartbeatSounds.Count > 0)
             _playingHeartbeatSounds.Add(soundId);
         else _playingActionSound = soundId;
         float volume = stage == EnemySoundStage.Telegraph || stage == EnemySoundStage.Heartbeat ? _telegraphVolume : _actionVolume;
@@ -334,6 +340,15 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
             Managers.Sound.PlayAttachedWithLabel(soundId, gameObject, "SwingType", melee.IsLeftToRightSlash ? "A" : "B", volume);
         else
             Managers.Sound.PlayAttached(soundId, gameObject, volume);
+    }
+
+    /// <summary>
+    /// stage에 맞는 공통 공격 소리 ID를 반환한다.
+    /// 파생 공격이 특정 단계의 소리를 교체해도 기존 재생·취소 처리를 사용한다.
+    /// </summary>
+    protected virtual SoundId ResolveActionSound(EnemySoundStage stage)
+    {
+        return EnemySoundSettings.GetSound(SoundAction, stage);
     }
 
     /// <summary>

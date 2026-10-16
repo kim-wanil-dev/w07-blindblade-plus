@@ -15,9 +15,16 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private const int FINAL_STAGE = 8;
     private const float TARGET_DISTANCE = 5f;
     private const float TARGET_ARRIVAL_RADIUS = 1f;
+    private const float TARGET_RING_RADIUS = 0.8f;
+    private const float TARGET_RING_WIDTH = 0.0375f;
+    private const int TARGET_RING_SEGMENTS = 64;
     private const float PRACTICE_ENEMY_DISTANCE = 4f;
+    private const float SWORD_WAVE_TARGET_DISTANCE = 9f;
     private const float ENEMY_REPLACE_DISTANCE = 18f;
-    private const float FOREST_EDGE_DISTANCE = 19.5f;
+    private const float WAVE_STAGE_START_DISTANCE = 5f;
+    private const float ULTIMATE_TARGET_DISTANCE = 11f;
+    private const float ULTIMATE_TARGET_SPACING = 1.8f;
+    private const int ULTIMATE_TARGET_COUNT = 8;
     private const float THROWER_DISTANCE = 12f;
     private const float THROW_INTERVAL = 2f;
     private const float HEALTH_REGEN_PER_SECOND = 45f;
@@ -43,6 +50,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private readonly HashSet<int> _launchedShurikenAttackIds = new HashSet<int>();
     private readonly HashSet<int> _perfectDodgeAttackIds = new HashSet<int>();
     private readonly HashSet<int> _pendingPerfectDodgeAttackIds = new HashSet<int>();
+    private readonly List<GameObject> _ultimateTargets = new List<GameObject>();
+    private readonly List<Vector3> _ultimateTargetPositions = new List<Vector3>();
     private PlayerController _player;
     private PlayerMotor _motor;
     private PlayerHealth _health;
@@ -56,7 +65,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private InputManager _inputManager;
     private GameObject _trainingEnemy;
     private EnemyHealth _trainingEnemyHealth;
-    private EnemyAttackSelector _trainingEnemyAttacks;
     private BambooThrower _trainingThrower;
     private FootstepWave _targetWave;
     private Vector3 _moveTarget;
@@ -121,6 +129,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             CompleteCurrentObjective();
 
         MaintainTrainingEnemy();
+        MaintainUltimateTargets();
         UpdateGuardTiming();
         UpdateRangedThrower();
     }
@@ -209,6 +218,11 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _resolvedHitIds.Clear();
         _launchedShurikenAttackIds.Clear();
 
+        if (_stage == 5 || _stage == 7)
+            _empower.PrepareOnboardingFollowUp(0);
+        else if (_stage == FINAL_STAGE)
+            _empower.PrepareOnboardingFollowUp(_empower.MaxTokens - 1);
+
         PositionPlayerForStage(_stage);
         _hud.ShowObjective(_stage, _objectiveIndex);
         ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
@@ -218,10 +232,18 @@ public sealed class OnboardingFlowController : MonoBehaviour
             CreateMovementTarget();
         else if (_stage == 2 || _stage == 4)
             CreateTrainingEnemy(_stage == 2, _stage != 2);
+        else if (_stage == 5 || _stage == 7)
+        {
+            CreateTrainingEnemy(true, false, SWORD_WAVE_TARGET_DISTANCE);
+            CreateTrainingThrower();
+        }
         else if (_stage == 3 || _stage == 6)
             CreateTrainingThrower();
         else if (_stage == FINAL_STAGE)
-            _empower.BeginOnboardingUltimate();
+        {
+            CreateUltimateTargets();
+            CreateTrainingThrower();
+        }
     }
 
     /// <summary>필요한 연습 위치를 NavMesh에서 찾고 플레이어와 시점을 단계에 맞게 배치한다.</summary>
@@ -237,7 +259,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
         else if (stage == 5 || stage == 7 || stage == FINAL_STAGE)
         {
-            position = center + Vector3.forward * FOREST_EDGE_DISTANCE;
+            position = center + Vector3.forward * WAVE_STAGE_START_DISTANCE;
             facing = Vector3.forward;
         }
         else if (stage == 6)
@@ -250,36 +272,81 @@ public sealed class OnboardingFlowController : MonoBehaviour
             MovePlayer(position, facing);
     }
 
-    /// <summary>목표 위치를 플레이어 정면 TARGET_DISTANCE에 만들고 기존 Wave 프리팹으로 표시한다.</summary>
+    /// <summary>정면 TARGET_DISTANCE의 기존 Wave 프리팹에 세 배 두께의 원형 기본 선을 표시한다.</summary>
     private void CreateMovementTarget()
     {
         Vector3 forward = Vector3.ProjectOnPlane(_motor.ViewForward, Vector3.up).normalized;
         _moveTarget = _player.transform.position + forward * TARGET_DISTANCE;
         _targetWave = Instantiate(_targetWavePrefab, _moveTarget + Vector3.up * 0.01f, Quaternion.identity);
-        _targetWave.Play(new Color(0.35f, 0.9f, 1f, 0.9f), 0.8f, 1800f);
+        Color color = new Color(0.35f, 0.9f, 1f, 0.9f);
+        _targetWave.Play(color, TARGET_RING_RADIUS, 1800f);
+        SpriteRenderer ringSprite = _targetWave.GetComponentInChildren<SpriteRenderer>();
+        ringSprite.enabled = false;
+        LineRenderer ring = _targetWave.gameObject.AddComponent<LineRenderer>();
+        ring.sharedMaterial = ringSprite.sharedMaterial;
+        ring.startColor = color;
+        ring.endColor = color;
+        ring.widthMultiplier = TARGET_RING_WIDTH;
+        ring.useWorldSpace = false;
+        ring.loop = true;
+        ring.positionCount = TARGET_RING_SEGMENTS;
+        ring.sortingLayerID = ringSprite.sortingLayerID;
+        ring.sortingOrder = ringSprite.sortingOrder + 1;
+        for (int i = 0; i < TARGET_RING_SEGMENTS; i++)
+        {
+            float angle = i * Mathf.PI * 2f / TARGET_RING_SEGMENTS;
+            ring.SetPosition(i, new Vector3(Mathf.Cos(angle) * TARGET_RING_RADIUS,
+                0.035f, Mathf.Sin(angle) * TARGET_RING_RADIUS));
+        }
     }
 
-    /// <summary>기존 근접 적을 앞에 배치하고 killable 여부와 공격 활성 상태를 현재 단계에 맞춘다.</summary>
-    private void CreateTrainingEnemy(bool killable, bool attacksPlayer)
+    /// <summary>기존 근접 적을 플레이어 앞 distance에 배치하고 killable·attacksPlayer 상태를 설정한다.</summary>
+    private void CreateTrainingEnemy(bool killable, bool attacksPlayer, float distance = PRACTICE_ENEMY_DISTANCE)
     {
         Vector3 forward = Vector3.ProjectOnPlane(_motor.ViewForward, Vector3.up).normalized;
-        Vector3 position = _player.transform.position + forward * PRACTICE_ENEMY_DISTANCE;
+        Vector3 position = _player.transform.position + forward * distance;
+        _trainingEnemy = SpawnTrainingEnemy(position, killable, attacksPlayer);
+        _trainingEnemyHealth = _trainingEnemy.GetComponent<EnemyHealth>();
+        if (_trainingEnemyHealth != null)
+            _trainingEnemyHealth.Died += HandleTrainingEnemyDied;
+    }
+
+    /// <summary>position의 NavMesh에 근접 적을 만들고 killable·attacksPlayer에 맞춰 피해와 공격·추적을 설정해 반환한다.</summary>
+    private GameObject SpawnTrainingEnemy(Vector3 position, bool killable, bool attacksPlayer)
+    {
         if (NavMesh.SamplePosition(position, out NavMeshHit hit, 2.5f, NavMesh.AllAreas)) position = hit.position;
         Quaternion rotation = Quaternion.LookRotation(Vector3.ProjectOnPlane(_player.transform.position - position, Vector3.up));
-        _trainingEnemy = Instantiate(_meleePrefab, position, rotation, _unitRoot);
-        _trainingEnemyHealth = _trainingEnemy.GetComponent<EnemyHealth>();
-        _trainingEnemyAttacks = _trainingEnemy.GetComponent<EnemyAttackSelector>();
-        if (_trainingEnemyHealth != null)
+        GameObject enemy = Instantiate(_meleePrefab, position, rotation, _unitRoot);
+        EnemyHealth health = enemy.GetComponent<EnemyHealth>();
+        if (health != null) health.SetInvulnerable(!killable);
+        EnemyController controller = enemy.GetComponent<EnemyController>();
+        if (controller != null)
         {
-            _trainingEnemyHealth.SetInvulnerable(!killable);
-            _trainingEnemyHealth.Died += HandleTrainingEnemyDied;
+            controller.SetTarget(attacksPlayer ? _player.transform : null);
+            controller.enabled = attacksPlayer;
         }
-
-        EnemyController controller = _trainingEnemy.GetComponent<EnemyController>();
-        if (controller != null) controller.SetTarget(attacksPlayer ? _player.transform : null);
-        foreach (EnemyAttackBehaviour attack in _trainingEnemy.GetComponents<EnemyAttackBehaviour>())
+        foreach (EnemyAttackBehaviour attack in enemy.GetComponents<EnemyAttackBehaviour>())
             attack.enabled = attacksPlayer;
-        if (_trainingEnemyAttacks != null) _trainingEnemyAttacks.enabled = attacksPlayer;
+        EnemyAttackSelector selector = enemy.GetComponent<EnemyAttackSelector>();
+        if (selector != null) selector.enabled = attacksPlayer;
+        DefenseChaser chaser = enemy.GetComponent<DefenseChaser>();
+        if (chaser != null) chaser.enabled = attacksPlayer;
+        return enemy;
+    }
+
+    /// <summary>궁극기 단계의 정면 11m에 기존 비공격 근접 적 8명을 균일한 한 줄로 배치한다.</summary>
+    private void CreateUltimateTargets()
+    {
+        Vector3 forward = Vector3.ProjectOnPlane(_motor.ViewForward, Vector3.up).normalized;
+        Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+        Vector3 center = _player.transform.position + forward * ULTIMATE_TARGET_DISTANCE;
+        for (int i = 0; i < ULTIMATE_TARGET_COUNT; i++)
+        {
+            Vector3 position = center + right * ((i - (ULTIMATE_TARGET_COUNT - 1) * 0.5f)
+                * ULTIMATE_TARGET_SPACING);
+            _ultimateTargetPositions.Add(position);
+            _ultimateTargets.Add(SpawnTrainingEnemy(position, true, false));
+        }
     }
 
     /// <summary>극한 회피 또는 원거리 방어 단계에서 BambooThrower를 플레이어 앞에 두고 예약 투척을 준비한다.</summary>
@@ -308,17 +375,58 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>현재 연습 적이 사라지거나 18m보다 멀어지면 같은 단계에 다시 배치한다.</summary>
     private void MaintainTrainingEnemy()
     {
-        if ((_stage != 2 && _stage != 4) || _advanceQueued) return;
+        if ((_stage != 2 && _stage != 4 && _stage != 5 && _stage != 7) || _advanceQueued) return;
+        if ((_stage == 5 || _stage == 7) && _player.CurrentState != PlayerActionState.Free) return;
         if (_trainingEnemy == null || _trainingEnemyHealth == null || !_trainingEnemyHealth.IsAlive)
         {
-            bool killable = _stage == 2;
-            CreateTrainingEnemy(killable, !killable);
+            DestroyTrainingEnemy();
+            bool attacksPlayer = _stage == 4;
+            CreateTrainingEnemy(!attacksPlayer, attacksPlayer,
+                _stage == 5 || _stage == 7 ? SWORD_WAVE_TARGET_DISTANCE : PRACTICE_ENEMY_DISTANCE);
             return;
         }
         if (HorizontalDistance(_player.transform.position, _trainingEnemy.transform.position) <= ENEMY_REPLACE_DISTANCE) return;
-        bool canDie = _stage == 2;
         DestroyTrainingEnemy();
-        CreateTrainingEnemy(canDie, !canDie);
+        bool attacks = _stage == 4;
+        CreateTrainingEnemy(!attacks, attacks,
+            _stage == 5 || _stage == 7 ? SWORD_WAVE_TARGET_DISTANCE : PRACTICE_ENEMY_DISTANCE);
+    }
+
+    /// <summary>궁극기 수락 전 사라진 대상이 있으면 원래 정면 배열 위치에 비공격 적을 다시 채운다.</summary>
+    private void MaintainUltimateTargets()
+    {
+        if (_stage != FINAL_STAGE || _empower.IsStriking) return;
+        for (int i = 0; i < _ultimateTargets.Count; i++)
+        {
+            GameObject enemy = _ultimateTargets[i];
+            EnemyHealth health = enemy != null ? enemy.GetComponent<EnemyHealth>() : null;
+            if (health != null && health.IsAlive) continue;
+            if (enemy != null) Destroy(enemy);
+            _ultimateTargets[i] = SpawnTrainingEnemy(_ultimateTargetPositions[i], true, false);
+        }
+    }
+
+    /// <summary>현재 궁극기 목표의 8명이 모두 실제로 쓰러졌는지 확인해 완료 판정에 반환한다.</summary>
+    private bool AreUltimateTargetsDefeated()
+    {
+        if (_ultimateTargets.Count != ULTIMATE_TARGET_COUNT) return false;
+        foreach (GameObject enemy in _ultimateTargets)
+        {
+            if (enemy == null) continue;
+            EnemyHealth health = enemy.GetComponent<EnemyHealth>();
+            if (health != null && health.IsAlive) return false;
+        }
+        return true;
+    }
+
+    /// <summary>궁극기 연습을 다시 할 수 있도록 기존 8명을 치우고 원래 전방 배열에 새 적을 배치한다.</summary>
+    private void ResetUltimateTargets()
+    {
+        foreach (GameObject enemy in _ultimateTargets)
+            if (enemy != null) Destroy(enemy);
+        _ultimateTargets.Clear();
+        _ultimateTargetPositions.Clear();
+        CreateUltimateTargets();
     }
 
     /// <summary>방어 단계에서 플레이어의 실제 가드 유지 시간과 현재 접촉 판정을 HUD에 전달한다.</summary>
@@ -332,7 +440,9 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>현재 2초 간격 시각에 BambooThrower가 예약 허용한 경우 실제 전조·투척 사이클을 시작한다.</summary>
     private void UpdateRangedThrower()
     {
-        if (_stage != 3 && _stage != 6) return;
+        bool followUpStage = _stage == 5 || _stage == 7 || _stage == FINAL_STAGE;
+        if (_stage != 3 && _stage != 6 && !followUpStage) return;
+        if (followUpStage && _objectiveIndex != 0) return;
         if (_trainingThrower == null)
         {
             CreateTrainingThrower();
@@ -386,6 +496,10 @@ public sealed class OnboardingFlowController : MonoBehaviour
                 || (_objectiveIndex == 1 && resolution.Outcome == DefenseOutcome.PerfectParry))
                 CompleteCurrentObjective();
         }
+        else if ((_stage == 5 || _stage == 7 || _stage == FINAL_STAGE) && _objectiveIndex == 0
+            && _launchedShurikenAttackIds.Contains(resolution.AttackId)
+            && resolution.Outcome == DefenseOutcome.PerfectParry)
+            CompleteCurrentObjective();
     }
 
     /// <summary>현재 근접 적 또는 2초 주기 투척수가 시작한 공격 ID인지 확인한다.</summary>
@@ -418,29 +532,36 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (!_transitionInputLocked && _stage == 1) _dodgeWasStarted = true;
     }
 
-    /// <summary>현재 강화 종료 이유를 읽어 궁극기 완료를 집계하거나 잘못 쓴 기술의 준비를 복구한다.</summary>
+    /// <summary>현재 강화 종료 이유와 목표 순번을 읽어 완료를 집계하거나 퍼펙트 패링 재시도를 예약한다.</summary>
     private void HandleEmpowerChanged(PlayerEmpowerEvent empowerEvent)
     {
         if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked
             || empowerEvent.Stage != PlayerEmpowerStage.Ended) return;
-        if (_stage == FINAL_STAGE && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
-            QueueAdvance();
-        else if ((_stage == 5 || _stage == 7) && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
-            StartCoroutine(RecoverWrongEmpowerUse());
-        else if (_stage == FINAL_STAGE && empowerEvent.EndReason == PlayerEmpowerEndReason.SwordWave)
-            StartCoroutine(RecoverWrongEmpowerUse());
+        if (_stage == FINAL_STAGE && _objectiveIndex == 1
+            && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
+        {
+            if (AreUltimateTargetsDefeated()) QueueAdvance();
+            else StartCoroutine(RecoverWrongEmpowerUse(true));
+        }
+        else if ((_stage == 5 || _stage == 7) && _objectiveIndex == 1
+            && empowerEvent.EndReason == PlayerEmpowerEndReason.Completed)
+            StartCoroutine(RecoverWrongEmpowerUse(true));
+        else if (_stage == FINAL_STAGE && _objectiveIndex == 1
+            && empowerEvent.EndReason == PlayerEmpowerEndReason.SwordWave)
+            StartCoroutine(RecoverWrongEmpowerUse(false));
     }
 
     /// <summary>검기 런처가 실제 DefenseSwordWave를 생성한 사건으로 검기 목표를 완료한다.</summary>
     private void HandleSwordWaveLaunched(DefenseSwordWave wave)
     {
-        if (!_transitionInputLocked && (_stage == 5 || _stage == 7)) QueueAdvance();
+        if (!_transitionInputLocked && _objectiveIndex == 1 && (_stage == 5 || _stage == 7)) QueueAdvance();
     }
 
-    /// <summary>극한 회피·원거리 방어 중 실제 발사된 수리검 공격 ID를 기록한다.</summary>
+    /// <summary>극한 회피·원거리 방어·연계 공격 연습 중 실제 발사된 수리검 공격 ID를 기록한다.</summary>
     private void HandleShurikenLaunched(DefenseShuriken shuriken)
     {
-        if (_transitionInputLocked || (_stage != 3 && _stage != 6) || shuriken == null) return;
+        if (_transitionInputLocked || (_stage != 3 && _stage != 5 && _stage != 6
+            && _stage != 7 && _stage != FINAL_STAGE) || shuriken == null) return;
         _launchedShurikenAttackIds.Add(shuriken.AttackId);
     }
 
@@ -466,18 +587,23 @@ public sealed class OnboardingFlowController : MonoBehaviour
         QueueAdvance();
     }
 
-    /// <summary>nextObjective 앞에서 현재 목표 완료 표시를 보여 주고 같은 단계의 다음 목표 문구로 바꾼다.</summary>
+    /// <summary>현재 목표를 완료한 뒤 완료 카드를 생략하고 같은 단계의 다음 목표 문구로 바꾼다.</summary>
     private IEnumerator AdvanceToNextObjective(int nextObjective)
     {
         yield return new WaitForEndOfFrame();
         LockTransitionInput();
-        yield return _hud.ShowObjectiveCompletion();
-        if (_restartQueued) yield break;
+        if (_stage == 5 || _stage == 7 || _stage == FINAL_STAGE)
+        {
+            _empower.HoldOnboardingReady();
+            ClearRangedPractice();
+        }
+        else if ((_stage == 4 || _stage == 6) && _empower.IsReady)
+            _empower.PrepareOnboardingFollowUp(_empower.Tokens);
         _objectiveIndex = nextObjective;
-        _hud.ShowObjective(_stage, _objectiveIndex);
+        _hud.ShowObjective(_stage, _objectiveIndex, true);
         ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
         _advanceQueued = false;
-        UnlockTransitionInput();
+        yield return ReadyStageAndUnlockInput();
     }
 
     /// <summary>중복 이벤트를 막고 다음 단계 이동 코루틴을 예약한다.</summary>
@@ -494,7 +620,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
     {
         yield return new WaitForEndOfFrame();
         LockTransitionInput();
-        if (_stage == 4 || _stage == 6) _empower.HoldOnboardingReady();
         int nextStage = _stage + 1;
         yield return _hud.ShowStageCompletion(_stage, nextStage <= FINAL_STAGE);
         if (_restartQueued) yield break;
@@ -530,29 +655,37 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _transitionInputLocked = false;
     }
 
-    /// <summary>검기·궁극기 단계의 준비와 불릿 타임을 확인한 뒤 잠근 입력을 복원한다.</summary>
+    /// <summary>연계 단계의 시간 상태와 플레이어 행동이 목표에 맞는지 확인한 뒤 잠근 입력을 복원한다.</summary>
     private IEnumerator ReadyStageAndUnlockInput()
     {
         while (_stage == 5 || _stage == 7 || _stage == FINAL_STAGE)
         {
             if (_restartQueued || _gameState.State != GameplayState.Playing || !_health.IsAlive) yield break;
-            if (_stage == FINAL_STAGE)
+            if (_objectiveIndex == 0)
             {
-                if ((!_empower.IsReady || _empower.Tokens != _empower.MaxTokens)
-                    && !_empower.IsStriking) _empower.BeginOnboardingUltimate();
+                if (!_empower.IsReady && !_empower.IsStriking
+                    && _player.CurrentState == PlayerActionState.Free) break;
             }
             else
-                _empower.EnsureOnboardingSwordWaveReady();
-            if (_empower.IsReady && _empower.IsBulletTimeActive && _player.CurrentState == PlayerActionState.Free
-                && (_stage == FINAL_STAGE ? _empower.Tokens == _empower.MaxTokens
-                    : _empower.Tokens < _empower.MaxTokens)) break;
+            {
+                if (!_empower.IsReady && !_empower.IsStriking
+                    && _player.CurrentState == PlayerActionState.Free)
+                {
+                    _objectiveIndex = 0;
+                    _hud.ShowObjective(_stage, _objectiveIndex, true);
+                    CreateTrainingThrower();
+                    break;
+                }
+                if (_empower.IsReady && _empower.IsBulletTimeActive
+                    && _player.CurrentState == PlayerActionState.Free) break;
+            }
             yield return null;
         }
         UnlockTransitionInput();
     }
 
-    /// <summary>검기·궁극기를 목표와 다르게 사용하면 현재 행동 종료 뒤 해당 단계의 집중과 토큰을 다시 채운다.</summary>
-    private IEnumerator RecoverWrongEmpowerUse()
+    /// <summary>잘못된 연계 공격이 끝나면 spentUltimateTokens에 따라 토큰·표적을 준비하고 패링 목표로 돌아간다.</summary>
+    private IEnumerator RecoverWrongEmpowerUse(bool spentUltimateTokens)
     {
         _recoveryQueued = true;
         yield return new WaitForEndOfFrame();
@@ -562,6 +695,14 @@ public sealed class OnboardingFlowController : MonoBehaviour
             if (_restartQueued || _gameState.State != GameplayState.Playing || !_health.IsAlive) yield break;
             yield return null;
         }
+        int startingTokens = _stage == FINAL_STAGE
+            ? (spentUltimateTokens ? _empower.MaxTokens - 1 : _empower.Tokens)
+            : 0;
+        _empower.PrepareOnboardingFollowUp(startingTokens);
+        if (_stage == FINAL_STAGE) ResetUltimateTargets();
+        _objectiveIndex = 0;
+        _hud.ShowObjective(_stage, _objectiveIndex, true);
+        CreateTrainingThrower();
         yield return ReadyStageAndUnlockInput();
         _recoveryQueued = false;
     }
@@ -603,15 +744,26 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private void CleanupTrainingContent()
     {
         DestroyTrainingEnemy();
-        if (_trainingThrower != null)
-        {
-            Destroy(_trainingThrower.gameObject);
-            _trainingThrower = null;
-        }
+        foreach (GameObject enemy in _ultimateTargets)
+            if (enemy != null) Destroy(enemy);
+        _ultimateTargets.Clear();
+        _ultimateTargetPositions.Clear();
+        ClearRangedPractice();
         if (_targetWave != null)
         {
             Destroy(_targetWave.gameObject);
             _targetWave = null;
+        }
+    }
+
+    /// <summary>현재 연습 투척 예약과 비행 수리검을 정리해 다음 목표에 남지 않도록 한다.</summary>
+    private void ClearRangedPractice()
+    {
+        if (_trainingThrower != null)
+        {
+            _trainingThrower.enabled = false;
+            Destroy(_trainingThrower.gameObject);
+            _trainingThrower = null;
         }
         DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
         foreach (DefenseShuriken shuriken in shurikens)
@@ -626,6 +778,5 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_trainingEnemy != null) Destroy(_trainingEnemy);
         _trainingEnemy = null;
         _trainingEnemyHealth = null;
-        _trainingEnemyAttacks = null;
     }
 }
