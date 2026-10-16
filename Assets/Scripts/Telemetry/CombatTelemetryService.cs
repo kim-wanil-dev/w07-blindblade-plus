@@ -36,8 +36,10 @@ namespace BlindBlade.Telemetry
         private bool _allowUpload;
         private bool _uploading;
         private bool _quitting;
-        private bool _warned;
+        private bool _quitRequested;
+        private bool _reportedUploadSuccess;
         private string _lastError;
+        private string _lastWarnedError;
         private int _dropped;
         private int _uploaded;
         private int _failures;
@@ -52,6 +54,7 @@ namespace BlindBlade.Telemetry
         public int BufferedEvents => _buffer.Count + (_writing?.Length ?? 0);
         public string AnonymousPlayerId => _anonymousPlayerId;
         public string ConfigurationSource => _configurationSource;
+        public event Action QuitRequested;
 
         /// <summary>최초 recorder의 설정으로 영속 서비스를 만들거나 기존 서비스를 반환한다. 설정은 재도전 때 덮어쓰지 않는다.</summary>
         public static CombatTelemetryService GetOrCreate(int bufferLimit, float flushInterval, int maximumMegabytes,
@@ -70,6 +73,7 @@ namespace BlindBlade.Telemetry
             _active._timeout = Mathf.Clamp(timeout, 5, 120);
             _active._maximumRetry = Mathf.Max(30f, maximumRetry);
             _active._allowUpload = allowUpload;
+            if (!Application.isEditor) Application.wantsToQuit += _active.HandleWantsToQuit;
             _active._anonymousPlayerId = Guid.NewGuid().ToString("N");
             try
             {
@@ -165,7 +169,11 @@ namespace BlindBlade.Telemetry
             }
             if (!string.IsNullOrEmpty(_store.ReadError)) ReportError(_store.ReadError);
             UploadBatch batch = read.Result;
-            if (batch == null) { _uploading = false; yield break; }
+            if (batch == null)
+            {
+                _uploading = false;
+                yield break;
+            }
             JObject body = new JObject { ["protocolVersion"] = "1", ["token"] = configuration.Value<string>("token"),
                 ["batchId"] = batch.BatchId, ["records"] = batch.Records };
             using (UnityWebRequest request = new UnityWebRequest(configuration.Value<string>("endpoint"), "POST"))
@@ -178,11 +186,13 @@ namespace BlindBlade.Telemetry
                 request.redirectLimit = 5;
                 yield return request.SendWebRequest();
                 bool accepted = false;
+                string responseError = null;
                 if (request.result == UnityWebRequest.Result.Success)
                 {
                     try
                     {
                         JObject response = JObject.Parse(request.downloadHandler.text);
+                        responseError = response.Value<string>("error");
                         HashSet<string> acknowledged = new HashSet<string>(response["acknowledgedEventIds"]?.Values<string>()
                             ?? Array.Empty<string>());
                         accepted = response.Value<bool?>("ok") == true && response.Value<string>("batchId") == batch.BatchId;
@@ -194,7 +204,9 @@ namespace BlindBlade.Telemetry
                 _request = null;
                 if (!accepted)
                 {
-                    FailUpload("Google Sheets가 배치 저장을 확인하지 않았습니다. HTTP " + request.responseCode);
+                    FailUpload("Google Sheets upload was not acknowledged. HTTP " + request.responseCode
+                        + ", transport=" + request.result + ", server=" + (responseError ?? "none")
+                        + ", client=" + (request.error ?? "none"));
                     yield break;
                 }
             }
@@ -207,6 +219,12 @@ namespace BlindBlade.Telemetry
             }
             _uploaded += batch.Records.Count;
             _failures = 0;
+            _lastError = null;
+            if (!_reportedUploadSuccess)
+            {
+                _reportedUploadSuccess = true;
+                Debug.Log("CombatTelemetry upload acknowledged. Configuration=" + _configurationSource, this);
+            }
             _uploading = false;
             _nextUpload = Time.realtimeSinceStartupAsDouble + 0.5d;
         }
@@ -238,9 +256,44 @@ namespace BlindBlade.Telemetry
         private void ReportError(string message)
         {
             _lastError = message;
-            if (_warned) return;
-            _warned = true;
+            if (_lastWarnedError == message) return;
+            _lastWarnedError = message;
             Debug.LogWarning("전투 로그: " + message, this);
+        }
+
+        /// <summary>플레이어 종료 요청 때 기록자를 닫아 마지막 사건을 큐에 넣고 네트워크 확인을 기다리지 않고 종료를 허용한다. _quitRequested와 QuitRequested 이벤트를 갱신한다.</summary>
+        private bool HandleWantsToQuit()
+        {
+            if (_quitRequested) return true;
+            _quitRequested = true;
+            QuitRequested?.Invoke();
+            RequestFlush();
+            return true;
+        }
+
+        /// <summary>진행 중인 파일 저장 뒤 메모리 버퍼의 마지막 사건을 JSONL에 추가하고 최대 1.5초 기다린다. 저장 작업이 제한 시간 안에 끝나지 않으면 진단 오류를 남긴다.</summary>
+        private void PersistPendingEventsOnShutdown()
+        {
+            Task finalWrite = _write;
+            if (_buffer.Count > 0)
+            {
+                string[] pending = _buffer.ToArray();
+                _buffer.Clear();
+                finalWrite = finalWrite == null
+                    ? _store.AppendAsync(pending)
+                    : finalWrite.ContinueWith(
+                        _ => _store.AppendAsync(pending),
+                        TaskScheduler.Default).Unwrap();
+            }
+
+            if (finalWrite == null) return;
+            if (!finalWrite.Wait(1500))
+            {
+                ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
+                return;
+            }
+
+            ObserveWrite();
         }
 
         void OnApplicationPause(bool paused)
@@ -255,14 +308,12 @@ namespace BlindBlade.Telemetry
 
         void OnDestroy()
         {
+            if (!Application.isEditor) Application.wantsToQuit -= HandleWantsToQuit;
             _quitting = true;
             _request?.Abort();
-            // 종료 시 네트워크를 기다리지 않고 남은 원본 저장만 짧게 기다린다.
             try
             {
-                if (_write != null && !_write.Wait(1500)) return;
-                ObserveWrite();
-                if (_buffer.Count > 0) _store.AppendAsync(_buffer.ToArray()).Wait(1500);
+                PersistPendingEventsOnShutdown();
             }
             catch (Exception exception) { _lastError = "종료 저장 실패: " + exception.GetBaseException().Message; }
             finally { if (_active == this) _active = null; }

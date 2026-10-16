@@ -75,6 +75,7 @@ namespace BlindBlade.Telemetry
             _state = Game.Instance.GameStateManager;
             _service = CombatTelemetryService.GetOrCreate(_bufferLimit, _flushIntervalSeconds, _maximumStorageMegabytes,
                 _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds, _maximumRetrySeconds);
+            _service.QuitRequested += HandleQuitRequested;
             _health.Died += HandleDeath;
             _combat.Events.InputResolved += HandleInput;
             _combat.Events.DodgeChanged += HandleDodge;
@@ -415,10 +416,14 @@ namespace BlindBlade.Telemetry
 
         void OnApplicationQuit() { Close("application_quit"); }
 
+        /// <summary>플레이어 종료가 시작되면 현재 구간과 세션을 닫는다. 최종 사건을 서비스 큐에 넣어 종료 전 전송 대상에 포함한다.</summary>
+        private void HandleQuitRequested() { Close("application_quit"); }
+
         void OnDisable()
         {
             Close("scene_unloaded");
             if (!_bound) return;
+            _service.QuitRequested -= HandleQuitRequested;
             _health.Died -= HandleDeath;
             _combat.Events.InputResolved -= HandleInput;
             _combat.Events.DodgeChanged -= HandleDodge;

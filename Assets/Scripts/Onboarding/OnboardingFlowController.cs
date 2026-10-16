@@ -787,7 +787,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _recoveryQueued = false;
     }
 
-    /// <summary>온보딩 완료 후 0.5초 암전에서 1-1 완료 체크포인트를 저장하고 BambooStage1 보스전으로 연다.</summary>
+    /// <summary>온보딩 완료 후 0.5초 암전에서 1-1 진행 정보를 저장하고 BambooStage1을 연다.</summary>
     private void CompleteOnboarding()
     {
         _completingOnboarding = true;
@@ -795,7 +795,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _retryPending = false;
         SceneTransitionOverlay.TransitionToScene(_stage1SceneName, STAGE1_FADE_DURATION, () =>
         {
-            BambooStage1Progress.MarkBossCheckpointReached();
+            BambooStage1Progress.MarkStage1Started();
             _savedRunStage = 0;
             _restartStage = 0;
         });

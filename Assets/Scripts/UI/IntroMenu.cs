@@ -45,6 +45,8 @@ public class IntroMenu : MonoBehaviour
     void Awake()
     {
         if (!enabled) return;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
         _sliceShader = Resources.Load<Shader>("Effects/IntroTextSlice");
         _volumeControl = GetComponent<VolumeControlUI>();
         _onboardingTransition = GetComponent<IntroOnboardingTransition>();
