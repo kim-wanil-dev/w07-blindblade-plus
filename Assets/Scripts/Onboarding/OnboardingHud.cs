@@ -170,16 +170,13 @@ public sealed class OnboardingHud : MonoBehaviour
         if (!visible) return;
 
         string judgement = !guarding ? "대기"
-            : outcome == DefenseOutcome.PerfectParry ? "퍼펙트 패링"
-            : outcome == DefenseOutcome.NormalParry ? "일반 패링" : "가드";
+            : outcome == DefenseOutcome.PerfectParry ? "퍼펙트 패링" : "가드";
         _guardTimingLabel.text = $"가드 {heldTime:0.00}초 · {judgement}";
         _guardTimingFill.fillAmount = guarding && windowDuration > 0f
             ? Mathf.Clamp01(heldTime / windowDuration) : 0f;
         _guardTimingFill.color = outcome == DefenseOutcome.PerfectParry
             ? new Color(1f, 0.82f, 0.3f, 1f)
-            : outcome == DefenseOutcome.NormalParry
-                ? new Color(0.91f, 0.89f, 0.75f, 1f)
-                : new Color(0.65f, 0.7f, 0.73f, 1f);
+            : new Color(0.65f, 0.7f, 0.73f, 1f);
     }
 
     /// <summary>재배치 전 검게 페이드하고 onBlack에서 단계 이동을 실행한 뒤 화면을 되돌린다.</summary>
