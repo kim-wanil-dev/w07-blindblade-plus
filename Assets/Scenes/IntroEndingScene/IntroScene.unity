@@ -1310,7 +1310,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   startButton: {fileID: 1900274950}
   quitButton: {fileID: 183067728}
-  _gameSceneName: Stage_1
+  _gameSceneName: BambooStage1
   _sliceDuration: 0.2
   _sliceAngle: -15
   _sliceDistance: 28
@@ -1826,7 +1826,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   startButton: {fileID: 1900274950}
   quitButton: {fileID: 183067728}
-  _gameSceneName: BambooDefense
+  _gameSceneName: BambooStage1
   _sliceDuration: 0.2
   _sliceAngle: -15
   _sliceDistance: 28

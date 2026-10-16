@@ -1,145 +1,83 @@
-# D5 로컬 로그와 Google Sheets 자동 전송
+﻿# BambooStage1 분석 로그 v0.3
 
-## 현재 설치 상태
+## 바로 사용하기
 
-- 정식 `BambooDefense` 씬의 `GameSceneInitializer`에 `CombatTelemetryRecorder`를 연결한다.
-- 설치/참조 복구 메뉴: `BlindBlade > 대숲 방어 > 로그 > D5 로컬 로그 연결`. 열린 정식 씬에서만 동작하고 기존 수치·참조를 재생성하지 않는다.
-- 기본 로컬 기록 ON. 배포용 기본 설정 에셋에 자동 전송이 활성화되어 있으며 새 PC는 CONFIG 작성 없이 전송한다. 로컬 CONFIG가 있으면 그 파일이 우선한다. 추가 SDK·서비스 계정·Python은 필요 없다.
-- JSON은 스키마 `0.2.0`, 계약은 `0.2.0`이다. KST 벽시각 필드는 0.2.0의 선택적 추가 필드라 예전 로그와 기존 미전송 백로그도 처리할 수 있다. 이전 `0.1.0` 파일을 이 전처리기에 섞지 않는다.
+1. 새 빌드 또는 갱신된 Unity 프로젝트에서 BambooStage1을 플레이한다. Intro 시작 버튼도 이 씬을 연다.
+2. 로컬 경로: `%USERPROFILE%\AppData\LocalLow\DefaultCompany\w07-blindblade+\CombatTelemetry`.
+3. `*.jsonl` 한 줄이 Events의 한 행이다. 일반 구간은 stageId=1-1, 보스 구간은 1-2다. 보스 재도전은 1-2만 기록한다.
+4. 기본 전송 설정은 Resources에 포함된다. 기존 URL·token은 유지했으므로 새 PC의 별도 CONFIG는 필요 없다. 로컬 `upload-config.json`이 있으면 그 설정이 우선한다.
+5. 전송은 기본 20초마다 시작하고, 밀린 배치는 ACK 후 이어서 보낸다. 큐가 저장·전송될 시간을 두고 종료한다. 시트가 비어 있으면 Console의 전송 오류와 아래 배포 상태를 확인한다.
 
-## 시간 표기
+## Events와 Sessions
 
-- 새 사건은 `occurredAtKst`, `recordedAtKst`와 `payload.startedKst`에 한국 표준시를 ISO 8601 형식으로 기록한다. 예: `2026-10-15T13:20:45.123+09:00`. PC의 시간대 설정과 무관하게 +09:00을 사용하며 사건 발생 시각은 해당 기록의 realtime 차이로 계산한다.
-- `occurredAt`/`recordedAt` 안의 `realtimeSeconds`, `gameplaySeconds`, `activeUnscaledSeconds`는 플레이 시간 분석용 경과 초이며 변경하지 않는다.
-- Google Apps Script는 `Events.received_kst`, `Events.occurred_at_kst`, `Events.recorded_at_kst`, `Sessions.started_kst`를 사용한다. 기존 시트의 `received_utc`와 `started_utc` 값은 KST로 변환해 같은 위치에 저장하고 UTC 열 이름은 제거한다. 앞선 버전에서 오른쪽에 추가된 중복 KST 열도 합친다.
-- 이전 JSONL 원본은 수정하지 않는다. 이전 세션의 `startedUtc`는 CSV 전처리에서 `started_kst`로 변환한다. 이전 사건의 발생 KST 시각은 기록된 적이 없으므로 빈 값으로 둔다.
+- **Events**: 사건별 원본. stage_id, stage_attempt_id, input_id, attack_id와 함께 종류·패턴·결과·피해량·좌표·반응 시간을 열로 제공한다. 기타 정보는 payload_json에 남긴다.
+- **Sessions**: 세션 전체가 아니라 **스테이지 도전당 1행**. 한 플레이에서 웨이브와 보스를 하면 2행, 보스 재도전은 1행이다. status=started/in_progress/cleared/death/application_quit/scene_unloaded.
+- 같은 사건 재전송은 event_key로 중복 제거한다. Sessions는 최신 event_sequence의 누적값으로 갱신한다.
+- 정상 종료 신호 없이 프로세스가 강제 종료되면 in_progress 행을 완료/사망으로 바꾸지 않는다.
 
-## 저장 위치와 파일
+## 요청한 분석과 필터
 
-Unity `Application.persistentDataPath/CombatTelemetry`를 사용한다. 현재 프로젝트 설정에서 Windows 경로는 다음과 같다. Company/Product Name을 변경하면 경로도 달라진다.
-
-```text
-C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetry
-  upload-config.json                     선택적 로컬 재정의. 새 PC에는 자동 생성하지 않음
-  anonymous-player-id.txt                 이 PC 설치의 익명 ID, 실명·Steam ID 아님
-  <sessionId>.json                        시작 사건·환경·설정 메타데이터
-  <sessionId>.jsonl                       한 줄당 사건 한 건인 원본
-  <sessionId>.jsonl.<destination>.cursor   해당 수신 URL에서 확인된 파일 바이트 위치
-```
-
-원본 파일은 전송 후에도 삭제하지 않는다. 커서·설정 파일은 분석 입력이 아니다. 같은 PC를 여러 참가자가 쓰면 익명 ID도 같으므로 참가자 ID로 해석하지 않는다. 참가자 교체 시 게임 종료 후 ID 파일을 따로 보관하고 제거하여 새 ID를 발급하거나 별도 참가자 매핑을 관리한다. 재도전은 새 SessionId로 구분한다.
-
-## Google 쪽 준비 순서
-
-1. 새 스프레드시트를 만든다. URL의 `/d/`와 `/edit` 사이가 ID다. 시트를 공개 공유하지 않는다.
-2. `확장 프로그램 > Apps Script`를 열어 [Code.gs](google_apps_script/Code.gs) 전체를 붙여 넣는다.
-3. `프로젝트 설정 > 스크립트 속성`에 `SPREADSHEET_ID`와 `UPLOAD_TOKEN`을 저장한다. token은 32자 이상의 임의 문자열을 사용한다.
-4. 함수 목록에서 `setupSheets`를 선택해 실행하고 본인 계정의 Sheets 접근 권한을 승인한다. 빈 `Events`, `Sessions` 탭과 헤더가 생성된다. 기존 다른 탭은 삭제하지 않는다.
-5. `배포 > 새 배포 > 웹 앱`: 실행 사용자 `나`, 액세스 권한 `모든 사용자`로 배포한다. 학교 Workspace 정책에서 막히면 개인 계정 또는 관리자 허용이 필요하다.
-6. `/exec`로 끝나는 배포 URL을 복사한다. `/dev`는 편집자용이므로 게임에 사용하지 않는다.
-7. 수신 코드를 수정한 뒤에는 `배포 관리 > 수정 > 새 버전`으로 갱신한다. 같은 배포 URL을 유지할 수 있다.
-
-`setupSheets`는 이전 UTC 헤더를 KST로 바꾸면서 기존 UTC 시각을 +09:00 문자열로 변환한다. 앞선 버전의 추가 KST 열이 있으면 값을 옮긴 뒤 중복 열을 제거한다. 사건 키와 다른 데이터 열은 유지한다. 다른 헤더나 해석할 수 없는 시각은 오류로 알리며 값을 버리지 않는다. 코드 변경 뒤에는 `setupSheets`를 다시 실행하고 웹 앱을 새 버전으로 재배포한다.
-
-## Unity/테스터 PC 설정
-
-### 배포 빌드: 테스터 설정 없이 전송
-
-`Assets/Resources/Telemetry/CombatTelemetryUploadSettings.asset`에 현재 정상 동작한 수신 URL/token과 enabled=true를 저장했다. 이 에셋은 Resources를 통해 빌드에 포함된다. 새 PC는 게임을 실행하면 로컬 로그를 저장하고 인터넷 연결 시 해당 시트로 전송한다. AppData에 비활성 CONFIG를 자동 생성하던 동작은 제거했다.
-
-1. 개발자는 `GameSceneInitializer > CombatTelemetryRecorder`의 Recording Enabled와 Allow Automatic Upload를 켜 둔다.
-2. 배포 기본 에셋의 Enabled가 켜져 있는지 확인한다.
-3. **새로 빌드한 전체 게임 폴더**를 테스터에게 배포한다. 기존 실행 파일은 이 변경을 포함하지 않는다.
-4. 테스터는 인터넷에 연결하고 플레이한다. CONFIG 작성, Google 로그인, 시트 접근 권한 부여는 필요 없다.
-
-설정 우선순위는 `로컬 upload-config.json > 빌드 기본 에셋`이다. 기존 CONFIG의 enabled=false는 계속 전송을 끈다. 이전 버전에서 생성된 비활성 CONFIG가 있는 PC는 그 파일을 백업하여 전송 폴더 밖으로 옮기면 빌드 기본값을 사용한다. 코드가 사용자 재정의 파일을 삭제하거나 덮어쓰지 않는다. 잘못된 JSON도 기본값으로 조용히 대체하지 않고 오류로 알린다.
-
-개발자가 URL/token을 변경하려면 로컬 CONFIG에 새 값을 저장한 뒤 `BlindBlade > 대숲 방어 > 로그 > 현재 로컬 설정을 빌드 기본값으로 저장`을 실행하고 재빌드한다. 메뉴는 로컬 설정의 활성 여부까지 그대로 복사하므로 배포 전 Enabled를 확인한다. 동일 에셋을 갱신해 GUID를 보존한다. token은 Inspector에서 숨기고 메뉴/Console 결과에 출력하지 않는다.
-
-### 개발자용 로컬 재정의
-
-기본값을 바꾸지 않고 특정 PC에서 전송을 제어하려면 로그 폴더에 `upload-config.json`을 직접 작성한다. 아래 값은 그 PC에서 빌드 기본값보다 우선한다.
-
-```json
-{
-  "enabled": true,
-  "endpoint": "https://script.google.com/macros/s/실제배포ID/exec",
-  "token": "Google의_UPLOAD_TOKEN과_동일한_32자이상_임의문자열"
-}
-```
-
-- 실행 중에도 다음 전송 주기에 설정을 다시 읽는다. `enabled:false`는 이후 요청을 멈추지만 진행 중인 요청 취소나 이미 전송한 데이터 삭제를 의미하지 않는다.
-- Inspector 위치: `GameSceneInitializer > CombatTelemetryRecorder`. Recording Enabled, Config Version, Buffer Limit, Flush Interval Seconds, Maximum Storage Megabytes, Sample Interval Seconds, Allow Automatic Upload, Upload Interval Seconds, Batch Event Limit, Request Timeout Seconds, Maximum Retry Seconds를 조절한다.
-- 기본값: 저장 2초, 표본 5초, 전송 확인 주기 20초, 배치 100건/약192KiB, 타임아웃 30초, 재시도 최대300초, 메모리4096건, 원본100MiB.
-- 미확인 기록이 많으면 성공 후 0.5초 간격으로 다음 배치를 보낸다. 수신 오류 시 지수 지연으로 재시도한다. 과제 참가자 수가 늘면 배치 간격·Apps Script 할당량을 관찰한다.
-- 수신 URL별 커서를 사용한다. URL이 바뀌면 그 URL에 원본을 처음부터 보낸다. 동일 스프레드시트에 새 URL을 배포해도 사건 키로 중복을 제거한다.
-- 사용자의 요청에 따라 배포용 공유 URL/token을 Resources 설정 에셋에 포함한다. Google 계정 비밀번호·OAuth 토큰·서비스 계정 키를 넣는 방식은 아니다. 로컬 재정의 CONFIG와 token 값은 Console·문서에 출력하지 않는다.
-- 이 설정은 제한된 플레이테스트용이다. Inspector에서 숨겨도 공유 token은 에셋/빌드에서 추출 가능하다. Steam 공개 배포에서는 인증·요청 제한을 갖춘 수집 서버로 교체한다. 수집 내용을 참가자에게 알리고 필요한 기록만 받는다.
-
-## 기록 가능한 사실
-
-| 사건 | 의미와 한계 |
+| 분석 | 사용할 데이터 |
 | --- | --- |
-| session_started / session_ended | 세션·버전·환경·시계 기준·설정 스냅샷, 정상 종료 요약. 강제 종료면 종료 사건이 없을 수 있음 |
-| state_changed / combat_started / run_ended | 게임 상태, 준비 종료, 치명타 프레임의 모든 사건 수신 후 결과. GameOver에서 구독을 즉시 끊지 않음 |
-| resource_changed / damage_applied / player_died | HP 변경·실제 감소량·사망. 피해 합계는 damage_applied만 사용하며 방어 결과 피해를 다시 더하지 않음 |
-| action_phase / katana_phase | 실제 행동 단계·결과·ActionId, 카타나 단계. 실제 입력 횟수와 동일하지 않음 |
-| defense_resolved / dodge_changed / reveal_pulse | 공급자가 확정한 방어 결과·회피 단계·파동 요청과 제공된 ID |
-| projectile_lifecycle / throw_telegraph | 기존 수리검 발사 ID와 실제 전조. 수명 종료·반사·원인 연결이 모두 제공된다고 가정하지 않음 |
-| enemy_lifecycle | 스포너의 확정 처치 수. 현재 이벤트에 적/공격 ID가 없으므로 생성하지 않음 |
-| threat_presentation_changed / footstep | C 표시 플래그 전환과 원본 걸음당1회. HUD가 실제로 눈에 보였거나 인지됐다는 증거가 아님 |
-| progress_sample / time_scale_changed | 5초 간격 진행·위치·HP·누적 결과, 시간 배율 변경 |
+| 구간별 사망 수 | Sessions를 stage_id로 묶어 deaths 합계 |
+| 피해량 원인 비중 | rangedDamage/meleeDamage, bossRangedDamage/bossChargeDamage 및 DamageShare 열 |
+| 피격 횟수 원인 비중 | Patterns.csv의 damage_hits / 구간의 damageHitCount |
+| 회피 시도 | dodgeAttempts, 거부=dodgeRejected, 실행=dodgeStarted |
+| 방어 시도 | guardAttempts, guardRejected, guardAttemptsWithContact/WithoutContact |
+| 방어 중 접촉 결과 | guardNormalParryCount, guardPerfectParryCount, guardGuardCount, guardHitCount |
+| 반응 시간 | Events의 enemy_attack_resolved에서 reaction_seconds / input_to_contact_seconds |
+| 이동 히트맵 | movement_sample의 x,z에 duration_seconds를 가중치로 사용 |
+| 공격 시도 히트맵 | player_input, kind=Attack, is_attempt=true의 x,z |
+| 적 공격 결과·적중률 | enemy_attack_resolved의 outcome; Sessions의 ranged/melee/bossRanged/bossCharge 열 |
+| 공격 적중 히트맵 | enemy_attack_resolved, applied_damage>0의 x,z |
+| 원거리 공격 직선 | 같은 결과 행의 origin_x,origin_z → x,z; kind=Projectile |
 
-`InputResolved`, `StaminaChanged`, `EmpowerChanged`도 구독하지만 현재 실제 입력/스태미너/강화 공급자가 없으면 해당 기록은 생성되지 않는다. 입력 시간 보정·실제 입력 시도 수가 없으므로 입력 성공률, early/late 판정을 산출하지 않는다. `parryCount/defenseCount`는 접촉 결과 중 패링 비율이며 패링 시도 성공률이 아니다.
+비율을 여러 도전에 걸쳐 계산할 때는 비율의 평균 대신 **분자 합/분모 합**을 쓴다. 전체 적중률 분모는 실행 후 결과가 확정된 공격이며 취소·중단은 제외한다. Miss는 빗나감이고 Dodge는 실제 회피 무적/극한 회피 판정이다. Guard·다른 무적·공격 제거도 별도 결과라서 네 결과만 합하면 100%가 아닐 수 있다.
 
-현재 PlayerCombatEvents는 `BlindBlade.Combat.Contracts.DefenseResolution`을 사용한다. Recorder는 공통 계약 별칭을 명시해 소비한다. 공통 방어 결과에 DodgeId가 없어 defense_resolved의 correlation.dodgeId는 0이며, 별도 dodge_changed의 원본 DodgeId는 보존한다. 시각이나 현재 회피 상태로 빠진 연결을 추정하지 않는다. 공통 계약과 공급자 코드는 수정하지 않았다.
+방어 결과 열은 접촉 횟수다. 한 번 누른 가드로 여러 공격을 막을 수 있어 입력 횟수와 같지 않다. guardHitCount는 누르고 있던 가드 의도와 연결된 피격이며 거부된 입력도 포함한다.
 
-`runRealtimeSeconds`는 세션 시작부터 GameOver까지 실제 시간이고 준비·플레이어 일시정지·포커스 이탈이 포함된다. GameOver 화면 대기는 제외한다. `combatRealtimeSeconds`는 준비 종료 뒤 실제 시간이며, `survivalGameSeconds`는 기존 director의 배율 적용 시간이다. `activeUnscaledSeconds`는 Runtime의 명시적 frozen만 제외한다. 5~10분 달성 기준에서 어떤 시간을 쓸지 팀이 고정하고 대기/재도전 포함 총 체험 시간과 구별한다.
+## 반응 시간 해석
 
-## 전처리 / CSV
+- 전조 시작→입력 처리 프레임: 엔진 realtime을 사용한다. 원시 deviceTime은 따로 저장하며 엔진 시간과 직접 빼지 않는다.
+- 입력→접촉: 같은 AttackId의 확정 접촉과 입력 ID를 연결한다.
+- reaction_association=resolved_contact가 실제 방어/회피 연결, held_guard_intent는 가드 의도와 피격의 시간상 연결이다.
+- reaction_candidate는 입력 당시 진행 중인 공격마다 남기는 후보다. candidateCount>1일 때 어느 공격에 반응했는지는 확정할 수 없다. 후보를 모두 평균내 실제 반응 시간으로 보고하지 않는다.
+- 전조 전에 누른 입력이나 연결 불가 입력은 반응 시간이 빈 값이다. 0초로 채우지 않는다.
+- 원거리 직선은 발사점→접촉/종료점이다. 유도 궤적을 재현하는 선은 아니다.
 
-Windows PowerShell 5.1 이상에서 플레이를 마친 원본의 사본을 대상으로 실행한다. 테스트 코드는 포함하지 않는다.
+## CSV와 히트맵 전처리
+
+Node.js가 설치된 PC에서 실행한다.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\combat_telemetry\Export-Telemetry.ps1 -LogDirectory "C:\Users\JUNGLE\AppData\LocalLow\DefaultCompany\week06-blindblade\CombatTelemetry" -OutputDirectory ".\UserSettings\CombatTelemetryAnalysis"
+powershell -ExecutionPolicy Bypass -File tools/combat_telemetry/Export-Telemetry.ps1 `
+  -LogDirectory "$env:USERPROFILE\AppData\LocalLow\DefaultCompany\w07-blindblade+\CombatTelemetry" `
+  -OutputDirectory "$env:USERPROFILE\Desktop\Stage1Telemetry"
 ```
 
-- `events.csv`: 사건 평탄화, `occurred_at_kst`/`recorded_at_kst`, 기존 ID·경과 시계·payload 보존.
-- `sessions.csv`: `started_kst` 요약과 정상 종료 여부. 이전 `startedUtc`도 KST로 변환한다. 종료 사건 없는 세션을 클리어/사망/정상 플레이시간으로 단정하지 않는다.
-- `diagnostics.csv`: 스키마 미지원, 파싱 실패/잘린 끝줄, 중복 사건 키, 순번 누락·역전, 종료 누락.
-- `explicit-links.csv`: 공급자의 InputId가 있는 사건만 보존한다. 후보 매칭이나 성공 판정을 생성하지 않는다.
-- `analysis-manifest.json`: 분석 버전·`generated_kst`·입력 SHA256·건수.
+생성 파일:
 
-Google Sheets에는 원본 업로드 기준 `Events`와 최신 요약 `Sessions`가 쌓인다. CSV와 같은 지표 정의로 피벗/차트를 만든다. 전처리 도구는 원본을 수정하지 않는다. 빈 자료의 CSV가 비어 있을 수 있다. 전처리는 분석 분모를 대신 결정하지 않는다.
+- Events.csv / Sessions.csv: 시트와 같은 구조.
+- Patterns.csv: 패턴별 분모·적중/회피/패리/퍼펙트 패리 비율과 피해량·피격 횟수 비중.
+- Heatmaps.csv: 1m 월드 XZ 격자별 movement(초), attack_attempt(횟수), damage_hit(횟수).
+- Diagnostics.csv: 잘린 JSONL, 지원하지 않는 스키마 등 제외된 줄. 파일이 정상이어도 강제 종료 마지막 줄은 제외될 수 있다.
 
-## 오류·운영
+Google Sheets에 Heatmaps.csv를 가져와 stage_id와 layer로 필터링하고 grid_z를 행, grid_x를 열, weight 합계를 값으로 피벗 테이블을 만든 뒤 색상 척도를 적용한다. 원거리 직선은 Events.csv의 시작·끝 좌표를 이용해 별도 선분 그래프로 그린다.
 
-- 인터넷/서버 오류: 원본 보존, 서버의 `ok`, 배치 ID와 모든 사건 키 확인 뒤에만 커서 이동. HTTP200만으로 성공 처리하지 않는다. Apps Script JSON 응답의 리다이렉트를 허용한다.
-- 서버는 script lock 안에서 Events의 사건 키로 중복 확인 후 저장한다. 확인 응답 유실이나 커서 저장 실패에도 재전송으로 같은 행을 추가하지 않는다. Sessions 집계는 합계 덧셈이 아니라 최신 요약으로 갱신한다.
-- 메모리/디스크 한도: 전투는 계속되고 누락 수·LastError를 남긴다. 서비스 누락 수는 여러 재도전의 누적값이다. 공간이 없어 저장 자체가 실패하면 누락 진단까지 파일에 남는다고 보장할 수 없다.
-- 백그라운드 저장은 Unity 객체를 사용하지 않는다. 매 프레임 동기 파일 쓰기를 하지 않는다. 시작 시 익명 ID·설정 파일 접근은 작은 동기 작업이다.
-- 종료 시 네트워크를 기다리지 않는다. 남은 저장은 최대 약3초 기다리며, 강제 종료면 미저장 메모리·끝줄이 손실될 수 있다. 다음 실행에서 디스크에 있는 미확인 기록을 재전송한다.
-- 손상/잘린 줄은 자동 삭제·확인하지 않고 해당 파일의 나머지 전송을 보류한다. 앞의 정상 줄과 다른 정상 세션 파일은 전송할 수 있다. 원본을 백업하고 전처리 보고서를 확인한 뒤 해당 파일을 전송 폴더 밖으로 보관한다. 정상 기록은 CSV로도 구할 수 있다.
-- 100MiB 한도는 원본 JSONL 기준이다. 자동 삭제하지 않는다. 테스팅 회차가 끝나면 원본·메타데이터·커서를 함께 백업하고 게임 종료 상태에서 정리한다.
-- `CombatTelemetryService.Active`의 LogDirectory / LastError / DroppedEvents / AcknowledgedEvents / BufferedEvents가 개발용 상태다. ConfigurationSource는 LocalOverride 또는 BuiltIn이며 접속 token·본문을 Console에 출력하지 않는다.
-- Recorder 비활성화는 해당 관찰 세션을 닫는다. 새 세션 기록은 씬 재시작으로 시작한다. 영속 서비스의 미전송 원본 전송은 별개로 계속된다.
+## Apps Script 재배포
 
-## 연결 후 수동 확인 항목 (미실행)
+1. 기존 시트의 확장 프로그램 → Apps Script에서 `google_apps_script/Code.gs`를 반영한다.
+2. Script Properties의 SPREADSHEET_ID와 UPLOAD_TOKEN은 기존 값을 유지한다. 코드나 로그에 token을 출력하지 않는다.
+3. 기존 데이터를 버리기로 결정한 경우에만 `resetTelemetrySheets`를 한 번 실행한다. Events·Sessions만 비운다. 정상 운영 시에는 setupSheets만 사용한다.
+4. 배포 → 배포 관리 → 기존 웹 앱 편집 → **새 버전** → 배포한다. 새 배포를 만들지 않으면 기존 URL이 유지된다.
+5. 이전 0.2 빌드는 새 수신기로 보낼 수 없다. 새 게임 빌드를 배포한다. 다른 PC에 남은 0.2 JSONL은 업로더가 건너뛴다.
 
-1. 짧은 정상 플레이 후 로컬 JSONL에 시작·피격·최종 판정·run_ended가 순서대로 있는지 확인한다.
-2. 재도전 후 새 SessionId와 같은 익명 설치 ID인지 확인한다.
-3. Sheets Events의 사건 키가 유일하고 Sessions의 피해 합계가 damage_applied 합계와 맞는지 확인한다.
-4. 인터넷을 끊고 플레이한 뒤 복구/재실행하여 전송·중복 제거를 확인한다.
-5. 잘못된 token, HTML 응답, 타임아웃, 저장 경로 접근 실패에서 게임이 지속되고 실패가 진단되는지 확인한다.
-6. 실제 전송/전처리 자료로 5~10분 지표·손상 로그·누락 분모를 확인한다.
+Events/Sessions 헤더를 수동으로 바꾸면 header_mismatch로 저장을 거부한다. 전송 실패에서도 로컬 원본은 남고 재시도하며, ACK되지 않은 데이터를 성공으로 표시하지 않는다. 저장 한도 기본100MB와 Apps Script 처리량 때문에 장기 서비스 전체 수집에 대한 규모 검증은 별도 필요하다.
 
-2026-10-15 로컬 CONFIG 경로의 실제 전송은 기존 로그 1건 POST와 Unity Play 자동 전송 400건에서 서버 ACK·커서 생성으로 확인했다. 이후 CONFIG 없는 PC를 위한 빌드 기본 설정 기능을 구현하고 활성 에셋을 Editor API로 저장했다. 새 기능은 C# 컴파일과 에셋 저장까지 확인했으며 CONFIG 없는 실제 PC/Standalone 실행은 미확인이다. 새 동작 확인을 위해 기존 CONFIG를 임의 삭제하거나 새 Play를 실행하지 않았다. 전체 백로그·장애/재도전은 미확인이다.
+## 이번 변경의 확인 범위
 
-2026-10-15 KST 확인: `Code.gs` 운영 웹 앱을 동일 URL의 버전 2로 갱신하고 `setupSheets`를 실행했다. 기존 `Events.received_utc` 값은 `received_kst`의 +09:00 문자열로 변환됐다. 실제 로컬 `session_started` 전송은 HTTP 200/ACK 1건을 받았고, 시트 `Events!B7817`의 수신 KST, `V7817`의 발생 KST, `W7817`의 기록 KST와 `Sessions!D7`의 시작 KST를 직접 확인했다. 이전 배포에서 시작 KST가 누락된 두 세션은 원본 시작 사건을 재전송해 채웠다. CSV 내보내기는 사건 12,783건/세션 6건/진단 0건이며 UTC 출력 열이 없다. 과거 사건의 발생·기록 KST를 당시 수신하지 않았다면 그 셀은 빈 값으로 남는다.
-
-## 참고
-
-- [Apps Script 웹 앱 배포·doPost](https://developers.google.com/apps-script/guides/web)
-- [Content Service 리다이렉트](https://developers.google.com/apps-script/guides/content)
-- [Apps Script LockService](https://developers.google.com/apps-script/reference/lock/lock-service)
-- [Apps Script 할당량](https://developers.google.com/apps-script/guides/services/quotas)
+- C# 빌드·Unity Editor 컴파일, 씬 연결 및 빌드 순서 확인.
+- 기존 로컬 57세션과 커서 삭제. 익명 PC 식별자는 유지.
+- 보스 재도전 Play에서 보스 수리검 3회와 돌진 1회의 시작·실행·적중, 피해 70, KST 시각, 자동 전송 64건 ACK를 확인했다. Google Events·Sessions 행과 로컬 CSV 전처리(65건, 오류 0건)를 확인했다. 확인용 로컬·시트 데이터는 삭제했다.
+- 실제 회피·가드 입력과 1-1 웨이브의 플레이 검증은 아직 수행하지 않았다.
+- 같은 PC에서 여러 참가자가 플레이하면 anonymous_player_id가 같으므로 참가자 구분은 별도로 관리한다.

@@ -33,6 +33,7 @@ public sealed class BambooThrower : MonoBehaviour
     private BambooDefenseDirector _director;
     private Coroutine _routine;
     private bool _reserved;
+    private int _telemetryAttackId;
     private bool _spawned;
 
     public event Action<BambooThrower> Despawned;
@@ -127,6 +128,8 @@ public sealed class BambooThrower : MonoBehaviour
             if (_telegraphSound != SoundId.None)
                 Managers.Sound.PlayAttached(_telegraphSound, gameObject);
 
+            _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BambooShuriken", "Projectile",
+                _muzzle.position, Game.Player.transform.position);
             _director.NotifyThrowTelegraph(_signalPoint.position, _telegraphDuration);
 
             yield return new WaitForSeconds(_telegraphDuration);
@@ -164,7 +167,8 @@ public sealed class BambooThrower : MonoBehaviour
 
         DefenseShuriken shuriken = Instantiate(_shurikenPrefab, _muzzle.position, Quaternion.LookRotation(direction));
 
-        shuriken.Launch(gameObject, player.GetComponent<PlayerHealth>(), _damage, direction, _director);
+        shuriken.Launch(gameObject, player.GetComponent<PlayerHealth>(), _damage, direction, _director, _telemetryAttackId);
+        _telemetryAttackId = 0;
 
         _reserved = false;
         _director.NotifyShurikenLaunched(shuriken);
@@ -251,6 +255,8 @@ public sealed class BambooThrower : MonoBehaviour
             return;
 
         _reserved = false;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Cancelled", transform.position);
+        _telemetryAttackId = 0;
         _director.CancelThrowReservation();
     }
 }

@@ -12,7 +12,7 @@
 
 ## 읽기 시작점
 
-- 정식 게임은 **Intro(빌드 0) → BambooDefense(빌드 1) → 게임오버 → 재도전**이다. 처음이면 [대숲 방어](features/대숲_방어.md)와 [플레이어 시스템 인수인계](features/플레이어_시스템_인수인계.md)부터 읽는다.
+- 정식 게임은 **Intro(빌드 0) → BambooStage1(빌드 1) → 게임오버 → 재도전**이다. 처음이면 [대숲 방어](features/대숲_방어.md)와 [플레이어 시스템 인수인계](features/플레이어_시스템_인수인계.md)부터 읽는다.
 - 2026-10-14 BambooDefense 리팩토링 S7에서 기존 모드 씬(Build의 Stage·Boss, Map, LevelDesign_HP, TestScene, TutoScene, EndingScene)을 삭제했다. 각 명세에 남은 해당 씬 이름은 그 시점의 검증 기록이며 현재 씬이 아니다. 진행 기록과 복구 방법은 [진행 문서](plans/BambooDefense_refactoring_progress.md)의 S7 절을 따른다.
 
 ## 기능 목록

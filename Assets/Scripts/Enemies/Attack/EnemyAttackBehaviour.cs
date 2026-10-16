@@ -220,6 +220,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         }
 
         EnemyAttackContext context = _context;
+        bool wasTelegraph = _phase == EnemyAttackPhase.Telegraph;
         _phase = EnemyAttackPhase.Ready;
         StopActionSound(_usesHeartbeatForCurrentAttack || _playingHeartbeatSounds.Count > 0);
         _usesHeartbeatForCurrentAttack = false;
@@ -228,6 +229,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         _nextHeartbeatTime = 0f;
         _attackVoiceTime = 0f;
         OnAttackEnded(context, true);
+        if (!(this is EnemyRangedAttack) || wasTelegraph)
+            BlindBlade.Telemetry.CombatTelemetrySignals.End(context.AttackId, "Cancelled", transform.position);
         AttackCancelled?.Invoke(context);
     }
 
@@ -286,6 +289,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         if (!_usesHeartbeatForCurrentAttack && (SoundAction == EnemySoundAction.Melee || SoundAction == EnemySoundAction.Ranged))
             PlayActionSound(EnemySoundStage.AttackVoice);
         PlayActionSound(EnemySoundStage.Action);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Commit(context.AttackId, transform.position);
         PerformAttack(context);
         if (_phase != EnemyAttackPhase.Active)
             return;
@@ -309,6 +313,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
         EnemyAttackContext context = _context;
         if (SoundAction == EnemySoundAction.Melee && !_usesHeartbeatForCurrentAttack) StopActionSound();
         OnAttackEnded(context, false);
+        if (!(this is EnemyRangedAttack))
+            BlindBlade.Telemetry.CombatTelemetrySignals.End(context.AttackId, "Miss", transform.position);
         AttackEnded?.Invoke(context);
     }
 
