@@ -58811,8 +58811,8 @@ MonoBehaviour:
     _followUpNote: 
     _objectives:
     - "\uD30C\uB3D9 \uC911\uC2EC 1m \uC774\uB0B4 \uB3C4\uCC29"
-  - _keyboardHint: "\uB3CC\uC9C4/\uD68C\uD53C - SPACE"
-    _gamepadHint: "\uB3CC\uC9C4/\uD68C\uD53C - A \uBC84\uD2BC"
+  - _keyboardHint: "\uD68C\uD53C - SPACE"
+    _gamepadHint: "\uD68C\uD53C - A \uBC84\uD2BC"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: 
     _followUpGamepadHint: 
@@ -58820,9 +58820,9 @@ MonoBehaviour:
     _followUpObjective: 1
     _followUpNote: 
     _objectives:
-    - "\uB3CC\uC9C4 1\uD68C"
-  - _keyboardHint: "\uC88C\uD074\uB9AD - \uACF5\uACA9"
-    _gamepadHint: "RB - \uACF5\uACA9"
+    - "\uD68C\uD53C 1\uD68C"
+  - _keyboardHint: "\uC88C\uD074\uB9AD - \uBC1C\uB3C4"
+    _gamepadHint: "RB - \uBC1C\uB3C4"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: 
     _followUpGamepadHint: 
@@ -58830,7 +58830,7 @@ MonoBehaviour:
     _followUpObjective: 1
     _followUpNote: 
     _objectives:
-    - "\uADFC\uC811 \uC801 \uCC98\uCE58 1\uD68C"
+    - "\uBC1C\uB3C4\uB85C \uC801 1\uBA85 \uCC98\uCE58"
   - _keyboardHint: "\uADF9\uD55C \uD68C\uD53C - SPACE"
     _gamepadHint: "\uADF9\uD55C \uD68C\uD53C - A \uBC84\uD2BC"
     _keyboardIcon: {fileID: 0}
@@ -58841,8 +58841,8 @@ MonoBehaviour:
     _followUpNote: 
     _objectives:
     - "\uC218\uB9AC\uAC80 \uADF9\uD55C \uD68C\uD53C 1\uD68C"
-  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uBC29\uC5B4"
-    _gamepadHint: "LB - \uBC29\uC5B4"
+  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uB9C9\uAE30 / \uCCD0\uB0B4\uAE30"
+    _gamepadHint: "LB - \uB9C9\uAE30 / \uCCD0\uB0B4\uAE30"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: 
     _followUpGamepadHint: 
@@ -58850,32 +58850,32 @@ MonoBehaviour:
     _followUpObjective: 1
     _followUpNote: 
     _objectives:
-    - "\uAC00\uB4DC 1\uD68C"
-    - "\uAC00\uB4DC\uB97C \uB193\uACE0 \uD328\uB9C1 1\uD68C"
-  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uBC29\uC5B4"
-    _gamepadHint: "LB - \uBC29\uC5B4"
+    - "\uB9C9\uAE30 1\uD68C"
+    - "\uC815\uD655\uD55C \uC2DC\uC810\uC5D0 \uB9C9\uC544\uC11C \uACF5\uACA9 \uCCD0\uB0B4\uAE30 1\uD68C"
+  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uB9C9\uAE30 / \uCCD0\uB0B4\uAE30"
+    _gamepadHint: "LB - \uB9C9\uAE30 / \uCCD0\uB0B4\uAE30"
     _keyboardIcon: {fileID: 0}
-    _followUpKeyboardHint: "\uC88C\uD074\uB9AD - \uAC80\uAE30"
-    _followUpGamepadHint: "RB - \uAC80\uAE30"
+    _followUpKeyboardHint: "\uC88C\uD074\uB9AD - \uC77C\uC12C"
+    _followUpGamepadHint: "RB - \uC77C\uC12C"
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 2
     _followUpNote: 
     _objectives:
-    - "\uAC00\uB4DC 1\uD68C"
-    - "\uAC00\uB4DC\uB97C \uB193\uACE0 \uD328\uB9C1 1\uD68C"
-    - "\uAC80\uAE30 \uC2E4\uC81C \uBC1C\uC0AC"
-  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uD328\uB9C1"
-    _gamepadHint: "LB - \uD328\uB9C1"
+    - "\uB9C9\uAE30 1\uD68C"
+    - "\uC815\uD655\uD55C \uC2DC\uC810\uC5D0 \uB9C9\uC544\uC11C \uACF5\uACA9 \uCCD0\uB0B4\uAE30 1\uD68C"
+    - "\uC77C\uC12C \uBC1C\uB3D9 1\uD68C"
+  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uCCD0\uB0B4\uAE30"
+    _gamepadHint: "LB - \uCCD0\uB0B4\uAE30"
     _keyboardIcon: {fileID: 0}
-    _followUpKeyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAD81\uADF9\uAE30"
-    _followUpGamepadHint: "RB \uD640\uB4DC - \uAD81\uADF9\uAE30"
+    _followUpKeyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
+    _followUpGamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
-    _followUpNote: "\uAE30\uC6B4 3\uAC1C\uB97C \uBAA8\uC73C\uBA74 \uAD81\uADF9\uAE30\uB97C
+    _followUpNote: "\uAE30\uC6B4 3\uAC1C\uB97C \uBAA8\uC73C\uBA74 \uAC70\uD569\uC744
       \uC4F8 \uC218 \uC788\uC2B5\uB2C8\uB2E4"
     _objectives:
-    - "\uC218\uB9AC\uAC80 \uD328\uB9C1 1\uD68C"
-    - "\uAD81\uADF9\uAE30\uB85C \uC801 8\uBA85 \uCC98\uCE58"
+    - "\uC218\uB9AC\uAC80 \uCCD0\uB0B4\uAE30 1\uD68C"
+    - "\uAC70\uD569\uC73C\uB85C \uC801 8\uBA85 \uCC98\uCE58"
 --- !u!4 &2058950797
 Transform:
   m_ObjectHideFlags: 0

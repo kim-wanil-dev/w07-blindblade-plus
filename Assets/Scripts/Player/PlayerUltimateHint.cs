@@ -14,8 +14,8 @@ public sealed class PlayerUltimateHint : MonoBehaviour
 
     [Header("표시")]
     [SerializeField] private TMP_FontAsset _font;
-    [SerializeField, TextArea(1, 2)] private string _keyboardHint = "좌클릭 홀드 - 궁극기";
-    [SerializeField, TextArea(1, 2)] private string _gamepadHint = "RB 홀드 - 궁극기";
+    [SerializeField, TextArea(1, 2)] private string _keyboardHint = "좌클릭 홀드 - 거합";
+    [SerializeField, TextArea(1, 2)] private string _gamepadHint = "RB 홀드 - 거합";
     [SerializeField, Min(0.01f), Tooltip("안내가 나타나고 사라지는 실시간(초)")]
     private float _fadeDuration = 0.15f;
     private PlayerEmpower _empower;
