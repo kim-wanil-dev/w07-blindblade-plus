@@ -55,6 +55,9 @@ public sealed class BambooStage1Controller : MonoBehaviour
     void Awake()
     {
         _bossHealth = _boss.GetComponent<EnemyHealth>();
+        // 보스 출현에 필요한 처치 수보다 많은 근접 적은 내보내지 않는다.
+        _director.SetMeleeSpawnLimit(_requiredKills);
+        _director.SetKillGoal(_requiredKills);
         _warning.alpha = 0f;
         _warning.blocksRaycasts = false;
         _warning.interactable = false;
@@ -150,11 +153,13 @@ public sealed class BambooStage1Controller : MonoBehaviour
     }
 
     /// <summary>
-    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정한다.
+    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정하며 플레이어 체력을 최대로 회복한다.
     /// 등장 파동은 첫 진입과 재도전 모두 시작하며 shakeCamera가 참인 첫 진입에서만 카메라를 흔든다.
     /// </summary>
     private void ActivateBoss(Vector3 position, bool shakeCamera)
     {
+        PlayerHealth playerHealth = Game.Player.GetComponent<PlayerHealth>();
+        playerHealth.Heal(playerHealth.MaxHealth);
         Vector3 toPlayer = Game.Player.transform.position - position;
         toPlayer.y = 0f;
         _boss.transform.SetPositionAndRotation(position,
@@ -162,6 +167,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _boss.GetComponent<BossController>().ConfigureArena(_arena, _edgeInset);
         BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2");
         _boss.SetActive(true);
+        _director.HideRecord();
         _phase = StagePhase.Boss;
         BambooStage1Progress.MarkBossCheckpointReached();
         _entranceWaveRoutine = StartCoroutine(PlayEntranceWaves(position));

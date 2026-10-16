@@ -14,6 +14,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 {
     private const int FINAL_STAGE = 6;
     private const int RANGED_STAGE = 5;
+    private const int PERFECT_DODGE_STAGE = 3;
     private const int RANGED_PARRY_OBJECTIVE = 1;
     private const float TARGET_DISTANCE = 5f;
     private const float TARGET_ARRIVAL_RADIUS = 1f;
@@ -111,6 +112,9 @@ public sealed class OnboardingFlowController : MonoBehaviour
         // 첫 단계부터 시작하는 실행은 첫 화면부터 암전으로 덮어 서막 전에 장면이 보이지 않게 한다.
         _playOpening = !_retryPending && _savedRunStage == 0;
         if (_playOpening) _hud.CoverScreen();
+        // 극한 회피 단계에서 재시작하면 게임 시작 자동 파동도 생략해 대나무를 드러내지 않는다.
+        int startingStage = _retryPending ? _restartStage : _savedRunStage;
+        if (startingStage == PERFECT_DODGE_STAGE) Game.Player.GetComponent<PlayerPerfectPulse>().SuppressStartPulse();
         StartCoroutine(BeginWhenGameplayIsReady());
     }
 
@@ -679,11 +683,20 @@ public sealed class OnboardingFlowController : MonoBehaviour
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 
-    /// <summary>실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 표시와 필요한 재배치를 진행한다.</summary>
+    /// <summary>
+    /// 실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 표시와 필요한 재배치를 진행한다.
+    /// 극한 회피 단계는 극한 회피 파동이 다 퍼지고 사라질 때까지 기다린 뒤 완료를 표시한다.
+    /// </summary>
     private IEnumerator AdvanceAfterResolvedEvent()
     {
         yield return new WaitForEndOfFrame();
         LockTransitionInput();
+        // 다음 단계의 시작 파동이 극한 회피 파동을 덮어쓰지 않도록 끝까지 보여 준다.
+        while (_stage == PERFECT_DODGE_STAGE && _perfectPulse.IsRunning)
+        {
+            if (_restartQueued) yield break;
+            yield return null;
+        }
         int nextStage = _stage + 1;
         yield return _hud.ShowStageCompletion(_stage, nextStage <= FINAL_STAGE);
         if (_restartQueued) yield break;
@@ -698,7 +711,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
         else
             EnterStage(nextStage);
         if (_restartQueued) yield break;
-        _perfectPulse.ReplayStartPulseForOnboarding();
+        // 극한 회피 단계는 대나무가 드러나지 않도록 시작 파동을 생략한다.
+        if (_stage != PERFECT_DODGE_STAGE) _perfectPulse.ReplayStartPulseForOnboarding();
         _hud.PlayStageStart(_stage);
         yield return ReadyStageAndUnlockInput();
     }
