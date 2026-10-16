@@ -168,6 +168,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     /// </summary>
     internal bool TryAttack(Transform target, bool immediateMeleeAttack = false)
     {
+        _heartbeatsPlayed = 0;
+        _attackVoicePlayed = false;
         bool attackImmediately = immediateMeleeAttack && this is EnemyMeleeAttack;
         if ((UsesHeartbeatTelegraph || attackImmediately) && Time.timeScale <= 0f) return false;
         if (!IsAvailable || !CanAttack(target) || target != _sensor.Target || !_sensor.CanSeeTarget())
