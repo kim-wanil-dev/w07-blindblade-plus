@@ -260,6 +260,7 @@ GameObject:
   - component: {fileID: 7719342256018403923}
   - component: {fileID: 7719342256018403924}
   - component: {fileID: 7719342256018403925}
+  - component: {fileID: 7719342256018403926}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -1648,3 +1649,73 @@ MonoBehaviour:
   _scabbard: {fileID: 1746509643972831858}
   _grip: {fileID: 5036744704484886163}
   _material: {fileID: 2100000, guid: 9e56680fd30a4ec0b80ad2e97d836f7f, type: 2}
+--- !u!23 &1259153877585065921 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6192303726752776966, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  m_PrefabInstance: {fileID: 4942158160852825287}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &7719342256018403926
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79c93276f8344141b937af47f19c62c6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerKatanaBeads
+  _viewSpace: {fileID: 658615258030587121}
+  _attach: {fileID: 1259153877585065921}
+  _attachLocalOffset: {x: -0.5, y: -1, z: 0}
+  _material: {fileID: 2100000, guid: 7e6de1d019e74d4983bc3529e25ada03, type: 2}
+  _beadRadius: 0.008
+  _sphereRadiusRatio: 0.8
+  _shellTint: {r: 1, g: 1, b: 1, a: 1}
+  _crackCount: 3
+  _crackWidth: 0.0004
+  _crackColor: {r: 0.86, g: 0.87, b: 0.9, a: 0.55}
+  _crackSeed: 7
+  _firstCordLength: 0.025
+  _cordLength: 0.014
+  _cordSubdivisions: 3
+  _cordWidth: 0.0014
+  _cordColor: {r: 1, g: 1, b: 1, a: 1}
+  _gravity: 9.81
+  _damping: 0.97
+  _iterations: 16
+  _maxStretch: 1.02
+  _viewInertia: 0.12
+  _maxInertiaStep: 0.006
+  _minViewDepth: 0.34
+  _beadInverseMass: 0.4
+  _sphereStyle:
+    _sphereScale: 1
+    _axisRoll: 20
+    _axisPitch: 25
+    _inclination: 65
+    _twist: 0.3
+    _precessionSpeed: 0.4
+    _counterAzimuth: 90
+    _segments: 64
+    _mainWidth: 2.2
+    _branchWidthRatio: 0.2
+    _strokeLength: 0.85
+    _thicknessVariation: 0.35
+    _branchSpread: 0.75
+    _backOpacity: 0.3
+    _feather: 0.08
+    _color: {r: 1, g: 1, b: 1, a: 1}
+    _orbitSpeed: 0.32
+    _counterSpeedRatio: 0.8
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
+    _fadeDuration: 0.25
+  _fullSpeedMultiplier: 2.5
+  _fullGlowStrength: 1
+  _fullGlowRadius: 1.7
+  _fullGlowPulseDepth: 0.35
+  _fullGlowPulseSpeed: 1.2
+  _fullTransitionDuration: 0.3

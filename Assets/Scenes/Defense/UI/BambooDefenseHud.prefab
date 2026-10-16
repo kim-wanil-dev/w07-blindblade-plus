@@ -835,8 +835,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 102, y: 0}
-  m_SizeDelta: {x: 28, y: 28}
+  m_AnchoredPosition: {x: 156, y: 0}
+  m_SizeDelta: {x: 56, y: 56}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1555718701591584192
 CanvasRenderer:
@@ -1265,8 +1265,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 58, y: 0}
-  m_SizeDelta: {x: 28, y: 28}
+  m_AnchoredPosition: {x: 92, y: 0}
+  m_SizeDelta: {x: 56, y: 56}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &7953639786203224064
 CanvasRenderer:
@@ -2330,8 +2330,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 48, y: 867}
-  m_SizeDelta: {x: 116, y: 32}
+  m_AnchoredPosition: {x: 48, y: 845}
+  m_SizeDelta: {x: 184, y: 64}
   m_Pivot: {x: 0, y: 0}
 --- !u!114 &1470648948322352512
 MonoBehaviour:
@@ -2351,10 +2351,39 @@ MonoBehaviour:
   - {fileID: 8082528598179355648}
   - {fileID: 1503186345334717184}
   _filledSprite: {fileID: 21300000, guid: 33790c7c3bd448148d9e12afb5aadf78, type: 3}
-  _emptySprite: {fileID: 21300000, guid: 33790c7c3bd448148d9e12afb5aadf78, type: 3}
+  _emptySprite: {fileID: 21300000, guid: b0e2c553ae8f42d590c880c15d2e6ce7, type: 3}
   _filledColor: {r: 0.86, g: 0.1, b: 0.1, a: 1}
-  _emptyColor: {r: 0.45, g: 0.45, b: 0.45, a: 0.75}
+  _emptyColor: {r: 0.62, g: 0.62, b: 0.64, a: 0.85}
   _chargeScale: 1.5
+  _orbitStyle:
+    _sphereScale: 1
+    _axisRoll: 20
+    _axisPitch: 25
+    _inclination: 65
+    _twist: 0.3
+    _precessionSpeed: 0.4
+    _counterAzimuth: 90
+    _segments: 64
+    _mainWidth: 1.2
+    _branchWidthRatio: 0.2
+    _strokeLength: 0.75
+    _thicknessVariation: 0.35
+    _branchSpread: 0.75
+    _backOpacity: 0.3
+    _feather: 0.8
+    _color: {r: 1, g: 1, b: 1, a: 1}
+    _orbitSpeed: 0.32
+    _counterSpeedRatio: 0.8
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
+    _fadeDuration: 0.25
+  _fullSpeedMultiplier: 2.5
+  _fullGlowStrength: 1
+  _fullGlowRadius: 1.7
+  _fullGlowPulseDepth: 0.35
+  _fullGlowPulseSpeed: 1.2
+  _fullTransitionDuration: 0.3
 --- !u!1 &7706114903086575250
 GameObject:
   m_ObjectHideFlags: 0
@@ -2459,8 +2488,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0.5}
   m_AnchorMax: {x: 0, y: 0.5}
-  m_AnchoredPosition: {x: 14, y: 0}
-  m_SizeDelta: {x: 28, y: 28}
+  m_AnchoredPosition: {x: 28, y: 0}
+  m_SizeDelta: {x: 56, y: 56}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &3844721996618770944
 CanvasRenderer:
