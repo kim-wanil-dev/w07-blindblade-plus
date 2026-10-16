@@ -587,7 +587,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         else if ((_stage == 4 || _stage == 6) && _empower.IsReady)
             _empower.PrepareOnboardingFollowUp(_empower.Tokens);
         _objectiveIndex = nextObjective;
-        _hud.ShowObjective(_stage, _objectiveIndex);
+        _hud.ShowObjective(_stage, _objectiveIndex, true);
         _advanceQueued = false;
         yield return ReadyStageAndUnlockInput();
     }
@@ -657,7 +657,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
                     && _player.CurrentState == PlayerActionState.Free)
                 {
                     _objectiveIndex = 0;
-                    _hud.ShowObjective(_stage, _objectiveIndex);
+                    _hud.ShowObjective(_stage, _objectiveIndex, true);
                     CreateTrainingThrower();
                     break;
                 }
@@ -686,7 +686,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _empower.PrepareOnboardingFollowUp(startingTokens);
         if (_stage == FINAL_STAGE) ResetUltimateTargets();
         _objectiveIndex = 0;
-        _hud.ShowObjective(_stage, _objectiveIndex);
+        _hud.ShowObjective(_stage, _objectiveIndex, true);
         CreateTrainingThrower();
         yield return ReadyStageAndUnlockInput();
         _recoveryQueued = false;
