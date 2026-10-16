@@ -6642,9 +6642,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.CombatTelemetryRecorder
   _health: {fileID: 876271890}
-  _director: {fileID: 1968806059}
   _spawner: {fileID: 1968806062}
-  _presentation: {fileID: 1968806063}
   _recordingEnabled: 1
   _configVersion: bamboo-2026-10-14
   _bufferLimit: 4096
@@ -55841,7 +55839,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.16666667
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 0}
+  m_NavMeshData: {fileID: 23800000, guid: 6a3e70085228ced4994f818cffca6748, type: 2}
   m_BuildHeightMesh: 0
 --- !u!114 &1943110757
 MonoBehaviour:
@@ -58806,26 +58804,51 @@ MonoBehaviour:
   - _keyboardHint: "\uC774\uB3D9 - WASD"
     _gamepadHint: "\uC774\uB3D9 - \uC67C\uCABD \uC2A4\uD2F1"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: 
+    _followUpGamepadHint: 
+    _followUpKeyboardIcon: {fileID: 0}
+    _followUpObjective: 1
+    _followUpNote: 
     _objectives:
     - "\uD30C\uB3D9 \uC911\uC2EC 1m \uC774\uB0B4 \uB3C4\uCC29"
   - _keyboardHint: "\uB3CC\uC9C4/\uD68C\uD53C - SPACE"
     _gamepadHint: "\uB3CC\uC9C4/\uD68C\uD53C - A \uBC84\uD2BC"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: 
+    _followUpGamepadHint: 
+    _followUpKeyboardIcon: {fileID: 0}
+    _followUpObjective: 1
+    _followUpNote: 
     _objectives:
     - "\uB3CC\uC9C4 1\uD68C"
   - _keyboardHint: "\uC88C\uD074\uB9AD - \uACF5\uACA9"
     _gamepadHint: "RB - \uACF5\uACA9"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: 
+    _followUpGamepadHint: 
+    _followUpKeyboardIcon: {fileID: 0}
+    _followUpObjective: 1
+    _followUpNote: 
     _objectives:
     - "\uADFC\uC811 \uC801 \uCC98\uCE58 1\uD68C"
   - _keyboardHint: "\uADF9\uD55C \uD68C\uD53C - SPACE"
     _gamepadHint: "\uADF9\uD55C \uD68C\uD53C - A \uBC84\uD2BC"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: 
+    _followUpGamepadHint: 
+    _followUpKeyboardIcon: {fileID: 0}
+    _followUpObjective: 1
+    _followUpNote: 
     _objectives:
     - "\uC218\uB9AC\uAC80 \uADF9\uD55C \uD68C\uD53C 1\uD68C"
   - _keyboardHint: "\uC6B0\uD074\uB9AD - \uBC29\uC5B4"
     _gamepadHint: "LB - \uBC29\uC5B4"
     _keyboardIcon: {fileID: 0}
+    _followUpKeyboardHint: 
+    _followUpGamepadHint: 
+    _followUpKeyboardIcon: {fileID: 0}
+    _followUpObjective: 1
+    _followUpNote: 
     _objectives:
     - "\uAC00\uB4DC 1\uD68C"
     - "\uAC00\uB4DC\uB97C \uB193\uACE0 \uD328\uB9C1 1\uD68C"
@@ -58836,7 +58859,7 @@ MonoBehaviour:
     _followUpGamepadHint: "RB - \uAC80\uAE30"
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 2
-    _followUpNote:
+    _followUpNote: 
     _objectives:
     - "\uAC00\uB4DC 1\uD68C"
     - "\uAC00\uB4DC\uB97C \uB193\uACE0 \uD328\uB9C1 1\uD68C"
@@ -58848,7 +58871,8 @@ MonoBehaviour:
     _followUpGamepadHint: "RB \uD640\uB4DC - \uAD81\uADF9\uAE30"
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
-    _followUpNote: "\uAE30\uC6B4 3\uAC1C\uB97C \uBAA8\uC73C\uBA74 \uAD81\uADF9\uAE30\uB97C \uC4F8 \uC218 \uC788\uC2B5\uB2C8\uB2E4"
+    _followUpNote: "\uAE30\uC6B4 3\uAC1C\uB97C \uBAA8\uC73C\uBA74 \uAD81\uADF9\uAE30\uB97C
+      \uC4F8 \uC218 \uC788\uC2B5\uB2C8\uB2E4"
     _objectives:
     - "\uC218\uB9AC\uAC80 \uD328\uB9C1 1\uD68C"
     - "\uAD81\uADF9\uAE30\uB85C \uC801 8\uBA85 \uCC98\uCE58"
