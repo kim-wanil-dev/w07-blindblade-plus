@@ -20,7 +20,8 @@
 | 분석 | 사용할 데이터 |
 | --- | --- |
 | 구간별 사망 수 | Sessions를 stage_id로 묶어 deaths 합계 |
-| 피해량 원인 비중 | rangedDamage/meleeDamage, bossRangedDamage/bossChargeDamage 및 DamageShare 열 |
+| 구간별 평균 처치·사망 횟수 | Sessions를 stage_id로 묶어 수치가 기록된 kills와 deaths의 평균을 계산한다. 정상 로그는 구간별 Sessions 행(도전)마다 두 값이 기록된다. |
+| 피해량 원인 비중 | rangedDamage/meleeDamage, bossRangedDamage/bossEscapeBarrageDamage/bossChargeDamage 및 DamageShare 열 |
 | 피격 횟수 원인 비중 | Patterns.csv의 damage_hits / 구간의 damageHitCount |
 | 회피 시도 | dodgeAttempts, 거부=dodgeRejected, 실행=dodgeStarted |
 | 방어 시도 | guardAttempts, guardRejected, guardAttemptsWithContact/WithoutContact |
@@ -28,7 +29,7 @@
 | 반응 시간 | Events의 enemy_attack_resolved에서 reaction_seconds / input_to_contact_seconds |
 | 이동 히트맵 | movement_sample의 x,z에 duration_seconds를 가중치로 사용 |
 | 공격 시도 히트맵 | player_input, kind=Attack, is_attempt=true의 x,z |
-| 적 공격 결과·적중률 | enemy_attack_resolved의 outcome; Sessions의 ranged/melee/bossRanged/bossCharge 열 |
+| 적 공격 결과·적중률 | enemy_attack_resolved의 outcome; Sessions의 ranged/melee/bossRanged/bossEscapeBarrage/bossCharge 열 |
 | 공격 적중 히트맵 | enemy_attack_resolved, applied_damage>0의 x,z |
 | 원거리 공격 직선 | 같은 결과 행의 origin_x,origin_z → x,z; kind=Projectile |
 
@@ -109,7 +110,7 @@ Events/Sessions 헤더를 수동으로 바꾸면 header_mismatch로 저장을 �
 | --- | --- | --- |
 | 0-1~0-7 온보딩 각 단계 | 해당 단계의 목표별 활성 시간, 첫 추적 입력까지 시간, 요구 행동 시도·오입력·결과, 사망 재시도, 이탈 목표 | OnboardingSteps, Events의 onboarding_attempt, Sessions |
 | 1-1 일반 전투 | 사망·처치, 수리검/근접 피해 비중, 회피·방어 시도와 실제 판정, 반응 시간, 이동/공격/피격 히트맵 | Sessions, Events, Patterns.csv, Heatmaps.csv |
-| 1-2 보스전 | 보스 수리검/돌진의 적중률·피해 비중, 방어·회피 결과, 보스전 시간과 사망 | Sessions, Events, Patterns.csv, Heatmaps.csv |
+| 1-2 보스전 | 보스 수리검/도주 난사/돌진의 적중률·피해 비중, 방어·회피 결과, 보스전 시간과 사망 | Sessions, Events, Patterns.csv, Heatmaps.csv |
 
 온보딩을 완료하고 BambooStage1에 진입하면 전투 Sessions에도 같은 `run_id`를 남긴다. 보스 재도전은 새 `session_id`지만 같은 `run_id`로 묶인다. Stage1을 직접 실행하면 `run_id`는 비어 있다. 같은 PC에서 여러 참가자가 플레이하면 익명 PC ID도 같으므로 참가자 구분은 별도로 관리한다. Editor 확인 행은 `config_version`이 `-editor`로 끝나며 본 분석에서 제외한다.
 
@@ -142,7 +143,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `attack_id` | 같은 적 공격의 시작·확정·결과를 잇는 공격 ID |
 | `dodge_id` | 회피 행동의 연결 ID |
 | `kind` | 사건 종류에 따른 입력·공격 방식. 예: `Attack`, `Projectile` |
-| `pattern_id` | 적 공격 패턴 식별자 |
+| `pattern_id` | 적 공격 패턴 식별자. `BossEscapeBarrage`는 4초 동안 누적 피해가 30 이상일 때 발동하는 보스 도주 난사이며, 각 투사체를 별도 `attack_id`로 집계함 |
 | `outcome` | 공격 판정 결과. 예: Hit, Dodge, NormalParry, PerfectParry, Guard, Miss |
 | `is_attempt` | 플레이어 입력이 행동 시도로 집계되는지 여부 |
 | `input_status` | 입력 처리 결과: Started, Rejected, BufferDropped, Buffered 등 |
@@ -212,7 +213,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `reactionMeanSeconds` | 연결된 반응 시간 평균(초) |
 | `enemyHitRate` | 결과 확정 공격 중 적중 비율(0~1) |
 | `serviceDroppedEventsTotal` | 저장·전송 서비스가 버퍼 한도 등으로 누락한 사건 누계 |
-| `ranged*`, `melee*`, `bossRanged*`, `bossCharge*` | 공격 종류별 집계. 아래 접미어 정의 참조 |
+| `ranged*`, `melee*`, `bossRanged*`, `bossEscapeBarrage*`, `bossCharge*` | 공격 종류별 집계. 아래 접미어 정의 참조 |
 | `patterns_json` | 패턴별 판정 수·피해량 등 세부 누적 JSON |
 | `run_id` | 온보딩과 전투를 함께 묶는 실행 ID |
 | `exit_step_index` | 마지막으로 진행 중이던 온보딩 단계 인덱스(0부터) |
@@ -221,7 +222,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `attempts` | 구간 요약이 집계한 입력 시도 수 |
 | `retry_count` | 해당 온보딩 단계의 이전 사망 후 재진입 횟수 |
 
-공격 종류 접두어 네 가지(`ranged`, `melee`, `bossRanged`, `bossCharge`)마다 다음 열이 있다.
+공격 종류 접두어 다섯 가지(`ranged`, `melee`, `bossRanged`, `bossEscapeBarrage`, `bossCharge`)마다 다음 열이 있다.
 
 | 접미어 | 의미 |
 | --- | --- |
