@@ -451,13 +451,9 @@ MonoBehaviour:
   _targetedAttackMinimumDuration: 0.45
   _perfectParryStart: 0
   _perfectParryEnd: 0.1
-  _normalParryStart: 0.1
-  _normalParryEnd: 0.25
   _blockInputRecovery: 0
   _guardPushDistance: 0.9
   _guardPushDuration: 0.12
-  _counterWindow: 0.5
-  _automaticCounterDelay: 0.12
   _parryStaggerDuration: 0.9
   _counterInvulnerabilityAfter: 0.3
   _sheatheDuration: 0.3

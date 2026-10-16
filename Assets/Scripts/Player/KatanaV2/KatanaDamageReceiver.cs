@@ -80,7 +80,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// context의 공격 1회를 회피·가드·패링으로 판정하고 막지 못하면 체력을 줄인 뒤 결과를 반환한다.
     /// 회피 판정 구간이면 가드보다 먼저 DodgeAvoided 또는 Invulnerable로, 반격 무적·강화 공격·퍼펙트 패링 직후 무적 중이면 보상 없는 Invulnerable로 확정한다.
     /// 그 외에는 Kind가 Projectile이면 진입 방향과 반격 없음 규칙을, 아니면 기존 전방 근접·보스 공격 규칙을 사용하며
-    /// 가드가 열린 뒤 지난 시간으로 PerfectParry·NormalParry·Guard를 나눈다.
+    /// 가드가 열린 뒤 지난 시간으로 PerfectParry·Guard를 나눈다.
     /// 사망·일시정지·시간 정지에서는 Ignored를 반환한다. 모든 결과는 반환 전에 DefenseResolved 사건으로 한 번 발행한다.
     /// </summary>
     public DefenseResolution ResolveIncomingAttack(DamageContext context)
@@ -111,7 +111,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     /// <summary>
     /// context의 투사체 진입 방향으로 전방 가드·패링을 검사하고 방어 성공 여부를 반환한다.
-    /// parried에 일반 또는 퍼펙트 패링 여부를 출력하며 기존 방어 효과를 적용한다. allowCounter가 false이면 반격 기회를 만들지 않는다.
+    /// parried에 퍼펙트 패링 여부를 출력하며 기존 방어 효과를 적용한다. allowCounter가 false이면 반격 기회를 만들지 않는다.
     /// 회피 판정 구간이나 반격 무적·강화 공격·퍼펙트 패링 직후 무적 중이면 막지 않고 false를 반환해 호출자의 TakeDamage가 무적 결과로 처리하게 한다.
     /// 방어에 성공한 경우에만 DefenseResolved를 발행하고, 실패는 호출자의 TakeDamage가 발행한다.
     /// </summary>
