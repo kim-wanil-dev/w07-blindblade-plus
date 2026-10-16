@@ -56,15 +56,28 @@ public sealed class RainStageWeather : MonoBehaviour
 
     [Header("검격과 빈 자국")]
     [SerializeField, Min(0.01f)] private float _bladeThickness = 0.12f;
-    [SerializeField, Min(0.01f)] private float _waveThickness = 0.35f;
+    [SerializeField, Min(0.01f)] private float _waveThickness = 1f;
+    [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링 뒤 검기 돌진에서 몸이 지나간 경로 둘레로 빗방울을 터뜨리는 반경(미터). 방울은 경로 바깥쪽으로 튄다.")]
+    private float _dashBurstRadius = 2f;
+    [SerializeField, Min(0.01f), Tooltip("궁극기 사선 평면 앞뒤로 빗방울을 터뜨리는 두께(미터). 방울은 평면 바깥쪽으로 튄다.")]
+    private float _ultimateBurstThickness = 18f;
+    [SerializeField, Min(0f), Tooltip("궁극기 사선 평면이 카메라 뒤쪽까지 닿는 거리(미터). 옆과 앞은 Far Radius까지 닿는다.")]
+    private float _ultimateBurstBehind = 3f;
     [SerializeField, Min(0.01f)] private float _trailLifetime = 0.75f;
     [SerializeField, Range(1, 64)] private int _maximumTrails = 32;
     [SerializeField, Range(1, 64)] private int _maximumHitsPerFrame = 48;
 
     [Header("물 파열")]
-    [SerializeField, Min(0.05f)] private float _splashDuration = 0.3f;
-    [SerializeField, Min(0.02f)] private float _splashSize = 0.35f;
+    [SerializeField, Min(0.05f)] private float _splashDuration = 0.39f;
+    [SerializeField, Min(0.02f), Tooltip("검격 진행 방향으로 뿜어지는 액체 스플랫 길이(미터). 폭은 길이의 절반이다.")]
+    private float _splashSize = 0.525f;
     [SerializeField] private Color _splashColor = new Color(1f, 1f, 1f, 0.48f);
+    [SerializeField, Tooltip("핏방울 이펙트와 같은 3x3 액체 스플랫 플립북. 알파 경계만 테두리로 그린다.")]
+    private Texture2D _splashTexture;
+    [SerializeField, Range(0.25f, 4f), Tooltip("액체 스플랫 테두리의 화면 픽셀 반두께.")]
+    private float _splashOutlineWidth = 0.75f;
+    [SerializeField, Range(0f, 90f), Tooltip("파열 방울마다 검격 진행 방향에서 무작위로 벌어지는 최대 각도(도).")]
+    private float _splashSpread = 35f;
 
     [Header("빗방울 땅 파동")]
     [SerializeField, Range(0f, 1f), Tooltip("지면에 닿은 빗방울이 파동을 남길 확률.")]
@@ -323,6 +336,9 @@ public sealed class RainStageWeather : MonoBehaviour
         _properties.SetFloat("_OutlineOpacity", _dropletOutlineOpacity);
         _properties.SetFloat("_IdleDropVisibility", _idleDropletVisibility);
         _properties.SetColor("_SplashColor", _splashColor);
+        _properties.SetTexture("_SplashTexture", _splashTexture);
+        _properties.SetFloat("_SplashOutlineWidth", _splashOutlineWidth);
+        _properties.SetFloat("_SplashSpread", _splashSpread * Mathf.Deg2Rad);
         RenderParams render = new RenderParams(_rainMaterial)
         {
             camera = _viewCamera,
@@ -398,6 +414,31 @@ public sealed class RainStageWeather : MonoBehaviour
         Vector3 offset = right.normalized * halfWidth;
         _active.AddSweep(previous - offset, previous + offset, current - offset,
             current + offset, _active._waveThickness);
+    }
+
+    /// <summary>
+    /// 검기 돌진에서 플레이어 몸 중심이 previous에서 current로 지난 경로 둘레 _dashBurstRadius 안의 물방울을 터뜨린다.
+    /// 파열은 경로 바깥쪽으로 튀며 같은 범위에 빈 자국을 남긴다. RainyStage에 비가 활성화된 경우에만 동작한다.
+    /// </summary>
+    public static void RecordDashSweep(Vector3 previous, Vector3 current)
+    {
+        if (_active == null || !_active._initialized) return;
+        _active.AddSweep(previous, previous, current, current, _active._dashBurstRadius, true);
+    }
+
+    /// <summary>
+    /// 궁극기 사선처럼 point를 지나고 normal에 수직인 평면에서, forward 쪽 Far Radius·양옆 Far Radius·뒤쪽 _ultimateBurstBehind 범위의
+    /// 평면 두께 _ultimateBurstThickness 안 물방울을 한 번에 터뜨린다. 파열은 평면 바깥쪽으로 튀며 같은 범위에 빈 자국을 남긴다.
+    /// RainyStage에 비가 활성화된 경우에만 동작한다.
+    /// </summary>
+    public static void RecordCutPlaneBurst(Vector3 point, Vector3 normal, Vector3 forward)
+    {
+        if (_active == null || !_active._initialized) return;
+        Vector3 along = Vector3.ProjectOnPlane(forward, normal).normalized;
+        Vector3 side = Vector3.Cross(normal, along).normalized * _active._farRadius;
+        Vector3 back = point - along * _active._ultimateBurstBehind;
+        Vector3 front = point + along * _active._farRadius;
+        _active.AddSweep(back - side, front - side, back + side, front + side, _active._ultimateBurstThickness, true);
     }
 
     /// <summary>
@@ -518,14 +559,15 @@ public sealed class RainStageWeather : MonoBehaviour
 
     /// <summary>
     /// 네 모서리와 두께로 공격 영역을 만들고 이번 프레임의 파열 판정과 만료되는 빈 자국에 추가한다.
+    /// outward가 참이면 파열이 진행 방향 대신 면(모서리가 한 선분으로 모이면 그 선분)에서 바깥쪽으로 튄다.
     /// 한도를 넘으면 새 파열 판정은 버리고 오래된 빈 자국부터 덮어쓴다.
     /// </summary>
-    private void AddSweep(Vector3 a, Vector3 b, Vector3 c, Vector3 d, float thickness)
+    private void AddSweep(Vector3 a, Vector3 b, Vector3 c, Vector3 d, float thickness, bool outward = false)
     {
         Sweep sweep = new Sweep
         {
             A = new Vector4(a.x, a.y, a.z, thickness),
-            B = new Vector4(b.x, b.y, b.z, 0f),
+            B = new Vector4(b.x, b.y, b.z, outward ? 1f : 0f),
             C = new Vector4(c.x, c.y, c.z, 0f),
             D = new Vector4(d.x, d.y, d.z, 0f)
         };

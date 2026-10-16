@@ -166,6 +166,32 @@ bool TouchesSweep(float3 previous, float3 current, Sweep sweep)
     return false;
 }
 
+// sweep에 맞은 position의 파열이 튈 단위 방향을 반환한다.
+// 기본은 이전 변 중점에서 현재 변 중점으로 가는 검격 진행 방향이다. B.w가 1이면 면에서 바깥쪽,
+// 네 모서리가 한 선분으로 모인 경로라면 그 선분에서 바깥쪽으로 튄다.
+float3 BurstDirection(float3 position, Sweep sweep)
+{
+    float3 a = sweep.A.xyz;
+    float3 b = sweep.B.xyz;
+    float3 c = sweep.C.xyz;
+    float3 d = sweep.D.xyz;
+    if (sweep.B.w < 0.5)
+    {
+        float3 motion = (c + d - a - b) * 0.5;
+        return dot(motion, motion) > 0.00000001 ? normalize(motion) : float3(0, 1, 0);
+    }
+    float3 normal = cross(b - a, c - a);
+    if (dot(normal, normal) > 0.000001)
+    {
+        normal = normalize(normal);
+        return dot(position - a, normal) >= 0 ? normal : -normal;
+    }
+    float3 path = c - a;
+    float t = saturate(dot(position - a, path) / max(dot(path, path), 0.000001));
+    float3 offset = position - (a + path * t);
+    return dot(offset, offset) > 0.00000001 ? normalize(offset) : float3(0, 1, 0);
+}
+
 bool TouchesAnyTrail(float3 previous, float3 current)
 {
     [loop]
@@ -241,9 +267,14 @@ void UpdateRain(uint3 threadId : SV_DispatchThreadID)
     [loop]
     for (int i = 0; i < _HitCount; i++)
     {
-        if (!TouchesSweep(previous, current, _HitSweeps[i])) continue;
+        Sweep sweep = _HitSweeps[i];
+        if (!TouchesSweep(previous, current, sweep)) continue;
+        // 파열이 튀는 방향을 방위각·고도각으로 저장한다.
+        float3 direction = BurstDirection(current, sweep);
         drop.PositionState.w = 1;
         drop.Data.y = 0;
+        drop.Data.z = atan2(direction.z, direction.x);
+        drop.Data.w = asin(clamp(direction.y, -1.0, 1.0));
         _Drops[id] = drop;
         return;
     }

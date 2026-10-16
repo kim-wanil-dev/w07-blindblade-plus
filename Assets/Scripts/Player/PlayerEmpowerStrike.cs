@@ -40,6 +40,8 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     [Header("납도")]
     [SerializeField, Range(0f, 1f)] private float _sheatheFlash = 0.4f;
     [SerializeField, Min(0f)] private float _sheathePause = 0.3f;
+    [SerializeField, Min(0f), Tooltip("RainyStage에서 암전이 걷히고 납도 섬광(0.2초)이 지난 뒤 사선 평면 빗방울이 터지기까지의 실시간(초). 납도 멈춤 시간 안에서 터진다.")]
+    private float _rainBurstDelay = 0.2f;
     [SerializeField, Min(0)] private int _scatterCount = 48;
     [SerializeField, Min(0.01f), Tooltip("갈라진 선이 흩어진 먹 조각이 떠다니다 사라지는 실시간. 강화가 끝난 뒤에도 남는다.")]
     private float _scatterLifetime = 1.2f;
@@ -128,6 +130,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     /// _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
     /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 비행 중인 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
     /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다. 같은 선을 따라 땅에 흰 흔적을 남긴다.
+    /// RainyStage에서는 암전이 걷히고 _rainBurstDelay 뒤에 같은 사선 평면 주변 빗방울이 카메라 옆·조금 뒤까지 평면 바깥쪽으로 터진다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished)
     {
@@ -159,7 +162,11 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         _overlay.Flash(_sheatheFlash, 0.2f);
         PunchFov();
         PushIn(0f, 0.25f);
-        yield return WaitReal(_sheathePause);
+        // 빗방울은 암전과 납도 섬광이 걷혀 화면이 보이는 뒤에 사선을 따라 터진다.
+        float burstDelay = Mathf.Min(_rainBurstDelay, _sheathePause);
+        yield return WaitReal(burstDelay);
+        RainStageWeather.RecordCutPlaneBurst(bambooCutPoint, bambooCutNormal, _camera.transform.forward);
+        yield return WaitReal(_sheathePause - burstDelay);
 
         _routine = null;
         onFinished?.Invoke();

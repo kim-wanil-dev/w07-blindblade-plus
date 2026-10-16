@@ -62324,13 +62324,19 @@ MonoBehaviour:
   _bulletWiggleAmplitude: 0.25
   _bulletSplashSpeed: 0.65
   _bladeThickness: 0.12
-  _waveThickness: 0.35
+  _waveThickness: 1
+  _dashBurstRadius: 2
+  _ultimateBurstThickness: 18
+  _ultimateBurstBehind: 3
   _trailLifetime: 0.75
   _maximumTrails: 32
   _maximumHitsPerFrame: 48
-  _splashDuration: 0.3
-  _splashSize: 0.35
+  _splashDuration: 0.39
+  _splashSize: 0.525
   _splashColor: {r: 1, g: 1, b: 1, a: 0.48}
+  _splashTexture: {fileID: 2800000, guid: 3ba0179ad6e513e4e9a0ebe65a28009d, type: 3}
+  _splashOutlineWidth: 0.75
+  _splashSpread: 35
   _groundRippleChance: 0.6
   _groundRippleRadius: {x: 0.15, y: 0.5}
   _groundRippleDuration: 0.35

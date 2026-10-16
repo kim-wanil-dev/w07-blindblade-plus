@@ -13,14 +13,25 @@
 - 떨어지는 빗방울 선명함: 평상시에는 기존 외곽선 불투명도의 0.3배(Idle Droplet Visibility)로 보이고, 퍼펙트 패링·극한 회피 파동(`_OutlinePulseRegion`·`_OutlinePulseVisibility`) 안에서는 수평 거리 기준으로 1배까지 밝아진다. 다른 인지 파동(시야원·소리·걸음·충격·빗방울 땅 파동)은 떨어지는 빗방울을 밝히지 않는다. 게임 시작 때 맵 전체로 퍼지는 시작 파동도 같은 영역을 쓰므로 그동안은 빗방울이 선명하다. 검격 파열은 항상 그대로 보인다.
 - 셰이더에는 이전 시도에서 쓰던 인지 합성 함수(`RevealMapVisibility`, `ImpactRippleVisibility`, `SphereRippleVisibility` 포함)가 남아 있지만 현재 빗방울 선명함에는 쓰지 않는다.
 
+#### 2026-10-16 액체 파열 테두리·돌진/검기/궁극기 빗방울 폭발 (사용자 요청)
+
+- 액체 파열: 검격에 맞은 방울은 원형 링·점 파열 대신, 적 피격 혈흔(BloodHit의 `BloodExplosionSpikyAnimated`)과 같은 `Epic Toon FX/Textures/splat01_animated_3x3.png` 3×3 액체 스플랫 플립북으로 터진다. 액체 내부는 칠하지 않고 알파 0.5 경계만 화면 픽셀 기준 반두께 0.75px 테두리로 그린다. 파열 시간 동안 9칸을 넘기되 이웃한 두 칸 알파를 진행도로 섞어 칸이 뚝뚝 바뀌지 않게 한다. 스플랫 길이는 0.525m(폭은 절반), 파열 시간은 0.39초다. 빈 자국에 들어간 방울(상태 2)은 그리지 않는다.
+- 파열 방향: 맞는 순간 컴퓨트 셰이더가 튈 방향을 방울 `Data.zw`에 방위각·고도각으로 저장하고, 셰이더가 화면에 투영해 스플랫을 그쪽으로 길게 놓는다. 방울마다 최대 ±35° 무작위로 벌린다. 화면 투영이 거의 없는 방향이면 방울별 무작위 방향을 쓴다. 기본 방향은 베기 면의 이전 변 중점에서 현재 변 중점으로 가는 검격 진행 방향이며, 바깥쪽 폭발 면(`Sweep.B.w` = 1)은 면 법선 쪽 바깥, 네 모서리가 한 선분으로 모인 경로는 그 선분에서 바깥쪽이다.
+- 검기: 비를 터뜨리는 검기 면 두께를 0.35m에서 1m로 키웠다.
+- 퍼펙트 패링 뒤 검기 돌진: `PlayerSwordWaveLauncher.StrikeAlongDash`가 몸 판정과 같은 구간을 `RainStageWeather.RecordDashSweep`로 넘긴다. 몸 중심 경로 둘레 반경 2m 안 방울이 경로 바깥쪽으로 터진다.
+- 궁극기: `PlayerEmpowerStrike.RunSequence`가 암전이 걷히고 납도 섬광(0.2초)이 지난 뒤 Rain Burst Delay(0.2초, 납도 멈춤 0.3초 안) 시점에 `RainStageWeather.RecordCutPlaneBurst`를 호출한다. 대나무를 베는 것과 같은 카메라를 지나는 사선 평면에서 앞쪽·양옆 Far Radius, 뒤쪽 3m 범위의 평면 앞뒤 18m 안 방울이 평면 바깥쪽으로 터진다. 사실상 카메라 주변 비가 거의 모두 터진다.
+- 돌진 경로와 궁극기 평면도 기존 검격처럼 게임 시간 0.75초 동안 빈 자국이 되어 그 자리에 비가 다시 차지 않는다.
+
 #### 관련 코드
 
 | 파일 경로 | 클래스 / 메서드 | 역할 |
 | --- | --- | --- |
 | `Assets/Scenes/Defense/RainyStage.unity` | `RainStageWeather` 오브젝트 | 이 씬에서만 비를 시작하고 씬 해제 때 GPU 자원을 정리 |
 | `Assets/Scripts/Defense/RainStageWeather.cs` | `RainStageWeather`, `RecordBladeSweep`, `RecordWaveSweep`, `EmitBambooRainHits`, `EnqueueRevealPass`, `DisableRevealAfterCamera`, `RevealPass.RecordRenderGraph`, `RevealPass.Draw` | 시간 배율·비 시간, GPU 버퍼, 베기 면 및 잔류 영역 관리, 땅 파동·대숲 잔상 버퍼, 화면 공개 패스, Inspector 연출값 전달 |
-| `Assets/Effects/RainStage/RainStage.compute` | `Initialize`, `UpdateRain`, `SpawnPosition`, `OuterRadius` | 가까운 원·바깥 고리 방울 생성 높이 분산·이동·파열·빈 자국 판정, 지면 통과 시 땅 파동 기록 |
-| `Assets/Effects/RainStage/RainStage.shader`, `RainStage.mat` | `Vert`, `RippleVert`, `Frag`, `DropVisibility`, `RevealVert`, `RevealFrag` | 투명한 방울 내부와 회백색 외곽선, 불릿 타임 크기 축소, 비 줄기·둥근 방울·흰 위치별 물 파열, 퍼펙트 파동 기준 빗방울 선명함, 세 겹 바닥 링, RainReveal 패스의 구 판정 |
+| `Assets/Effects/RainStage/RainStage.compute` | `Initialize`, `UpdateRain`, `SpawnPosition`, `OuterRadius`, `BurstDirection` | 가까운 원·바깥 고리 방울 생성 높이 분산·이동·파열·빈 자국 판정, 파열 방향 저장, 지면 통과 시 땅 파동 기록 |
+| `Assets/Effects/RainStage/RainStage.shader`, `RainStage.mat` | `Vert`, `SplashVert`, `SplashFrameAlpha`, `RippleVert`, `Frag`, `DropVisibility`, `RevealVert`, `RevealFrag` | 투명한 방울 내부와 회백색 외곽선, 불릿 타임 크기 축소, 비 줄기·둥근 방울, 방향 있는 액체 스플랫 테두리 파열, 퍼펙트 파동 기준 빗방울 선명함, 세 겹 바닥 링, RainReveal 패스의 구 판정 |
+| `Assets/Scripts/Player/PlayerSwordWaveLauncher.cs` | `StrikeAlongDash` | 검기 돌진 몸 경로를 비 시스템에 전달 |
+| `Assets/Scripts/Player/PlayerEmpowerStrike.cs`, `Assets/Resources/Prefabs/Player.prefab` | `RunSequence`, `_rainBurstDelay` | 궁극기 사선 평면 빗방울 폭발을 암전 뒤 지연해 전달 |
 | `Assets/Scripts/Defense/BambooGrove.cs` | `TryGetRainHitPoint` | 범위 안 서 있는 대나무 줄기의 무작위 빗방울 잔상 위치 조회 |
 | `Assets/Shaders/ScreenSpaceOutline.shader` | `PerceptionColor` | `_OutlineRainReveal` 화면 공개 텍스처를 인지 가시성과 max로 합성 |
 | `Assets/Scripts/Player/PlayerBladeBambooCutter.cs` | `LateUpdate` | 기존 실제 칼날 베기 사각형을 비 시스템에 전달 |
@@ -31,6 +42,7 @@
 - 연결된 기능: 대숲 스테이지 1, 대나무 베기, 퍼펙트 패링 토큰, 게임 씬 공통 구성.
 - 공유하는 코드 및 상태: `PlayerEmpower.IsBulletTimeActive`, `PlayerController.IsPaused`, 기존 칼날·검기 베기 경로를 읽는다. `Time.timeScale`이나 공격 판정을 변경하지 않는다.
 - 공유하는 코드 및 상태(2026-10-16 추가): `PlayerPerfectPulse`가 `SensoryPerceptionMask`로 넘기는 `_OutlinePulseRegion`·`_OutlinePulseVisibility`를 읽는다. 윤곽선 셰이더에 전역 `_OutlineRainReveal`·`_OutlineRainRevealEnabled`를 넘기며, RainyStage가 아니면 Enabled가 0이라 읽지 않는다.
+- 중복 또는 충돌 사항(2026-10-16 추가): `PlayerSwordWaveLauncher`·`PlayerEmpowerStrike`에 비 시스템 호출만 추가했다. 궁극기 폭발은 기존 납도 멈춤 시간 안에서 기다리므로 궁극기 전체 길이와 피해·대나무 베기 시점은 그대로다.
 - 중복 또는 충돌 사항: 공유 커터 두 곳에 비 시스템 호출만 추가한다. RainyStage 외 씬에서는 활성 비 시스템이 없어 호출이 아무 효과를 내지 않는다. VFX Graph의 GPU Event 대신 Compute Shader의 방울 상태를 직접 바꿔 파열을 방울 위치에 고정한다.
 - 승인 필요 사항 및 결과: 사용자가 RainyStage 한정 비 연출 구현을 요청했다. 기존 기능의 판단과 피해 동작은 그대로다.
 
@@ -44,7 +56,9 @@
 - Far Droplet Count(4,096), Far Radius(40m)로 바깥 고리 비를 조정한다. Idle Droplet Visibility(0.3)는 퍼펙트 파동 밖 평상시 빗방울 선명함 배율이다.
 - 빗방울 땅 파동: Ground Ripple Chance 0.6, Ground Ripple Radius 0.15~0.5m, Ground Ripple Duration 0.35초, Ground Ripple Ring Interval 0.1초, Ground Ripple Color 흰색·알파 0.2, Maximum Ground Ripples 4,096, Ground Ripple Reveal Radius Scale 1.5, Ground Ripple Reveal Afterimage 0.3초, Ground Ripple Reveal Strength 0.018.
 - 대숲 빗방울 잔상: Bamboo Rain Hits Per Second 24, Bamboo Rain Hit Radius 0.6~1.2m, Bamboo Rain Hit Expand Duration 0.25초, Bamboo Rain Hit Afterimage 0.3초, Bamboo Rain Hit Strength 0.35.
-- 위 값은 모두 `RainyStage.unity`에 직렬화되어 있다.
+- 액체 파열: Splash Duration 0.39초, Splash Size 0.525m(스플랫 길이), Splash Texture `splat01_animated_3x3`, Splash Outline Width 0.75px, Splash Spread 35°.
+- 공격별 폭발: Wave Thickness 1m, Dash Burst Radius 2m, Ultimate Burst Thickness 18m, Ultimate Burst Behind 3m. 궁극기 폭발 지연 Rain Burst Delay 0.2초는 `Player.prefab`의 `PlayerEmpowerStrike`에 있다.
+- 위 값은 Rain Burst Delay를 빼고 모두 `RainyStage.unity`에 직렬화되어 있다.
 - 방울마다 GameObject·Collider·Rigidbody를 만들지 않는다. 카메라 주변 방울과 베기 면만 GPU에 보낸다. 최대 잔류 영역 32개, 프레임당 신규 공격 면 48개다.
 
 #### 확인 결과
@@ -53,5 +67,6 @@
 - 이전 Unity Editor 로그에서 최초 셰이더·컴퓨트 파일 가져오기를 확인했다. 첫 셰이더 가져오기에서 발견된 인스턴스 ID와 HLSL 예약어 오류를 수정했으며, 그 당시 최종 가져오기 이후 새 셰이더 오류 기록은 없었다. 그 뒤 변경한 셰이더는 에디터에서 다시 가져왔는지 확인하지 못했다.
 - RainStage 씬 참조와 GUID 연결은 정적 확인했다. 컴퓨터에서 Unity Editor가 프로젝트 잠금 파일을 보유 중이라 별도 배치 Editor 실행은 종료 코드 1로 끝났고 Play 모드 시각 확인은 수행하지 못했다.
 - GPU/CPU 프레임 시간 측정은 미확인이다.
+- 2026-10-16 액체 파열 테두리·프레임 섞기·공격별 빗방울 폭발도 셰이더 가져오기·C# 컴파일·Play 시각 확인을 하지 않았다.
 - 2026-10-16 변경(바깥 고리 비, 땅 파동, 화면 공개 패스, 대숲 잔상, 퍼펙트 파동 선명함)은 셰이더 가져오기·C# 컴파일·Play 시각 확인을 하지 않았다. 땅 파동 발생량을 어림하면 동시에 살아 있는 파동이 4,096개를 넘어, 오래된 파동의 링 끝부분과 잔상 뒷부분이 덮어써질 수 있다(미확인).
 - 화면 캡처나 Play 상태에서 외곽선 색·알파, 방울 수, 불릿 타임 크기·흔들림, 흰 파열색과 재생성 분산 효과를 검증하지 않았다. 불릿 타임 중 방울이 영역 아래를 벗어나면 높이 범위에 분산해 재생성되므로 같은 높이에서 일제히 낙하하는 원인을 제거하는 방향으로 수정했다.

@@ -68,6 +68,16 @@ Shader "BlindBlade/RainStage"
             float _OutlineWidth;
             float _OutlineOpacity;
             float _IdleDropVisibility;
+            TEXTURE2D(_SplashTexture);
+            SAMPLER(sampler_SplashTexture);
+            float _SplashOutlineWidth;
+            float _SplashSpread;
+
+            // 파열 텍스처는 핏방울 이펙트와 같은 3x3 액체 스플랫 플립북이며, 한 칸은 가로가 세로의 두 배다.
+            #define SPLASH_FRAME_COLUMNS 3u
+            #define SPLASH_FRAME_COUNT 9u
+            // 칸 안에서 액체가 뿜어져 나오는 왼쪽 시작점의 가로 위치다.
+            #define SPLASH_ORIGIN_U 0.05
             float4 _OutlineColor;
             float4 _SplashColor;
 
@@ -224,32 +234,70 @@ Shader "BlindBlade/RainStage"
                 return output;
             }
 
+            // 파열 방울 drop을 검격 진행 방향의 화면 투영 쪽으로 길게 놓인 액체 스플랫 사각형으로 만든다.
+            // 방향은 drop.Data.zw의 방위각·고도각에 방울별 퍼짐을 더하며, 길이는 _SplashSize이고 uv는 플립북 한 칸의 0~1 좌표다.
+            Varyings SplashVert(RainDrop drop, float3 positionOS)
+            {
+                Varyings output = (Varyings)0;
+                // 빈 자국에 들어간 방울은 그리지 않는다.
+                if (drop.PositionState.w > 1.5) return output;
+                float elevationCos = cos(drop.Data.w);
+                float3 direction = float3(cos(drop.Data.z) * elevationCos, sin(drop.Data.w),
+                    sin(drop.Data.z) * elevationCos);
+                float2 screenDirection = float2(dot(direction, _CameraRight), dot(direction, _CameraUp));
+                // 카메라를 향하거나 등지는 베기는 화면 방향이 거의 없으므로 방울마다 무작위 방향을 쓴다.
+                float seedAngle = drop.Data.x * 6.2831853;
+                screenDirection = dot(screenDirection, screenDirection) > 0.01
+                    ? normalize(screenDirection) : float2(cos(seedAngle), sin(seedAngle));
+                float spread = (drop.Data.x - 0.5) * 2.0 * _SplashSpread;
+                float spreadSin = sin(spread);
+                float spreadCos = cos(spread);
+                screenDirection = float2(screenDirection.x * spreadCos - screenDirection.y * spreadSin,
+                    screenDirection.x * spreadSin + screenDirection.y * spreadCos);
+                float3 alongAxis = _CameraRight * screenDirection.x + _CameraUp * screenDirection.y;
+                float3 acrossAxis = _CameraUp * screenDirection.x - _CameraRight * screenDirection.y;
+                float2 frameUv = positionOS.xy * 0.5 + 0.5;
+                float3 world = drop.PositionState.xyz
+                    + alongAxis * (frameUv.x - SPLASH_ORIGIN_U) * _SplashSize
+                    + acrossAxis * positionOS.y * _SplashSize * 0.25;
+                output.positionCS = TransformWorldToHClip(world);
+                output.uv = frameUv;
+                output.state = drop.PositionState.w;
+                output.splashAge = saturate(drop.Data.y / max(_SplashDuration, 0.0001));
+                output.seed = drop.Data.x;
+                output.visibility = 1;
+                return output;
+            }
+
             Varyings Vert(Attributes input)
             {
                 if (_RippleMode > 0.5) return RippleVert(input);
                 RainDrop drop = _RainDrops[input.instanceID];
+                if (drop.PositionState.w > 0.5) return SplashVert(drop, input.positionOS);
                 Varyings output = (Varyings)0;
-                // 떨어지는 빗방울은 평상시 흐리게 보이다 퍼펙트 패링·극한 회피 파동 안에서 선명해지고, 검격 파열은 그대로 보인다.
-                float visibility = drop.PositionState.w < 0.5 ? DropVisibility(drop.PositionState.xyz) : 1.0;
+                // 떨어지는 빗방울은 평상시 흐리게 보이다 퍼펙트 패링·극한 회피 파동 안에서 선명해진다.
+                float visibility = DropVisibility(drop.PositionState.xyz);
                 if (visibility < MINIMUM_DROP_VISIBILITY) return output;
-                float isSplash = step(0.5, drop.PositionState.w);
-                float splashProgress = saturate(drop.Data.y / max(_SplashDuration, 0.0001));
-                float halfWidth = lerp(_DropSize * 0.17, _DropSize, _Roundness);
-                float halfHeight = lerp(_StreakLength * 0.5, _DropSize, _Roundness);
                 float dropletScale = lerp(1.0, _BulletDropletScale, _Roundness);
-                float splashHalfSize = _SplashSize * (0.15 + 0.35 * splashProgress);
-                halfWidth = lerp(halfWidth * dropletScale, splashHalfSize, isSplash);
-                halfHeight = lerp(halfHeight * dropletScale, splashHalfSize, isSplash);
+                float halfWidth = lerp(_DropSize * 0.17, _DropSize, _Roundness) * dropletScale;
+                float halfHeight = lerp(_StreakLength * 0.5, _DropSize, _Roundness) * dropletScale;
                 float3 world = drop.PositionState.xyz
                     + _CameraRight * input.positionOS.x * halfWidth
                     + _CameraUp * input.positionOS.y * halfHeight;
                 output.positionCS = TransformWorldToHClip(world);
                 output.uv = input.positionOS.xy;
                 output.state = drop.PositionState.w;
-                output.splashAge = splashProgress;
                 output.seed = drop.Data.x;
                 output.visibility = visibility;
                 return output;
+            }
+
+            // 액체 스플랫 플립북의 frame번째 칸에서 칸 안 좌표 uv의 알파를 반환한다. 0번 칸은 텍스처 왼쪽 위다.
+            float SplashFrameAlpha(uint frame, float2 uv)
+            {
+                float2 cell = float2(frame % SPLASH_FRAME_COLUMNS,
+                    SPLASH_FRAME_COLUMNS - 1u - frame / SPLASH_FRAME_COLUMNS);
+                return SAMPLE_TEXTURE2D(_SplashTexture, sampler_SplashTexture, (cell + uv) / SPLASH_FRAME_COLUMNS).a;
             }
 
             half4 Frag(Varyings input) : SV_Target
@@ -279,20 +327,15 @@ Shader "BlindBlade/RainStage"
                 if (input.state > 1.5) discard;
                 if (input.state > 0.5)
                 {
-                    float progress = input.splashAge;
-                    float ringRadius = lerp(0.18, 0.82, progress);
-                    float ring = 1.0 - smoothstep(0.04, 0.12, abs(radius - ringRadius));
-                    float dots = 0.0;
-                    [unroll]
-                    for (int i = 0; i < 6; i++)
-                    {
-                        float angle = (i + input.seed) * 1.04719755;
-                        float2 direction = float2(cos(angle), sin(angle));
-                        float2 splashPoint = direction * ringRadius;
-                        dots += 1.0 - smoothstep(0.04, 0.12, length(uv - splashPoint));
-                    }
-                    float alpha = saturate(ring * 0.55 + dots) * (1.0 - progress);
-                    return half4(_SplashColor.rgb, saturate(alpha * _SplashColor.a * 1.8));
+                    // 진행도 사이의 이웃한 두 플립북 칸 알파를 섞어 칸이 뚝뚝 바뀌지 않고 이어지게 한다.
+                    // 섞인 액체 알파가 절반을 지나는 경계만 화면 픽셀 두께의 테두리로 그린다.
+                    float framePosition = input.splashAge * (SPLASH_FRAME_COUNT - 1u);
+                    uint frame = min((uint)framePosition, SPLASH_FRAME_COUNT - 2u);
+                    float liquid = lerp(SplashFrameAlpha(frame, uv), SplashFrameAlpha(frame + 1u, uv),
+                        saturate(framePosition - frame));
+                    float edgePixels = abs(liquid - 0.5) / max(fwidth(liquid), 0.0001);
+                    float outline = 1.0 - smoothstep(_SplashOutlineWidth, _SplashOutlineWidth + 1.0, edgePixels);
+                    return half4(_SplashColor.rgb, outline * _SplashColor.a);
                 }
 
                 float angle = atan2(uv.y, uv.x);

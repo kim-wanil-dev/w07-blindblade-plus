@@ -768,6 +768,7 @@ MonoBehaviour:
   _pushInFov: 6
   _sheatheFlash: 0.4
   _sheathePause: 0.3
+  _rainBurstDelay: 0.2
   _scatterCount: 48
   _scatterLifetime: 1.2
   _blackoutSound: 34
