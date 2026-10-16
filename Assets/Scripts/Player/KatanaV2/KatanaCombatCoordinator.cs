@@ -11,7 +11,8 @@ public enum KatanaStage
 {
     NormalStarted, StrikeEnded, ParryAttempted, ParryWindowClosed, ParrySucceeded, ParryFailed, ParryMotionEnded,
     DrawnWaiting, SheatheStarted, SheatheEnded, ChargeStarted, ChargeReady,
-    ChargeReleased, DashStarted, SlashStarted, Died, RequestRejected, GuardStarted, GuardEnded, GuardSucceeded
+    ChargeReleased, DashStarted, SlashStarted, Died, RequestRejected, GuardStarted, GuardEnded, GuardSucceeded,
+    ParryMotionStarted
 }
 
 public readonly struct KatanaEvent
@@ -123,6 +124,13 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private bool _counterAttack;
     private float _counterInvulnerableUntil;
 
+    [Header("퍼펙트 패링 모션")]
+    [SerializeField, Min(0.01f), InspectorName("퍼펙트 패링 모션 시간 (초)")]
+    [Tooltip("퍼펙트 패링 순간 가드를 풀고 흘리기·튕겨내기 모션을 재생하는 시간입니다. 끝나면 바로 납도하며, 도중 공격·회피·새 우클릭으로 끊을 수 있습니다.")]
+    private float _perfectParryMotionDuration = 0.35f;
+    private int _parryMotionGuardInputId;
+    private bool _attackFromParryMotion;
+
     [Header("Sheathe")]
     [SerializeField, Min(0.01f)] private float _sheatheDuration = 0.3f;
 
@@ -194,6 +202,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         }
     }
     public bool IsParryMotion => _parryMotion;
+    public float PerfectParryMotionDuration => _perfectParryMotionDuration;
     public float SheatheDuration => _sheatheDuration;
     public float ParryRemaining => IsParryWindowOpen ? Mathf.Max(0f, _parryUntil - _playerClock.Now) : 0f;
     public bool CanStartAction => isActiveAndEnabled && _player != null
@@ -259,12 +268,9 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         {
             _parryMotion = false;
             Publish(KatanaStage.ParryMotionEnded);
+            // 퍼펙트 패링 모션이 끊기지 않고 끝나면 발도 대기 없이 바로 납도한다.
             if (_player.CurrentState == PlayerActionState.Free)
-            {
-                _waitAfterRecovery = false;
-                if (!_waiting)
-                    BeginWaiting();
-            }
+                BeginSheathe();
         }
 
         if (_weaponState == KatanaWeaponState.Sheathing && _clock >= _sheatheUntil)
@@ -304,13 +310,23 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
 
     /// <summary>
     /// 반격, 대상 돌진, 일반 1·2타 연계 중 현재 상태에 맞는 공격을 시작하거나 다음 클릭 하나를 예약한다.
-    /// 가드 중 입력은 가드를 끝내고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다. 제자리 공격 요청 중에는 대상 돌진을 건너뛴다.
+    /// 가드 중 입력은 가드를 끝내고, 퍼펙트 패링 모션 중 입력은 모션을 끊고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다. 제자리 공격 요청 중에는 대상 돌진을 건너뛴다.
     /// </summary>
     public bool RequestAttack()
     {
         if (!isActiveAndEnabled || _player.IsPaused || Time.timeScale <= 0f)
             return Reject(PlayerInputRejectReason.Unavailable, "Attack: input unavailable");
         if (CanCounterAttack) return RequestCounterAttack();
+        if (_parryMotion)
+        {
+            // 퍼펙트 패링 모션 중 공격은 모션을 끊고 납도 없이 발도 상태에서 바로 시작한다. 시작하지 못하면 모션을 이어간다.
+            _parryMotion = false;
+            _attackFromParryMotion = true;
+            bool startedFromParryMotion = RequestAttack();
+            _attackFromParryMotion = false;
+            if (!startedFromParryMotion) _parryMotion = true;
+            return startedFromParryMotion;
+        }
 
         bool attackFromGuard = _player.IsGuarding;
         if (attackFromGuard)
@@ -394,7 +410,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         }
         if (!_inPlaceAttackRequested && _player.RequestTargetedIaidoAttack(strike))
             return true;
-        if (strike == 1 && _weaponState == KatanaWeaponState.Drawn && !attackFromGuard
+        if (strike == 1 && _weaponState == KatanaWeaponState.Drawn && !attackFromGuard && !_attackFromParryMotion
             && _clock >= _comboExpiresAt)
         {
             BeginSheathe();
@@ -747,22 +763,50 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     }
 
     /// <summary>
-    /// 회피가 시작되면 예약된 다음 공격·납도 뒤 공격과 대기 중인 자동 반격·반격 기회를 취소한다.
+    /// 회피가 시작되면 예약된 다음 공격·납도 뒤 공격과 대기 중인 자동 반격·반격 기회를 취소하고 퍼펙트 패링 모션을 끊어 납도한다.
     /// 진행 중인 공격은 회피 요청 시 PlayerController가 먼저 끝낸다.
     /// </summary>
     private void HandleDodgeStarted()
     {
         CancelPendingAttacks();
+        CancelParryMotion();
     }
 
     /// <summary>
-    /// 강화 공격이 시작되면 가드를 끝내고 예약된 다음 공격·납도 뒤 공격과 대기 중인 자동 반격·반격 기회를 취소한다.
+    /// 강화 공격이 시작되면 가드와 퍼펙트 패링 모션을 끝내고 예약된 다음 공격·납도 뒤 공격과 대기 중인 자동 반격·반격 기회를 취소한다.
     /// 진행 중인 공격은 PlayerController가 따로 끝낸다.
     /// </summary>
     public void CancelForEmpowerStrike()
     {
         if (_player.IsGuarding) EndDefense();
+        CancelParryMotion();
         CancelPendingAttacks();
+    }
+
+    /// <summary>
+    /// 퍼펙트 패링 모션 중이면 _parryMotion을 끄고 가드 해제와 같은 납도를 시작한다.
+    /// 모션 중이 아니면 아무것도 바꾸지 않는다.
+    /// </summary>
+    private void CancelParryMotion()
+    {
+        if (!_parryMotion) return;
+        _parryMotion = false;
+        BeginSheathe();
+    }
+
+    /// <summary>
+    /// 퍼펙트 패링 직후 납도 없이 가드를 끝내고 _perfectParryMotionDuration 동안 퍼펙트 패링 모션을 시작한다.
+    /// 패링한 가드의 _guardInputId를 저장해 같은 우클릭을 계속 누른 가드 재진입을 모션이 끝날 때까지 막는다.
+    /// </summary>
+    private void BeginPerfectParryMotion()
+    {
+        _suppressSheatheOnGuardEnd = true;
+        EndDefense();
+        _suppressSheatheOnGuardEnd = false;
+        _parryMotion = true;
+        _parryMotionUntil = _clock + _perfectParryMotionDuration;
+        _parryMotionGuardInputId = _guardInputId;
+        Publish(KatanaStage.ParryMotionStarted);
     }
 
     /// <summary>_automaticCounterPending·_counterUntil과 예약된 공격·납도 뒤 공격을 비운다.</summary>
@@ -943,6 +987,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     /// <summary>
     /// 자유 상태에서 가드에 들어가고 패링 창을 연다. 공격 중이면 가드·패링을 받지 않고 Attacking으로 거부하며 예약하지 않는다.
     /// inputId는 가드가 시작되면 GuardInputId에 저장되며, 입력 ID가 없는 호출은 0을 사용한다. 거부 이유는 LastRejectReason에 남긴다.
+    /// 퍼펙트 패링 모션 중에는 inputId가 패링한 가드의 입력과 다를 때만 모션을 끊고 가드에 들어간다.
     /// </summary>
     public bool BeginDefense(int inputId = 0)
     {
@@ -958,6 +1003,13 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         if (state != PlayerActionState.Free || _playerClock.Now < _defenseReadyUntil)
             return Refuse(PlayerInputRejectReason.ActionBusy);
 
+        // 퍼펙트 패링 모션은 새 우클릭만 끊고 가드로 들어간다. 패링한 우클릭을 계속 누르는 재진입은 모션이 끝날 때까지 막는다.
+        if (_parryMotion)
+        {
+            if (inputId == _parryMotionGuardInputId) return Refuse(PlayerInputRejectReason.ActionBusy);
+            _parryMotion = false;
+        }
+
         return StartDefense(inputId) || Refuse(PlayerInputRejectReason.ActionBusy);
     }
 
@@ -971,7 +1023,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     /// <summary>
     /// incoming이 eligible인 전방 근접 접촉이고 가드 중이면 피해를 차단한다.
     /// GuardContactOutcome의 가드·일반 패링·퍼펙트 패링에 따라 적 회복·반동·방어 피드백을 적용하고 일반 적의 근접 베기·돌진 가드에 수평 밀림을 추가하여 성공 여부를 반환한다.
-    /// 두 패링은 같은 쳐내기 피드백과 경직을 쓰며 반격 대상·자동 반격은 일반 패링에서만 예약한다.
+    /// 두 패링은 같은 쳐내기 피드백과 경직을 쓰며 반격 대상·자동 반격은 일반 패링에서만 예약한다. 퍼펙트 패링은 가드를 끝내고 퍼펙트 패링 모션을 시작한다.
     /// allowCounter가 false이면 패링에도 경직·반격 대상·자동 반격을 만들지 않으며 공격자가 사라진 접촉도 처리한다.
     /// </summary>
     public bool TryDefendIncoming(DamageContext incoming, bool eligible, bool allowCounter = true)
@@ -1023,6 +1075,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
                 _automaticCounterPending = true;
                 _automaticCounterReadyAt = _playerClock.Now + Mathf.Min(_automaticCounterDelay, _counterWindow * 0.5f);
             }
+            if (outcome == DefenseOutcome.PerfectParry) BeginPerfectParryMotion();
         }
         return true;
     }
