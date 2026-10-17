@@ -26996,6 +26996,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 7414776361951269170, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
+      propertyPath: _ripple._spherical
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1080894898460965423, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
       propertyPath: _iaidoInstantKill
       value: 1
@@ -62303,6 +62307,8 @@ MonoBehaviour:
   _rainMaterial: {fileID: 2100000, guid: d154e75c411545adb66cf2cffecb405f, type: 2}
   _dropletCount: 2048
   _nearRadius: 15
+  _farDropletCount: 4096
+  _farRadius: 40
   _heightAboveCamera: 7
   _depthBelowCamera: 2
   _fallSpeed: 11
@@ -62311,19 +62317,40 @@ MonoBehaviour:
   _dropletOutlineColor: {r: 0.82, g: 0.87, b: 0.93, a: 1}
   _dropletOutlineWidth: 0.055
   _dropletOutlineOpacity: 0.58
+  _idleDropletVisibility: 0.3
   _bulletRainSpeed: 0.012
   _shapeTransitionTime: 0.12
   _bulletDropletScale: 0.33
   _bulletWiggleAmplitude: 0.25
   _bulletSplashSpeed: 0.65
   _bladeThickness: 0.12
-  _waveThickness: 0.35
+  _waveThickness: 1
+  _dashBurstRadius: 2
+  _ultimateBurstThickness: 18
+  _ultimateBurstBehind: 3
   _trailLifetime: 0.75
   _maximumTrails: 32
   _maximumHitsPerFrame: 48
-  _splashDuration: 0.3
-  _splashSize: 0.35
+  _splashDuration: 0.39
+  _splashSize: 0.525
   _splashColor: {r: 1, g: 1, b: 1, a: 0.48}
+  _splashTexture: {fileID: 2800000, guid: 3ba0179ad6e513e4e9a0ebe65a28009d, type: 3}
+  _splashOutlineWidth: 0.75
+  _splashSpread: 35
+  _groundRippleChance: 0.6
+  _groundRippleRadius: {x: 0.15, y: 0.5}
+  _groundRippleDuration: 0.35
+  _groundRippleRingInterval: 0.1
+  _groundRippleColor: {r: 1, g: 1, b: 1, a: 0.2}
+  _maximumGroundRipples: 4096
+  _groundRippleRevealRadiusScale: 1.5
+  _groundRippleRevealAfterimage: 0.3
+  _groundRippleRevealStrength: 0.018
+  _bambooRainHitsPerSecond: 24
+  _bambooRainHitRadius: {x: 0.6, y: 1.2}
+  _bambooRainHitExpandDuration: 0.25
+  _bambooRainHitAfterimage: 0.3
+  _bambooRainHitStrength: 0.35
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

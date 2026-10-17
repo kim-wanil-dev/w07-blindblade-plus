@@ -301,10 +301,11 @@ MonoBehaviour:
   _postHeartbeatAttackDelay: 0.5
   _projectilePrefab: {fileID: 2115214498364783961, guid: 5884e76ee1bf02144afab106081fabd4, type: 3}
   _rangedDamage: 15
-  _rangedPreparation: 0.8
+  _rangedPreparation: 0.26666668
   _rangedShots: 3
-  _rangedInterval: 0.8
-  _rangedBackstepDistance: 10
+  _rangedInterval: 0.26666668
+  _rangedProjectileSpeedMultiplier: 1.6666666
+  _rangedBackstepDistance: 30
   _rangedBackstepSpeed: 12
   _burstDamageWindow: 4
   _burstDamageThreshold: 30
@@ -313,9 +314,12 @@ MonoBehaviour:
   _barragePreparation: 0.6
   _barrageVolleys: 4
   _barrageInterval: 0.5
-  _barrageSpreadAngle: 20
-  _barrageTopAimHeight: 3.2
+  _barrageSpreadAngle: 30
+  _barrageTopAimHeight: 5.3
   _barrageBottomAimHeight: 0.2
+  _barrageSpeedMultiplierMin: 1
+  _barrageSpeedMultiplierMax: 2.0833333
+  _barrageHomingSpeedScale: 1
   _chargePreparation: 0.9
   _chargeSpeed: 14
   _chargeDistance: 12
@@ -328,9 +332,27 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 51
   _repositionSpeed: 25
-  _deflectPushDistance: 3
-  _deflectPushDuration: 0.16
   _hitDeflectDuration: 2
+  _hitInvulnerableDelay: 0.08
+  _counterSlowDuration: 1.5
+  _counterSlowFadeIn: 0.2
+  _counterSlowFadeOut: 0.3
+  _counterWarningAt: 0.33333334
+  _counterDashAt: 0.6666667
+  _counterBackstepDistance: 18
+  _counterSlashSpeed: 90
+  _counterSlashExitDistance: 12
+  _counterSlashDamage: 25
+  _counterParryPushDistance: 6
+  _counterParryPushDuration: 0.2
+  _counterPulseColor: {r: 1, g: 0.1, b: 0.06, a: 1}
+  _counterViewAssistAngle: 20
+  _counterViewAssistSpeed: 120
+  _counterCameraKickPitch: 4
+  _counterCameraShake: 0.05
+  _counterCameraShakeDuration: 0.3
+  _counterStaggerDistance: 1.5
+  _counterStaggerDuration: 0.3
   _teleportRadius: 6
   _teleportArc: 180
 --- !u!114 &805973891534154810
@@ -372,6 +394,10 @@ MonoBehaviour:
   - {fileID: 2961610450630845464}
   _chargeWarningFadeIn: 0.15
   _chargeWarningFadeOut: 0.12
+  _guardWeaponPrefab: {fileID: 4775461175289693859, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  _guardWeaponController: {fileID: 9100000, guid: 1eb1cf08b0ba4cd3b001f3714f5f04d7, type: 2}
+  _guardWeaponOffset: {x: 0, y: 1.6, z: 0.6}
+  _guardWeaponScale: 1.5
 --- !u!114 &900100100
 MonoBehaviour:
   m_ObjectHideFlags: 0

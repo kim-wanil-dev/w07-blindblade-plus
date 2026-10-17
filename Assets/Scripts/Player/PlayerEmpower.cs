@@ -80,6 +80,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     public bool IsBulletTimeActive => _active && _hitStopRemaining <= 0f;
     public bool IsPerfectParryInvulnerable => Time.unscaledTime < _invulnerableUntil;
     public float PlayerTimeScale => _playerTimeScale;
+    public float WorldTimeScale => _worldTimeScale;
     public int Tokens => _tokens;
     public int MaxTokens => MAX_TOKENS;
     public bool IsCharging => IsReady && _charging;

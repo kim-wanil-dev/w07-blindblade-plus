@@ -138,7 +138,13 @@ private Vector3 _attackLungeDirection;
 
     [Header("전투 카메라 반동")]
     [SerializeField, Min(0f)] private float _recoilReturnSpeed = 18f;
+    [SerializeField, Min(0f), Tooltip("AddCameraKick으로 위로 젖힌 카메라가 원래 각도로 돌아오는 속도")]
+    private float _kickReturnSpeed = 6f;
     private Vector3 _recoilOffset;
+    private float _kickPitch;
+    private float _shakeAmplitude;
+    private float _shakeDuration;
+    private float _shakeRemaining;
     public Vector3 ViewForward => Quaternion.Euler(0f, _yaw, 0f) * Vector3.forward;
     public Vector3 ViewOrigin => _cameraPivot.parent.TransformPoint(GetCameraBasePosition());
 
@@ -146,6 +152,18 @@ private Vector3 _attackLungeDirection;
     public void AddCombatRecoil(Vector3 direction, float strength)
     {
         _recoilOffset = Vector3.ClampMagnitude(_recoilOffset + Vector3.back * (0.025f * strength), 0.08f);
+    }
+
+    /// <summary>
+    /// pitchUp(도)만큼 카메라를 위로 젖히고 shakeAmplitude(미터) 크기로 shakeDuration 플레이어 시간 동안 흔든다.
+    /// 화면 표현만 바꾸며 논리적인 조준 방향과 ViewForward는 유지한다. 젖힘은 _kickReturnSpeed로 돌아온다.
+    /// </summary>
+    public void AddCameraKick(float pitchUp, float shakeAmplitude, float shakeDuration)
+    {
+        _kickPitch = Mathf.Max(_kickPitch, pitchUp);
+        _shakeAmplitude = shakeAmplitude;
+        _shakeDuration = Mathf.Max(0.01f, shakeDuration);
+        _shakeRemaining = _shakeDuration;
     }
 
     /// <summary>웅크리기 진행도와 원래 카메라 위치로 반동 없는 로컬 시점 위치를 반환한다.</summary>
@@ -161,8 +179,17 @@ private Vector3 _attackLungeDirection;
         if (_cameraPivot == null) return;
         float decay = Mathf.Exp(-_recoilReturnSpeed * Clock.DeltaTime);
         _recoilOffset *= decay;
-        _cameraPivot.localPosition = GetCameraBasePosition() + _recoilOffset;
-        _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+        _kickPitch *= Mathf.Exp(-_kickReturnSpeed * Clock.DeltaTime);
+        Vector3 shake = Vector3.zero;
+        if (_shakeRemaining > 0f)
+        {
+            _shakeRemaining -= Clock.DeltaTime;
+            shake = UnityEngine.Random.insideUnitSphere
+                * (_shakeAmplitude * Mathf.Clamp01(_shakeRemaining / _shakeDuration));
+        }
+        _cameraPivot.localPosition = GetCameraBasePosition() + _recoilOffset + shake;
+        // 위로 젖힘은 화면 회전에만 더해 논리적인 조준 각도 _pitch는 바꾸지 않는다.
+        _cameraPivot.localRotation = Quaternion.Euler(_pitch - _kickPitch, 0f, 0f);
     }
 
     public event Action<PlayerFootstepEvent> FootstepEmitted;
@@ -277,6 +304,21 @@ private Vector3 _attackLungeDirection;
         _pendingLookDelta = Vector2.zero;
         transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
         _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+    }
+
+    /// <summary>
+    /// worldTarget이 시야 중심에서 수평으로 deadAngle(도)보다 벗어나 있으면 벗어난 만큼을 maxDegrees 안에서 좌우 시점으로 보정한다.
+    /// 상하 시점과 대기 중인 시점 입력은 유지하며 _yaw와 Transform 회전을 갱신한다.
+    /// </summary>
+    public void NudgeViewToward(Vector3 worldTarget, float deadAngle, float maxDegrees)
+    {
+        Vector3 horizontal = Vector3.ProjectOnPlane(worldTarget - transform.position, Vector3.up);
+        if (horizontal.sqrMagnitude < 0.0001f || maxDegrees <= 0f) return;
+        float offset = Mathf.DeltaAngle(_yaw, Mathf.Atan2(horizontal.x, horizontal.z) * Mathf.Rad2Deg);
+        float excess = Mathf.Abs(offset) - deadAngle;
+        if (excess <= 0f) return;
+        _yaw += Mathf.Sign(offset) * Mathf.Min(excess, maxDegrees);
+        transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
     }
 
     /// <summary>이동과 시점 입력, 현재 평면 속도를 초기화합니다.</summary>
