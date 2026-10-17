@@ -71,6 +71,8 @@ public sealed class BambooStage1Controller : MonoBehaviour
         BambooStage1Progress.MarkStage1Started();
         if (!BambooStage1Progress.BossCheckpointReached) return;
 
+        Debug.Log("BambooStage1 저장 데이터에 보스 체크포인트가 있어 일반 적 웨이브를 건너뛰고 보스전을 시작합니다.", this);
+
         PlayerController player = Game.Player;
         Vector3 forward = Vector3.ProjectOnPlane(player.GetComponent<PlayerMotor>().ViewForward, Vector3.up);
         if (!TryFindBossRetryPosition(forward, out Vector3 bossPosition))

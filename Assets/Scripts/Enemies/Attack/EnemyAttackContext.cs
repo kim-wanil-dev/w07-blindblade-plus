@@ -29,6 +29,6 @@ public readonly struct EnemyAttackContext
         TelegraphDuration = telegraphDuration;
         ActiveDuration = pattern.ExecutionDuration;
         AttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin(PatternId,
-            pattern is EnemyRangedAttack ? "Projectile" : pattern is EnemyMeleeAttack ? "Melee" : "Charge", Origin, AimPosition);
+            pattern.TelemetryKind, Origin, AimPosition);
     }
 }

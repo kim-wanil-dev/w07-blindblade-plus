@@ -131,7 +131,10 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         return true;
     }
 
-    /// <summary>context의 공격자가 실행 중인 유일한 패턴이 활성 근접 베기 또는 돌진이고 공격자가 전방 각도 안에 있는지 반환한다.</summary>
+    /// <summary>
+    /// context의 PatternId에 맞는 활성 근접 베기·돌진·DefenseBeast 도약이 전방 각도 안인지 반환한다.
+    /// DefenseBeast는 저장한 도약 진입 방향을 사용하고, 나머지는 공격자 위치를 사용한다.
+    /// </summary>
     private bool IsFrontMelee(DamageContext context)
     {
         if (context.Instigator == null) return false;
@@ -142,9 +145,11 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
             if (matching != null) return false;
             matching = pattern;
         }
-        if (!(matching is EnemyMeleeAttack || matching is EnemyChargeAttack)
+        if (!(matching is EnemyMeleeAttack || matching is EnemyChargeAttack || matching is DefenseBeastLeapAttack)
             || matching.Phase != EnemyAttackPhase.Active) return false;
-        Vector3 toEnemy = Vector3.ProjectOnPlane(context.Instigator.transform.position - transform.position, Vector3.up);
+        Vector3 toEnemy = matching is DefenseBeastLeapAttack beastLeap
+            ? Vector3.ProjectOnPlane(beastLeap.IncomingDirection, Vector3.up)
+            : Vector3.ProjectOnPlane(context.Instigator.transform.position - transform.position, Vector3.up);
         Vector3 forward = _motor.ViewForward;
         return toEnemy.sqrMagnitude > 0.0001f && forward.sqrMagnitude > 0.0001f
             && Vector3.Angle(forward, toEnemy) <= _frontArc * 0.5f;

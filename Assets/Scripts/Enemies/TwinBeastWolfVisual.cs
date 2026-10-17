@@ -221,6 +221,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private Vector3 _headBasePosition;
     private Quaternion _headBaseRotation;
     private Quaternion _tailBaseRotation;
+    private Transform _beastRoot;
     private Vector3 _jawBasePosition;
     private Quaternion _jawBaseRotation;
     private readonly Quaternion[] _earBaseRotations = new Quaternion[2];
@@ -229,6 +230,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
     void Awake()
     {
+        _beastRoot = _beast.transform;
         // 게임 화면에는 도형 윤곽선 대신 표면에서 피어오르는 연기만 보이게 한다.
         foreach (Renderer body in _bodyRenderers)
             body.enabled = false;
@@ -283,7 +285,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
     void OnEnable()
     {
-        _previousPosition = _beast.transform.position;
+        _previousPosition = _beastRoot.position;
         _speed = 0f;
         _crouch = 0f;
         _leap = 0f;
@@ -410,7 +412,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     /// </summary>
     private void UpdateSpeed(float deltaTime)
     {
-        Vector3 position = _beast.transform.position;
+        Vector3 position = _beastRoot.position;
         Vector3 moved = Vector3.ProjectOnPlane(position - _previousPosition, Vector3.up);
         _previousPosition = position;
         float measured = Mathf.Min(MAX_MEASURED_SPEED, moved.magnitude / deltaTime);

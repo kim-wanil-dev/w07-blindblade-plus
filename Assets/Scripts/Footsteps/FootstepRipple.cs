@@ -19,6 +19,7 @@ public sealed class FootstepRipple : MonoBehaviour
     private FootstepEmitter _emitter;
     private PerceptionRevealMap _revealMap;
     private EnemyMeleeAttack[] _meleeAttacks;
+    private DefenseBeastLeapAttack[] _beastLeapAttacks;
 
     public event Action<Vector3, RevealRippleSettings, float> PlayerRippleEmitted;
 
@@ -27,6 +28,7 @@ public sealed class FootstepRipple : MonoBehaviour
         _player = GetComponent<PlayerController>();
         _emitter = GetComponent<FootstepEmitter>();
         _meleeAttacks = GetComponents<EnemyMeleeAttack>();
+        _beastLeapAttacks = GetComponents<DefenseBeastLeapAttack>();
     }
 
     void OnEnable()
@@ -40,6 +42,11 @@ public sealed class FootstepRipple : MonoBehaviour
             attack.FirstHeartbeatPlayed += HandleMeleeTelegraph;
             attack.AttackCommitted += HandleMeleeAttack;
         }
+        foreach (DefenseBeastLeapAttack attack in _beastLeapAttacks)
+        {
+            attack.FirstHeartbeatPlayed += HandleMeleeTelegraph;
+            attack.AttackCommitted += HandleMeleeAttack;
+        }
     }
 
     void OnDisable()
@@ -49,6 +56,11 @@ public sealed class FootstepRipple : MonoBehaviour
         if (_emitter != null)
             _emitter.OnFootstepEmitted -= HandleGroundContact;
         foreach (EnemyMeleeAttack attack in _meleeAttacks)
+        {
+            attack.FirstHeartbeatPlayed -= HandleMeleeTelegraph;
+            attack.AttackCommitted -= HandleMeleeAttack;
+        }
+        foreach (DefenseBeastLeapAttack attack in _beastLeapAttacks)
         {
             attack.FirstHeartbeatPlayed -= HandleMeleeTelegraph;
             attack.AttackCommitted -= HandleMeleeAttack;

@@ -10,6 +10,10 @@ using Random = UnityEngine.Random;
 [DisallowMultipleComponent]
 public sealed class DefenseEnemySpawner : MonoBehaviour
 {
+    private const int FALLBACK_MELEE_ANGLE_COUNT = 24;
+    private const int FALLBACK_MELEE_RADIUS_COUNT = 4;
+    private const int RANDOM_MELEE_POSITION_ATTEMPTS = 16;
+    private const float MELEE_POSITION_SAMPLE_RADIUS = 1.5f;
     private const float TIMED_WAVE_INITIAL_WEIGHT = 3f;
 
     [Header("스폰 공통")]
@@ -61,10 +65,26 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     [SerializeField, Range(0f, 1f), InspectorName("돌진형 선택 확률")] private float _chargeTypeChance = 0.4f;
     [SerializeField, Min(1), Tooltip("성능 보호용 최대 근접 적 수"), InspectorName("근접 동시 생존 상한 (명)")]
     private int _maximumMelee = 30;
+    [Header("일반·Beast 선택 가중치")]
+    [SerializeField] private GameObject _beastPrefab;
+    [SerializeField, Min(0), InspectorName("보간 시작 스폰 수 (마리)")]
+    private int _weightBlendStartSpawnCount;
+    [SerializeField, Min(1), InspectorName("보간 종료 스폰 수 (마리)")]
+    private int _weightBlendEndSpawnCount = 50;
+    [SerializeField, Range(0f, 1f), InspectorName("시작 일반 적 가중치")]
+    private float _meleeWeightAtStart = 1f;
+    [SerializeField, Range(0f, 1f), InspectorName("시작 Beast 가중치")]
+    private float _beastWeightAtStart;
+    [SerializeField, Range(0f, 1f), InspectorName("종료 일반 적 가중치")]
+    private float _meleeWeightAtEnd = 1f;
+    [SerializeField, Range(0f, 1f), InspectorName("종료 Beast 가중치")]
+    private float _beastWeightAtEnd;
     private readonly List<MeleeUnit> _activeMelee = new List<MeleeUnit>();
     private readonly Stack<MeleeUnit> _idleMelee = new Stack<MeleeUnit>();
+    private readonly Stack<MeleeUnit> _idleBeasts = new Stack<MeleeUnit>();
     private readonly Dictionary<EnemyHealth, MeleeUnit> _meleeByHealth = new Dictionary<EnemyHealth, MeleeUnit>();
     private NavMeshPath _meleePath;
+    private bool _reportedMeleePositionFailure;
     private float _nextMeleeSpawnAt;
     private int _meleeSpawnLimit;
     private int _meleeSpawned;
@@ -88,15 +108,17 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         public EnemyController Controller { get; }
         public EnemyAttackSelector Selector { get; }
         public EnemyChargeAttack Charge { get; }
+        public bool IsBeast { get; }
 
-        /// <summary>root에서 근접 적의 체력·추적·공격 선택·돌진 컴포넌트를 찾아 보관한다.</summary>
-        public MeleeUnit(GameObject root)
+        /// <summary>root의 전투 컴포넌트와 isBeast 유형을 저장해 스폰 중 재사용한다.</summary>
+        public MeleeUnit(GameObject root, bool isBeast)
         {
             Root = root;
             Health = root.GetComponent<EnemyHealth>();
             Controller = root.GetComponent<EnemyController>();
             Selector = root.GetComponent<EnemyAttackSelector>();
             Charge = root.GetComponent<EnemyChargeAttack>();
+            IsBeast = isBeast;
         }
     }
 
@@ -162,7 +184,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             MeleeUnit unit = _activeMelee[i];
             _activeMelee.RemoveAt(i);
             unit.Root.SetActive(false);
-            _idleMelee.Push(unit);
+            ReturnMeleeToPool(unit);
         }
     }
 
@@ -276,12 +298,13 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         if (_activeMelee.Count >= _maximumMelee || !TryFindMeleePosition(out Vector3 position))
             return false;
 
-        MeleeUnit unit = _idleMelee.Count > 0 ? _idleMelee.Pop() : CreateMelee();
-        bool chargeType = elapsed >= _chargeTypeStartTime && Random.value < _chargeTypeChance;
+        MeleeUnit unit = GetOrCreateMelee(ShouldSpawnBeast());
+        bool chargeType = !unit.IsBeast && elapsed >= _chargeTypeStartTime && Random.value < _chargeTypeChance;
         Vector3 toCenter = Vector3.ProjectOnPlane(transform.position - position, Vector3.up);
         unit.Root.transform.SetPositionAndRotation(position,
             toCenter.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(toCenter) : Quaternion.identity);
-        unit.Charge.enabled = chargeType;
+        if (unit.Charge != null)
+            unit.Charge.enabled = chargeType;
         unit.Root.SetActive(true);
         unit.Controller.SetTarget(Game.Player.transform);
         _activeMelee.Add(unit);
@@ -329,21 +352,74 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private bool TryFindMeleePosition(out Vector3 position)
     {
         Vector3 player = Game.Player.transform.position;
-        for (int attempt = 0; attempt < 16; attempt++)
+        for (int attempt = 0; attempt < RANDOM_MELEE_POSITION_ATTEMPTS; attempt++)
         {
             float angle = Random.Range(0f, Mathf.PI * 2f);
             float radius = Random.Range(_meleeSpawnMinimumRadius, Mathf.Max(_meleeSpawnMinimumRadius, _meleeSpawnMaximumRadius));
             Vector3 desired = transform.position + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-            if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, 1.5f, NavMesh.AllAreas)
-                || HorizontalDistance(hit.position, player) < _minimumSpawnDistance
-                || !NavMesh.CalculatePath(hit.position, player, NavMesh.AllAreas, _meleePath)
-                || _meleePath.status != NavMeshPathStatus.PathComplete)
+            if (!TryValidateMeleePosition(desired, player, out position))
                 continue;
-            position = hit.position;
+            _reportedMeleePositionFailure = false;
             return true;
         }
+
+        if (TryFindFallbackMeleePosition(player, out position))
+        {
+            _reportedMeleePositionFailure = false;
+            return true;
+        }
+
+        position = default;
+        if (!_reportedMeleePositionFailure)
+        {
+            Debug.LogWarning("근접 적 스폰 위치를 찾지 못했습니다. NavMesh 베이크와 플레이어까지의 경로, 스폰 반경 설정을 확인하세요.", this);
+            _reportedMeleePositionFailure = true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 무작위 위치를 모두 놓쳤을 때 설정 반경의 고정 각도·고리 후보를 검색한다.
+    /// player까지 완전한 NavMesh 경로가 있는 후보를 position에 담고 성공 여부를 반환한다.
+    /// </summary>
+    private bool TryFindFallbackMeleePosition(Vector3 player, out Vector3 position)
+    {
+        float minimumRadius = Mathf.Max(0f, _meleeSpawnMinimumRadius);
+        float maximumRadius = Mathf.Max(minimumRadius, _meleeSpawnMaximumRadius);
+        for (int radiusIndex = 0; radiusIndex < FALLBACK_MELEE_RADIUS_COUNT; radiusIndex++)
+        {
+            float radiusBlend = radiusIndex / (float)(FALLBACK_MELEE_RADIUS_COUNT - 1);
+            float radius = Mathf.Lerp(minimumRadius, maximumRadius, radiusBlend);
+            for (int angleIndex = 0; angleIndex < FALLBACK_MELEE_ANGLE_COUNT; angleIndex++)
+            {
+                float angle = angleIndex * (Mathf.PI * 2f / FALLBACK_MELEE_ANGLE_COUNT);
+                Vector3 desired = transform.position + new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+                if (TryValidateMeleePosition(desired, player, out position))
+                    return true;
+            }
+        }
+
         position = default;
         return false;
+    }
+
+    /// <summary>
+    /// desired를 NavMesh에 투영한 뒤 최소 플레이어 거리와 완전한 경로를 확인한다.
+    /// 유효한 표본을 position에 담고 성공 여부를 반환한다.
+    /// </summary>
+    private bool TryValidateMeleePosition(Vector3 desired, Vector3 player, out Vector3 position)
+    {
+        if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, MELEE_POSITION_SAMPLE_RADIUS, NavMesh.AllAreas)
+            || HorizontalDistance(hit.position, player) < _minimumSpawnDistance
+            || !NavMesh.CalculatePath(hit.position, player, NavMesh.AllAreas, _meleePath)
+            || _meleePath.status != NavMeshPathStatus.PathComplete)
+        {
+            position = default;
+            return false;
+        }
+
+        position = hit.position;
+        return true;
     }
 
     /// <summary>플레이어와 radius 수평 거리 안의 활성 근접 적이 공격 전조 중이면 true를 반환한다.</summary>
@@ -448,15 +524,50 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         _nextThrowerSpawnAt = Mathf.Max(_nextThrowerSpawnAt, Time.time + _throwerSpawnInterval);
     }
 
-    /// <summary>근접 적 프리팹을 비활성 상태로 생성하고 구성 요소와 사망 사건 구독을 등록해 반환한다.</summary>
-    private MeleeUnit CreateMelee()
+    /// <summary>_meleeSpawned와 Inspector 가중치를 보간해 다음 생성이 Beast인지 반환한다.</summary>
+    private bool ShouldSpawnBeast()
     {
-        GameObject root = Instantiate(_meleePrefab, transform.position, Quaternion.identity, _unitRoot);
+        if (_beastPrefab == null)
+            return false;
+
+        int startCount = Mathf.Max(0, _weightBlendStartSpawnCount);
+        int endCount = Mathf.Max(startCount + 1, _weightBlendEndSpawnCount);
+        float blend = Mathf.InverseLerp(startCount, endCount, _meleeSpawned);
+        float meleeWeight = Mathf.Lerp(_meleeWeightAtStart, _meleeWeightAtEnd, blend);
+        float beastWeight = Mathf.Lerp(_beastWeightAtStart, _beastWeightAtEnd, blend);
+        float totalWeight = meleeWeight + beastWeight;
+        if (beastWeight <= 0f || totalWeight <= 0f)
+            return false;
+        if (meleeWeight <= 0f)
+            return true;
+
+        return Random.value < beastWeight / totalWeight;
+    }
+
+    /// <summary>isBeast에 맞는 대기 풀에서 적을 꺼내고 풀이 비었으면 해당 프리팹을 생성해 반환한다.</summary>
+    private MeleeUnit GetOrCreateMelee(bool isBeast)
+    {
+        Stack<MeleeUnit> idlePool = isBeast ? _idleBeasts : _idleMelee;
+        return idlePool.Count > 0 ? idlePool.Pop() : CreateMelee(isBeast);
+    }
+
+    /// <summary>isBeast에 해당하는 프리팹을 비활성 상태로 생성하고 체력 사망 사건을 구독해 반환한다.</summary>
+    private MeleeUnit CreateMelee(bool isBeast)
+    {
+        GameObject prefab = isBeast ? _beastPrefab : _meleePrefab;
+        GameObject root = Instantiate(prefab, transform.position, Quaternion.identity, _unitRoot);
         root.SetActive(false);
-        MeleeUnit unit = new MeleeUnit(root);
+        MeleeUnit unit = new MeleeUnit(root, isBeast);
         _meleeByHealth.Add(unit.Health, unit);
         unit.Health.Died += HandleMeleeDied;
         return unit;
+    }
+
+    /// <summary>unit을 Beast 여부에 맞는 비활성 재사용 풀에 보관한다.</summary>
+    private void ReturnMeleeToPool(MeleeUnit unit)
+    {
+        Stack<MeleeUnit> idlePool = unit.IsBeast ? _idleBeasts : _idleMelee;
+        idlePool.Push(unit);
     }
 
     /// <summary>health의 근접 적 사망을 처치 수에 더하고 다음 재사용을 위해 대기 목록으로 옮긴다.</summary>
@@ -465,7 +576,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         if (!_meleeByHealth.TryGetValue(health, out MeleeUnit unit) || !_activeMelee.Remove(unit))
             return;
         EnemyKilled?.Invoke();
-        _idleMelee.Push(unit);
+        ReturnMeleeToPool(unit);
     }
 
     /// <summary>first와 second의 높이를 제외한 수평 거리를 반환한다.</summary>

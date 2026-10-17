@@ -68,6 +68,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     public bool IsAvailable => isActiveAndEnabled && !IsBusy && Time.time >= _nextAttackTime;
     public virtual bool AllowsMovement => false;
     public EnemyAttackContext Context => _context;
+    internal virtual string TelemetryKind => this is EnemyRangedAttack ? "Projectile" : this is EnemyMeleeAttack ? "Melee" : "Charge";
     public float FirstHeartbeatAt { get; private set; }
     public float LastHeartbeatInterval { get; private set; }
     public int HeartbeatCount => Mathf.Max(1, _heartbeatCount);
