@@ -69,21 +69,21 @@ public sealed class FootstepRipple : MonoBehaviour
     }
 
     /// <summary>
-    /// context의 첫 박동 전조음 재생 직후 적 발밑에서 근접 공격 파동을 낸다.
-    /// 공격 위치와 발생자 참조를 사용하여 이동 파동과 같은 시야 효과를 적용한다.
+    /// 첫 박동 전조음 시점에 context.Source의 현재 위치에서 파동을 낸다.
+    /// 발생자를 제외하지 않는 일반 파동으로 등록해 공격자의 실루엣도 공개한다.
     /// </summary>
     private void HandleMeleeTelegraph(EnemyAttackContext context)
     {
-        EmitRipple(context.Origin, context.Source);
+        EmitRipple(context.Source.position, null);
     }
 
     /// <summary>
-    /// context의 근접 공격 확정 시 검격 표시와 같은 프레임에 적 발밑 파동을 낸다.
-    /// 고정된 공격 원점과 발생자 참조로 파동 중심과 자기 몸 제외를 유지한다.
+    /// 검격 시작 시점에 context.Source의 현재 위치에서 파동을 낸다.
+    /// 일반 파동의 시야와 잔상을 사용해 공격자의 실루엣을 다시 공개한다.
     /// </summary>
     private void HandleMeleeAttack(EnemyAttackContext context)
     {
-        EmitRipple(context.Origin, context.Source);
+        EmitRipple(context.Source.position, null);
     }
 
     /// <summary>

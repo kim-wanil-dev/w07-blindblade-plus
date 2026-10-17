@@ -157,7 +157,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         projectile.Initialize(_health, _hitCollider, _player, _damage, direction);
     }
 
-    /// <summary>player에게 탑승 부채꼴 난사를 시작한다. 진행 중인 사격과 탄환은 먼저 정리한다.</summary>
+    /// <summary>player에게 탑승 부채꼴 난사를 시작한다. 진행 중인 사격은 먼저 멈추고 날아가는 탄환은 그대로 둔다.</summary>
     public void StartBarrage(KatanaDamageReceiver player)
     {
         StopShooting();
@@ -385,11 +385,18 @@ public sealed class HumanBossAttack : MonoBehaviour
         if (_agent.isActiveAndEnabled) _agent.Warp(destination);
     }
 
-    /// <summary>사격 코루틴을 중지하고 현재 공격의 모든 탄환과 이벤트 구독을 정리한다.</summary>
+    /// <summary>
+    /// 사격 코루틴만 중지해 더 던지지 않게 한다. 이미 날아가는 수리검은 순간이동·패턴 전환과 상관없이 수명이 다하거나 맞을 때까지 그대로 난다.
+    /// </summary>
     public void StopShooting()
     {
         if (_shooting != null) StopCoroutine(_shooting);
         _shooting = null;
+    }
+
+    /// <summary>날아가는 모든 수리검을 즉시 거두고 이벤트 구독과 관리 목록을 비운다. 인간이 꺼질 때 쓴다.</summary>
+    private void ReleaseProjectiles()
+    {
         for (int i = _projectiles.Count - 1; i >= 0; i--)
         {
             TwinBossProjectile projectile = _projectiles[i];
@@ -418,6 +425,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     void OnDisable()
     {
         StopShooting();
+        ReleaseProjectiles();
         Dismount();
         CancelMelee();
     }
