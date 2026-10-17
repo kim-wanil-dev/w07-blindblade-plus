@@ -68,13 +68,23 @@ public sealed class InputManager : MonoBehaviour
     {
         InputDeviceDisplay.PollButtons();
         PlayerController player = Game.Player;
-        if (!IsGameplayInputEnabled || player == null || player.IsPaused) return;
-        if (InputDeviceDisplay.CancelPressed)
+        if (InputDeviceDisplay.CancelPressed && _state != null)
         {
-            ClearHeldInput();
-            SetCursor(false);
-            return;
+            if (_state.State == GameplayState.Paused)
+            {
+                GameSettingsPopupUI.TryCloseForGameplay();
+                return;
+            }
+            if (_state.State == GameplayState.Playing && IsGameplayInputEnabled
+                && player != null && !player.IsPaused)
+            {
+                ClearHeldInput();
+                if (!GameSettingsPopupUI.TryOpenForGameplay())
+                    SetCursor(false);
+                return;
+            }
         }
+        if (!IsGameplayInputEnabled || player == null || player.IsPaused) return;
         if (!Application.isFocused) return;
         if (_lockCursorOnClick && !InputDeviceDisplay.IsGamepad && Cursor.lockState != CursorLockMode.Locked)
         {

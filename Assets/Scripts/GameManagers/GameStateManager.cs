@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 
 using BlindBlade.Combat.Contracts;
 
-public enum GameplayState { Initializing, Playing, GameOver, Cleared, Restarting }
+public enum GameplayState { Initializing, Playing, GameOver, Cleared, Restarting, Paused }
 
 /// <summary>게임 상태와 시간·커서 수명을 관리하고 입력 및 UI에 상태 변경을 알린다.</summary>
 public sealed class GameStateManager : MonoBehaviour
@@ -18,6 +18,8 @@ public sealed class GameStateManager : MonoBehaviour
     private bool _frozen;
     public GameplayState State { get; private set; } = GameplayState.Initializing;
     public event Action<GameplayState> StateChanged;
+
+    public bool IsPaused => State == GameplayState.Paused;
 
     /// <summary>player와 scenePath를 현재 세션에 연결하고 초기화 중 상태로 전환한다.</summary>
     public void Initialize(PlayerController player, string scenePath)
@@ -33,6 +35,41 @@ public sealed class GameStateManager : MonoBehaviour
     public void BeginPlaying()
     {
         if (State == GameplayState.Initializing) ChangeState(GameplayState.Playing);
+    }
+
+    /// <summary>플레이 중 플레이어와 세션 시계를 정지하고 커서를 표시한다. 정지에 성공하면 true를 반환한다.</summary>
+    public bool PauseForSettings()
+    {
+        if (State != GameplayState.Playing || _player == null)
+            return false;
+
+        _previousCursorLock = Cursor.lockState;
+        _previousCursorVisible = Cursor.visible;
+        _frozen = true;
+        _player.SetPaused(true);
+        if (CombatSessionRuntime.Active != null)
+            CombatSessionRuntime.Active.SetFrozen(true);
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        ChangeState(GameplayState.Paused);
+        return true;
+    }
+
+    /// <summary>설정 팝업에서 복귀해 플레이어·세션 시계·커서를 다시 플레이 상태로 복원한다.</summary>
+    public bool ResumeFromSettings()
+    {
+        if (State != GameplayState.Paused)
+            return false;
+
+        if (_player != null)
+            _player.SetPaused(false);
+        if (CombatSessionRuntime.Active != null)
+            CombatSessionRuntime.Active.SetFrozen(false);
+        _frozen = false;
+        ChangeState(GameplayState.Playing);
+        Cursor.lockState = _previousCursorLock;
+        Cursor.visible = _previousCursorVisible;
+        return true;
     }
 
     /// <summary>action의 플레이어 사망을 게임오버로 전환한다.</summary>
@@ -116,6 +153,8 @@ public sealed class GameStateManager : MonoBehaviour
     /// <summary>이전 플레이어 구독과 게임오버 전역 상태를 해제한다.</summary>
     public void Shutdown()
     {
+        if (State == GameplayState.Paused && _player != null)
+            _player.SetPaused(false);
         RestoreTimeAndCursor();
         if (_player != null) _player.ActionEvent -= HandleAction;
         _player = null;
