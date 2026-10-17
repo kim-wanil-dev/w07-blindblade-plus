@@ -1021,11 +1021,13 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         _motor.AddCombatRecoil(incoming.Direction, parry ? 0.9f : 0.6f);
         EnemyAttackBehaviour[] patterns = instigator != null
             ? instigator.GetComponents<EnemyAttackBehaviour>() : System.Array.Empty<EnemyAttackBehaviour>();
+        bool hasDefenseBeastLeap = false;
         foreach (EnemyAttackBehaviour pattern in patterns)
         {
             if (pattern.PatternId != incoming.PatternId) continue;
             // 돌진의 쳐내기 반응은 적 담당이 제공하므로 플레이어 밀림만 적용한다.
             if (pattern is EnemyMeleeAttack melee) melee.Deflect(parry, point);
+            else if (pattern is DefenseBeastLeapAttack) hasDefenseBeastLeap = true;
             else if (!(pattern is EnemyChargeAttack)) continue;
             if (!parry && instigator.GetComponentInParent<BossController>() == null)
             {
@@ -1035,7 +1037,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
                 _motor.ApplyCombatPush(pushDirection, _guardPushDistance, _guardPushDuration);
             }
         }
-        if (parriedEnemy != null && parriedEnemy.IsAlive
+        if (!hasDefenseBeastLeap && parriedEnemy != null && parriedEnemy.IsAlive
             && parriedEnemy.TryGetComponent(out EnemyAttackSelector selector))
             selector.Stagger(_parryStaggerDuration);
         DefenseSucceeded?.Invoke(new KatanaDefenseResult(incoming, point, parry, outcome == DefenseOutcome.PerfectParry));

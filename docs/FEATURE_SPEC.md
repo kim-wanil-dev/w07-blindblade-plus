@@ -84,6 +84,7 @@
 | 전투·인지·HUD 공통 계약 | [명세](features/전투_인지_HUD_공통_계약.md) | v0.2.0 HUD 연결, D5 로컬 저장/전송 코드 구현·실제 수집 확인 대기, 스태미너 공급자·팀 검토 대기 |
 | RainyStage 비 연출 | [명세](features/RainyStage_비_연출.md) | 시험 씬 구현, 실제 Play 연출·성능 확인 대기 |
 | 비 내리는 쌍둥이 보스전 | [명세](features/비_쌍둥이_보스전.md) | RainyTwinBoss 씬·컨트롤러·쌍둥이 연기 외형 구현, 등장·사격 Play 확인, 클리어·재도전·최신 외형 Play 확인 대기 |
+| DefenseBeast 일반 적 | [구현 명세](features/DefenseBeast.md) | 독립 Variant·도약 패턴 구현 및 Unity 컴파일/프리팹 참조 확인 완료, Play 검증 미확인·스테이지 미연결 |
 
 ### 기존 모드 기록 (씬은 S7에서 삭제, 일부 코드·Resources 프리팹은 남음)
 

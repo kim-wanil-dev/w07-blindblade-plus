@@ -13,6 +13,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
     [Header("몸체 연결")]
     [SerializeField] private BeastBossAttack _beast;
+    [SerializeField] private DefenseBeastLeapAttack _defenseBeast;
     [SerializeField] private Transform _spine;
     [SerializeField] private Transform _head;
     [SerializeField] private Transform _tail;
@@ -67,9 +68,13 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private readonly Quaternion[] _hipBaseRotations = new Quaternion[LEG_COUNT];
     private readonly Quaternion[] _kneeBaseRotations = new Quaternion[LEG_COUNT];
     private readonly Quaternion[] _ankleBaseRotations = new Quaternion[LEG_COUNT];
+    private Transform _beastRoot;
+    private bool IsPreparing => _beast != null ? _beast.IsPreparing : _defenseBeast.IsPreparing;
+    private bool IsJumping => _beast != null ? _beast.IsJumping : _defenseBeast.IsJumping;
 
     void Awake()
     {
+        _beastRoot = _beast != null ? _beast.transform : _defenseBeast.transform;
         // 게임 화면에는 도형 윤곽선 대신 표면에서 피어오르는 연기만 보이게 한다.
         foreach (Renderer body in _bodyRenderers)
             body.enabled = false;
@@ -93,7 +98,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
     void OnEnable()
     {
-        _previousPosition = _beast.transform.position;
+        _previousPosition = _beastRoot.position;
         _speed = 0f;
         _crouch = 0f;
         _leap = 0f;
@@ -107,10 +112,10 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
         UpdateSpeed(deltaTime);
         float blend = 1f - Mathf.Exp(-_poseBlendSpeed * deltaTime);
-        _crouch = Mathf.Lerp(_crouch, _beast.IsPreparing ? 1f : 0f, blend);
-        _leap = Mathf.Lerp(_leap, _beast.IsJumping ? 1f : 0f, blend);
+        _crouch = Mathf.Lerp(_crouch, IsPreparing ? 1f : 0f, blend);
+        _leap = Mathf.Lerp(_leap, IsJumping ? 1f : 0f, blend);
         // 도약 중에는 다리를 뻗은 자세로 고정하므로 걸음 주기를 진행하지 않는다.
-        if (!_beast.IsJumping)
+        if (!IsJumping)
             _phase = Mathf.Repeat(_phase + _speed / _strideLength * deltaTime, 1f);
         _idleTime += deltaTime;
         ApplyPose();
@@ -122,7 +127,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     /// </summary>
     private void UpdateSpeed(float deltaTime)
     {
-        Vector3 position = _beast.transform.position;
+        Vector3 position = _beastRoot.position;
         Vector3 moved = Vector3.ProjectOnPlane(position - _previousPosition, Vector3.up);
         _previousPosition = position;
         float measured = Mathf.Min(MAX_MEASURED_SPEED, moved.magnitude / deltaTime);
