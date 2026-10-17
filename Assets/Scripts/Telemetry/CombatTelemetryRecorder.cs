@@ -364,12 +364,13 @@ namespace BlindBlade.Telemetry
             summary["reactionMeanSeconds"] = _reactionCount > 0 ? (JToken)(_reactionTotal / _reactionCount) : JValue.CreateNull();
             double resolved = (double?)_counts["enemyResolvedCount"] ?? 0;
             summary["enemyHitRate"] = resolved > 0 ? (JToken)(((double?)_counts["enemyHitCount"] ?? 0) / resolved) : JValue.CreateNull();
-            string[] groups = { "ranged", "melee", "bossRanged", "bossEscapeBarrage", "bossCharge" };
+            string[] groups = { "ranged", "melee", "bossRanged", "bossEscapeBarrage", "bossCharge", "bossCounterSlash" };
             foreach (string group in groups)
             {
                 double damage = 0, hits = 0, attempts = 0, count = 0, dodges = 0, parries = 0, perfects = 0;
                 string bossPatternId = group == "bossRanged" ? "BossRanged"
-                    : group == "bossCharge" ? "BossCharge" : "BossEscapeBarrage";
+                    : group == "bossCharge" ? "BossCharge"
+                    : group == "bossCounterSlash" ? "BossCounterSlash" : "BossEscapeBarrage";
                 foreach (JProperty property in _patterns.Properties())
                 {
                     JObject pattern = (JObject)property.Value;

@@ -359,6 +359,7 @@ MonoBehaviour:
   _attackFollowThroughSpeedMultiplier: 0.3
   _combatResumeAcceleration: 14
   _recoilReturnSpeed: 18
+  _kickReturnSpeed: 6
 --- !u!114 &6616511219798166873
 MonoBehaviour:
   m_ObjectHideFlags: 0

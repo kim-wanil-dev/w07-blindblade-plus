@@ -10,10 +10,13 @@ using FMODUnity;
 [RequireComponent(typeof(BossController))]
 public sealed class BossPresentation : MonoBehaviour
 {
+    private const string GUARD_SCABBARD_NAME = "Saya";
+
     private static readonly HashSet<BossPresentation> _activeChargeWarnings = new HashSet<BossPresentation>();
     private static readonly int _baseMapId = Shader.PropertyToID("_BaseMap");
     private static readonly int _baseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int _warningIntensityId = Shader.PropertyToID("_MeleeWarningIntensity");
+    private static readonly int _guardHoldStateId = Animator.StringToHash("Base Layer.GuardHold");
 
     [Header("외형")]
     [SerializeField] private Renderer[] _bodyRenderers;
@@ -73,15 +76,70 @@ public sealed class BossPresentation : MonoBehaviour
     public IReadOnlyList<Renderer> ChargeWarningRenderers => _chargeWarningRenderers;
     public float ChargeWarningIntensity { get; private set; }
 
+    [Header("방어 자세 칼")]
+    [SerializeField, Tooltip("방어 상태 동안 보스 앞에 띄울 플레이어 카타나 모형(KatanaRig)")]
+    private GameObject _guardWeaponPrefab;
+    [SerializeField, Tooltip("플레이어와 같은 가드 자세 상태(GuardHold)를 가진 카타나 Animator Controller")]
+    private RuntimeAnimatorController _guardWeaponController;
+    [SerializeField, Tooltip("플레이어를 향한 방향 기준 카타나 모형의 시점 위치(미터). x는 오른쪽, y는 높이, z는 플레이어 쪽으로 몸통 앞에 내미는 거리입니다.")]
+    private Vector3 _guardWeaponOffset = new Vector3(0f, 1.6f, 0.6f);
+    [SerializeField, Min(0.01f), Tooltip("카타나 모형 크기 배율. 1인칭용 모형이라 멀리서 보이도록 키웁니다.")]
+    private float _guardWeaponScale = 1.5f;
+    private GameObject _guardWeapon;
+    private Animator _guardWeaponAnimator;
+
     void Awake()
     {
         _boss = GetComponent<BossController>();
         _warningProperties = new MaterialPropertyBlock();
+        CreateGuardWeapon();
     }
 
     void Start()
     {
         ApplySoundRadius();
+    }
+
+    /// <summary>
+    /// _guardWeaponPrefab을 보스 자식으로 한 번 복제해 _guardWeaponScale 크기로 두고 검집 렌더러를 끈 뒤 숨긴다. 위치와 방향은 표시 중에 갱신한다.
+    /// 복제본 Animator에 _guardWeaponController를 연결하며 프리팹이 없으면 아무것도 만들지 않는다.
+    /// </summary>
+    private void CreateGuardWeapon()
+    {
+        if (_guardWeaponPrefab == null) return;
+        _guardWeapon = Instantiate(_guardWeaponPrefab, transform);
+        _guardWeapon.name = "BossGuardKatana";
+        _guardWeapon.transform.localScale = Vector3.one * _guardWeaponScale;
+        _guardWeaponAnimator = _guardWeapon.GetComponentInChildren<Animator>(true);
+        if (_guardWeaponController != null) _guardWeaponAnimator.runtimeAnimatorController = _guardWeaponController;
+        // 보스 가드 자세는 칼만 보이도록 검집 렌더러를 끈다. 검집 Transform은 Animator가 계속 움직여도 된다.
+        Transform scabbard = _guardWeapon.transform.Find(GUARD_SCABBARD_NAME);
+        if (scabbard != null)
+            foreach (Renderer part in scabbard.GetComponentsInChildren<Renderer>(true))
+                part.enabled = false;
+        _guardWeapon.SetActive(false);
+    }
+
+    /// <summary>
+    /// 보스가 방어 상태이면 카타나 모형을 켜고 플레이어와 같은 GuardHold 자세를 재생하며, 방어가 끝나거나 쳐내면 바로 숨긴다.
+    /// 켜져 있는 동안 보스 몸 방향과 무관하게 매 프레임 플레이어를 향하도록 _guardWeaponOffset 위치와 회전을 갱신한다.
+    /// 칼은 일반 물체처럼 파동·소리로 밝혀진 부분만 윤곽선으로 보인다.
+    /// </summary>
+    private void UpdateGuardWeapon()
+    {
+        if (_guardWeapon == null) return;
+        bool defending = _boss.IsDefending && _boss.State != BossState.Dead;
+        if (_guardWeapon.activeSelf != defending)
+        {
+            _guardWeapon.SetActive(defending);
+            if (defending) _guardWeaponAnimator.Play(_guardHoldStateId, 0, 0f);
+        }
+        if (!defending) return;
+        Vector3 facing = Game.Player != null
+            ? Vector3.ProjectOnPlane(Game.Player.transform.position - transform.position, Vector3.up) : Vector3.zero;
+        if (facing.sqrMagnitude < 0.0001f) facing = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        Quaternion rotation = Quaternion.LookRotation(facing.normalized);
+        _guardWeapon.transform.SetPositionAndRotation(transform.position + rotation * _guardWeaponOffset, rotation);
     }
 
     /// <summary>보스전의 소리 인지 반경을 적용하고 씬 종료 시 복원할 이전 값을 저장한다.</summary>
@@ -147,6 +205,7 @@ public sealed class BossPresentation : MonoBehaviour
 
     void LateUpdate()
     {
+        UpdateGuardWeapon();
         UpdateChargeWarning();
         ApplySoundRadius();
         Vector3 movement = Vector3.ProjectOnPlane(transform.position - _previousPosition, Vector3.up);

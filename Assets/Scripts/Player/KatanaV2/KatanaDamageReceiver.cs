@@ -147,10 +147,11 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
             && Vector3.Angle(forward, toEnemy) <= _frontArc * 0.5f;
     }
 
-    /// <summary>context가 진행 중인 보스 돌진이고 진입 방향이 전방 방어 각도 안인지 반환한다.</summary>
+    /// <summary>context가 진행 중인 보스 돌진 또는 방어 반격 관통 베기이고 진입 방향이 전방 방어 각도 안인지 반환한다.</summary>
     private bool IsFrontBossCharge(DamageContext context)
     {
-        if (context.PatternId != "BossCharge" || context.Instigator == null) return false;
+        if ((context.PatternId != "BossCharge" && context.PatternId != "BossCounterSlash")
+            || context.Instigator == null) return false;
         BossController boss = context.Instigator.GetComponent<BossController>();
         if (boss == null || (boss.State != BossState.Charging && boss.State != BossState.ChainCharge)) return false;
         Vector3 incoming = Vector3.ProjectOnPlane(-context.Direction, Vector3.up);

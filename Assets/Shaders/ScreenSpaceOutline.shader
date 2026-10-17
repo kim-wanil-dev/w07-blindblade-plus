@@ -72,6 +72,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float _OutlinePerceptionTime;
             float4 _OutlinePulseRegion;
             float _OutlinePulseVisibility;
+            // rgb: 파동이 밝힌 윤곽선 색, a: 물들이는 정도. 보스 반격 파동만 붉게 쓴다.
+            float4 _OutlinePulseTint;
             TEXTURE2D(_OutlineTerrainMemory);
             SAMPLER(sampler_OutlineTerrainMemory);
             float4 _OutlineMemoryBounds;
@@ -225,10 +227,11 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     visibility = max(visibility, soundVisibility);
                 }
                 // 보상 파동은 높이를 무시하고 C의 대상 판정과 같은 수평거리로 공개한다.
-                visibility = max(visibility, RegionVisibility(
+                float pulseVisibility = RegionVisibility(
                     float3(position.x, 0.0, position.z),
                     float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
-                    _OutlinePulseRegion.w) * _OutlinePulseVisibility);
+                    _OutlinePulseRegion.w) * _OutlinePulseVisibility;
+                visibility = max(visibility, pulseVisibility);
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));
                 visibility = max(visibility, ImpactRippleVisibility(position));
                 if (forced.b > 0.5)
@@ -242,7 +245,10 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                             sampler_OutlineTerrainMemory, memoryUv, 0).r;
                 }
                 float3 memoryColor = _OutlineMemoryColor.rgb * _OutlineMemoryColor.a * memoryVisibility;
-                return memoryColor * (1.0 - visibility) + _LineColor.rgb * _LineColor.a * visibility;
+                // 파동이 밝힌 만큼만 선 색을 파동 색조로 바꿔 보스 반격 파동 안의 윤곽을 붉게 보인다.
+                float3 lineColor = lerp(_LineColor.rgb * _LineColor.a, _OutlinePulseTint.rgb,
+                    saturate(pulseVisibility) * _OutlinePulseTint.a);
+                return memoryColor * (1.0 - visibility) + lineColor * visibility;
             }
 
             // 배경 표면은 상시 표시하지 않고 현재 인지로만 드러내며 지형 기억에는 남기지 않는다.
