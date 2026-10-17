@@ -1,3 +1,5 @@
+using System;
+
 using UnityEngine;
 
 /// <summary>
@@ -17,6 +19,8 @@ public sealed class FootstepRipple : MonoBehaviour
     private FootstepEmitter _emitter;
     private PerceptionRevealMap _revealMap;
     private EnemyMeleeAttack[] _meleeAttacks;
+
+    public event Action<Vector3, RevealRippleSettings, float> PlayerRippleEmitted;
 
     void Awake()
     {
@@ -54,7 +58,8 @@ public sealed class FootstepRipple : MonoBehaviour
     /// <summary>플레이어 발걸음 step의 착지 위치에서 파동을 낸다.</summary>
     private void HandlePlayerFootstep(PlayerFootstepEvent step)
     {
-        Emit(step.WorldPosition, null);
+        if (Emit(step.WorldPosition, null))
+            PlayerRippleEmitted?.Invoke(step.WorldPosition, _ripple, Time.time);
     }
 
     /// <summary>적 character의 지면 접촉 position에서 파동을 내며 이 파동은 character 자신의 몸체를 밝히지 않는다.</summary>
@@ -83,30 +88,30 @@ public sealed class FootstepRipple : MonoBehaviour
 
     /// <summary>
     /// 걸음을 _stepCount에 세어 _stepsPerRipple번째 걸음마다 시야 맵에 position 중심의 _ripple 파동을 등록한다.
-    /// hiddenOwner가 있으면 그 몸체를 이 파동으로 밝히지 않는다. 시야 맵이 없으면 무시한다.
+    /// hiddenOwner가 있으면 그 몸체를 밝히지 않으며, 실제 등록을 시도했으면 true를 반환한다.
     /// </summary>
-    private void Emit(Vector3 position, Transform hiddenOwner)
+    private bool Emit(Vector3 position, Transform hiddenOwner)
     {
         _stepCount = (_stepCount + 1) % _stepsPerRipple;
         if (_stepCount != 0)
-            return;
-        EmitRipple(position, hiddenOwner);
+            return false;
+        return EmitRipple(position, hiddenOwner);
     }
 
     /// <summary>
     /// position과 hiddenOwner를 사용해 기존 _ripple 설정으로 시야 파동을 등록한다.
-    /// 이동·공격 모두 걸음 횟수와 독립적으로 같은 PerceptionRevealMap 효과를 사용한다.
+    /// 이동·공격 모두 걸음 횟수와 독립적으로 같은 PerceptionRevealMap 효과를 사용하고 등록 시도 결과를 반환한다.
     /// </summary>
-    private void EmitRipple(Vector3 position, Transform hiddenOwner)
+    private bool EmitRipple(Vector3 position, Transform hiddenOwner)
     {
         if (_revealMap == null)
         {
             if (!Game.IsInitialized || Game.Instance.SensoryManager == null)
-                return;
+                return false;
             _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
             if (_revealMap == null)
-                return;
+                return false;
         }
-        _revealMap.EmitRipple(position, _ripple, hiddenOwner);
+        return _revealMap.EmitRipple(position, _ripple, hiddenOwner);
     }
 }
