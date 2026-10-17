@@ -11039,6 +11039,30 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _dashArc
+      value: 40
+      objectReference: {fileID: 0}
+    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _dashSpeed
+      value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _dashMaxDistance
+      value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _repositionSpeed
+      value: 30
+      objectReference: {fileID: 0}
+    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _dashStartDistance
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _jumpDuration
+      value: 0.55
+      objectReference: {fileID: 0}
     - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _riseForce
       value: 3
