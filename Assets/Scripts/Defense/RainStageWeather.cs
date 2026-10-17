@@ -30,7 +30,8 @@ public sealed class RainStageWeather : MonoBehaviour
     [SerializeField] private Material _rainMaterial;
 
     [Header("비")]
-    [SerializeField, Range(256, 8192)] private int _dropletCount = 2048;
+    [SerializeField, Range(256, 8192), Tooltip("씬 시작 시 가까운 빗방울 수입니다. 보스 등장 등 이후 변화는 스테이지 컨트롤러가 지정합니다.")]
+    private int _dropletCount = 2048;
     [SerializeField, Range(3f, 30f)] private float _nearRadius = 15f;
     [SerializeField, Range(0, 8192), Tooltip("가까운 원 바깥부터 Far Radius까지 고리에 떨어지는 방울 수. 대숲까지 비를 내린다.")]
     private int _farDropletCount = 4096;

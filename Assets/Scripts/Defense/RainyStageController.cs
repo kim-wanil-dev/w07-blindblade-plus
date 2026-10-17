@@ -24,8 +24,10 @@ public sealed class RainyStageController : MonoBehaviour
     [SerializeField] private RainyStageAudio _rainAudio;
 
     [Header("보스 등장 조건")]
-    [SerializeField, Min(1)] private int _requiredKills = 50;
-    [SerializeField, Min(256)] private int _bossDropletCount = 2662;
+    [SerializeField, Min(1), Tooltip("이 수만큼 일반 적을 처치하면 보스 등장 경고가 시작됩니다.")]
+    private int _requiredKills = 50;
+    [SerializeField, Range(256, 8192), Tooltip("보스가 등장할 때 적용할 가까운 빗방울 수입니다.")]
+    private int _bossDropletCount = 2662;
 
     [Header("보스 등장 위치")]
     [SerializeField, Min(0f)] private float _warningDuration = 2f;
