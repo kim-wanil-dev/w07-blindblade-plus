@@ -168,7 +168,7 @@ public sealed class BambooThrower : MonoBehaviour
             if (_telegraphSound != SoundId.None)
                 Managers.Sound.PlayAttached(_telegraphSound, gameObject);
 
-            _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BambooShuriken", "Projectile",
+            _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("DefenseShuriken", "Projectile",
                 _muzzle.position, Game.Player.transform.position);
             _director.NotifyThrowTelegraph(_signalPoint.position, _telegraphDuration);
 

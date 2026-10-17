@@ -178,6 +178,8 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `expected` | 온보딩 목표가 요구한 입력 종류인지 여부 |
 | `defense_outcome` | 입력과 연결된 실제 방어 접촉 결과 |
 
+수리검 패턴은 `DefenseShuriken`으로 집계한다. BambooThrower의 자동 발사는 전조 시점에 Begin을 기록하고 같은 `attack_id`로 실제 발사 Commit과 종료 결과를 연결한다. 온보딩 발사도 같은 패턴명으로 기록된다. 전조 뒤 발사 전에 취소된 경우 시작·취소 사건은 있지만 Commit이 없으므로 실제 발사 시도에는 포함되지 않는다. 이전 로그의 `BambooShuriken`은 변경 전 패턴명이며, 같은 공격의 시작/Commit과 접촉 결과가 서로 다른 이름으로 저장됐을 수 있으므로 이벤트 행을 패턴별 공격 횟수로 직접 합산하지 않는다. `attempts`는 Patterns.csv 또는 Sessions의 패턴 집계를 사용한다.
+
 ### Sessions
 
 한 행은 전체 게임 세션이 아니라 **하나의 스테이지 도전**이다. Events의 `stage_started`, `stage_summary`, `stage_ended` 중 가장 최신 누적 스냅샷으로 같은 `stage_attempt_id` 행을 갱신한다.
