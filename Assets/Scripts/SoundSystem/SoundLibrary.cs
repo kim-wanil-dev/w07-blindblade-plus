@@ -89,6 +89,22 @@ public class SoundLibrary : ScriptableObject
     }
 
     /// <summary>
+    /// soundId 항목에 Spatialize 2D 거리 범위가 지정돼 있으면 minimumDistance·maximumDistance를 그 값으로 바꾼다.
+    /// 0인 값과 미등록 ID는 FMOD 이벤트에서 읽은 값을 그대로 둔다.
+    /// </summary>
+    internal void ApplySpatialRange(SoundId soundId, ref float minimumDistance, ref float maximumDistance)
+    {
+        soundId = ResolveId(soundId);
+        foreach (SoundEntry entry in _sounds)
+        {
+            if (entry.Id != soundId) continue;
+            if (entry.SpatialMinDistance > 0f) minimumDistance = entry.SpatialMinDistance;
+            if (entry.SpatialMaxDistance > 0f) maximumDistance = entry.SpatialMaxDistance;
+            return;
+        }
+    }
+
+    /// <summary>
     /// soundId에 연결된 FMOD 이벤트와 사운드 종류를 조회한다.
     /// 등록이 유효하면 eventReference와 soundType을 채우고 true를 반환하며, 누락 또는 중복이면 false를 반환한다.
     /// </summary>
@@ -144,6 +160,10 @@ public class SoundLibrary : ScriptableObject
         [SerializeField] private bool _combatCue;
         [SerializeField, Tooltip("2D 이벤트에 청취자 기준 좌우 패닝과 거리 감쇠를 적용한다. 3D 이벤트는 FMOD 설정을 따른다.")]
         private bool _spatialize2D;
+        [SerializeField, Min(0f), Tooltip("Spatialize 2D 거리 감쇠가 시작되는 거리(미터). 0이면 FMOD 이벤트 값을 쓴다.")]
+        private float _spatialMinDistance;
+        [SerializeField, Min(0f), Tooltip("Spatialize 2D 거리 감쇠로 들리지 않게 되는 거리(미터). 0이면 FMOD 이벤트 값을 쓴다.")]
+        private float _spatialMaxDistance;
         [SerializeField, Tooltip("이 ID만 정지하는 요청을 무시하고 단발음을 끝까지 재생한다. 공격 취소에도 꼬리가 남으며 소유자 정리·전체 정지는 유지한다.")]
         private bool _finishNaturally;
 
@@ -152,6 +172,8 @@ public class SoundLibrary : ScriptableObject
         internal EventReference Event => _event;
         internal bool CombatCue => _combatCue;
         internal bool Spatialize2D => _spatialize2D;
+        internal float SpatialMinDistance => _spatialMinDistance;
+        internal float SpatialMaxDistance => _spatialMaxDistance;
         internal bool FinishNaturally => _finishNaturally;
         internal bool Enabled => _enabled;
         internal float VolumeMultiplier => Mathf.Max(0f, _volumeMultiplier);

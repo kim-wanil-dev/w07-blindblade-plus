@@ -79,6 +79,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float _OutlinePulseVisibility;
             // rgb: 파동이 밝힌 윤곽선 색, a: 물들이는 정도. 보스 반격 파동만 붉게 쓴다.
             float4 _OutlinePulseTint;
+            // 1이면 보상 파동 영역을 3D 거리 구로 공개한다(쌍둥이 거합 파동). 0이면 기존처럼 수평거리다.
+            float _OutlinePulseSpherical;
             TEXTURE2D(_OutlineTerrainMemory);
             SAMPLER(sampler_OutlineTerrainMemory);
             float4 _OutlineMemoryBounds;
@@ -236,10 +238,11 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                         position, _OutlineSoundRegions[i].xyz, revealRadius) * timeVisibility;
                     visibility = max(visibility, soundVisibility);
                 }
-                // 보상 파동은 높이를 무시하고 C의 대상 판정과 같은 수평거리로 공개한다.
+                // 보상 파동은 높이를 무시하고 C의 대상 판정과 같은 수평거리로 공개한다. 구형 보스 파동만 3D 거리를 쓴다.
+                float pulseHeight = _OutlinePulseSpherical > 0.5 ? 1.0 : 0.0;
                 float pulseVisibility = RegionVisibility(
-                    float3(position.x, 0.0, position.z),
-                    float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
+                    float3(position.x, position.y * pulseHeight, position.z),
+                    float3(_OutlinePulseRegion.x, _OutlinePulseRegion.y * pulseHeight, _OutlinePulseRegion.z),
                     _OutlinePulseRegion.w) * _OutlinePulseVisibility;
                 visibility = max(visibility, pulseVisibility);
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));

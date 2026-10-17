@@ -113,6 +113,8 @@ GameObject:
   - component: {fileID: 2285517556864344112}
   - component: {fileID: 2285517556864344113}
   - component: {fileID: 6221432540510008360}
+  - component: {fileID: 4823150712345678901}
+  - component: {fileID: 4823150712345678902}
   m_Layer: 0
   m_Name: TwinBossProjectile
   m_TagString: Untagged
@@ -148,12 +150,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1ccff8407b854a9da0cef9f90942844d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _speed: 10
+  _speed: 20
   _lifetime: 5
   _hitRadius: 0.12
   _collisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  _homingTurnRate: 20
+  _homingStopDistance: 3
+  _flightSound: 36
 --- !u!114 &2285517556864344113
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -174,14 +179,42 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 9035632415214600233}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 56ba57b4cae8f074e98993776dca04e4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   _waveVisualPrefab: {fileID: 402, guid: 2363502e95a345d2b96fbe5cf9542e60, type: 3}
   _pulseInterval: 0.3
   _pulseDuration: 0.25
   _startRadius: 0.04
   _endRadius: 0.25
   _pulseColor: {r: 1, g: 1, b: 1, a: 1}
+--- !u!114 &4823150712345678901
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9035632415214600233}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b750630a72edb1344957267889fe3eb9, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::OutlineLayer
+  _kind: 1
+--- !u!114 &4823150712345678902
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9035632415214600233}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b98596fb4d737ae44b0eaadb94789a37, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::MovingPerceptionReveal
+  _radius: 2.5
+  _afterimage: 0.3
+  _trailInterval: 0.05

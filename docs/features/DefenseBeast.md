@@ -1,7 +1,7 @@
 # DefenseBeast 일반 적 구현 명세
 
 - 작성일: 2026-10-17
-- 상태: **코드·프리팹 구현 및 Unity 컴파일 확인 완료, Play 검증 미확인**
+- 상태: **일반 Beast 전용 시각 스크립트 분리 및 프리팹 연결 완료, 최종 Unity 컴파일·Play 검증 대기**
 
 ## 기능과 행동 규칙
 
@@ -21,7 +21,7 @@ DefenseBeast는 플레이어를 추적하고, 수평 거리 6m 이내에서 완�
 ## 프리팹 구성
 
 - 직접 부모: Assets/Resources/Enemies/Enemy_SingleMelee.prefab
-- TwinBoss의 Beast/Wolf 시각 계층만 복제했다. 복제된 Wolf의 TwinBeastWolfVisual은 DefenseBeastLeapAttack을 참조하고 기존 BeastBossAttack 참조는 비워 둔다.
+- TwinBoss의 Beast/Wolf 시각 계층을 복제하되, 일반 적 Wolf에는 전용 `DefenseBeastWolfVisual`을 연결한다. 이 스크립트는 `DefenseBeastLeapAttack`의 전조·도약 상태를 표시하며 TwinBoss 전용 `BeastBossAttack`이나 `TwinBeastWolfVisual`을 사용하지 않는다.
 - 일반 적 루트는 NavMeshAgent, EnemyMotor, EnemyHealth를 하나씩 사용한다. 보스 공격·보스 오디오·TwinBossController·RiderSeat는 복제하지 않았다.
 - 원본의 베기·돌진 공격과 더 이상 쓰지 않는 공격 시각 계층을 Variant에서 제거했다. 공격 선택기에는 DefenseBeastLeapAttack 하나만 지정하고 Melee Only는 끈다.
 - Wolf 피격 판정은 기존 일반 적 체력과 연결했다. 프리팹에는 누락된 스크립트가 없고 중복 NavMeshAgent 또는 EnemyHealth가 없다.
@@ -49,15 +49,15 @@ DefenseBeast는 플레이어를 추적하고, 수평 거리 6m 이내에서 완�
 
 DefenseBeastLeapAttack은 EnemyAttackBehaviour를 상속하고 공격 로그 종류 및 DamageContext.Kind를 Melee로 분류한다. 도약 시작과 접촉에는 같은 AttackId와 PatternId를 사용한다. KatanaDamageReceiver는 저장된 진입 방향으로 도약 공격의 전방 방어를 판정한다. Guard는 기존 플레이어 밀림을 적용하고 패링은 DefenseBeast의 일반 적 자동 경직을 생략해 패턴이 시작점 복귀를 마칠 수 있게 한다.
 
-TwinBeastWolfVisual은 기존 TwinBoss 공격 참조와 별도로 DefenseBeastLeapAttack 참조도 사용할 수 있다. 새 프리팹은 이 참조로 웅크림·도약 자세를 표시한다. FootstepRipple은 첫 박동과 공격 확정 사건에 기존 리플을 내며, 새 공격의 박동음과 도약음은 Inspector SoundId를 사용한다.
+`DefenseBeastWolfVisual`은 일반 적의 이동 속도와 `DefenseBeastLeapAttack` 상태를 사용해 걸음·웅크림·도약 자세를 표시한다. `TwinBeastWolfVisual`은 TwinBoss의 `BeastBossAttack` 상태와 잠수·물기 연출만 담당한다. FootstepRipple은 첫 박동과 공격 확정 사건에 기존 리플을 내며, 새 공격의 박동음과 도약음은 Inspector SoundId를 사용한다.
 
 ## 구현 및 확인 상태
 
 - 구현 코드: Assets/Scripts/Enemies/Attack/DefenseBeastLeapAttack.cs
 - 전투 연결: Assets/Scripts/Enemies/Attack/EnemyAttackBehaviour.cs, Assets/Scripts/Enemies/Attack/EnemyAttackContext.cs, Assets/Scripts/Player/KatanaV2/KatanaDamageReceiver.cs, Assets/Scripts/Player/KatanaV2/KatanaCombatCoordinator.cs
-- 시각·감각 연결: Assets/Scripts/Enemies/TwinBeastWolfVisual.cs, Assets/Scripts/Footsteps/FootstepRipple.cs
-- Unity 6000.3.22f1에서 최신 재컴파일 완료, 현재 컴파일 오류 없음.
-- Unity Prefab API로 Variant 부모, 패턴 선택, 주요 직렬화 설정, Wolf 참조, 누락 스크립트 및 중복 Agent/Health를 확인했다. IntroScene은 변경되지 않았고 현재 dirty 상태가 아니다.
+- 시각·감각 연결: Assets/Scripts/Enemies/DefenseBeastWolfVisual.cs, Assets/Scripts/Footsteps/FootstepRipple.cs
+- `DefenseBeast.prefab`은 `DefenseBeastWolfVisual`의 GUID로 연결했고 기존 Wolf 리그 참조와 Inspector 수치는 YAML 직렬화 데이터에서 보존했다. Unity Editor의 최종 재컴파일 및 프리팹 재임포트 확인은 대기 중이다.
+- TwinBoss 프리팹은 계속 `TwinBeastWolfVisual`을 사용하며 일반 Beast 프리팹은 해당 컴포넌트를 사용하지 않는다.
 - Play 동작 검증은 미확인이다. 코드 재컴파일 중 기존 IntroScene Play 세션이 자동 종료되어 수동 Play 검증을 진행하지 않았다. 자동 종료 뒤 Play를 재시작하지 않았다.
 - 테스트 코드는 작성하지 않았다.
 

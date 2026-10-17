@@ -605,6 +605,22 @@ MonoBehaviour:
     _combatCue: 0
     _spatialize2D: 0
     _finishNaturally: 0
+  - _id: 42
+    _type: 1
+    _event:
+      Guid:
+        Data1: 1974387921
+        Data2: 1186111738
+        Data3: 1717475982
+        Data4: -1792932505
+      Path: event:/Footsteps/Footsteps_Water_Light
+    _enabled: 1
+    _volumeMultiplier: 0.65
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 0
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _cinematicBusPath: bus:/Cinematic_Bus

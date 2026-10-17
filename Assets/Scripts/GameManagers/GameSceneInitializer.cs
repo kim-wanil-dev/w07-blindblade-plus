@@ -31,6 +31,7 @@ public sealed class GameSceneInitializer : MonoBehaviour
     private PlayerInputCommandAdapter _legacyInput;
     private KatanaInputCommandAdapter _katanaInput;
     private CombatSessionRuntime _combatSession;
+    private RainyStageAudio _rainAudio;
     private bool _started;
 
     public bool SwordNoiseEnabled => _useSwordNoise;
@@ -120,13 +121,23 @@ public sealed class GameSceneInitializer : MonoBehaviour
         sensory.SetEffectsVisible(true);
         sensory.SetFootstepsSuppressed(false);
         Managers.Sound.SetFootstepOnlyOwner(null);
+        foreach (GameObject root in gameObject.scene.GetRootGameObjects())
+        {
+            _rainAudio = root.GetComponentInChildren<RainyStageAudio>();
+            if (_rainAudio != null) break;
+        }
         _player.FootstepEmitted += HandlePlayerFootstep;
     }
 
-    /// <summary>step의 소음 강도로 현재 플레이어에 붙은 발소리를 요청한다.</summary>
+    /// <summary>
+    /// step의 소음 강도로 현재 플레이어에 붙은 발소리를 재생한다.
+    /// 씬의 활성 RainyStageAudio가 물 발소리를 선택하면 RainFootstep을 사용하고 나머지는 기본 Footstep을 사용한다.
+    /// </summary>
     private void HandlePlayerFootstep(PlayerFootstepEvent step)
     {
-        Managers.Sound.PlayAttached(SoundId.Footstep, _player.gameObject, step.NoiseStrength);
+        SoundId soundId = _rainAudio != null && _rainAudio.isActiveAndEnabled && _rainAudio.UseWaterFootsteps
+            ? SoundId.RainFootstep : SoundId.Footstep;
+        Managers.Sound.PlayAttached(soundId, _player.gameObject, step.NoiseStrength);
     }
 
     void OnDisable()
@@ -150,5 +161,6 @@ public sealed class GameSceneInitializer : MonoBehaviour
         _state = null;
         _ui = null;
         _combatSession = null;
+        _rainAudio = null;
     }
 }

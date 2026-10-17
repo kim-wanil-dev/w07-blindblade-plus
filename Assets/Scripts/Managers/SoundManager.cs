@@ -25,6 +25,9 @@ public class SoundManager
     private readonly List<PendingStreamingEffect> _pendingStreamingEffects = new List<PendingStreamingEffect>();
     private bool _effectsPaused;
     private float _combatFocusUntil;
+    private bool _enemyRainMuffleEnabled;
+    private float _enemyRainLowpassCutoff = 6500f;
+    private float _enemyRainVolume = 0.85f;
     private readonly List<PendingCue> _pendingCues = new List<PendingCue>();
     private bool _processingCues;
 #if UNITY_EDITOR
@@ -115,6 +118,7 @@ public class SoundManager
             {
                 if (CanPlayDuringMovement(_effects[i].Id, _effects[i].Owner, _effects[i].PlayDuringMovement))
                     continue;
+                _effects[i].ReleaseRainFilter();
                 if (RuntimeManager.IsInitialized)
                     StopEffect(_effects[i].Instance, false);
                 _effects.RemoveAt(i);
@@ -122,6 +126,20 @@ public class SoundManager
         }
         if (_bgm.isValid() && RuntimeManager.IsInitialized)
             _bgm.setVolume(owner != null ? 0f : _bgmPlaybackVolume);
+    }
+
+    /// <summary>
+    /// enabled에 따라 적과 투사체 효과음에만 저역 통과 필터와 음량 배율을 적용한다.
+    /// lowpassCutoff와 volume을 저장하고 이미 재생 중인 대상에도 즉시 반영한다.
+    /// </summary>
+    public void SetEnemyRainMuffle(bool enabled, float lowpassCutoff, float volume)
+    {
+        _enemyRainMuffleEnabled = enabled;
+        _enemyRainLowpassCutoff = Mathf.Clamp(lowpassCutoff, 1000f, 22000f);
+        _enemyRainVolume = Mathf.Clamp01(volume);
+        if (!RuntimeManager.IsInitialized) return;
+        foreach (ActiveEffect effect in _effects)
+            UpdateEffectMix(effect);
     }
 
     /// <summary>
@@ -578,7 +596,10 @@ public class SoundManager
         if (RuntimeManager.IsInitialized)
         {
             foreach (ActiveEffect effect in _effects)
+            {
+                effect.ReleaseRainFilter();
                 StopEffect(effect.Instance, false);
+            }
         }
         _effects.Clear();
         StopStreamingEffects();
@@ -626,6 +647,7 @@ public class SoundManager
     public void Clear()
     {
         _footstepOnlyOwner = null;
+        _enemyRainMuffleEnabled = false;
         StopBgm(false);
         StopEffects();
         SetTimeWarp(1f, 0f);
@@ -715,6 +737,7 @@ public class SoundManager
                 StopEffect(effect.Instance, false);
             if (!RuntimeManager.IsInitialized || !effect.Instance.isValid())
             {
+                effect.ReleaseRainFilter();
                 _effects.RemoveAt(i);
                 continue;
             }
@@ -864,6 +887,7 @@ public class SoundManager
                 dopplerEnabled = dopplerenabled;
 
             description.getMinMaxDistance(out float minimumDistance, out float maximumDistance);
+            _library.ApplySpatialRange(soundId, ref minimumDistance, ref maximumDistance);
             if (attach)
             {
                 if (is3D && dopplerEnabled)
@@ -893,7 +917,8 @@ public class SoundManager
             if (combatCue)
                 _combatFocusUntil = Time.unscaledTime + _library.CombatFocusDuration;
             var effect = new ActiveEffect(instance, source, soundId, playDuringMovement, position, attach,
-                volume, spatialize2D && !is3D, minimumDistance, maximumDistance);
+                volume, spatialize2D && !is3D, minimumDistance, maximumDistance,
+                IsEnemyOrProjectileSound(soundId, source));
             _effects.Add(effect);
 #if UNITY_EDITOR
             _recentPlayback.Add($"{Time.time:F2}s | {cueName ?? soundId.ToString()} | {eventReference.Path} | {source?.name ?? "world"} | {label} | volume={volume:F2}");
@@ -910,15 +935,18 @@ public class SoundManager
     }
 
     /// <summary>
-    /// effect의 원래 음량에 Combat Cue 재생 직후의 발소리 감쇠와 선택된 2D 공간 보정을 합성한다.
-    /// FMOD 0번 Listener의 위치·방향과 이동 소유자를 사용하며 채널 생성 전 패닝은 다음 Update에서 재시도한다.
+    /// effect의 원래 음량에 발소리 감쇠, 비 속 적 사운드 감쇠와 선택된 2D 공간 보정을 합성한다.
+    /// FMOD 0번 Listener와 이동 소유자 및 씬 비 설정을 사용하고 채널 생성 전 DSP 연결은 다음 Update에서 재시도한다.
     /// </summary>
     private void UpdateEffectMix(ActiveEffect effect)
     {
         if (!effect.Instance.isValid()) return;
         float volume = Mathf.Max(0f, effect.Volume);
-        if (Time.unscaledTime < _combatFocusUntil && (effect.Id == SoundId.Footstep || effect.Id == SoundId.EnemyFootstep))
+        if (Time.unscaledTime < _combatFocusUntil && (effect.Id == SoundId.Footstep || effect.Id == SoundId.RainFootstep
+            || effect.Id == SoundId.EnemyFootstep))
             volume *= _library.CombatFootstepVolume;
+        if (_enemyRainMuffleEnabled && effect.MuffleInRain)
+            volume *= _enemyRainVolume;
         if (effect.Spatialize2D && StudioListener.ListenerCount > 0
             && RuntimeManager.StudioSystem.getListenerAttributes(0, out FMOD.ATTRIBUTES_3D listener) == FMOD.RESULT.OK)
         {
@@ -933,6 +961,51 @@ public class SoundManager
                 group.setPan(pan);
         }
         effect.Instance.setVolume(volume);
+        effect.ApplyRainFilter(_enemyRainMuffleEnabled, _enemyRainLowpassCutoff);
+    }
+
+    /// <summary>
+    /// soundId와 source의 적·보스·투사체 소유 여부를 판별한다.
+    /// 씬의 비 먹먹함 효과를 적용할 대상이면 true를 반환하며 플레이어 전용 소리는 제외한다.
+    /// </summary>
+    private static bool IsEnemyOrProjectileSound(SoundId soundId, GameObject source)
+    {
+        if (source != null && (source.GetComponentInParent<EnemyHealth>() != null
+            || source.GetComponentInParent<EnemyController>() != null
+            || source.GetComponentInParent<BossController>() != null
+            || source.GetComponentInParent<TwinBossController>() != null
+            || source.GetComponentInParent<EnemyProjectile>() != null
+            || source.GetComponentInParent<DefenseShuriken>() != null
+            || source.GetComponentInParent<TwinBossProjectile>() != null
+            || source.GetComponentInParent<BambooThrower>() != null))
+            return true;
+
+        switch (soundId)
+        {
+            case SoundId.EnemyFootstep:
+            case SoundId.EnemyAttackPrepare:
+            case SoundId.EnemySwordSwing:
+            case SoundId.EnemyFinished:
+            case SoundId.EnemyDie:
+            case SoundId.EnemyDetected:
+            case SoundId.BossChargeCry:
+            case SoundId.BossDuelCry:
+            case SoundId.BossStunCry:
+            case SoundId.EnemyDamaged:
+            case SoundId.EnemyGetParryed:
+            case SoundId.EnemyHeartbeat:
+            case SoundId.EnemyAttackVoice:
+            case SoundId.EnemyRangedAttackVoice:
+            case SoundId.BeastBossAttack:
+            case SoundId.BeastBossHit:
+            case SoundId.BeastBossDie:
+            case SoundId.BeastBossIdle:
+            case SoundId.BeastBossParry:
+            case SoundId.EnemyMeleeWarning:
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>
@@ -942,7 +1015,8 @@ public class SoundManager
     private bool CanPlayDuringMovement(SoundId soundId, GameObject source, bool playDuringMovement)
     {
         return _footstepOnlyOwner == null || playDuringMovement || soundId == SoundId.WarCry
-            || (source == _footstepOnlyOwner && (soundId == SoundId.Footstep || soundId == SoundId.SwordSwing
+            || (source == _footstepOnlyOwner && (soundId == SoundId.Footstep || soundId == SoundId.RainFootstep
+                || soundId == SoundId.SwordSwing
                 || soundId == SoundId.SwordHit || soundId == SoundId.SwordUnsheath));
     }
 
@@ -1103,7 +1177,7 @@ public class SoundManager
         }
     }
 
-    private readonly struct ActiveEffect
+    private sealed class ActiveEffect
     {
         [Header("Effect")]
         private readonly FMOD.Studio.EventInstance _instance;
@@ -1117,6 +1191,8 @@ public class SoundManager
         private readonly bool _spatialize2D;
         private readonly float _minimumDistance;
         private readonly float _maximumDistance;
+        private readonly bool _muffleInRain;
+        private FMOD.DSP _rainFilter;
 
         internal FMOD.Studio.EventInstance Instance => _instance;
         internal GameObject Owner => _owner;
@@ -1129,13 +1205,15 @@ public class SoundManager
         internal bool Spatialize2D => _spatialize2D;
         internal float MinimumDistance => _minimumDistance;
         internal float MaximumDistance => _maximumDistance;
+        internal bool MuffleInRain => _muffleInRain;
 
         /// <summary>
         /// instance·owner·soundId·playDuringMovement와 위치·부착·음량·거리 입력을 보관한다.
-        /// 공간 보정 플래그와 소유 여부를 기록하여 재생 수명 및 매 프레임 믹싱에 사용한다.
+        /// 공간 보정과 비 속 필터 대상 여부를 기록하여 재생 수명 및 매 프레임 믹싱에 사용한다.
         /// </summary>
         internal ActiveEffect(FMOD.Studio.EventInstance instance, GameObject owner, SoundId soundId, bool playDuringMovement,
-            Vector3 position, bool attach, float volume, bool spatialize2D, float minimumDistance, float maximumDistance)
+            Vector3 position, bool attach, float volume, bool spatialize2D, float minimumDistance, float maximumDistance,
+            bool muffleInRain)
         {
             _instance = instance;
             _owner = owner;
@@ -1148,6 +1226,53 @@ public class SoundManager
             _spatialize2D = spatialize2D;
             _minimumDistance = minimumDistance;
             _maximumDistance = maximumDistance;
+            _muffleInRain = muffleInRain;
+        }
+
+        /// <summary>
+        /// enabled인 대상 이벤트의 채널 그룹에 lowpassCutoff를 적용하는 EQ 필터를 연결한다.
+        /// 채널이 아직 없으면 다음 갱신에서 재시도하고 비활성화되면 기존 필터를 해제한다.
+        /// </summary>
+        internal void ApplyRainFilter(bool enabled, float lowpassCutoff)
+        {
+            if (!_muffleInRain) return;
+            if (!enabled)
+            {
+                ReleaseRainFilter();
+                return;
+            }
+            if (!_rainFilter.hasHandle())
+            {
+                if (Instance.getChannelGroup(out FMOD.ChannelGroup group) != FMOD.RESULT.OK
+                    || RuntimeManager.CoreSystem.createDSPByType(FMOD.DSP_TYPE.MULTIBAND_EQ, out FMOD.DSP filter) != FMOD.RESULT.OK)
+                    return;
+                filter.setParameterInt((int)FMOD.DSP_MULTIBAND_EQ.A_FILTER,
+                    (int)FMOD.DSP_MULTIBAND_EQ_FILTER_TYPE.LOWPASS_12DB);
+                filter.setParameterFloat((int)FMOD.DSP_MULTIBAND_EQ.A_FREQUENCY, lowpassCutoff);
+                if (group.addDSP(FMOD.CHANNELCONTROL_DSP_INDEX.HEAD, filter) != FMOD.RESULT.OK)
+                {
+                    filter.release();
+                    return;
+                }
+                _rainFilter = filter;
+            }
+            _rainFilter.setParameterFloat((int)FMOD.DSP_MULTIBAND_EQ.A_FREQUENCY, lowpassCutoff);
+        }
+
+        /// <summary>
+        /// 현재 이벤트에 연결된 비 속 EQ 필터를 채널 그룹에서 떼고 FMOD 자원을 반환한다.
+        /// 저장된 필터 핸들을 비워 다음 활성화 때 새 필터를 만들 수 있게 한다.
+        /// </summary>
+        internal void ReleaseRainFilter()
+        {
+            if (!_rainFilter.hasHandle()) return;
+            if (RuntimeManager.IsInitialized)
+            {
+                if (Instance.isValid() && Instance.getChannelGroup(out FMOD.ChannelGroup group) == FMOD.RESULT.OK)
+                    group.removeDSP(_rainFilter);
+                _rainFilter.release();
+            }
+            _rainFilter.clearHandle();
         }
     }
 

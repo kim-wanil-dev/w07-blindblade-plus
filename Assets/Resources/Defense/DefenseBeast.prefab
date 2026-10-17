@@ -231046,10 +231046,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 6412277247694926186}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 384aeac34ae341db897ef110fe303f40, type: 3}
+  m_Script: {fileID: 11500000, guid: 58035dda94784da18d052dc85c95f6e0, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TwinBeastWolfVisual
-  _beast: {fileID: 0}
+  m_EditorClassIdentifier: Assembly-CSharp::DefenseBeastWolfVisual
   _defenseBeast: {fileID: 2167395515785710848}
   _spine: {fileID: 967417469444588913}
   _head: {fileID: 2763118162878152806}

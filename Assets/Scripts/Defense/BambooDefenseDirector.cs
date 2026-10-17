@@ -166,6 +166,12 @@ public sealed class BambooDefenseDirector : MonoBehaviour
         _spawner.SetMeleeSpawnLimit(limit);
     }
 
+    /// <summary>count·duration·interval과 준비 시간 startDelay를 스폰 담당자에게 전달해 시간별 근접 적 일정을 설정한다.</summary>
+    public void ConfigureTimedMeleeWave(int count, float duration, float interval)
+    {
+        _spawner.ConfigureTimedMeleeWave(count, duration, interval, _startDelay);
+    }
+
     /// <summary>스테이지 전환 때 현재 웨이브의 스폰·투척 예약·비행 수리검을 종료하고 처치 수는 보존한다.</summary>
     public void StopWave()
     {
