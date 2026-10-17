@@ -385,6 +385,11 @@ flowchart LR
 - Managers는 PoolManager, ResourceManager, SoundManager, SceneManagerEx를 보유하며 씬 전환 시 유지된다. ResourceManager는 Library만 로드하며 FMOD 음원은 Unity AudioClip Pool을 사용하지 않는다.
 - SoundLibrary.cs는 SoundSystem 폴더에 있고 실제 설정 에셋은 Resources/Sound에 있다. 기존 호출은 유지하며 설정 에셋 이름과 로드 경로를 SoundLibrary로 변경했다.
 
+#### 2026-10-17 Beast 보스 사운드
+
+- `event:/BossMonsterDog/ChargeBark`를 SFX 뱅크에 추가하고 `SoundId.BeastBossChargeBark` 45에 연결했다. FMOD 이벤트에서 원본 짖음을 6반음·4dB 낮췄다. 플레이어 물 발소리 ID 42와 충돌하던 보스 전조 ID는 43·44로 분리하고 같은 `PerfectParry_Clash`·`UltimateReady` 이벤트를 4~60m 공간 보정과 함께 SoundLibrary에 등록했다. Desktop SFX 및 Master strings 뱅크를 Unity StreamingAssets에 반영했다. 실제 Play 청취는 미확인이다.
+- 후속 범위 조정: `ChargeBark` 이벤트 자체의 3D 최소·최대 거리를 25m·100m로 지정했다. SoundLibrary의 거리 필드는 2D 이벤트 전용이므로 짖음의 3D 범위는 FMOD 이벤트에서 관리한다. 물 발소리의 범위는 변경하지 않았다.
+
 #### 공통 Managers의 Update 호출에 대한 협업 규칙
 
 - 현재 `_sound.Update()`는 테스트 코드가 아닌 사운드 서비스의 수명 정리 호출이다. 소유자의 비활성화/파괴를 감지해 재생을 정지하고, 종료된 효과음 항목 및 BGM 상태를 정리한다.

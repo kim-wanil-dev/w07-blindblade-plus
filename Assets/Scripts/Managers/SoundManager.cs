@@ -1001,6 +1001,9 @@ public class SoundManager
             case SoundId.BeastBossDie:
             case SoundId.BeastBossIdle:
             case SoundId.BeastBossParry:
+            case SoundId.TwinBossChargePulse:
+            case SoundId.TwinBossChargeFinalPulse:
+            case SoundId.BeastBossChargeBark:
             case SoundId.EnemyMeleeWarning:
                 return true;
             default:
