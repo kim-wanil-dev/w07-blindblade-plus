@@ -1,5 +1,10 @@
 ### FMOD 사운드 매니저
 
+#### 씬별 비 속 적·투사체 사운드 (2026-10-17)
+
+- `RainyStageAudio`의 인스펙터 옵션이 `SoundManager.SetEnemyRainMuffle`에 켜짐 여부, 저역 통과 주파수와 음량 배율을 전달한다. 적·보스·투사체 소유 오브젝트 또는 적 전용 `SoundId`의 효과음에만 개별 FMOD `MULTIBAND_EQ` 저역 통과 필터를 연결한다. 재생 중인 대상에도 옵션 변경을 반영하고 종료·비활성화 때 필터를 해제한다.
+- `RainyStage_JH` 기본값은 6,500Hz와 음량 0.85이며 비·Ambient BGM, 플레이어 공격음, 물 발소리는 필터 대상이 아니다. 다른 씬은 활성 `RainyStageAudio` 컴포넌트를 추가해 독립적으로 사용한다. Unity Play의 실제 청감은 미확인이다.
+
 #### 수리검 비행음 도플러 (2026-10-17)
 
 - 3D 이벤트의 Doppler가 켜져 있으면 PlayEffect의 부착 재생(PlayAttached·PlayAttachedLoop 등)이 AttachInstanceWithVelocity로 발음체의 속도를 FMOD에 전달한다. Rigidbody가 있으면 그 속도를 쓰고, 없으면 Transform 이동량으로 속도를 계산한다. Doppler가 꺼진 이벤트는 기존 부착 방식을 유지한다.

@@ -3,6 +3,8 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 
+using TMPro;
+
 /// <summary>일반 적 처치 수에 따라 보스 경고, 원형 공터 가장자리 등장 연출과 스테이지 완료를 관리한다.</summary>
 // 등장 흔들림은 PlayerMotor(0)와 GameSceneInitializer(100) 뒤, 칼 궤적(200)·돌진 대상 실(300)·칼 구슬(310) 앞에 적용한다.
 [DefaultExecutionOrder(120)]
@@ -38,6 +40,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
     private EnemyHealth _bossHealth;
     private Coroutine _warningRoutine;
     private Coroutine _entranceWaveRoutine;
+    private Coroutine _stageTransitionRoutine;
     private Camera _playerCamera;
     private float _shakeElapsed;
     private StagePhase _phase;
@@ -120,9 +123,12 @@ public sealed class BambooStage1Controller : MonoBehaviour
             StopCoroutine(_warningRoutine);
         if (_entranceWaveRoutine != null)
             StopCoroutine(_entranceWaveRoutine);
+        if (_stageTransitionRoutine != null)
+            StopCoroutine(_stageTransitionRoutine);
         _warningRoutine = null;
         _entranceWaveRoutine = null;
-        _warning.alpha = 0f;
+        _stageTransitionRoutine = null;
+        if (_warning != null) _warning.alpha = 0f;
         _playerCamera = null;
     }
 
@@ -283,15 +289,28 @@ public sealed class BambooStage1Controller : MonoBehaviour
         }
     }
 
-    /// <summary>bossHealth가 현재 보스의 사망을 알리면 스테이지 완료 상태로 변경한다.</summary>
+    /// <summary>bossHealth가 현재 보스의 사망을 알리면 2막 진입을 저장하고 전환 메시지를 표시한다.</summary>
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         if (bossHealth == _bossHealth && _phase == StagePhase.Boss)
         {
             _phase = StagePhase.Complete;
             BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2", true);
-            BambooStage1Progress.MarkBossCheckpointReached();
-            Game.Instance.GameStateManager.RequestGameClear();
+            BambooStage1Progress.MarkRainyStageReached();
+            _stageTransitionRoutine = StartCoroutine(ShowActTwoThenTransition());
         }
+    }
+
+    /// <summary>2막 문구를 잠시 보여 준 뒤 페이드와 함께 RainyStage 씬으로 이동한다.</summary>
+    private IEnumerator ShowActTwoThenTransition()
+    {
+        _warning.GetComponentInChildren<TMP_Text>(true).text = "2막";
+        _warning.alpha = 1f;
+        yield return new WaitForSecondsRealtime(2f);
+        _warning.alpha = 0f;
+        _stageTransitionRoutine = null;
+        if (Game.Instance.GameStateManager.State != GameplayState.Playing)
+            yield break;
+        SceneTransitionOverlay.TransitionToScene("RainyStage", 0.5f, null);
     }
 }

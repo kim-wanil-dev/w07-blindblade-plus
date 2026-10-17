@@ -1,5 +1,7 @@
 ### RainyStage 비 연출
 
+- 2026-10-17 정식 2막 연결: 이전 `RainyStage.unity`는 `(Legacy) RainyStage.unity`로 보존했다. 현재 `RainyStage.unity`는 RainyTwinBoss를 복사해 웨이브 1,434개, 보스 2,662개의 가까운 방울을 사용한다. `RainStageWeather.SetDropletCount`가 보스 등장 시 GPU 방울 버퍼를 재구성한다. 아래의 기본 2,048개 설명은 이전 시험 씬과 RainyTwinBoss의 기존 수치다. [비 내리는 스테이지 2](비_스테이지2.md) 참고.
+
 - 씬에 함께 저장된 보스 경고 제목은 `강적 출현`이며 `Assets/Fonts/ChosunCentennial_otf SDF.asset`을 사용한다. `BambooStage1`과 같이 제목에만 켜져 있던 TMP Bold 스타일을 해제했다. 비 연출 및 경고 동작은 변경하지 않았다. 실제 GameView 표시는 미확인이다.
 
 - 기능 설명: `RainyStage`에서만 카메라 주변에 비가 내린다. 불릿 타임에는 물방울이 거의 멈추고 둥글게 보인다. 실제 칼날과 검기의 베기 면에 닿은 방울은 그 자리에서 파열하고, 베기가 지난 면에는 잠시 방울이 없는 자국이 남는다.

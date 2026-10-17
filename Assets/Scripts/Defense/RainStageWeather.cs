@@ -30,7 +30,8 @@ public sealed class RainStageWeather : MonoBehaviour
     [SerializeField] private Material _rainMaterial;
 
     [Header("비")]
-    [SerializeField, Range(256, 8192)] private int _dropletCount = 2048;
+    [SerializeField, Range(256, 8192), Tooltip("씬 시작 시 가까운 빗방울 수입니다. 보스 등장 등 이후 변화는 스테이지 컨트롤러가 지정합니다.")]
+    private int _dropletCount = 2048;
     [SerializeField, Range(3f, 30f)] private float _nearRadius = 15f;
     [SerializeField, Range(0, 8192), Tooltip("가까운 원 바깥부터 Far Radius까지 고리에 떨어지는 방울 수. 대숲까지 비를 내린다.")]
     private int _farDropletCount = 4096;
@@ -391,6 +392,29 @@ public sealed class RainStageWeather : MonoBehaviour
         if (_quad != null) Destroy(_quad);
         _quad = null;
         _initialized = false;
+    }
+
+    /// <summary>count를 가까운 빗방울 수로 적용하고 GPU 방울 버퍼를 새 수량으로 다시 채운다.</summary>
+    public void SetDropletCount(int count)
+    {
+        int clamped = Mathf.Clamp(count, 256, 8192);
+        if (_dropletCount == clamped)
+            return;
+        _dropletCount = clamped;
+        if (!_initialized)
+            return;
+
+        _totalDropletCount = _dropletCount + _farDropletCount;
+        _drops.Release();
+        _drops = new ComputeBuffer(_totalDropletCount, DROP_STRIDE);
+        _properties.SetBuffer("_RainDrops", _drops);
+        _rippleProperties.SetBuffer("_RainDrops", _drops);
+        int initKernel = _simulation.FindKernel("Initialize");
+        _simulation.SetBuffer(initKernel, "_Drops", _drops);
+        _simulation.SetBuffer(_updateKernel, "_Drops", _drops);
+        _simulation.SetInt("_DropCount", _totalDropletCount);
+        _simulation.SetInt("_NearDropCount", _dropletCount);
+        _simulation.Dispatch(initKernel, Mathf.CeilToInt(_totalDropletCount / (float)THREAD_GROUP_SIZE), 1, 1);
     }
 
     /// <summary>
