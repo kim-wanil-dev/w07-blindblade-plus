@@ -6740,15 +6740,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.CombatTelemetryRecorder
   _health: {fileID: 876271890}
-  _director: {fileID: 1968806059}
   _spawner: {fileID: 1968806062}
-  _presentation: {fileID: 1968806063}
   _recordingEnabled: 1
   _configVersion: bamboo-2026-10-14
   _bufferLimit: 4096
   _flushIntervalSeconds: 2
   _maximumStorageMegabytes: 100
-  _sampleIntervalSeconds: 5
+  _movementSampleIntervalSeconds: 1
+  _summaryIntervalSeconds: 15
   _allowAutomaticUpload: 1
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100
@@ -10998,7 +10997,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 100, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 101, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: m_LocalPosition.x
@@ -11011,6 +11010,10 @@ PrefabInstance:
     - target: {fileID: 101, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: m_LocalPosition.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 101, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 101, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: m_LocalRotation.x
@@ -11036,9 +11039,29 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 101, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
+    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _riseForce
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _sizeScale
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _lengthScale
+      value: 0.3
+      objectReference: {fileID: 0}
+    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _densityScale
+      value: 150
+      objectReference: {fileID: 0}
+    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _lifetimeScale
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _flowSpeedScale
+      value: 0.03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -11071,7 +11094,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 204, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
   m_PrefabInstance: {fileID: 350192289}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 350192291}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
@@ -11082,7 +11105,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 304, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
   m_PrefabInstance: {fileID: 350192289}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 350192292}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
@@ -27066,10 +27089,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 7414776361951269170, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
-      propertyPath: _ripple._spherical
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 1080894898460965423, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
       propertyPath: _iaidoInstantKill
       value: 1
@@ -27085,6 +27104,10 @@ PrefabInstance:
     - target: {fileID: 7253810946217735011, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
       propertyPath: _dashHitMask.m_Bits
       value: 55
+      objectReference: {fileID: 0}
+    - target: {fileID: 7414776361951269170, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
+      propertyPath: _ripple._spherical
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 9061784569180931348, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
       propertyPath: m_LocalPosition.x
@@ -60122,7 +60145,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &2091614580
 Transform:
   m_ObjectHideFlags: 0

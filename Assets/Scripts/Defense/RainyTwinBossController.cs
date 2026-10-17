@@ -107,7 +107,9 @@ public sealed class RainyTwinBossController : MonoBehaviour
             StopCoroutine(_entranceWaveRoutine);
         _warningRoutine = null;
         _entranceWaveRoutine = null;
-        _warning.alpha = 0f;
+        // 씬 해제 때는 경고 Canvas가 먼저 파괴될 수 있으므로 남아 있을 때만 숨긴다.
+        if (_warning != null)
+            _warning.alpha = 0f;
         _playerCamera = null;
     }
 
