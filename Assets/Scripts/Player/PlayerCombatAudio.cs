@@ -7,7 +7,7 @@ using UnityEngine;
 /// 플레이어 베기·방어·피격을 FMOD 사운드에 연결한다.
 /// 실제 적 피격음은 EnemyDamageAudio가 처리하고 모든 재생은 Managers.Sound를 사용한다.
 /// </summary>
-[RequireComponent(typeof(PlayerController))]
+[RequireComponent(typeof(PlayerController), typeof(PlayerEmpower))]
 [DisallowMultipleComponent]
 public sealed class PlayerCombatAudio : MonoBehaviour
 {
@@ -23,7 +23,9 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     [SerializeField, Range(0.25f, 4f)] private float _damagePitch = 1f;
     [SerializeField, Tooltip("퍼펙트 패링 순간 가드·패링 소리 대신 재생하는 소리. 연출음 버스라 불릿 타임 효과를 받지 않는다.")]
     private SoundId _perfectParrySound = SoundId.PerfectParryClash;
+    [SerializeField] private SoundId _ultimateReadySound = SoundId.EmpowerUltimateReady;
     private PlayerHealth _health;
+    private PlayerEmpower _empower;
     private PlayerActionDriver _timing;
     private PlayerMotor _motor;
     private int _pendingSwingAction = -1;
@@ -53,6 +55,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         _player = GetComponent<PlayerController>();
         _katana = GetComponent<KatanaCombatCoordinator>();
         _health = GetComponent<PlayerHealth>();
+        _empower = GetComponent<PlayerEmpower>();
         _timing = GetComponent<PlayerActionDriver>();
         _motor = GetComponent<PlayerMotor>();
         _playerClock = GetComponent<PlayerClock>();
@@ -77,6 +80,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         _lastDashAction = -1;
         _nextEnemyAudioScan = 0f;
         _health.DamageReceived += HandleDamage;
+        _empower.UltimateReadyParry += HandleUltimateReadyParry;
         if (_contactService != null)
             _contactService.AttackContactResolved += HandleContact;
         if (_katana != null && _katana.isActiveAndEnabled)
@@ -90,6 +94,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         RegisterEnemyAudio();
         // 퍼펙트 패링음은 판정 순간 바로 들려야 하므로 샘플 데이터를 미리 올려 둔다.
         if (_isPrimary && _perfectParrySound != SoundId.None) Managers.Sound.PreloadSampleData(_perfectParrySound);
+        if (_isPrimary && _ultimateReadySound != SoundId.None) Managers.Sound.PreloadSampleData(_ultimateReadySound);
         if (_profile != null && _profile.PlayAmbience)
             Managers.Sound.PlayBgm(_profile.AmbienceSound, gameObject, _profile.LoopAmbience, _profile.AmbienceVolume);
     }
@@ -99,6 +104,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         if (!_isPrimary) return;
         _player.ActionEvent -= HandleAction;
         _health.DamageReceived -= HandleDamage;
+        _empower.UltimateReadyParry -= HandleUltimateReadyParry;
         _pendingSwingAction = -1;
         _pendingCues.Clear();
         if (_contactService != null)
@@ -209,6 +215,13 @@ public sealed class PlayerCombatAudio : MonoBehaviour
             && Managers.Sound.Play(_perfectParrySound, result.Point, _volume, gameObject)) return;
         if (QueueCue(result.IsParry ? CombatSoundCue.Parry : CombatSoundCue.Guard, result.Point, false)) return;
         Managers.Sound.Play(result.IsParry ? SoundId.ParryClash : _hitSound, result.Point, _volume, gameObject);
+    }
+
+    /// <summary>거합 토큰이 가득 찬 알림을 플레이어에 붙여 재생한다.</summary>
+    private void HandleUltimateReadyParry()
+    {
+        if (_ultimateReadySound == SoundId.None) return;
+        Managers.Sound.PlayAttached(_ultimateReadySound, gameObject, _volume);
     }
 
     /// <summary>

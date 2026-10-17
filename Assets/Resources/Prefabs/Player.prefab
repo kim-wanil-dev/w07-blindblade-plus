@@ -186,7 +186,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 86c6556701af9e04380698b89f691b6e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nonRigidbodyVelocity: 0
+  nonRigidbodyVelocity: 1
   attenuationObject: {fileID: 0}
 --- !u!1 &1639225020724238883
 GameObject:
@@ -458,6 +458,7 @@ MonoBehaviour:
   _guardPushDuration: 0.12
   _parryStaggerDuration: 0.9
   _counterInvulnerabilityAfter: 0.3
+  _perfectParryMotionDuration: 0.35
   _sheatheDuration: 0.3
 --- !u!114 &2388544270244161858
 MonoBehaviour:
@@ -499,6 +500,14 @@ MonoBehaviour:
   _animator: {fileID: 8362338574495906464}
   _idleClip: {fileID: 7400000, guid: 8c03e20cc5701384195e95a718f911ce, type: 2}
   _counterAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
+  _perfectParryClip: {fileID: 0}
+  _perfectParryArcWidth: 0.3
+  _perfectParryArcPeakHeight: 0.22
+  _perfectParryArcEndHeight: 0.1
+  _perfectParryArcPeakPosition: 0.75
+  _perfectParryArcDepth: 0
+  _perfectParryBladeAngles: {x: 0, y: 0, z: -20}
+  _perfectParryPeakProgress: 0.6
   _firstAttackClip: {fileID: 7400000, guid: c83264164fb7e824ab09176b14e72719, type: 2}
   _firstAttackReturnsToIdle: 1
   _secondAttackClip: {fileID: 7400000, guid: 56a37a9bb1fcea74dae1b73f0c0c3fb2, type: 2}
@@ -569,6 +578,7 @@ MonoBehaviour:
   _damageVolumeMultiplier: 1
   _damagePitch: 1
   _perfectParrySound: 37
+  _ultimateReadySound: 41
   _contactService: {fileID: 1080894898460965423}
 --- !u!114 &8491623887222581670
 MonoBehaviour:
@@ -838,6 +848,7 @@ MonoBehaviour:
     _ringInterval: 0.15
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
+    _spherical: 0
   _stepsPerRipple: 2
 --- !u!114 &6051350681916135295
 MonoBehaviour:
@@ -895,7 +906,7 @@ MonoBehaviour:
   _lineMaterial: {fileID: 2100000, guid: d9859716a952461db94ff1cc2aacb654, type: 2}
   _length: 1.3
   _lineWidth: 3.5
-  _lineColor: {r: 1, g: 1, b: 1, a: 1}
+  _lineColor: {r: 1, g: 1, b: 1, a: 0}
   _startOffset: 0.5
   _fadeDuration: 0.15
   _revealCount: 4
@@ -956,6 +967,7 @@ MonoBehaviour:
     _ringInterval: 0.15
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
+    _spherical: 0
 --- !u!114 &7719342256018403924
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -974,6 +986,160 @@ MonoBehaviour:
   _endFade: 0.05
   _holdDuration: 2
   _fadeDuration: 3
+--- !u!114 &7719342256018403925
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2303cb48b52a4f4fa911250005b0ac39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerDashTargetThread
+  _viewCamera: {fileID: 421133909551674746}
+  _scabbard: {fileID: 1746509643972831858}
+  _grip: {fileID: 5036744704484886163}
+  _material: {fileID: 2100000, guid: 9e56680fd30a4ec0b80ad2e97d836f7f, type: 2}
+  _segments: 96
+  _mainWidth: 0.0192
+  _branchWidthRatio: 0.2
+  _thicknessVariation: 0.35
+  _thicknessChangeSpeed: 1.2
+  _opacity: 1
+  _fadeDuration: 0.2
+  _handleLobeScale: 1.08
+  _scabbardLobeScale: 0.55
+  _drawnHandleLobeScale: 0.35
+  _loopRadiusScale: 1.35
+  _loopWobble: 0.25
+  _reverseWrap: 0
+  _faceSweep: 70
+  _loopAnglePerFlow: 21
+  _mainStrokeLength: 0.3
+  _counterThread: 1
+  _counterAngle: 180
+  _counterTwist: 40
+  _counterSpeedRatio: 0.8
+  _branchStart: 0.15
+  _branchEnd: 0.85
+  _branchSpread: 1.2
+  _branchLobes: 1
+  _branchBreathSpeed: 2.2
+  _branchSwirlSpeed: 0.8
+  _flowDrift: 0.032
+  _tugStrength: 0.32
+  _surgeChance: 0.35
+  _surgeMultiplier: 2.2
+  _tugDampingMin: 1.5
+  _tugDampingMax: 5
+  _tugMeanInterval: 1.3
+  _tugIntervalMin: 0.15
+  _tugIntervalMax: 4
+  _reverseTugChance: 0.2
+  _speedWander: 0.4
+  _linkDuration: 0.12
+  _releaseDuration: 0.12
+  _candidateInterval: 0.05
+  _retargetSharpness: 14
+  _slack: 0.035
+  _linkBranchSpread: 0.02
+  _linkBranchLobes: 2
+  _linkUndulation: 0.035
+  _linkUndulationWaves: 2.5
+  _linkUndulationSpeed: 4
+  _linkUndulationDuration: 0.45
+  _beatInterval: 1.4
+  _beatGap: 0.25
+  _secondBeatStrength: 0.6
+  _waveSpeed: 2.5
+  _minimumWaveDuration: 0.8
+  _wavePacketWidth: 0.12
+  _waveAmplitude: 0.016
+  _waveGlow: 1.6
+  _waveArrivalLinger: 0.25
+--- !u!114 &7719342256018403926
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79c93276f8344141b937af47f19c62c6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerKatanaBeads
+  _viewSpace: {fileID: 658615258030587121}
+  _attach: {fileID: 1259153877585065921}
+  _attachLocalOffset: {x: -0.5, y: -1, z: 0}
+  _material: {fileID: 2100000, guid: 7e6de1d019e74d4983bc3529e25ada03, type: 2}
+  _beadRadius: 0.008
+  _sphereRadiusRatio: 0.8
+  _shellTint: {r: 1, g: 1, b: 1, a: 1}
+  _crackCount: 3
+  _crackWidth: 0.0004
+  _crackColor: {r: 0.86, g: 0.87, b: 0.9, a: 0.55}
+  _crackSeed: 7
+  _firstCordLength: 0.025
+  _cordLength: 0.014
+  _cordSubdivisions: 3
+  _cordWidth: 0.0014
+  _cordColor: {r: 1, g: 1, b: 1, a: 1}
+  _gravity: 9.81
+  _damping: 0.97
+  _iterations: 16
+  _maxStretch: 1.02
+  _viewInertia: 0.12
+  _maxInertiaStep: 0.006
+  _minViewDepth: 0.34
+  _beadInverseMass: 0.4
+  _sphereStyle:
+    _sphereScale: 1
+    _axisRoll: 20
+    _axisPitch: 25
+    _inclination: 65
+    _twist: 0.3
+    _precessionSpeed: 0.4
+    _counterAzimuth: 90
+    _segments: 64
+    _mainWidth: 2.2
+    _branchWidthRatio: 0.2
+    _strokeLength: 0.85
+    _thicknessVariation: 0.35
+    _branchSpread: 0.75
+    _backOpacity: 0.3
+    _feather: 0.08
+    _color: {r: 1, g: 1, b: 1, a: 1}
+    _orbitSpeed: 0.32
+    _counterSpeedRatio: 0.8
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
+    _fadeDuration: 0.25
+  _fullSpeedMultiplier: 2.5
+  _fullGlowStrength: 1
+  _fullGlowRadius: 1.7
+  _fullGlowPulseDepth: 0.35
+  _fullGlowPulseSpeed: 1.2
+  _fullTransitionDuration: 0.3
+--- !u!114 &7719342256018403927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab0053a0255a4cf09aa406939c0346e5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
+  _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
+  _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
+  _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
+  _fadeDuration: 0.15
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1378,6 +1544,16 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 3796482945788141926}
   m_SourcePrefab: {fileID: 100100000, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+--- !u!23 &1259153877585065921 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6192303726752776966, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  m_PrefabInstance: {fileID: 4942158160852825287}
+  m_PrefabAsset: {fileID: 0}
+--- !u!23 &1746509643972831858 stripped
+MeshRenderer:
+  m_CorrespondingSourceObject: {fileID: 6677373617046904501, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  m_PrefabInstance: {fileID: 4942158160852825287}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &2953905633047843522 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 7811620188448204293, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
@@ -1413,19 +1589,14 @@ MonoBehaviour:
     m_Bits: 4294967295
   _contactRadius: 0.04
   _teleportDistance: 3
---- !u!95 &8362338574495906464 stripped
-Animator:
-  m_CorrespondingSourceObject: {fileID: 3502371185263496807, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
-  m_PrefabInstance: {fileID: 4942158160852825287}
-  m_PrefabAsset: {fileID: 0}
---- !u!23 &1746509643972831858 stripped
-MeshRenderer:
-  m_CorrespondingSourceObject: {fileID: 6677373617046904501, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
-  m_PrefabInstance: {fileID: 4942158160852825287}
-  m_PrefabAsset: {fileID: 0}
 --- !u!23 &5036744704484886163 stripped
 MeshRenderer:
   m_CorrespondingSourceObject: {fileID: 103598420115649108, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  m_PrefabInstance: {fileID: 4942158160852825287}
+  m_PrefabAsset: {fileID: 0}
+--- !u!95 &8362338574495906464 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 3502371185263496807, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
   m_PrefabInstance: {fileID: 4942158160852825287}
   m_PrefabAsset: {fileID: 0}
 --- !u!1001 &6007029229710333164
@@ -1637,105 +1808,3 @@ ParticleSystem:
   m_CorrespondingSourceObject: {fileID: 3437129320176675894, guid: 641ef78c43feafe4fbcf82c9b47f2227, type: 3}
   m_PrefabInstance: {fileID: 6350052290514714908}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &7719342256018403925
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2303cb48b52a4f4fa911250005b0ac39, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerDashTargetThread
-  _viewCamera: {fileID: 421133909551674746}
-  _scabbard: {fileID: 1746509643972831858}
-  _grip: {fileID: 5036744704484886163}
-  _material: {fileID: 2100000, guid: 9e56680fd30a4ec0b80ad2e97d836f7f, type: 2}
---- !u!23 &1259153877585065921 stripped
-MeshRenderer:
-  m_CorrespondingSourceObject: {fileID: 6192303726752776966, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
-  m_PrefabInstance: {fileID: 4942158160852825287}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &7719342256018403926
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 79c93276f8344141b937af47f19c62c6, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerKatanaBeads
-  _viewSpace: {fileID: 658615258030587121}
-  _attach: {fileID: 1259153877585065921}
-  _attachLocalOffset: {x: -0.5, y: -1, z: 0}
-  _material: {fileID: 2100000, guid: 7e6de1d019e74d4983bc3529e25ada03, type: 2}
-  _beadRadius: 0.008
-  _sphereRadiusRatio: 0.8
-  _shellTint: {r: 1, g: 1, b: 1, a: 1}
-  _crackCount: 3
-  _crackWidth: 0.0004
-  _crackColor: {r: 0.86, g: 0.87, b: 0.9, a: 0.55}
-  _crackSeed: 7
-  _firstCordLength: 0.025
-  _cordLength: 0.014
-  _cordSubdivisions: 3
-  _cordWidth: 0.0014
-  _cordColor: {r: 1, g: 1, b: 1, a: 1}
-  _gravity: 9.81
-  _damping: 0.97
-  _iterations: 16
-  _maxStretch: 1.02
-  _viewInertia: 0.12
-  _maxInertiaStep: 0.006
-  _minViewDepth: 0.34
-  _beadInverseMass: 0.4
-  _sphereStyle:
-    _sphereScale: 1
-    _axisRoll: 20
-    _axisPitch: 25
-    _inclination: 65
-    _twist: 0.3
-    _precessionSpeed: 0.4
-    _counterAzimuth: 90
-    _segments: 64
-    _mainWidth: 2.2
-    _branchWidthRatio: 0.2
-    _strokeLength: 0.85
-    _thicknessVariation: 0.35
-    _branchSpread: 0.75
-    _backOpacity: 0.3
-    _feather: 0.08
-    _color: {r: 1, g: 1, b: 1, a: 1}
-    _orbitSpeed: 0.32
-    _counterSpeedRatio: 0.8
-    _tugStrength: 1.6
-    _tugMeanInterval: 1.2
-    _speedWander: 0.4
-    _fadeDuration: 0.25
-  _fullSpeedMultiplier: 2.5
-  _fullGlowStrength: 1
-  _fullGlowRadius: 1.7
-  _fullGlowPulseDepth: 0.35
-  _fullGlowPulseSpeed: 1.2
-  _fullTransitionDuration: 0.3
---- !u!114 &7719342256018403927
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ab0053a0255a4cf09aa406939c0346e5, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
-  _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
-  _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
-  _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
-  _fadeDuration: 0.15

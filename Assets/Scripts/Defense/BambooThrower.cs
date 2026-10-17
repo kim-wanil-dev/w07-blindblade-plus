@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// 숲에서 스폰되어 전조 뒤 수리검 한 발을 발사한다.
-/// 발사 후 실루엣을 잠시 표시하고 디스폰을 알린다.
+/// 발사 후에도 몸 형상은 숨긴 채 잠시 유지하고 디스폰을 알린다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class BambooThrower : MonoBehaviour
@@ -195,7 +195,7 @@ public sealed class BambooThrower : MonoBehaviour
 
     /// <summary>
     /// 플레이어의 예측 위치를 향해 수리검을 생성하고 유도·반사 대상 조회용 디렉터와 함께 발사한다.
-    /// 예약을 비행 집계로 넘기고 발사음과 실루엣을 표시한다.
+    /// 예약을 비행 집계로 넘기고 발사음을 재생한다. 몸 형상은 표시하지 않는다.
     /// </summary>
     private void Throw()
     {
@@ -215,8 +215,6 @@ public sealed class BambooThrower : MonoBehaviour
 
         if (_throwSound != SoundId.None)
             Managers.Sound.Play(_throwSound, _signalPoint.position);
-
-        SetRevealed(true);
     }
 
     /// <summary>

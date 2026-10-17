@@ -1,3 +1,5 @@
+using System;
+
 using UnityEngine;
 
 using BlindBlade.Combat.Contracts;
@@ -88,6 +90,9 @@ public sealed class PlayerEmpower : MonoBehaviour
     public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : 0f;
     public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : 0f;
 
+    /// <summary>거합 게이지가 가득 찬 상태에서 퍼펙트 패링이 성공했을 때 알린다.</summary>
+    public event Action UltimateReadyParry;
+
     void Awake()
     {
         _combat = GetComponent<KatanaCombatCoordinator>();
@@ -133,7 +138,7 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>
     /// 퍼펙트 패링을 알리고 attackId를 원인으로 강화 준비를 시작한다. 새 준비이면 히트스톱 뒤 불릿 타임으로 넘어가며 퍼펙트 파동을 낸다.
-    /// 퍼펙트 패링마다 토큰을 MAX_TOKENS까지 하나 늘린다.
+    /// 퍼펙트 패링마다 토큰을 MAX_TOKENS까지 하나 늘리고, 거합을 쓸 수 있는 상태에서 패링하면 UltimateReadyParry를 발행한다.
     /// 이미 준비 중이면 대기 시간만 처음부터 다시 세고 false를 반환하며, 새 준비를 시작했을 때만 true를 반환한다.
     /// 준비 중이든 새 준비든 _perfectParryInvulnerableDuration 실시간 동안 무적을 건다. 강화 공격 중이면 아무것도 바꾸지 않고 false를 반환한다.
     /// </summary>
@@ -145,10 +150,12 @@ public sealed class PlayerEmpower : MonoBehaviour
         if (IsReady)
         {
             _readyElapsed = 0f;
+            if (_tokens == MAX_TOKENS && !_charging) UltimateReadyParry?.Invoke();
             return false;
         }
 
         BeginReady(attackId);
+        if (_tokens == MAX_TOKENS && !_charging) UltimateReadyParry?.Invoke();
         return true;
     }
 

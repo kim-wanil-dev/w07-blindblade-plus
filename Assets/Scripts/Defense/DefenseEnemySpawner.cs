@@ -46,6 +46,14 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private float _meleeSpawnsPerMinute = 15f;
     [SerializeField, Min(0f), Tooltip("1분마다 늘어나는 분당 스폰 수"), InspectorName("분당 근접 스폰율 증가")]
     private float _meleeSpawnGrowthPerMinute = 9f;
+    [SerializeField, Min(0), Tooltip("0이면 처치 수에 따른 첫 번째 스폰율 변경을 사용하지 않는다.")]
+    private int _firstMeleeKillThreshold;
+    [SerializeField, Min(0f), Tooltip("첫 번째 처치 기준 이후의 근접 스폰 수(회/분). 0이면 변경하지 않는다.")]
+    private float _firstMeleeSpawnsPerMinute;
+    [SerializeField, Min(0), Tooltip("0이면 처치 수에 따른 두 번째 스폰율 변경을 사용하지 않는다.")]
+    private int _secondMeleeKillThreshold;
+    [SerializeField, Min(0f), Tooltip("두 번째 처치 기준 이후의 근접 스폰 수(회/분). 0이면 변경하지 않는다.")]
+    private float _secondMeleeSpawnsPerMinute;
     [SerializeField, Min(0f), Tooltip("이 시간 이후 돌진형 근접 적을 섞는다."), InspectorName("돌진형 등장 생존 시간 (초)")]
     private float _chargeTypeStartTime = 90f;
     [SerializeField, Range(0f, 1f), InspectorName("돌진형 선택 확률")] private float _chargeTypeChance = 0.4f;
@@ -58,6 +66,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private float _nextMeleeSpawnAt;
     private int _meleeSpawnLimit;
     private int _meleeSpawned;
+    private int _meleeSpawnTier;
     private readonly Plane[] _reflectCameraPlanes = new Plane[6];
 
     [Header("세션 연결")]
@@ -179,17 +188,36 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     }
 
     /// <summary>
-    /// 근접 적 스폰 시각이 되면 다음 시각을 생존 시간에 비례해 당기고 숲 가장자리의 도달 가능한 위치에 근접 적을 배치한다.
-    /// 분당 스폰 수는 시작값에 분당 증가량을 선형으로 더하며 동시 생존 상한을 넘으면 이번 스폰을 건너뛴다.
+    /// elapsed와 현재 처치 수로 분당 근접 스폰율을 정하고 숲 가장자리의 도달 가능한 위치에 근접 적을 배치한다.
+    /// 처치 구간이 바뀌면 다음 스폰 시각을 새 스폰율에 맞춰 다시 잡으며 동시 생존 상한을 넘으면 이번 스폰을 건너뛴다.
     /// 총 생성 제한이 있으면 _meleeSpawned가 제한에 닿은 뒤로는 더 생성하지 않는다.
     /// </summary>
     private void UpdateMelee(float elapsed)
     {
-        if (_meleePrefab == null || Time.time < _nextMeleeSpawnAt
-            || (_meleeSpawnLimit > 0 && _meleeSpawned >= _meleeSpawnLimit))
+        if (_meleePrefab == null || (_meleeSpawnLimit > 0 && _meleeSpawned >= _meleeSpawnLimit))
             return;
         float minutes = Mathf.Max(0f, elapsed - _meleeStartTime) / 60f;
         float spawnsPerMinute = _meleeSpawnsPerMinute + _meleeSpawnGrowthPerMinute * minutes;
+        int tier = 0;
+        if (_firstMeleeKillThreshold > 0 && _firstMeleeSpawnsPerMinute > 0f
+            && _director.Kills >= _firstMeleeKillThreshold)
+        {
+            tier = 1;
+            spawnsPerMinute = _firstMeleeSpawnsPerMinute;
+        }
+        if (_secondMeleeKillThreshold > 0 && _secondMeleeSpawnsPerMinute > 0f
+            && _director.Kills >= _secondMeleeKillThreshold)
+        {
+            tier = 2;
+            spawnsPerMinute = _secondMeleeSpawnsPerMinute;
+        }
+        if (tier != _meleeSpawnTier)
+        {
+            _meleeSpawnTier = tier;
+            _nextMeleeSpawnAt = Time.time + 60f / Mathf.Max(0.01f, spawnsPerMinute);
+        }
+        if (Time.time < _nextMeleeSpawnAt)
+            return;
         _nextMeleeSpawnAt = Time.time + 60f / Mathf.Max(0.01f, spawnsPerMinute);
         if (_activeMelee.Count >= _maximumMelee || !TryFindMeleePosition(out Vector3 position))
             return;

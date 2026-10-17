@@ -22,6 +22,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private const float ONBOARDING_START_PULSE_FADE_DURATION = 0.35f;
 
     private static bool _onboardingOpeningFastFadePending;
+    private static readonly int _threatSilhouetteWeightId = Shader.PropertyToID("_ThreatSilhouetteWeight");
 
     [Header("시야 파동")]
     [SerializeField, Min(1f), Tooltip("파동이 드러내는 최대 반경(미터).")]
@@ -91,7 +92,9 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private bool _hasSession;
     private bool _running;
     private bool _perfectRunning;
+    private bool _dodgeRunning;
 
+    public static float ThreatSilhouetteWeight { get; private set; }
     public bool IsRunning => _running;
     public bool IsPerfectRunning => _running && _perfectRunning;
     public Vector3 Center => _center;
@@ -126,6 +129,8 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     {
         _health.Died -= HandleDied;
         Stop();
+        ThreatSilhouetteWeight = 0f;
+        Shader.SetGlobalFloat(_threatSilhouetteWeightId, 0f);
     }
 
     void OnDestroy()
@@ -139,6 +144,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsReady ? _readyVignette : 0f);
         _overlay.SetChargeVignette(_empower.ChargeProgress, _chargeVignette);
         if (!_startPulsePlayed) TryPlayStartPulse();
+        PublishThreatSilhouette();
         if (!_running) return;
 
         if (_hasSession && (_sessionRuntime == null || !_sessionRuntime.IsInitialized
@@ -205,7 +211,21 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     {
         if (_running && _perfectRunning) return false;
         StartPulse(_dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration, _dodgeRingColor, false);
+        _dodgeRunning = true;
         return true;
+    }
+
+    /// <summary>
+    /// 불릿 타임이면 1, 극한 회피 파동이 진행 중이면 그 공개 세기를 위협 실루엣 강조 세기로 ThreatSilhouetteWeight와 전역 셰이더 값에 넘긴다.
+    /// _empower의 불릿 타임 상태와 파동의 CurrentVisibility를 읽으며 둘 다 아니면 0을 넘긴다.
+    /// </summary>
+    private void PublishThreatSilhouette()
+    {
+        float weight = _empower.IsBulletTimeActive ? 1f : 0f;
+        if (_running && _dodgeRunning)
+            weight = Mathf.Max(weight, CurrentVisibility);
+        ThreatSilhouetteWeight = weight;
+        Shader.SetGlobalFloat(_threatSilhouetteWeightId, weight);
     }
 
     /// <summary>
@@ -291,6 +311,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
             && _sessionRuntime.gameObject.scene == gameObject.scene;
         _session = _hasSession ? _sessionRuntime.Session : default;
         _perfectRunning = perfect;
+        _dodgeRunning = false;
         _elapsed = 0f;
         _fadeElapsed = 0f;
         _rememberedRadius = 0f;
@@ -308,6 +329,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         if (_ring != null) _ring.enabled = false;
         _running = false;
         _perfectRunning = false;
+        _dodgeRunning = false;
         _hasSession = false;
         CurrentRadius = 0f;
         CurrentVisibility = 0f;

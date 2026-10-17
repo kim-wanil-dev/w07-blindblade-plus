@@ -10,6 +10,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
         _SceneryColor ("Scenery Color", Color) = (0.3, 0.3, 0.3, 1)
         _ThreatColor ("Threat Color", Color) = (1, 0.1, 0.06, 1)
         _ThreatFillOpacity ("Threat Fill Opacity", Float) = 0.6
+        _ThreatHighlightFillOpacity ("Threat Highlight Fill Opacity", Float) = 0.6
         _MeleeWarningColor ("Melee Warning Color", Color) = (1, 0.1, 0.06, 1)
     }
 
@@ -46,8 +47,12 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 half4 _SceneryColor;
                 half4 _ThreatColor;
                 float _ThreatFillOpacity;
+                float _ThreatHighlightFillOpacity;
                 half4 _MeleeWarningColor;
             CBUFFER_END
+
+            // 불릿 타임·극한 회피 파동 동안 플레이어가 전역으로 넘기는 위협 채움 강조 세기(0~1).
+            float _ThreatSilhouetteWeight;
 
             TEXTURE2D_X(_OutlineOpaqueColor);
             TEXTURE2D_X(_OutlineAlwaysVisibleVfxColor);
@@ -562,7 +567,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     abs(threatThird - threatFourth)) * 1.5);
                 float threatFill = max(ThreatCoverage(uv),
                     max(max(threatFirst, threatSecond), max(threatThird, threatFourth)));
-                float threat = saturate(max(threatEdge, threatFill * _ThreatFillOpacity));
+                float fillOpacity = lerp(_ThreatFillOpacity, _ThreatHighlightFillOpacity, saturate(_ThreatSilhouetteWeight));
+                float threat = saturate(max(threatEdge, threatFill * fillOpacity));
                 edge = lerp(edge, _ThreatColor.rgb * _ThreatColor.a, threat);
                 edge = ApplyPresentation(edge, uv, firstUv, secondUv, thirdUv, fourthUv);
                 return half4(edge, 1.0);

@@ -1,14 +1,13 @@
 ### FMOD 사운드 매니저
 
-#### 2026-10-17 StreamingAssets 파일 효과음·BGM
+#### 수리검 비행음 도플러 (2026-10-17)
 
-- 대부분의 게임 효과음은 `SoundId`를 `SoundLibrary.asset`의 FMOD 이벤트에 연결하고 `Managers.Sound.Play` 또는 부착 재생 API로 호출한다. 음원·공간화·Bus 믹스는 FMOD Studio에서 편집한 뒤 Bank를 빌드한다.
-- FMOD 이벤트로 관리하지 않는 외부 파일 효과음은 `Assets/StreamingAssets` 아래에 두고 `Managers.Sound.PlayStreamingEffect(relativePath, volume, pitch, owner)`로 재생할 수 있다. 매니저가 FMOD Core 스트림 생성·종료 정리를 담당하고 재생을 기존 SFX_Bus에 연결해 효과음 옵션 음량을 따른다. Bus 준비 전 요청은 owner와 함께 보관하며 준비 후 재생하고, owner가 파괴되면 대기 요청을 취소한다. 이 경로는 SoundLibrary의 SoundId 항목이나 FMOD Bank에 파일 효과음 항목을 추가하지 않는다.
-- 반복 재생하는 파일형 BGM은 `Managers.Sound.PlayStreamingBgm(relativePath, volume)`을 사용한다. 재생은 BGM_Bus에 연결되어 음량 설정을 따르며, `SetBgmPaused`로 일시정지·재개할 수 있다. IntroScene의 타이틀 음악은 FMOD 시스템·Master Bank·BGM Bus 채널 그룹이 준비된 뒤 `Assets/StreamingAssets/Music/TitleBgm.mp3`를 `IntroTitleBgm`이 재생하고, 씬 이탈 시 같은 파일만 정지한다.
-- IntroScene의 대나무 버튼 절단음은 `Assets/StreamingAssets/UI/BambooButtonCut.mp3`를 사용한다. `IntroBambooButtonSliceEffect` Inspector의 파일 상대 경로·개별 음량·피치로 조정한다. `SoundId.BambooBreak`는 버튼에서 더 이상 호출하지 않으며 다른 게임 사용은 유지한다.
-- 시작 지연 수정: `RuntimeManager.IsInitialized`는 상태 확인만 하므로 초기화를 시작하지 않는다. `IsStreamingBgmReady`가 `RuntimeManager.StudioSystem` 접근으로 초기화를 시작하고 모든 뱅크와 Bus 채널 그룹이 준비될 때까지 기다린다. FMOD가 `Bus.lockChannelGroup()`을 처리하기 전에는 `getChannelGroup()`이 `ERR_STUDIO_NOT_LOADED`를 반환할 수 있으므로 프레임마다 준비 상태를 다시 확인한다.
-- 버튼 파일 효과음은 SFX Bus 준비 전 요청을 최대 8개까지 보관하며 같은 owner·경로는 합친다. 준비 후 재생하고, owner가 비활성화되면 요청을 버린다. 요청이 이미 재생으로 전환된 이후에는 기존 스트리밍 효과음 정리 규칙을 따른다.
-- 검증: Unity Editor 재컴파일 `completed`, `failed=false`, `errors=[]`, `compilationFailed=false`. 실제 Play Mode BGM·버튼음 청취는 확인하지 않았다.
+- 3D 이벤트의 Doppler가 켜져 있으면 PlayEffect의 부착 재생(PlayAttached·PlayAttachedLoop 등)이 AttachInstanceWithVelocity로 발음체의 속도를 FMOD에 전달한다. Rigidbody가 있으면 그 속도를 쓰고, 없으면 Transform 이동량으로 속도를 계산한다. Doppler가 꺼진 이벤트는 기존 부착 방식을 유지한다.
+- 현재 Doppler를 켠 이벤트는 수리검 비행음 `event:/Shuriken/Shuriken_Flight`(SoundId ShurikenFlight=36) 하나다. Event Macros의 Doppler Scale은 200%로, 기본 100%의 2배로 음높이가 변한다. Studio에서 설정할 수 있는 범위는 0~500%다. 전역 `set3DSettings`의 dopplerscale은 기본값 1을 유지한다.
+- Player 프리팹 StudioListener의 nonRigidbodyVelocity를 켜서 Rigidbody가 없는 청취자의 이동 속도도 반영한다.
+- 수치 조정: FMOD Studio에서 이벤트의 Doppler Scale을 바꾸고 SFX Bank를 빌드한다. 현재 프로젝트는 압축·스트리밍 설정이 충돌하는 기존 에셋 경고 때문에 CLI 빌드에 `-ignore-warnings`가 필요하다.
+- 관련 코드: Assets/Scripts/Managers/SoundManager.cs / AttachInstanceWithVelocity; FMODProject/week06-blindblade/Metadata/Event/{c2cf47f6-a28a-4c08-8669-a7688c9ce18c}.xml; FMODProject/week06-blindblade/Build/Desktop/SFX.bank.
+- 검증: fmodstudiocl로 Desktop SFX Bank 빌드 성공. Play에서의 실제 청취는 미확인이다.
 
 #### 적 리듬 공격 등록 및 취소 기반 — 2단계 (2026-10-12)
 
@@ -35,7 +34,6 @@
 - 계단 BGM은 기존 StairwellMusic이 FMOD EventInstance를 직접 생성·재생하고 씬 이탈 시 정지·해제한다. 이동 중 효과음 제한과 독립적으로 유지된다. 이번에 재생은 확인했지만 현재 event:/StairWell은 145.894초 단발 이벤트다. 반복이 필요하면 Studio에서 Loop Region을 설정하고 Bank를 빌드해야 한다. 기존 BGM 코드와 루프 설정은 이번 효과음 적용에서 변경하지 않았다. [스테이지 이동 명세](스테이지_이동.md) 참고.
 
 - 기능 설명: 협업자는 `Managers.Sound`에 사운드 ID와 위치 또는 오브젝트를 전달한다. FMOD 이벤트 생성, 재생 및 해제는 매니저가 처리한다.
-- 파일형 효과음이 필요하면 `PlayStreamingEffect`를 사용할 수 있다. 파일은 `StreamingAssets` 안에 두며 상대 경로를 전달하고, SoundManager가 재생 자원을 SFX_Bus에 연결해 옵션 음량을 관리한다.
 - 동작 조건 및 처리 흐름: Managers가 승인된 Resources 설정을 로드해 SoundManager를 생성한다. 단발 효과음은 자연 종료하고 BGM은 매니저가 하나만 유지한다. Update는 종료된 재생과 소유자 수명을 정리한다.
 - 구현 상태: 공개 재생 핸들과 미사용 지속 효과음 API를 제거하고 단발 효과음/BGM 중심으로 단순화했다. 기존 오브젝트별 정지와 음량 제어는 유지한다.
 - 로그 규칙: Debug.Log 계열 안내 및 오류 메시지는 영어로 작성한다.
@@ -46,7 +44,6 @@
 | 파일 경로 | 클래스 / 메서드 | 역할 |
 | --- | --- | --- |
 | Assets/Scripts/Managers/SoundManager.cs | SoundManager | FMOD를 숨기는 공통 재생 API |
-| Assets/Scripts/UI/IntroTitleBgm.cs | IntroTitleBgm | IntroScene 타이틀 BGM의 시작과 장면 종료 정리 |
 | Assets/Scripts/Managers/Managers.cs | InitializeSingleton, Update, ClearServices | 서비스 생성, 매 프레임 정리, 종료 처리 |
 | Assets/Scripts/SoundSystem/SoundLibrary.cs | SoundLibrary / TryGetEvent | 사운드 ID와 FMOD 이벤트 연결 |
 | Assets/Scripts/Enums/SoundId.cs | SoundId | 협업자가 선택하는 사운드 이름 |
@@ -241,7 +238,7 @@ Managers.Sound.Clear();
 - 2026-10-15 `PlayAttachedLoop(soundId, source, volume)`를 추가했다. 루프 구간이 있는 효과음을 source에 붙여 재생한다. `StopFor(source, soundId, ...)`로 멈추거나, source가 비활성·파괴되면 기존 소유자 정리로 멈춘다. 수리검 비행음(`ShurikenFlight`)이 사용한다. 기존 단발 API의 동작은 바꾸지 않았다.
 - BGM 반복은 Studio의 Loop Region을 사용한다. 같은 BGM은 중복 생성하지 않으며, 페이드 정지 중 같은 ID의 재생 요청은 false를 반환한다.
 - BGM을 다른 곡으로 전환할 때 이전 음악은 즉시 정지한다. 크로스페이드는 지원하지 않는다.
-- PlayAttachedWithLabel은 Labeled Parameter를 start 전에 설정한다. Label이 잘못되면 재생하지 않고 false와 영어 오류를 반환한다. 재생 중 파라미터 변경과 재생 한 건의 일시정지 API는 제공하지 않는다. `SetEffectsPaused(bool)`는 호출 시점에 매니저가 보유한 효과음 인스턴스와 파일 스트림을 일괄 일시정지·재개한다. 이후 새로 요청한 재생은 설정 미리듣기를 허용하기 위해 자동 일시정지하지 않는다. BGM 외의 지속 효과음은 PlayAttachedLoop만 지원한다.
+- PlayAttachedWithLabel은 Labeled Parameter를 start 전에 설정한다. Label이 잘못되면 재생하지 않고 false와 영어 오류를 반환한다. 재생 중 파라미터 변경과 재생 한 건의 일시정지 API는 제공하지 않는다. BGM 외의 지속 효과음은 PlayAttachedLoop만 지원한다.
 - `Stop(SoundType)`은 기존 호출과의 호환을 위해 유지한다. 새 호출부는 의미가 드러나는 StopBgm 또는 StopEffects를 사용한다.
 
 #### 사운드 담당자의 등록 방법
