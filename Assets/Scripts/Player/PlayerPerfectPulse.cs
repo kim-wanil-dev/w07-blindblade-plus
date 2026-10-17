@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 using BlindBlade.Combat.Contracts;
 
@@ -18,6 +19,9 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private const float SURFACE_OFFSET = 0.02f;
     private const float GROUND_PROBE_EXTRA = 0.5f;
     private const float MEMORY_STEP_DURATION = 0.0001f;
+    private const float ONBOARDING_START_PULSE_FADE_DURATION = 0.35f;
+
+    private static bool _onboardingOpeningFastFadePending;
 
     [Header("시야 파동")]
     [SerializeField, Min(1f), Tooltip("파동이 드러내는 최대 반경(미터).")]
@@ -98,6 +102,12 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     public float ActiveRadius => _activeRadius;
     public float ActiveExpandDuration => _activeExpandDuration;
     public float ActiveFadeDuration => _activeFadeDuration;
+
+    /// <summary>새 온보딩 실행의 자동 시작 파동 한 번에 빠른 페이드를 적용하도록 표시한다.</summary>
+    public static void ResetOnboardingStartPulseFade()
+    {
+        _onboardingOpeningFastFadePending = true;
+    }
 
     void Awake()
     {
@@ -229,7 +239,13 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
             || Game.Instance.GameStateManager.State != GameplayState.Playing) return;
         _startPulsePlayed = true;
         if (_startPulseRadius <= 0f) return;
-        StartPulse(_startPulseRadius, _dodgeExpandDuration, _startPulseFadeDuration, _dodgeRingColor, false);
+        float fadeDuration = _startPulseFadeDuration;
+        if (_onboardingOpeningFastFadePending && SceneManager.GetActiveScene().name == "Onboarding")
+        {
+            fadeDuration = ONBOARDING_START_PULSE_FADE_DURATION;
+            _onboardingOpeningFastFadePending = false;
+        }
+        StartPulse(_startPulseRadius, _dodgeExpandDuration, fadeDuration, _dodgeRingColor, false);
     }
 
     /// <summary>

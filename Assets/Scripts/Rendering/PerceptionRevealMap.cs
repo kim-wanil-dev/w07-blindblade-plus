@@ -239,18 +239,19 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     /// <summary>
     /// position에서 settings의 겹 수만큼 시간차 링을 퍼뜨려 지나간 지점의 실루엣을 잔상 시간 동안 공개한다.
     /// owner를 넘기면 그 발생자 주변 몸체는 이 파동으로 밝히지 않고, 배경(대나무)은 position 높이 기준으로 일정 높이까지만 밝힌다.
-    /// 바닥 링 시각도 함께 재생하며 미준비 상태나 반경 0이면 무시한다.
+    /// 바닥 링 시각도 함께 재생하며 등록했으면 true, 미준비 상태나 반경 0이면 false를 반환한다.
     /// </summary>
-    public void EmitRipple(Vector3 position, RevealRippleSettings settings, Transform owner = null)
+    public bool EmitRipple(Vector3 position, RevealRippleSettings settings, Transform owner = null)
     {
         if (!isActiveAndEnabled || !_sensoryManager.IsReady || settings.Radius <= 0f || settings.RingCount <= 0)
-            return;
+            return false;
         bool hideOwner = owner != null;
         if (hideOwner && !_hiddenOwners.Contains(owner) && _hiddenOwners.Count < MAX_HIDDEN_OWNERS)
             _hiddenOwners.Add(owner);
         // 적 파동 채널은 하나라서 가장 최근 적 파동의 바닥 높이를 배경 높이 제한 기준으로 쓴다.
         if (hideOwner) _hiddenGroundY = position.y;
         _ripples.Add(new Ripple(position, Time.time, settings, hideOwner));
+        return true;
     }
 
     /// <summary>
