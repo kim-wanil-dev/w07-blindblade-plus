@@ -15,8 +15,8 @@ public sealed class OnboardingHud : MonoBehaviour
     [Serializable]
     public sealed class Prompt
     {
-        [SerializeField, TextArea(1, 2)] private string _keyboardHint;
-        [SerializeField, TextArea(1, 2)] private string _gamepadHint;
+        [SerializeField, TextArea(1, 4)] private string _keyboardHint;
+        [SerializeField, TextArea(1, 4)] private string _gamepadHint;
         [SerializeField] private Sprite _keyboardIcon;
         [SerializeField, TextArea(1, 2)] private string _followUpKeyboardHint;
         [SerializeField, TextArea(1, 2)] private string _followUpGamepadHint;
@@ -91,26 +91,49 @@ public sealed class OnboardingHud : MonoBehaviour
 
     private const float REFERENCE_WIDTH = 1920f;
     private const float REFERENCE_HEIGHT = 1080f;
+    private const int CANVAS_SORTING_ORDER = 102;
     private const float OBJECTIVE_SHINE_DURATION = 0.62f;
     private const float OBJECTIVE_SHINE_PEAK_ALPHA = 0.42f;
     private const float COMPLETION_TITLE_SIZE = 38f;
+    private const float INSTRUCTION_FONT_SIZE = 34f;
     private const float TITLE_ONLY_SCALE = 1.4f;
+    private static readonly Color TUTORIAL_PAPER = new Color32(202, 197, 176, 255);
+    private static readonly Color TUTORIAL_GOLD = new Color(1f, 0.72f, 0.24f, 1f);
 
     [Header("표시 자산")]
     [SerializeField] private TMP_FontAsset _font;
     [SerializeField] private Prompt[] _prompts =
     {
-        new Prompt("이동 - WASD", "이동 - 왼쪽 스틱", null, "파동 중심 1m 이내 도착"),
-        new Prompt("회피 - SPACE", "회피 - A 버튼", null, "회피 1회"),
-        new Prompt("좌클릭 - 발도", "RB - 발도", null, "발도로 적 1명 처치"),
-        new Prompt("극한 회피 - SPACE", "극한 회피 - A 버튼", null, "수리검 극한 회피 1회"),
-        new Prompt("우클릭 - 막기 / 쳐내기", "LB - 막기 / 쳐내기", null, "막기 1회", "정확한 시점에 막아서 공격 쳐내기 1회"),
-        new Prompt("우클릭 - 막기 / 쳐내기", "LB - 막기 / 쳐내기", null,
-            new[] { "막기 1회", "정확한 시점에 막아서 공격 쳐내기 1회", "일섬 발동 1회" }, "좌클릭 - 일섬", "RB - 일섬", null, 2),
-        new Prompt("우클릭 - 쳐내기", "LB - 쳐내기", null,
-            new[] { "수리검 쳐내기 1회", "거합으로 적 8명 처치" },
-            "좌클릭 홀드 - 거합", "RB 홀드 - 거합", null, 1, "기운 3개를 모으면 거합을 쓸 수 있습니다")
+        new Prompt("이동 - WASD\n회피 - Space\n공격 - 마우스 왼쪽 버튼 클릭", "이동 - 왼쪽 스틱\n회피 - A 버튼\n공격 - RB", null,
+            "발도로 적 3명 처치"),
+        new Prompt("극한 회피 - Space", "극한 회피 - A 버튼", null, "수리검 극한 회피 1회"),
+        new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
+            new[] { "막기 1회", "공격 쳐내기 0/1" }),
+        new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
+            new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
+            "일섬* - 마우스 왼쪽 버튼 클릭\n*전방으로 검기를 날리며 돌진한다",
+            "일섬* - RB 버튼\n*전방으로 검기를 날리며 돌진한다", null, 2),
+        new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
+            new[] { "정확한 시점에 공격을 막아 쳐내기 0/3", "정확한 시점에 공격을 막아 쳐내기 1/3", "정확한 시점에 공격을 막아 쳐내기 2/3", "거합으로 적 8명 처치" },
+            "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.",
+            "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.", null, 3)
     };
+
+    [Header("집중 안내")]
+    [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialText = "극한 회피에 성공하면\n파동이 발생해 주위를 잠시 밝힙니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialGamepadText = "극한 회피에 성공하면\n파동이 발생해 주위를 잠시 밝힙니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialText = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
+    [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialGamepadText = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 좌클릭 홀드로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 RB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
+    [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
+    [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
 
     private Canvas _canvas;
     private Image _guidePanel;
@@ -131,6 +154,18 @@ public sealed class OnboardingHud : MonoBehaviour
     private Coroutine _objectiveUpdateRoutine;
     private TextMeshProUGUI _completionTitle;
     private TextMeshProUGUI _completionDetail;
+    private Image _movementPanel;
+    private TextMeshProUGUI _movementText;
+    private Image _tutorialPanel;
+    private RectTransform _tutorialPanelRect;
+    private TextMeshProUGUI _tutorialText;
+    private Image _tutorialTargetFrame;
+    private RectTransform _tutorialTargetRect;
+    private Image _tutorialConnector;
+    private string _tutorialKeyboardBody;
+    private string _tutorialGamepadBody;
+    private bool _movementControlsVisible;
+    private bool _idleMovementVisible;
     private int _currentStage = -1;
     private int _currentObjective = -1;
     private int _lastScreenWidth;
@@ -138,6 +173,18 @@ public sealed class OnboardingHud : MonoBehaviour
 
     /// <summary>필요한 경우 온보딩 단계 안내 문구를 Inspector에서 교체할 배열을 반환한다.</summary>
     public Prompt[] Prompts => _prompts;
+    public string MovementWaveTutorialText => _movementWaveTutorialText;
+    public string MovementWaveTutorialGamepadText => _movementWaveTutorialGamepadText;
+    public string PerfectDodgeTutorialText => _perfectDodgeTutorialText;
+    public string PerfectDodgeTutorialGamepadText => _perfectDodgeTutorialGamepadText;
+    public string TargetThreadTutorialText => _targetThreadTutorialText;
+    public string TargetThreadTutorialGamepadText => _targetThreadTutorialGamepadText;
+    public string ParryHudTutorialText => _parryHudTutorialText;
+    public string ParryHudTutorialGamepadText => _parryHudTutorialGamepadText;
+    public string ParryBeadsTutorialText => _parryBeadsTutorialText;
+    public string ParryBeadsTutorialGamepadText => _parryBeadsTutorialGamepadText;
+    public string UltimateReadyTutorialText => _ultimateReadyTutorialText;
+    public string UltimateReadyTutorialGamepadText => _ultimateReadyTutorialGamepadText;
 
     void Awake()
     {
@@ -215,6 +262,149 @@ public sealed class OnboardingHud : MonoBehaviour
             : new Color(0.65f, 0.7f, 0.73f, 1f);
     }
 
+    /// <summary>stage 0의 세 가지 조작을 중앙 패널에 표시하거나 숨긴다.</summary>
+    public void SetMovementControls(bool visible)
+    {
+        _movementControlsVisible = visible;
+        if (!visible) _idleMovementVisible = false;
+        _movementPanel.gameObject.SetActive(visible);
+        if (visible) RefreshMovementPrompt(false);
+    }
+
+    /// <summary>이동 정체 안내를 켜거나 끄고, 켜졌을 때 중앙 조작 안내를 지정 문구로 바꾼다.</summary>
+    public void SetIdleMovementHint(bool visible)
+    {
+        if (!_movementControlsVisible) return;
+        _idleMovementVisible = visible;
+        RefreshMovementPrompt(visible);
+    }
+
+    /// <summary>body 문구를 밝은 안내판에 표시하고 tutorial overlay를 보인다.</summary>
+    public void ShowTutorial(string keyboardBody, string gamepadBody)
+    {
+        _tutorialKeyboardBody = keyboardBody;
+        _tutorialGamepadBody = string.IsNullOrEmpty(gamepadBody) ? keyboardBody : gamepadBody;
+        RefreshTutorialText();
+        _tutorialPanel.gameObject.SetActive(true);
+    }
+
+    /// <summary>targetRect의 화면 범위를 계산해 금색 프레임과 안내판 연결선을 배치한다.</summary>
+    public void SetTutorialTarget(RectTransform targetRect)
+    {
+        if (targetRect == null) return;
+        Vector3[] corners = new Vector3[4];
+        targetRect.GetWorldCorners(corners);
+        Vector2 screenBottomLeft = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
+        Vector2 screenTopRight = RectTransformUtility.WorldToScreenPoint(null, corners[2]);
+        Vector2 center = (screenBottomLeft + screenTopRight) * 0.5f;
+        Vector2 size = (screenTopRight - screenBottomLeft) / Mathf.Max(0.01f, _canvas.scaleFactor);
+        SetTutorialTargetScreen(center, size + new Vector2(32f, 24f));
+    }
+
+    /// <summary>worldPosition의 카메라 화면 지점에 금색 프레임과 안내판 연결선을 배치한다.</summary>
+    public void SetTutorialTarget(Vector3 worldPosition, Camera viewCamera, Vector2 size)
+    {
+        Vector3 screen = viewCamera.WorldToScreenPoint(worldPosition);
+        if (screen.z <= 0f)
+        {
+            _tutorialTargetFrame.gameObject.SetActive(false);
+            _tutorialConnector.gameObject.SetActive(false);
+            return;
+        }
+        SetTutorialTargetScreen(screen, size);
+    }
+
+    /// <summary>
+    /// worldPosition의 화면 좌표에 안내선만 연결하고 대상 프레임은 숨긴다.
+    /// viewCamera로 투영할 수 없는 위치면 안내선도 숨긴다.
+    /// </summary>
+    public void SetTutorialConnectorTarget(Vector3 worldPosition, Camera viewCamera)
+    {
+        Vector3 screen = viewCamera.WorldToScreenPoint(worldPosition);
+        if (screen.z <= 0f)
+        {
+            _tutorialTargetFrame.gameObject.SetActive(false);
+            _tutorialConnector.gameObject.SetActive(false);
+            return;
+        }
+        SetTutorialTargetScreen(screen, Vector2.zero, false);
+    }
+
+    /// <summary>worldBounds에 포함된 실제 연결 실의 화면 범위를 금색 프레임과 안내 연결선으로 강조한다.</summary>
+    public void SetTutorialTarget(Bounds worldBounds, Camera viewCamera, Vector2 padding)
+    {
+        Vector3 min = worldBounds.min;
+        Vector3 max = worldBounds.max;
+        Vector2 screenMin = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+        Vector2 screenMax = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+        bool hasVisibleCorner = false;
+
+        for (int x = 0; x <= 1; x++)
+        for (int y = 0; y <= 1; y++)
+        for (int z = 0; z <= 1; z++)
+        {
+            Vector3 corner = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
+                z == 0 ? min.z : max.z);
+            Vector3 screen = viewCamera.WorldToScreenPoint(corner);
+            if (screen.z <= 0f) continue;
+            screenMin = Vector2.Min(screenMin, screen);
+            screenMax = Vector2.Max(screenMax, screen);
+            hasVisibleCorner = true;
+        }
+
+        if (!hasVisibleCorner)
+        {
+            _tutorialTargetFrame.gameObject.SetActive(false);
+            _tutorialConnector.gameObject.SetActive(false);
+            return;
+        }
+
+        Vector2 center = (screenMin + screenMax) * 0.5f;
+        Vector2 size = (screenMax - screenMin) / Mathf.Max(0.01f, _canvas.scaleFactor) + padding;
+        SetTutorialTargetScreen(center, size);
+    }
+
+    /// <summary>화면 좌표 targetScreenPoint를 Canvas 좌표로 바꾸고 프레임·연결선을 갱신한다.</summary>
+    private void SetTutorialTargetScreen(Vector2 targetScreenPoint, Vector2 size, bool showFrame = true)
+    {
+        RectTransform canvasRect = (RectTransform)_canvas.transform;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, targetScreenPoint, null, out Vector2 targetLocal);
+        _tutorialTargetRect.anchoredPosition = targetLocal;
+        _tutorialTargetRect.sizeDelta = size;
+        _tutorialTargetFrame.gameObject.SetActive(showFrame);
+        Vector2 panelPoint = _tutorialPanelRect.anchoredPosition;
+        Vector2 connectorStart = GetConnectorEdge(_tutorialPanelRect, targetLocal);
+        Vector2 connectorEnd = showFrame ? GetConnectorEdge(_tutorialTargetRect, panelPoint) : targetLocal;
+        Vector2 delta = connectorEnd - connectorStart;
+        _tutorialConnector.rectTransform.anchoredPosition = (connectorStart + connectorEnd) * 0.5f;
+        _tutorialConnector.rectTransform.sizeDelta = new Vector2(delta.magnitude, 4f);
+        _tutorialConnector.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        _tutorialConnector.gameObject.SetActive(delta.sqrMagnitude > 1f);
+    }
+
+    /// <summary>
+    /// rect 중심에서 toward 방향으로 뻗는 선이 사각형의 바깥 가장자리에 닿는 좌표를 반환한다.
+    /// 테두리와 안내선이 겹치지 않도록 사각형 반너비·반높이에 5픽셀 여백을 더한다.
+    /// </summary>
+    private Vector2 GetConnectorEdge(RectTransform rect, Vector2 toward)
+    {
+        Vector2 center = rect.anchoredPosition;
+        Vector2 direction = toward - center;
+        if (direction.sqrMagnitude < 0.001f) return center;
+        Vector2 extent = rect.rect.size * 0.5f + Vector2.one * 5f;
+        float xScale = Mathf.Abs(direction.x) > 0.001f ? extent.x / Mathf.Abs(direction.x) : float.PositiveInfinity;
+        float yScale = Mathf.Abs(direction.y) > 0.001f ? extent.y / Mathf.Abs(direction.y) : float.PositiveInfinity;
+        return center + direction * Mathf.Min(xScale, yScale);
+    }
+
+    /// <summary>현재 튜토리얼 안내판·대상 프레임·연결선을 함께 숨긴다.</summary>
+    public void HideTutorial()
+    {
+        _tutorialPanel.gameObject.SetActive(false);
+        _tutorialTargetFrame.gameObject.SetActive(false);
+        _tutorialConnector.gameObject.SetActive(false);
+    }
+
     /// <summary>재배치 전 검게 페이드하고 onBlack에서 단계 이동을 실행한 뒤 화면을 되돌린다.</summary>
     public IEnumerator FadeForReposition(Action onBlack)
     {
@@ -284,7 +474,8 @@ public sealed class OnboardingHud : MonoBehaviour
         canvasObject.transform.SetParent(transform, false);
         _canvas = canvasObject.GetComponent<Canvas>();
         _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        _canvas.sortingOrder = 100;
+        _canvas.overrideSorting = true;
+        _canvas.sortingOrder = CANVAS_SORTING_ORDER;
         CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(REFERENCE_WIDTH, REFERENCE_HEIGHT);
@@ -295,7 +486,7 @@ public sealed class OnboardingHud : MonoBehaviour
         _instructionIcon = CreateImage("MouseHint", _guidePanel.transform, Color.white);
         _instructionIcon.preserveAspect = true;
         SetAnchoredRect(_instructionIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(28f, 0f), new Vector2(40f, 60f));
-        _instructionText = CreateText("Instruction", _guidePanel.transform, 34f, TextAlignmentOptions.MidlineLeft);
+        _instructionText = CreateText("Instruction", _guidePanel.transform, INSTRUCTION_FONT_SIZE, TextAlignmentOptions.MidlineLeft);
         SetStretchRect(_instructionText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(100f, 8f), new Vector2(-26f, -8f));
         _notePanel = CreateImage("GuideNotePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
         SetAnchoredRect(_notePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 174f), new Vector2(760f, 48f));
@@ -326,6 +517,55 @@ public sealed class OnboardingHud : MonoBehaviour
         SetStretchRect(_guardTimingFill.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
         _guardTimingLabel.gameObject.SetActive(false);
         _guardTimingBack.gameObject.SetActive(false);
+
+        _movementPanel = CreateImage("MovementControls", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.92f));
+        SetAnchoredRect(_movementPanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(760f, 184f));
+        _movementText = CreateText("MovementControlsText", _movementPanel.transform, 30f, TextAlignmentOptions.Center);
+        _movementText.color = new Color(0.96f, 0.95f, 0.91f, 1f);
+        _movementText.textWrappingMode = TextWrappingModes.Normal;
+        SetStretchRect(_movementText.rectTransform, Vector2.zero, Vector2.one, new Vector2(28f, 18f), new Vector2(-28f, -18f));
+        _movementPanel.gameObject.SetActive(false);
+
+        _tutorialConnector = CreateImage("TutorialTargetConnector", canvasObject.transform, TUTORIAL_GOLD);
+        _tutorialConnector.raycastTarget = false;
+        _tutorialConnector.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        _tutorialConnector.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        _tutorialConnector.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+        _tutorialConnector.gameObject.SetActive(false);
+        _tutorialTargetFrame = CreateImage("TutorialTargetFrame", canvasObject.transform, Color.clear);
+        _tutorialTargetFrame.raycastTarget = false;
+        _tutorialTargetRect = _tutorialTargetFrame.rectTransform;
+        Image targetTop = CreateImage("TopBorder", _tutorialTargetFrame.transform, TUTORIAL_GOLD);
+        targetTop.raycastTarget = false;
+        SetAnchoredRect(targetTop.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f),
+            new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 4f));
+        Image targetBottom = CreateImage("BottomBorder", _tutorialTargetFrame.transform, TUTORIAL_GOLD);
+        targetBottom.raycastTarget = false;
+        SetAnchoredRect(targetBottom.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f),
+            new Vector2(0.5f, 0f), Vector2.zero, new Vector2(0f, 4f));
+        Image targetLeft = CreateImage("LeftBorder", _tutorialTargetFrame.transform, TUTORIAL_GOLD);
+        targetLeft.raycastTarget = false;
+        SetAnchoredRect(targetLeft.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f),
+            new Vector2(0f, 0.5f), Vector2.zero, new Vector2(4f, 0f));
+        Image targetRight = CreateImage("RightBorder", _tutorialTargetFrame.transform, TUTORIAL_GOLD);
+        targetRight.raycastTarget = false;
+        SetAnchoredRect(targetRight.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 1f),
+            new Vector2(1f, 0.5f), Vector2.zero, new Vector2(4f, 0f));
+        _tutorialTargetFrame.gameObject.SetActive(false);
+
+        _tutorialPanel = CreateImage("TutorialCard", canvasObject.transform, TUTORIAL_PAPER);
+        _tutorialPanelRect = _tutorialPanel.rectTransform;
+        SetAnchoredRect(_tutorialPanelRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 270f), new Vector2(820f, 206f));
+        Outline tutorialOutline = _tutorialPanel.gameObject.AddComponent<Outline>();
+        tutorialOutline.effectColor = TUTORIAL_GOLD;
+        tutorialOutline.effectDistance = new Vector2(4f, 4f);
+        _tutorialText = CreateText("TutorialCardText", _tutorialPanel.transform, 31f, TextAlignmentOptions.Center);
+        _tutorialText.color = new Color(0.12f, 0.11f, 0.09f, 1f);
+        _tutorialText.textWrappingMode = TextWrappingModes.Normal;
+        SetStretchRect(_tutorialText.rectTransform, Vector2.zero, Vector2.one, new Vector2(34f, 24f), new Vector2(-34f, -24f));
+        _tutorialPanel.gameObject.SetActive(false);
 
         Image completionPanel = CreateImage("CompletionPanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.92f));
         SetAnchoredRect(completionPanel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
@@ -391,6 +631,9 @@ public sealed class OnboardingHud : MonoBehaviour
         _notePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 154f : 174f);
         _objectivePanel.rectTransform.sizeDelta = new Vector2(400f, 170f);
         _objectivePanel.rectTransform.anchoredPosition = compact ? new Vector2(-62f, 82f) : new Vector2(-140f, 120f);
+        _movementPanel.rectTransform.sizeDelta = compact ? new Vector2(640f, 184f) : new Vector2(760f, 184f);
+        _movementPanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 42f : 62f);
+        _tutorialPanel.rectTransform.sizeDelta = compact ? new Vector2(700f, 206f) : new Vector2(820f, 206f);
     }
 
     /// <summary>name과 parent를 사용해 단색 기본 Image를 만든다.</summary>
@@ -491,20 +734,42 @@ public sealed class OnboardingHud : MonoBehaviour
     private void HandleDeviceChanged(bool gamepad)
     {
         RefreshDevicePrompt();
+        if (_movementControlsVisible) RefreshMovementPrompt(_idleMovementVisible);
+        if (_tutorialPanel.gameObject.activeSelf) RefreshTutorialText();
+    }
+
+    /// <summary>현재 입력 장치에 맞는 설명 본문을 선택해 튜토리얼 카드에 표시한다.</summary>
+    private void RefreshTutorialText()
+    {
+        _tutorialText.text = InputDeviceDisplay.IsGamepad ? _tutorialGamepadBody : _tutorialKeyboardBody;
     }
 
     /// <summary>현재 단계의 지정 문구를 실제 입력 장치에 맞춰 보여 주고 등록된 설명이 있으면 안내 위 줄에 표시한다.</summary>
     private void RefreshDevicePrompt()
     {
         if (_currentStage < 0 || _currentStage >= _prompts.Length) return;
+        _guidePanel.gameObject.SetActive(_currentStage != 0);
         Prompt prompt = _prompts[_currentStage];
         bool gamepad = InputDeviceDisplay.IsGamepad;
         _instructionText.text = prompt.GetHint(gamepad, _currentObjective);
+        bool swordWaveHint = _currentStage == 3 && _currentObjective == 2;
+        _instructionText.enableAutoSizing = !swordWaveHint;
+        if (swordWaveHint) _instructionText.fontSize = INSTRUCTION_FONT_SIZE;
         string note = prompt.GetNote(_currentObjective);
         _noteText.text = note;
         _notePanel.gameObject.SetActive(!string.IsNullOrEmpty(note));
         _instructionIcon.sprite = prompt.GetIcon(_currentObjective);
         _instructionIcon.enabled = _instructionIcon.sprite != null && !gamepad;
+    }
+
+    /// <summary>키보드·마우스 또는 게임패드 표기로 중앙 이동 안내를 갱신한다.</summary>
+    private void RefreshMovementPrompt(bool idle)
+    {
+        if (_prompts == null || _prompts.Length == 0) return;
+        if (idle)
+            _movementText.text = InputDeviceDisplay.IsGamepad ? _idleMovementGamepadText : _idleMovementText;
+        else
+            _movementText.text = _prompts[0].GetHint(InputDeviceDisplay.IsGamepad, 0);
     }
 
     /// <summary>현재 페이드 알파를 unscaled 시간으로 target까지 변경한다.</summary>

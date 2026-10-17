@@ -21,6 +21,8 @@ public struct RevealRippleSettings
     private float _afterimage;
     [SerializeField, Tooltip("바닥 링 색상. 알파는 첫 링의 진하기다.")]
     private Color _ringColor;
+    [SerializeField, Tooltip("켜면 수평 거리 대신 3D 거리로 구 모양으로 퍼져, 높은 곳은 더 늦게 밝힌다. 바닥 링은 같다.")]
+    private bool _spherical;
 
     public float Radius => _radius;
     public float ExpandDuration => _expandDuration;
@@ -28,12 +30,13 @@ public struct RevealRippleSettings
     public float RingInterval => _ringInterval;
     public float Afterimage => _afterimage;
     public Color RingColor => _ringColor;
+    public bool Spherical => _spherical;
 
     /// <summary>
-    /// radius·expandDuration·ringCount·ringInterval·afterimage·ringColor로 파동 설정을 만든다.
+    /// radius·expandDuration·ringCount·ringInterval·afterimage·ringColor와 구형 확산 여부 spherical로 파동 설정을 만든다.
     /// </summary>
     public RevealRippleSettings(float radius, float expandDuration, int ringCount, float ringInterval,
-        float afterimage, Color ringColor)
+        float afterimage, Color ringColor, bool spherical = false)
     {
         _radius = radius;
         _expandDuration = expandDuration;
@@ -41,6 +44,7 @@ public struct RevealRippleSettings
         _ringInterval = ringInterval;
         _afterimage = afterimage;
         _ringColor = ringColor;
+        _spherical = spherical;
     }
 }
 
@@ -57,6 +61,8 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private const int MAX_RIPPLES = 128;
     private const int MAX_SPHERES = 32;
     private const int MAX_HIDDEN_OWNERS = 32;
+    // PerceptionSphereRipples.hlsl의 MAX_SPHERE_RIPPLES와 같아야 한다.
+    private const int MAX_SPHERE_RIPPLES = 32;
     private const float RING_SURFACE_OFFSET = 0.02f;
     private const float OWNER_HIDE_EDGE = 0.2f;
     private static readonly int _revealMapId = Shader.PropertyToID("_OutlineRevealMap");
@@ -75,6 +81,10 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private static readonly int _rippleCountId = Shader.PropertyToID("_RevealRippleCount");
     private static readonly int _ripplesId = Shader.PropertyToID("_RevealRipples");
     private static readonly int _rippleParamsId = Shader.PropertyToID("_RevealRippleParams");
+    private static readonly int _sphereRippleCountId = Shader.PropertyToID("_OutlineSphereRippleCount");
+    private static readonly int _sphereRipplesId = Shader.PropertyToID("_OutlineSphereRipples");
+    private static readonly int _sphereRippleParamsId = Shader.PropertyToID("_OutlineSphereRippleParams");
+    private static readonly int _sphereRippleRingsId = Shader.PropertyToID("_OutlineSphereRippleRings");
 
     [Header("시야 맵")]
     [SerializeField, Tooltip("Hidden/BlindBlade/PerceptionRevealUpdate 셰이더.")]
@@ -123,6 +133,9 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     private readonly Vector4[] _rippleParamBuffer = new Vector4[MAX_RIPPLES];
     private readonly Vector4[] _sphereBuffer = new Vector4[MAX_SPHERES];
     private readonly Vector4[] _sphereStrengthBuffer = new Vector4[MAX_SPHERES];
+    private readonly Vector4[] _sphereRippleBuffer = new Vector4[MAX_SPHERE_RIPPLES];
+    private readonly Vector4[] _sphereRippleParamBuffer = new Vector4[MAX_SPHERE_RIPPLES];
+    private readonly Vector4[] _sphereRippleRingBuffer = new Vector4[MAX_SPHERE_RIPPLES];
     private SensoryManager _sensoryManager;
 
     private readonly struct Ripple
@@ -180,6 +193,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         Shader.SetGlobalFloat(_revealMapEnabledId, 0f);
         Shader.SetGlobalInt(_sphereCountId, 0);
         Shader.SetGlobalInt(_hiddenOwnerCountId, 0);
+        Shader.SetGlobalInt(_sphereRippleCountId, 0);
         _ripples.Clear();
         _pendingHeads.Clear();
         _heads.Clear();
@@ -204,6 +218,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
             Shader.SetGlobalFloat(_revealMapEnabledId, 0f);
             Shader.SetGlobalInt(_sphereCountId, 0);
             Shader.SetGlobalInt(_hiddenOwnerCountId, 0);
+            Shader.SetGlobalInt(_sphereRippleCountId, 0);
             return;
         }
 
@@ -212,6 +227,7 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         UpdateMap(now);
         UpdateRings(now);
         PublishSpheres(now);
+        PublishSphereRipples();
         PublishHiddenOwners();
         Shader.SetGlobalVector(_hiddenSceneryHeightId,
             new Vector4(_hiddenGroundY, _hiddenSceneryRevealHeight, _hiddenSceneryFadeHeight, 0f));
@@ -223,18 +239,19 @@ public sealed class PerceptionRevealMap : MonoBehaviour
     /// <summary>
     /// position에서 settings의 겹 수만큼 시간차 링을 퍼뜨려 지나간 지점의 실루엣을 잔상 시간 동안 공개한다.
     /// owner를 넘기면 그 발생자 주변 몸체는 이 파동으로 밝히지 않고, 배경(대나무)은 position 높이 기준으로 일정 높이까지만 밝힌다.
-    /// 바닥 링 시각도 함께 재생하며 미준비 상태나 반경 0이면 무시한다.
+    /// 바닥 링 시각도 함께 재생하며 등록했으면 true, 미준비 상태나 반경 0이면 false를 반환한다.
     /// </summary>
-    public void EmitRipple(Vector3 position, RevealRippleSettings settings, Transform owner = null)
+    public bool EmitRipple(Vector3 position, RevealRippleSettings settings, Transform owner = null)
     {
         if (!isActiveAndEnabled || !_sensoryManager.IsReady || settings.Radius <= 0f || settings.RingCount <= 0)
-            return;
+            return false;
         bool hideOwner = owner != null;
         if (hideOwner && !_hiddenOwners.Contains(owner) && _hiddenOwners.Count < MAX_HIDDEN_OWNERS)
             _hiddenOwners.Add(owner);
         // 적 파동 채널은 하나라서 가장 최근 적 파동의 바닥 높이를 배경 높이 제한 기준으로 쓴다.
         if (hideOwner) _hiddenGroundY = position.y;
         _ripples.Add(new Ripple(position, Time.time, settings, hideOwner));
+        return true;
     }
 
     /// <summary>
@@ -270,7 +287,10 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         foreach (Ripple ripple in _ripples)
         {
             RevealRippleSettings settings = ripple.Settings;
-            float distance = Vector2.Distance(point, new Vector2(ripple.Center.x, ripple.Center.z));
+            // 구형 파동은 셰이더와 같이 3D 거리로 전선 도달 시각을 구한다.
+            float distance = settings.Spherical
+                ? Vector3.Distance(position, ripple.Center)
+                : Vector2.Distance(point, new Vector2(ripple.Center.x, ripple.Center.z));
             if (distance > settings.Radius)
                 continue;
             float hitTime = HitTime(distance, settings);
@@ -383,7 +403,8 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         for (int i = _ripples.Count - 1; i >= 0 && rippleCount < MAX_RIPPLES; i--)
         {
             Ripple ripple = _ripples[i];
-            if (now >= ripple.FrontEndTime + Time.deltaTime)
+            // 구형 파동은 수평 시야 맵에 쓰지 않고 PublishSphereRipples로 셰이더에 직접 넘긴다.
+            if (ripple.Settings.Spherical || now >= ripple.FrontEndTime + Time.deltaTime)
                 continue;
             RevealRippleSettings settings = ripple.Settings;
             _rippleBuffer[rippleCount] = new Vector4(ripple.Center.x, ripple.Center.z, ripple.StartedAt, settings.Radius);
@@ -429,6 +450,30 @@ public sealed class PerceptionRevealMap : MonoBehaviour
         Shader.SetGlobalInt(_sphereCountId, count);
         Shader.SetGlobalVectorArray(_spheresId, _sphereBuffer);
         Shader.SetGlobalVectorArray(_sphereStrengthsId, _sphereStrengthBuffer);
+    }
+
+    /// <summary>
+    /// 잔상까지 끝나지 않은 구형 파동의 중심·반경, 시작 시각·확산·링 간격·잔상, 링 수를 최근 것부터 셰이더 전역 배열로 넘긴다.
+    /// 최대 개수를 넘는 오래된 구형 파동은 이번 프레임 셰이더 공개에서 빠진다.
+    /// </summary>
+    private void PublishSphereRipples()
+    {
+        int count = 0;
+        for (int i = _ripples.Count - 1; i >= 0 && count < MAX_SPHERE_RIPPLES; i--)
+        {
+            Ripple ripple = _ripples[i];
+            RevealRippleSettings settings = ripple.Settings;
+            if (!settings.Spherical)
+                continue;
+            _sphereRippleBuffer[count] = new Vector4(ripple.Center.x, ripple.Center.y, ripple.Center.z, settings.Radius);
+            _sphereRippleParamBuffer[count] = new Vector4(ripple.StartedAt, settings.ExpandDuration,
+                settings.RingInterval, settings.Afterimage);
+            _sphereRippleRingBuffer[count++] = new Vector4(settings.RingCount, 0f, 0f, 0f);
+        }
+        Shader.SetGlobalInt(_sphereRippleCountId, count);
+        Shader.SetGlobalVectorArray(_sphereRipplesId, _sphereRippleBuffer);
+        Shader.SetGlobalVectorArray(_sphereRippleParamsId, _sphereRippleParamBuffer);
+        Shader.SetGlobalVectorArray(_sphereRippleRingsId, _sphereRippleRingBuffer);
     }
 
     /// <summary>비활성·파괴된 발생자를 목록에서 빼고 남은 발생자의 위치와 제외 반경을 셰이더에 전달한다.</summary>

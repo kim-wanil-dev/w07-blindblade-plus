@@ -43,8 +43,8 @@ public class SoundManager
     private float _effectVolume = 1f;
 
     [Header("Time Warp")]
-    private readonly FMOD.DSP[] _warpFilters = new FMOD.DSP[2];
-    private readonly bool[] _hasWarpFilters = new bool[2];
+    private readonly FMOD.DSP[] _warpFilters = new FMOD.DSP[3];
+    private readonly bool[] _hasWarpFilters = new bool[3];
 
     /// <summary>
     /// library의 사운드 ID와 FMOD 이벤트 연결을 보관한다.
@@ -385,6 +385,7 @@ public class SoundManager
         StopBgm(false);
         StopEffects();
         SetTimeWarp(1f, 0f);
+        SetCinematicTimeWarp(1f, 0f);
         _busesReady = false;
     }
 
@@ -417,6 +418,17 @@ public class SoundManager
             return;
         ApplyTimeWarp(_effectBus, 0, pitch, lowpassCutoff);
         ApplyTimeWarp(_bgmBus, 1, pitch, lowpassCutoff);
+    }
+
+    /// <summary>
+    /// 연출음 버스의 소리를 pitch 배율과 lowpassCutoff(Hz) 저역 통과로 바꾼다. 보스 반격 감속처럼 연출음도 먹먹해야 할 때만 쓴다.
+    /// pitch 1과 lowpassCutoff 0 이하이면 원래 소리로 되돌리며 연출음 버스가 없거나 FMOD가 초기화되지 않았으면 아무것도 하지 않는다.
+    /// </summary>
+    public void SetCinematicTimeWarp(float pitch, float lowpassCutoff)
+    {
+        if (!RuntimeManager.IsInitialized || !TryInitializeBuses() || !_cinematicBus.isValid())
+            return;
+        ApplyTimeWarp(_cinematicBus, 2, pitch, lowpassCutoff);
     }
 
     /// <summary>
@@ -664,6 +676,8 @@ public class SoundManager
         {
             _cinematicBus = RuntimeManager.GetBus(_library.CinematicBusPath);
             _cinematicBus.setVolume(_effectVolume);
+            // 보스 반격 감속 소리가 첫 연출음부터 걸리도록 채널 그룹을 유지한다.
+            _cinematicBus.lockChannelGroup();
         }
         catch (BusNotFoundException)
         {

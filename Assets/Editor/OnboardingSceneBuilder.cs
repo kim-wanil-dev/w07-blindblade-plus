@@ -122,6 +122,7 @@ public static class OnboardingSceneBuilder
         ConfigureHud(hud, font);
         OnboardingFlowController flow = controllerObject.AddComponent<OnboardingFlowController>();
         ConfigureFlow(flow, director, spawner, hud, FindTransform(scene, "Arena"));
+        FindTransform(scene, "Ground").gameObject.AddComponent<OnboardingGroundGuide>();
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         EditorSceneManager.SetActiveScene(previousActiveScene);
@@ -173,68 +174,59 @@ public static class OnboardingSceneBuilder
         SerializedObject serializedHud = new SerializedObject(hud);
         serializedHud.FindProperty("_font").objectReferenceValue = font;
         SerializedProperty prompts = serializedHud.FindProperty("_prompts");
-        prompts.arraySize = 9;
+        prompts.arraySize = 5;
 
-        string[][] keyboardHints =
+        string[] keyboardHints =
         {
-            new[] { "이동 - WASD", "" },
-            new[] { "회피 - SPACE", "" },
-            new[] { "좌클릭 - 발도", "" },
-            new[] { "극한 회피 - SPACE", "" },
-            new[] { "우클릭 - 막기 / 쳐내기", "" },
-            new[] { "우클릭 - 쳐내기", "" },
-            new[] { "우클릭 - 막기 / 쳐내기", "" },
-            new[] { "우클릭 - 쳐내기", "" },
-            new[] { "우클릭 - 쳐내기", "" }
+            "이동 - WASD\n회피 - Space\n공격 - 마우스 왼쪽 버튼 클릭",
+            "극한 회피 - Space",
+            "우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기",
+            "우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기",
+            "우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기"
         };
-        string[][] gamepadHints =
+        string[] gamepadHints =
         {
-            new[] { "이동 - 왼쪽 스틱", "" },
-            new[] { "회피 - A 버튼", "" },
-            new[] { "RB - 발도", "" },
-            new[] { "극한 회피 - A 버튼", "" },
-            new[] { "LB - 막기 / 쳐내기", "" },
-            new[] { "LB - 쳐내기", "" },
-            new[] { "LB - 막기 / 쳐내기", "" },
-            new[] { "LB - 쳐내기", "" },
-            new[] { "LB - 쳐내기", "" }
+            "이동 - 왼쪽 스틱\n회피 - A 버튼\n공격 - RB",
+            "극한 회피 - A 버튼",
+            "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기",
+            "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기",
+            "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기"
         };
         string[] followUpKeyboardHints =
         {
-            "", "", "", "", "", "좌클릭 - 일섬", "", "좌클릭 - 일섬", "좌클릭 홀드 - 거합"
+            "", "", "", "일섬* - 마우스 왼쪽 버튼 클릭\n*전방으로 검기를 날리며 돌진한다",
+            "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다."
         };
         string[] followUpGamepadHints =
         {
-            "", "", "", "", "", "RB - 일섬", "", "RB - 일섬", "RB 홀드 - 거합"
+            "", "", "", "일섬* - RB 버튼\n*전방으로 검기를 날리며 돌진한다",
+            "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다."
         };
         string[][] objectives =
         {
-            new[] { "파동 중심 1m 이내 도착" },
-            new[] { "회피 1회" },
-            new[] { "발도로 적 1명 처치" },
+            new[] { "발도로 적 3명 처치" },
             new[] { "수리검 극한 회피 1회" },
-            new[] { "막기 1회", "정확한 시점에 막아서 공격 쳐내기 1회" },
-            new[] { "수리검 쳐내기 1회", "일섬 발동 1회" },
-            new[] { "막기 1회", "정확한 시점에 막아서 공격 쳐내기 1회" },
-            new[] { "수리검 쳐내기 1회", "일섬 발동 1회" },
-            new[] { "수리검 쳐내기 1회", "거합으로 적 8명 처치" }
+            new[] { "막기 1회", "공격 쳐내기 0/1" },
+            new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
+            new[] { "정확한 시점에 공격을 막아 쳐내기 0/3", "정확한 시점에 공격을 막아 쳐내기 1/3", "정확한 시점에 공격을 막아 쳐내기 2/3", "거합으로 적 8명 처치" }
         };
         Sprite leftMouse = AssetDatabase.LoadAssetAtPath<Sprite>(LEFT_MOUSE);
         Sprite rightMouse = AssetDatabase.LoadAssetAtPath<Sprite>(RIGHT_MOUSE);
-        int[] leftIconStages = { 2 };
-        int[] rightIconStages = { 4, 5, 6, 7, 8 };
-        int[] followUpIconStages = { 5, 7, 8 };
+        int[] rightIconStages = { 2, 3, 4 };
+        int[] followUpIconStages = { 3, 4 };
+        int[] followUpObjectives = { 1, 1, 1, 2, 3 };
 
         for (int i = 0; i < prompts.arraySize; i++)
         {
             SerializedProperty prompt = prompts.GetArrayElementAtIndex(i);
-            prompt.FindPropertyRelative("_keyboardHint").stringValue = keyboardHints[i][0];
-            prompt.FindPropertyRelative("_gamepadHint").stringValue = gamepadHints[i][0];
+            prompt.FindPropertyRelative("_keyboardHint").stringValue = keyboardHints[i];
+            prompt.FindPropertyRelative("_gamepadHint").stringValue = gamepadHints[i];
             prompt.FindPropertyRelative("_followUpKeyboardHint").stringValue = followUpKeyboardHints[i];
             prompt.FindPropertyRelative("_followUpGamepadHint").stringValue = followUpGamepadHints[i];
+            prompt.FindPropertyRelative("_followUpNote").stringValue = string.Empty;
+            prompt.FindPropertyRelative("_followUpObjective").intValue = followUpObjectives[i];
             SerializedProperty icon = prompt.FindPropertyRelative("_keyboardIcon");
-            if (System.Array.IndexOf(leftIconStages, i) >= 0) icon.objectReferenceValue = leftMouse;
-            else if (System.Array.IndexOf(rightIconStages, i) >= 0) icon.objectReferenceValue = rightMouse;
+            if (System.Array.IndexOf(rightIconStages, i) >= 0) icon.objectReferenceValue = rightMouse;
             else icon.objectReferenceValue = null;
             SerializedProperty followUpIcon = prompt.FindPropertyRelative("_followUpKeyboardIcon");
             followUpIcon.objectReferenceValue = System.Array.IndexOf(followUpIconStages, i) >= 0 ? leftMouse : null;
@@ -245,25 +237,37 @@ public static class OnboardingSceneBuilder
                 objectiveArray.GetArrayElementAtIndex(objectiveIndex).stringValue = objectives[i][objectiveIndex];
         }
 
+        serializedHud.FindProperty("_movementWaveTutorialText").stringValue = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_movementWaveTutorialGamepadText").stringValue = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_perfectDodgeTutorialText").stringValue = "극한 회피에 성공하면\n파동이 발생해 주위를 잠시 밝힙니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_perfectDodgeTutorialGamepadText").stringValue = "극한 회피에 성공하면\n파동이 발생해 주위를 잠시 밝힙니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_targetThreadTutorialText").stringValue = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
+        serializedHud.FindProperty("_targetThreadTutorialGamepadText").stringValue = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
+        serializedHud.FindProperty("_parryHudTutorialText").stringValue = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_parryHudTutorialGamepadText").stringValue = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_parryBeadsTutorialText").stringValue = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_parryBeadsTutorialGamepadText").stringValue = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 좌클릭 홀드로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialGamepadText").stringValue = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 RB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
+        serializedHud.FindProperty("_idleMovementText").stringValue = "WASD키로 이동하기";
+        serializedHud.FindProperty("_idleMovementGamepadText").stringValue = "왼쪽 스틱으로 이동하기";
+
         serializedHud.ApplyModifiedPropertiesWithoutUndo();
     }
 
-    /// <summary>기존 근접·투척수·Wave 프리팹과 씬 단위 연결을 새 단계 제어기에 저장한다.</summary>
+    /// <summary>기존 근접·투척수 프리팹과 씬 단위 연결을 새 단계 제어기에 저장한다.</summary>
     private static void ConfigureFlow(OnboardingFlowController flow, BambooDefenseDirector director,
         DefenseEnemySpawner spawner, OnboardingHud hud, Transform arenaCenter)
     {
         GameObject meleePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Defense/DefenseMelee.prefab");
         BambooThrower throwerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Defense/DefenseThrower.prefab")
             ?.GetComponent<BambooThrower>();
-        FootstepWave wavePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Resources/Wave/Wave.prefab")
-            ?.GetComponent<FootstepWave>();
         Transform unitRoot = null;
         if (spawner != null)
             unitRoot = new SerializedObject(spawner).FindProperty("_unitRoot").objectReferenceValue as Transform;
         SerializedObject serializedFlow = new SerializedObject(flow);
         serializedFlow.FindProperty("_meleePrefab").objectReferenceValue = meleePrefab;
         serializedFlow.FindProperty("_throwerPrefab").objectReferenceValue = throwerPrefab;
-        serializedFlow.FindProperty("_targetWavePrefab").objectReferenceValue = wavePrefab;
         serializedFlow.FindProperty("_unitRoot").objectReferenceValue = unitRoot;
         serializedFlow.FindProperty("_arenaCenter").objectReferenceValue = arenaCenter;
         serializedFlow.FindProperty("_hud").objectReferenceValue = hud;

@@ -72,6 +72,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float _OutlinePerceptionTime;
             float4 _OutlinePulseRegion;
             float _OutlinePulseVisibility;
+            // rgb: 파동이 밝힌 윤곽선 색, a: 물들이는 정도. 보스 반격 파동만 붉게 쓴다.
+            float4 _OutlinePulseTint;
             TEXTURE2D(_OutlineTerrainMemory);
             SAMPLER(sampler_OutlineTerrainMemory);
             float4 _OutlineMemoryBounds;
@@ -97,6 +99,11 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineImpactRipples[MAX_IMPACT_RIPPLES];
             // x: 확산 시간, y: 잔상 시간, z: 세기, w: 시작 시각
             float4 _OutlineImpactRippleParams[MAX_IMPACT_RIPPLES];
+            // RainyStage 빗방울 파동이 화면 픽셀마다 남긴 공개 정도다. Enabled가 0이면 읽지 않는다.
+            TEXTURE2D(_OutlineRainReveal);
+            float _OutlineRainRevealEnabled;
+
+            #include "Assets/Shaders/PerceptionSphereRipples.hlsl"
 
             // 약한 충격 파동이 구 모양으로 퍼진 전선이 지나간 뒤 잔상 동안 흐려지는 세기를 모두 더해 반환한다. 겹치면 더 밝아진다.
             float ImpactRippleVisibility(float3 position)
@@ -225,12 +232,17 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     visibility = max(visibility, soundVisibility);
                 }
                 // 보상 파동은 높이를 무시하고 C의 대상 판정과 같은 수평거리로 공개한다.
-                visibility = max(visibility, RegionVisibility(
+                float pulseVisibility = RegionVisibility(
                     float3(position.x, 0.0, position.z),
                     float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
-                    _OutlinePulseRegion.w) * _OutlinePulseVisibility);
+                    _OutlinePulseRegion.w) * _OutlinePulseVisibility;
+                visibility = max(visibility, pulseVisibility);
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));
                 visibility = max(visibility, ImpactRippleVisibility(position));
+                visibility = max(visibility, SphereRippleVisibility(position, _OutlinePerceptionTime, _OutlineEdgeFade));
+                if (_OutlineRainRevealEnabled > 0.5)
+                    visibility = max(visibility,
+                        saturate(SAMPLE_TEXTURE2D_LOD(_OutlineRainReveal, sampler_PointClamp, uv, 0).r));
                 if (forced.b > 0.5)
                     visibility = lerp(visibility * forced.r, forced.r, forced.g);
                 float memoryVisibility = 0.0;
@@ -242,7 +254,10 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                             sampler_OutlineTerrainMemory, memoryUv, 0).r;
                 }
                 float3 memoryColor = _OutlineMemoryColor.rgb * _OutlineMemoryColor.a * memoryVisibility;
-                return memoryColor * (1.0 - visibility) + _LineColor.rgb * _LineColor.a * visibility;
+                // 파동이 밝힌 만큼만 선 색을 파동 색조로 바꿔 보스 반격 파동 안의 윤곽을 붉게 보인다.
+                float3 lineColor = lerp(_LineColor.rgb * _LineColor.a, _OutlinePulseTint.rgb,
+                    saturate(pulseVisibility) * _OutlinePulseTint.a);
+                return memoryColor * (1.0 - visibility) + lineColor * visibility;
             }
 
             // 배경 표면은 상시 표시하지 않고 현재 인지로만 드러내며 지형 기억에는 남기지 않는다.
@@ -416,6 +431,14 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineGroundMarkParams[MAX_GROUND_MARKS];
             half4 _OutlineGroundMarkColor;
 
+            float _OutlineGroundGuideEnabled;
+            float _OutlineGroundGuideHeight;
+            float _OutlineGroundGuideHeightTolerance;
+            float _OutlineGroundGuideNearDistance;
+            float _OutlineGroundGuideFarDistance;
+            half4 _OutlineGroundGuideFillColor;
+            half4 _OutlineGroundGuideEdgeColor;
+
             // 화면 픽셀의 표면이 땅 흔적 선분 위에 있으면 흔적 색을 반환한다. 파동과 상관없이 그리며 장면 깊이로 가려진다.
             float3 GroundMarkColor(float2 uv)
             {
@@ -443,6 +466,45 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     coverage = max(coverage, side * ends * markParams.z);
                 }
                 return _OutlineGroundMarkColor.rgb * _OutlineGroundMarkColor.a * coverage;
+            }
+
+            // 실제 깊이와 위쪽 노멀을 가진 지면만 안내 대상으로 삼는다.
+            float GroundGuideCoverage(float2 uv)
+            {
+                float rawDepth = SampleSceneDepth(uv);
+                if (HasSurface(rawDepth) == 0.0)
+                    return 0.0;
+                float3 position = SurfacePosition(uv, rawDepth);
+                float3 normal = SampleSceneNormals(uv);
+                return step(abs(position.y - _OutlineGroundGuideHeight),
+                    _OutlineGroundGuideHeightTolerance) * step(0.8, normal.y);
+            }
+
+            // 멀리 있는 바닥을 옅게 채우고 지면이 하늘에 닿는 곳에만 가는 선을 더한다.
+            float3 GroundGuideColor(float2 uv, float2 firstUv, float2 secondUv,
+                float2 thirdUv, float2 fourthUv)
+            {
+                if (_OutlineGroundGuideEnabled < 0.5)
+                    return 0.0;
+                float rawDepth = SampleSceneDepth(uv);
+                float ground = GroundGuideCoverage(uv);
+                float distanceFade = smoothstep(_OutlineGroundGuideNearDistance,
+                    _OutlineGroundGuideFarDistance, EyeDepth(rawDepth));
+                float3 fill = _OutlineGroundGuideFillColor.rgb
+                    * _OutlineGroundGuideFillColor.a * ground * distanceFade;
+                float firstGround = GroundGuideCoverage(firstUv);
+                float secondGround = GroundGuideCoverage(secondUv);
+                float thirdGround = GroundGuideCoverage(thirdUv);
+                float fourthGround = GroundGuideCoverage(fourthUv);
+                float firstSky = 1.0 - HasSurface(SampleSceneDepth(firstUv));
+                float secondSky = 1.0 - HasSurface(SampleSceneDepth(secondUv));
+                float thirdSky = 1.0 - HasSurface(SampleSceneDepth(thirdUv));
+                float fourthSky = 1.0 - HasSurface(SampleSceneDepth(fourthUv));
+                float border = max(max(firstGround * secondSky, secondGround * firstSky),
+                    max(thirdGround * fourthSky, fourthGround * thirdSky));
+                float3 borderColor = _OutlineGroundGuideEdgeColor.rgb
+                    * _OutlineGroundGuideEdgeColor.a * border;
+                return max(fill, borderColor);
             }
 
             // 불투명 경계와 투명 이펙트 및 개별 위협을 합성하고 나머지 면과 배경은 검게 출력한다.
@@ -490,6 +552,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     abs(AlwaysVisibleCoverage(thirdUv) - AlwaysVisibleCoverage(fourthUv))) * 1.5);
                 edge = max(edge, foregroundEdge * _LineColor.rgb * _LineColor.a);
                 edge = max(edge, GroundMarkColor(uv));
+                edge = max(edge, GroundGuideColor(uv, firstUv, secondUv, thirdUv, fourthUv));
                 // 위협 실루엣은 경계를 선명하게, 내부는 반투명하게 다른 모든 선 위에 덮는다.
                 float threatFirst = ThreatCoverage(firstUv);
                 float threatSecond = ThreatCoverage(secondUv);

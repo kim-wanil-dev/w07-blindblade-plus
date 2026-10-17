@@ -217,6 +217,40 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
     private Vector3 _linkEnd;
     private float _linkSettle;
 
+    public bool HasLinkedTarget => _linkProgress >= LINKED_THRESHOLD && _hasCandidate;
+    public Vector3 LinkedTargetPosition => _linkEnd;
+
+    /// <summary>
+    /// 현재 적에게 연결된 발도 실의 검 쪽 시작점을 origin에 저장해 반환한다.
+    /// 연결된 대상이나 실 경로가 없으면 false를 반환한다.
+    /// </summary>
+    public bool TryGetLinkedThreadOrigin(out Vector3 origin)
+    {
+        if (!HasLinkedTarget || _linkCenters == null || _linkCenters.Length == 0)
+        {
+            origin = default;
+            return false;
+        }
+
+        origin = _linkCenters[0];
+        return true;
+    }
+
+    /// <summary>현재 연결된 발도 실의 실제 메시 점 전체를 감싸는 월드 경계를 반환한다.</summary>
+    public bool TryGetLinkedThreadBounds(out Bounds bounds)
+    {
+        if (!HasLinkedTarget || _linkCenters == null || _linkCenters.Length == 0)
+        {
+            bounds = default;
+            return false;
+        }
+
+        bounds = new Bounds(_linkCenters[0], Vector3.zero);
+        for (int i = 1; i < _linkCenters.Length; i++)
+            bounds.Encapsulate(_linkCenters[i]);
+        return true;
+    }
+
     private readonly struct LocalFrame
     {
         public readonly Vector3 Center;

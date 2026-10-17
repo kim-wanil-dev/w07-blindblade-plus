@@ -20,6 +20,7 @@ using UnityEngine;
         private static readonly int _perceptionTimeId = Shader.PropertyToID("_OutlinePerceptionTime");
         private static readonly int _pulseRegionId = Shader.PropertyToID("_OutlinePulseRegion");
         private static readonly int _pulseVisibilityId = Shader.PropertyToID("_OutlinePulseVisibility");
+        private static readonly int _pulseTintId = Shader.PropertyToID("_OutlinePulseTint");
 
         [Header("플레이어 주변 인지")]
         [SerializeField, Min(0f), Tooltip("관측자 주변을 상시 표시하는 반경(미터). 0이면 상시 표시하지 않는다.")]
@@ -49,6 +50,7 @@ using UnityEngine;
         [Header("퍼펙트 패링 파동")]
         private Vector4 _pulseRegion;
         private float _pulseVisibility;
+        private Vector4 _pulseTint;
 
         void Awake()
         {
@@ -117,11 +119,21 @@ using UnityEngine;
             _pulseVisibility = Mathf.Clamp01(visibility);
         }
 
-        /// <summary>퍼펙트 패링 파동 영역을 지워 더 이상 표시하지 않는다.</summary>
+        /// <summary>
+        /// 퍼펙트 패링 파동이 밝힌 윤곽선을 color로 amount(0~1)만큼 물들인다. 보스 반격 파동의 붉은 실루엣에 쓴다.
+        /// amount가 0이면 기본 선 색을 쓰며 다음 ClearPulseRegion에서 함께 초기화된다.
+        /// </summary>
+        public void SetPulseTint(Color color, float amount)
+        {
+            _pulseTint = new Vector4(color.r, color.g, color.b, Mathf.Clamp01(amount));
+        }
+
+        /// <summary>퍼펙트 패링 파동 영역과 색조를 지워 더 이상 표시하지 않는다.</summary>
         public void ClearPulseRegion()
         {
             _pulseRegion = Vector4.zero;
             _pulseVisibility = 0f;
+            _pulseTint = Vector4.zero;
         }
 
         /// <summary>
@@ -276,6 +288,7 @@ using UnityEngine;
             Shader.SetGlobalFloat(_perceptionTimeId, currentTime);
             Shader.SetGlobalVector(_pulseRegionId, _pulseRegion);
             Shader.SetGlobalFloat(_pulseVisibilityId, _pulseVisibility);
+            Shader.SetGlobalVector(_pulseTintId, _pulseTint);
             Shader.SetGlobalInt(_soundCountId, _soundCount);
             if (_soundCount > 0)
             {
@@ -293,6 +306,7 @@ using UnityEngine;
             ClearPulseRegion();
             Shader.SetGlobalVector(_observerRegionId, Vector4.zero);
             Shader.SetGlobalFloat(_pulseVisibilityId, 0f);
+            Shader.SetGlobalVector(_pulseTintId, Vector4.zero);
             Shader.SetGlobalInt(_soundCountId, 0);
         }
     }
