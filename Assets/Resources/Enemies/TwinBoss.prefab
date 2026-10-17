@@ -676,7 +676,7 @@ MonoBehaviour:
     _ringInterval: 0.15
     _afterimage: 1.5
     _ringColor: {r: 1, g: 1, b: 1, a: 0.9}
-    _spherical: 0
+    _spherical: 1
   _burrowCry: 32
   _burrowCryVolume: 2
 --- !u!114 &330
@@ -4617,7 +4617,7 @@ MonoBehaviour:
     _ringInterval: 0.08
     _afterimage: 0.8
     _ringColor: {r: 1, g: 1, b: 1, a: 0.6}
-    _spherical: 0
+    _spherical: 1
   _owner: {fileID: 301}
 --- !u!1 &320
 GameObject:

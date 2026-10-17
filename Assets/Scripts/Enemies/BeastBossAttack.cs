@@ -116,7 +116,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     [SerializeField, Min(0f)] private float _biteDamage = 15f;
     [SerializeField, Tooltip("뛰어들고 튀어나오는 자리에 크게 퍼지는 물 파동")]
     private RevealRippleSettings _burrowRipple = new RevealRippleSettings(16f, 1f, 3, 0.15f, 1.5f,
-        new Color(1f, 1f, 1f, 0.9f));
+        new Color(1f, 1f, 1f, 0.9f), true);
     [SerializeField, Tooltip("뛰어들고 튀어나올 때 크게 울리는 울음소리")]
     private SoundId _burrowCry = SoundId.BeastBossIdle;
     [SerializeField, Min(0f)] private float _burrowCryVolume = 2f;

@@ -10,7 +10,7 @@ public sealed class TwinBeastPawRipple : MonoBehaviour
 {
     [Header("발 파동")]
     [SerializeField] private RevealRippleSettings _ripple = new RevealRippleSettings(3.5f, 0.5f, 2, 0.08f, 0.8f,
-        new Color(1f, 1f, 1f, 0.6f));
+        new Color(1f, 1f, 1f, 0.6f), true);
     [SerializeField, Tooltip("파동이 짐승 몸을 밝히지 않도록 넘기는 짐승 루트")]
     private Transform _owner;
     private TwinBeastWolfVisual _visual;

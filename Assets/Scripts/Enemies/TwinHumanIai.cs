@@ -339,7 +339,7 @@ public sealed class TwinHumanIai : MonoBehaviour
         float strength = Mathf.Lerp(_firstPulseStrength, _lastPulseStrength, t);
         Color ring = _pulseColor;
         ring.a *= strength;
-        _playerPerfectPulse.BeginAt(transform.position, Vector3.up, ring, _pulseColor, radius, strength);
+        _playerPerfectPulse.BeginAt(transform.position, Vector3.up, ring, _pulseColor, radius, strength, true);
         SoundId sound = final ? _finalPulseSound : _pulseSound;
         if (sound != SoundId.None)
             Managers.Sound.Play(sound, transform.position, Mathf.Lerp(_firstPulseVolume, _lastPulseVolume, t),
