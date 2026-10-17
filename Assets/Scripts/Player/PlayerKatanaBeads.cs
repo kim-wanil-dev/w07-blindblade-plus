@@ -135,6 +135,19 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     private float _glowTime;
     private float _glow;
 
+    /// <summary>검 손잡이에 가장 가까운 첫 구슬의 시점 좌표를 월드 좌표로 변환해 안내 위치를 반환한다.</summary>
+    public bool TryGetBeadGuidePosition(out Vector3 position)
+    {
+        if (_positions == null || _beadNodes == null || _viewSpace == null)
+        {
+            position = Vector3.zero;
+            return false;
+        }
+
+        position = _viewSpace.TransformPoint(_positions[_beadNodes[0]]);
+        return true;
+    }
+
     void Awake()
     {
         _player = GetComponent<PlayerController>();

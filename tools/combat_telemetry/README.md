@@ -5,7 +5,7 @@
 1. 새 빌드 또는 갱신된 Unity 프로젝트에서 BambooStage1을 플레이한다. Intro 시작 버튼은 Onboarding을 거쳐 이 씬을 연다.
 2. 로컬 경로: `%USERPROFILE%\AppData\LocalLow\DefaultCompany\w07-blindblade+\CombatTelemetry`.
 3. 빌드 실행 중 CSV 파일은 만들지 않는다. 원본은 세션별 JSONL이며, 아래 Export 명령으로 Events·Sessions·OnboardingSteps 등의 CSV를 만든다.
-4. `*.jsonl` 한 줄이 Events의 한 행이다. 현재 온보딩은 `stageId=0-1~0-7`, 일반 구간은 `1-1`, 보스 구간은 `1-2`다. 보스 재도전은 `1-2`만 기록한다.
+4. `*.jsonl` 한 줄이 Events의 한 행이다. 현재 온보딩은 `stageId=0-1~0-5`, 일반 구간은 `1-1`, 보스 구간은 `1-2`다. 보스 재도전은 `1-2`만 기록한다. 수신 스키마에는 이전 7단계 기록을 위한 `0-6`·`0-7` 값도 호환용으로 남아 있다.
 5. 기본 전송 설정은 Resources에 포함된다. 기존 URL·token은 유지했으므로 새 PC의 별도 CONFIG는 필요 없다. 로컬 `upload-config.json`이 있으면 그 설정이 우선한다.
 6. 일반 로그는 기본 20초마다 전송을 시작하고, 온보딩 목표 결과는 목표가 닫힐 때 즉시 업로드를 요청한다. 밀린 배치는 ACK 후 이어서 보낸다. 시트가 비어 있으면 최신 로컬 JSONL, ACK 커서, Player.log의 전송 오류를 확인한다.
 
@@ -107,21 +107,21 @@ Events/Sessions 헤더를 수동으로 바꾸면 header_mismatch로 저장을 �
 - Apps Script 웹 앱은 소유자 계정으로 실행되고 액세스 권한은 기존 `Anyone` 설정 그대로다. 별도 토큰 검증 전에는 시트 데이터를 반환하지 않는다. `/exec`를 브라우저에서 직접 열면 doGet 없음 메시지가 나오는 것은 정상이며, Sites Worker가 POST 요청을 보낸다. 스프레드시트 공유는 제한됨/소유자만으로 유지한다.
 - 상세 데이터 흐름과 보안 경계는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)를 따른다.
 
-## 온보딩 0-1~0-7 단계 로그
+## 온보딩 0-1~0-5 단계 로그
 
 - **Events**: 온보딩 입력 한 번의 최종 처리 결과는 `onboarding_attempt`, 목표 종료 결과는 `onboarding_step`이다. 두 목표가 있는 방어 단계는 `objective_index=0/1`로 구분한다.
-- **stageId 대응**: 0→`0-1` 이동, 1→`0-2` 돌진, 2→`0-3` 근접 적 처치, 3→`0-4` 수리검 극한 회피, 4→`0-5` 근접 가드·패링, 5→`0-6` 원거리 가드·패링·검기, 6→`0-7` 수리검 패링·궁극기.
-- **Sessions**: 온보딩 단계마다 도전 행 하나다. `run_id`로 7단계와 이후 Stage1 전투를 묶고, `exit_step_index`와 `exit_objective_index`로 마지막 진행 지점을 본다. 같은 PC에서 같은 온보딩을 재시작해도 `run_id`가 달라지므로 별도 실행이다.
+- **stageId 대응**: 0→`0-1` 이동·발도 처치, 1→`0-2` 수리검 극한 회피, 2→`0-3` 근접 막기·쳐내기, 3→`0-4` 원거리 막기·쳐내기·일섬, 4→`0-5` 수리검 쳐내기·거합.
+- **Sessions**: 온보딩 단계마다 도전 행 하나다. `run_id`로 5단계와 이후 Stage1 전투를 묶고, `exit_step_index`와 `exit_objective_index`로 마지막 진행 지점을 본다. 같은 PC에서 같은 온보딩을 재시작해도 `run_id`가 달라지므로 별도 실행이다.
 - **OnboardingSteps / OnboardingSteps.csv**: 목표당 1행. 목표가 진행 중일 때는 아직 행이 없고, 완료·사망·이탈로 닫힐 때 로컬에 기록하고 즉시 업로드를 요청한다. `active_seconds`는 목표 입력이 열린 시간, `first_input_seconds`는 처음 추적된 이동/전투 입력까지 그 활성 시간이다. 이 입력은 기대 행동이거나 성공 판정일 필요가 없다. `attempts`는 필요한 행동 시도, `wrong_attempts`는 다른 전투 입력이다. `retry_count`는 해당 단계의 사망 후 재진입 횟수이고 `reason`은 completed/death/scene_unloaded/application_quit이다.
 - 이동 목표는 이동을 멈춘 뒤 다시 시작할 때 새 시도로 센다. 공격·방어·회피 입력은 고유 InputId로 세고 누르고 있기·놓기·버퍼 후 Started는 중복 계산하지 않는다. 입력 결과는 Started/Rejected/BufferDropped/Buffered이며 실제 목표 성공은 step의 `reason=completed`로 확인한다.
 - 사망 후 다시 진입하면 새 `session_id`와 `stage_attempt_id` 행이 생기지만 `run_id`는 유지된다. Intro에서 새로 시작하면 `run_id`와 단계별 재시도 횟수가 초기화된다.
-- 이전 설정(`config_version=onboarding-2026-10-16`)의 `0-1`·`0-2`는 각각 여러 단계가 합쳐진 과거 구간이다. 행은 보존하며 새 설정(`onboarding-2026-10-16-stage-ids-7`)의 7단계 데이터와 합쳐 비율을 계산하지 않는다. 대시보드는 기본으로 과거 행을 제외하고, `이전 2구간 온보딩 로그 포함`을 켜면 이전 기록임을 표시한다. OnboardingSteps CSV만 있으면 구버전 설정을 판별할 수 없으므로 Sessions도 함께 불러온다.
+- 이전 설정(`config_version=onboarding-2026-10-16`)의 `0-1`·`0-2`는 각각 여러 단계가 합쳐진 과거 구간이다. 행은 보존하며 새 설정(`onboarding-2026-10-17-stage-ids-5`)의 현재 5단계 데이터나 2026-10-16의 7단계 데이터와 합쳐 비율을 계산하지 않는다. 대시보드는 기본으로 과거 행을 제외하고, `이전 2구간 온보딩 로그 포함`을 켜면 이전 기록임을 표시한다. OnboardingSteps CSV만 있으면 구버전 설정을 판별할 수 없으므로 Sessions도 함께 불러온다.
 
 ## 전체 플레이에서 확인할 수 있는 것
 
 | 구간 | 핵심 지표 | 데이터 위치 |
 | --- | --- | --- |
-| 0-1~0-7 온보딩 각 단계 | 해당 단계의 목표별 활성 시간, 첫 추적 입력까지 시간, 요구 행동 시도·오입력·결과, 사망 재시도, 이탈 목표 | OnboardingSteps, Events의 onboarding_attempt, Sessions |
+| 0-1~0-5 온보딩 각 단계 | 해당 단계의 목표별 활성 시간, 첫 추적 입력까지 시간, 요구 행동 시도·오입력·결과, 사망 재시도, 이탈 목표 | OnboardingSteps, Events의 onboarding_attempt, Sessions |
 | 1-1 일반 전투 | 사망·처치, 수리검/근접 피해 비중, 회피·방어 시도와 실제 판정, 반응 시간, 이동/공격/피격 히트맵 | Sessions, Events, Patterns.csv, Heatmaps.csv |
 | 1-2 보스전 | 보스 수리검/도주 난사/돌진의 적중률·피해 비중, 방어·회피 결과, 보스전 시간과 사망 | Sessions, Events, Patterns.csv, Heatmaps.csv |
 
@@ -143,7 +143,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `build_version` | Unity `Application.version` |
 | `config_version` | 기록 설정 버전. Editor 기록은 끝에 `-editor`가 붙음 |
 | `session_id` | 씬 세션을 식별하는 임의 ID |
-| `stage_id` | 현재 구간 ID: 온보딩 `0-1`~`0-7`, 일반 전투 `1-1`, 보스전 `1-2` |
+| `stage_id` | 현재 구간 ID: 온보딩 `0-1`~`0-5`; 이전 7단계 데이터는 `0-6`·`0-7`을 포함할 수 있음, 일반 전투 `1-1`, 보스전 `1-2` |
 | `stage_attempt_id` | 도전 요약 키. `session_id:stage_id` |
 | `anonymous_player_id` | PC별 익명 ID. 참가자 고유 ID는 아니므로 같은 PC의 참가자를 분리하지 못함 |
 | `event_sequence` | 해당 세션에서 증가하는 사건 순번 |
@@ -171,7 +171,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `reaction_association` | 반응 시간 연결 근거. 예: `resolved_contact`, `held_guard_intent` |
 | `payload_json` | 위 열로 펼치지 않은 원본 사건 데이터 전체 |
 | `run_id` | 온보딩 단계들과 이후 전투를 묶는 실행 ID |
-| `step_index` | 온보딩 단계의 0부터 시작하는 인덱스(현재 0~6) |
+| `step_index` | 온보딩 단계의 0부터 시작하는 인덱스(현재 0~4) |
 | `objective_index` | 한 단계 안의 세부 목표 인덱스(0부터 시작) |
 | `retry_count` | 해당 온보딩 단계의 사망 후 재진입 횟수 |
 | `first_input_seconds` | 목표 입력 활성화 후 첫 추적 입력까지 걸린 시간(초) |
@@ -259,9 +259,9 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | `received_kst` | Apps Script가 목표 행을 받은 한국 시각 |
 | `run_id` | 전체 온보딩 실행 ID |
 | `session_id` | 목표가 진행된 씬 세션 ID |
-| `stage_id` | 현재 단계 ID `0-1`~`0-7` |
+| `stage_id` | 현재 단계 ID `0-1`~`0-5`; 과거 7단계 기록은 `0-6`·`0-7`을 포함할 수 있음 |
 | `stage_attempt_id` | 목표가 속한 단계 도전 키 |
-| `step_index` | 단계 인덱스(0~6) |
+| `step_index` | 단계 인덱스(현재 0~4) |
 | `objective_index` | 단계 안 세부 목표 인덱스(0부터 시작) |
 | `retry_count` | 사망 후 같은 단계에 재진입한 누계 |
 | `active_seconds` | 목표 입력이 허용된 누적 활성 시간(초) |
@@ -301,7 +301,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 - **구간 도전**은 Sessions 행 수다. 참가자 수나 온보딩 전체 완료 횟수가 아니다. 한 플레이 run은 온보딩 단계마다 행이 생기고 전투에서도 `1-1`, `1-2` 행이 생긴다.
 - **사망률**은 선택된 Sessions에서 사망 수 합계 ÷ 도전 행 수다. 단계별로 보고, 같은 run의 사망 재시도 행이 분모에 들어간다는 점을 고려한다. 표본이 적으면 백분율보다 사망 수와 도전 수를 함께 본다.
 - **평균 활성 플레이**는 stage attempt별 `active_play_seconds`의 단순 평균이다. 여러 구간 시간을 더한 전체 플레이 시간이나 플레이어당 평균이 아니다.
-- **온보딩 목표 완료**는 완료된 목표 행 ÷ 모든 목표 행이다. 플레이어가 온보딩을 끝낸 비율과 다르므로 마지막 단계 `0-7`의 완료/이탈과 `run_id`를 함께 확인한다.
+- **온보딩 목표 완료**는 완료된 목표 행 ÷ 모든 목표 행이다. 플레이어가 온보딩을 끝낸 비율과 다르므로 마지막 단계 `0-5`의 완료/이탈과 `run_id`를 함께 확인한다.
 - **피해 원인** 막대는 선택 데이터에서 원인별 누적 피해량을 비교한다. 막대 길이는 가장 큰 원인 대비 값이지 100% 누적 막대가 아니다. 피해 비중을 직접 비교하려면 `DamageShare`를 사용한다.
 
 ### 온보딩
@@ -330,7 +330,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 ### 데이터 상태·분석 주의
 
 - 데이터 상태의 행 수는 현재 가져온 파일/시트 행 수다. 플레이어 수가 아니며, Diagnostics 행은 로그 실패나 변환 제외 원인을 읽는 데 쓴다.
-- build, 날짜, Editor 제외, 구 온보딩 포함 상태를 고정하고 회차 간 비교한다. 새로운 7단계 stageId와 과거 2구간 stageId는 `config_version`으로 분리한다.
+- build, 날짜, Editor 제외, 구 온보딩 포함 상태를 고정하고 회차 간 비교한다. 현재 5단계, 이전 7단계, 과거 2구간 stageId는 `config_version`으로 분리한다.
 - 비율은 원시 이벤트나 합계 분자·분모로 다시 계산한다. 반올림된 구간별 비율을 단순 평균하지 않는다. 작은 표본에서는 결론 대신 다음 테스트에서 확인할 가설로 둔다.
 
 ## 전송량 정리와 현재 배포

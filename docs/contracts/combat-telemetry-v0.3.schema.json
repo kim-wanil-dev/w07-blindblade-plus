@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Onboarding and Stage1 telemetry 0.3.0",
-  "description": "Onboarding stages 0-1 through 0-7, objective attempts, and Stage1 combat attempts. Contract API remains 0.2.0.",
+  "description": "Current onboarding stages 0-1 through 0-5, with 0-6 and 0-7 retained for previous runs, objective attempts, and Stage1 combat attempts. Contract API remains 0.2.0.",
   "type": "object",
   "additionalProperties": false,
   "required": [
