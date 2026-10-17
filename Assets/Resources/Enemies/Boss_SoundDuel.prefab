@@ -304,8 +304,8 @@ MonoBehaviour:
   _rangedPreparation: 0.26666668
   _rangedShots: 3
   _rangedInterval: 0.26666668
-  _rangedProjectileSpeedMultiplier: 1.5
-  _rangedBackstepDistance: 15
+  _rangedProjectileSpeedMultiplier: 2.25
+  _rangedBackstepDistance: 30
   _rangedBackstepSpeed: 12
   _burstDamageWindow: 4
   _burstDamageThreshold: 30
