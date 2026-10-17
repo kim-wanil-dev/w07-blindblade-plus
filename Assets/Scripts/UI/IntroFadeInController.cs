@@ -8,6 +8,10 @@ public sealed class IntroFadeInController : MonoBehaviour
 {
     private static bool _pending;
     private static bool _startupShown;
+    private static bool _startupNoticeComplete = true;
+
+    /// <summary>인트로 시작 안내가 끝났는지 반환한다.</summary>
+    public static bool IsStartupNoticeComplete => _startupNoticeComplete;
 
     [Header("메뉴 페이드인")]
     [SerializeField] private CanvasGroup _overlay;
@@ -30,6 +34,7 @@ public sealed class IntroFadeInController : MonoBehaviour
     {
         _pending = false;
         _startupShown = false;
+        _startupNoticeComplete = true;
     }
 
     /// <summary>다음 IntroScene 진입 시 검은 화면에서 페이드인하도록 요청한다.</summary>
@@ -45,10 +50,12 @@ public sealed class IntroFadeInController : MonoBehaviour
         if (_overlay == null || _menu == null)
         {
             Debug.LogError("메뉴 페이드 Overlay와 Menu 참조를 연결하세요.", this);
+            _startupNoticeComplete = true;
             enabled = false;
             return;
         }
         _showNotice = !requested && !_startupShown && _headphoneNotice != null;
+        _startupNoticeComplete = !_showNotice;
         if (_showNotice) _startupShown = true;
         _overlay.alpha = requested || _showNotice ? 1f : 0f;
         _overlay.blocksRaycasts = requested || _showNotice;
@@ -82,6 +89,11 @@ public sealed class IntroFadeInController : MonoBehaviour
     void OnDisable()
     {
         StopAllCoroutines();
+        if (_showNotice)
+        {
+            _showNotice = false;
+            _startupNoticeComplete = true;
+        }
         if (!_fading) return;
         if (_menu != null) _menu.interactable = _menuWasInteractable;
         _fading = false;
@@ -102,6 +114,7 @@ public sealed class IntroFadeInController : MonoBehaviour
         _headphoneNotice.gameObject.SetActive(false);
         _elapsed = 0f;
         _showNotice = false;
+        _startupNoticeComplete = true;
     }
 
     /// <summary>헤드폰 안내 알파를 from에서 to까지 지정된 시간 동안 부드럽게 변경한다.</summary>
