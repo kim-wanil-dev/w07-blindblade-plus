@@ -521,11 +521,23 @@ public class SoundManager
             }
             var instance = RuntimeManager.CreateInstance(eventReference);
             description.is3D(out bool is3D);
+
+            bool dopplerEnabled = false;
+            if (is3D && description.isDopplerEnabled(out bool dopplerenabled) == FMOD.RESULT.OK)
+                dopplerEnabled = dopplerenabled;
+
             description.getMinMaxDistance(out float minimumDistance, out float maximumDistance);
             if (attach)
-                RuntimeManager.AttachInstanceToGameObject(instance, source);
+            {
+                if (is3D && dopplerEnabled)
+                    AttachInstanceWithVelocity(instance, source);
+                else
+                    RuntimeManager.AttachInstanceToGameObject(instance, source);
+            }
             else
+            {
                 instance.set3DAttributes(RuntimeUtils.To3DAttributes(position));
+            }
             FMOD.RESULT result = instance.setVolume(Mathf.Max(0f, volume));
             if (result == FMOD.RESULT.OK)
                 result = instance.setPitch(Mathf.Clamp(pitch, 0.25f, 4f));
@@ -595,6 +607,22 @@ public class SoundManager
         return _footstepOnlyOwner == null || playDuringMovement || soundId == SoundId.WarCry
             || (source == _footstepOnlyOwner && (soundId == SoundId.Footstep || soundId == SoundId.SwordSwing
                 || soundId == SoundId.SwordHit || soundId == SoundId.SwordUnsheath));
+    }
+
+    /// <summary>
+    /// source에 FMOD 이벤트를 연결하고, Rigidbody 또는 Transform에서 얻은 속도를 전달한다.
+    /// instance와 source를 입력받으며, 연결된 이벤트의 3D 속성 갱신을 FMOD에 맡긴다.
+    /// </summary>
+    private void AttachInstanceWithVelocity(FMOD.Studio.EventInstance instance, GameObject source)
+    {
+        Rigidbody rigidbody = source.GetComponent<Rigidbody>();
+        if (rigidbody != null)
+        {
+            RuntimeManager.AttachInstanceToGameObject(instance, source, rigidbody);
+            return;
+        }
+
+        RuntimeManager.AttachInstanceToGameObject(instance, source, true);
     }
 
     /// <summary>
