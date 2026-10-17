@@ -27,6 +27,7 @@ public sealed class BossController : MonoBehaviour
     private const float COUNTER_RETREAT_STEP = 0.5f;
     private const float COUNTER_RETREAT_PLAYER_CLEARANCE = 1.5f;
     private const float COUNTER_RETREAT_FLOOR_CLEARANCE = 0.2f;
+    private const string REFLECTED_PROJECTILE_PATTERN_ID = "ReflectedProjectile";
 
     [Header("전투 연결")]
     [SerializeField, Min(0f), Tooltip("피격 후 다음 패턴으로 넘어가기 전 회복 시간(초)")]
@@ -567,7 +568,10 @@ public sealed class BossController : MonoBehaviour
         return true;
     }
 
-    /// <summary>준비 시간 뒤 목표 방향을 고정하고 시작 사건을 알린 후 장애물 경계까지 돌진하며 접촉 피해를 한 번 적용한다.</summary>
+    /// <summary>
+    /// 준비 시간 뒤 목표 방향을 고정하고, 실제로 내려치며 돌진하는 순간 피격 후 방어 상태와 무적을 끝내 가드 자세 칼을 숨긴다.
+    /// 시작 사건을 알린 뒤 장애물 경계까지 돌진하며 접촉 피해를 한 번 적용한다.
+    /// </summary>
     private IEnumerator Charge()
     {
         _motor.Stop();
@@ -581,6 +585,8 @@ public sealed class BossController : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(direction);
         float remaining = _chargeDistance;
         float until = Time.time + _chargeDuration;
+        // 내려치는 돌진 동작에 들어가면 방어 자세를 풀어 이때부터 플레이어 공격에 맞는다.
+        RestoreAfterDisappearance(true);
         BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_telemetryAttackId, transform.position);
         ChargeStarted?.Invoke();
         while (Time.time < until && remaining > 0.01f)
@@ -757,7 +763,7 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고 외형을 유지한 채 무적 방어 상태로 다음 패턴을 준비한다.
     /// 짧은 시간의 누적 피해가 기준 이상이면 기존 회복 대신 무적 없이 도주 난사를 시작한다.
-    /// 플레이어 불릿 타임(강화 준비·강화 공격) 중에는 무적과 방어 상태 없이 회복한다.
+    /// 플레이어 불릿 타임(강화 준비·강화 공격) 중이거나 반사된 수리검에 맞았으면 무적과 방어 상태 없이 회복한다.
     /// </summary>
     private void HandleBossDamaged(DamageContext context)
     {
@@ -786,8 +792,8 @@ public sealed class BossController : MonoBehaviour
             _routine = StartCoroutine(EscapeBarrage());
             return;
         }
-        // 플레이어 불릿 타임이 이어지는 동안에는 피격 후 무적과 쳐내기 창을 만들지 않는다.
-        if (_playerEmpower.IsReady || _playerEmpower.IsStriking)
+        // 플레이어 불릿 타임 중이거나 반사된 수리검에 맞으면 피격 후 무적과 방어 상태를 만들지 않는다.
+        if (_playerEmpower.IsReady || _playerEmpower.IsStriking || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID)
             RestoreAfterDisappearance(true);
         else
             _hitDeflectUntil = Time.time + _hitDeflectDuration;

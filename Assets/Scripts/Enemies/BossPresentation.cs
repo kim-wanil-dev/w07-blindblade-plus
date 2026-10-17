@@ -11,7 +11,6 @@ using FMODUnity;
 public sealed class BossPresentation : MonoBehaviour
 {
     private const string GUARD_SCABBARD_NAME = "Saya";
-
     private static readonly HashSet<BossPresentation> _activeChargeWarnings = new HashSet<BossPresentation>();
     private static readonly int _baseMapId = Shader.PropertyToID("_BaseMap");
     private static readonly int _baseColorId = Shader.PropertyToID("_BaseColor");
