@@ -55316,8 +55316,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1919222288}
   - component: {fileID: 1919222287}
+  - component: {fileID: 2200000100}
   m_Layer: 0
-  m_Name: RainyTwinBossController
+  m_Name: RainyStageController
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -55332,15 +55333,19 @@ MonoBehaviour:
   m_GameObject: {fileID: 1919222286}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ccb3e0f1a9dd4425bd5e577cc85abd9a, type: 3}
+  m_Script: {fileID: 11500000, guid: f19de82b089f411997b003a3a4b64fed, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RainyTwinBossController
+  m_EditorClassIdentifier: Assembly-CSharp::RainyStageController
   _director: {fileID: 1968806059}
   _arena: {fileID: 1943110757}
   _twinBoss: {fileID: 350192290}
   _human: {fileID: 350192293}
   _beast: {fileID: 350192294}
   _warning: {fileID: 132706044}
+  _weather: {fileID: 2200000003}
+  _rainAudio: {fileID: 2200000100}
+  _requiredKills: 50
+  _bossDropletCount: 2662
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
@@ -56228,7 +56233,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.16666667
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: cf336a3533adb1245942337987058d95, type: 2}
+  m_NavMeshData: {fileID: 23800000, guid: 58af9a942d4014d488181a3215d5d357, type: 2}
   m_BuildHeightMesh: 0
 --- !u!114 &1943110757
 MonoBehaviour:
@@ -56671,19 +56676,23 @@ MonoBehaviour:
   _throwerMinimumHeight: 0.6
   _throwerMaximumHeight: 5.5
   _throwerSeparation: 3
-  _initialThrowers: 2
-  _throwersPerMinute: 1.5
+  _initialThrowers: 0
+  _throwersPerMinute: 0
   _maximumThrowers: 6
   _throwerSpawnInterval: 1.33
   _meleePrefab: {fileID: 2678292632270529432, guid: 69709147bb3f3ad4fb6c4e311ac6ce72, type: 3}
   _meleeSpawnMinimumRadius: 24
   _meleeSpawnMaximumRadius: 28.6
   _meleeStartTime: 5
-  _meleeSpawnsPerMinute: 7.5
-  _meleeSpawnGrowthPerMinute: 4.5
+  _meleeSpawnsPerMinute: 20
+  _meleeSpawnGrowthPerMinute: 16
+  _firstMeleeKillThreshold: 0
+  _firstMeleeSpawnsPerMinute: 0
+  _secondMeleeKillThreshold: 0
+  _secondMeleeSpawnsPerMinute: 0
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
-  _maximumMelee: 15
+  _maximumMelee: 20
 --- !u!114 &1968806063
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -62400,7 +62409,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RainStageWeather
   _simulation: {fileID: 7200000, guid: cc68cc2feb2c42a1a9747e14885535e9, type: 3}
   _rainMaterial: {fileID: 2100000, guid: d154e75c411545adb66cf2cffecb405f, type: 2}
-  _dropletCount: 2048
+  _dropletCount: 1434
   _nearRadius: 15
   _farDropletCount: 4096
   _farRadius: 40
@@ -62446,6 +62455,25 @@ MonoBehaviour:
   _bambooRainHitExpandDuration: 0.25
   _bambooRainHitAfterimage: 0.3
   _bambooRainHitStrength: 0.35
+--- !u!114 &2200000100
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1919222286}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7bcbbfe2a8194692b1a3c0d04a84f123, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RainyStageAudio
+  _playRainSound: 1
+  _crossfadeDuration: 3
+  _rainVolume: 0.7
+  _useWaterFootsteps: 1
+  _muffleEnemySoundsInRain: 1
+  _enemyRainLowpassCutoff: 6500
+  _enemyRainVolume: 0.85
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

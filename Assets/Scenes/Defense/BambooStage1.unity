@@ -6740,9 +6740,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.CombatTelemetryRecorder
   _health: {fileID: 876271890}
-  _director: {fileID: 1968806059}
   _spawner: {fileID: 1968806062}
-  _presentation: {fileID: 1968806063}
   _recordingEnabled: 1
   _configVersion: stage1-analysis-v3
   _bufferLimit: 4096
@@ -56142,7 +56140,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.16666667
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: cf336a3533adb1245942337987058d95, type: 2}
+  m_NavMeshData: {fileID: 23800000, guid: 307eacb5e4a4a0f41ac7e0fa2624e32a, type: 2}
   m_BuildHeightMesh: 0
 --- !u!114 &1943110757
 MonoBehaviour:

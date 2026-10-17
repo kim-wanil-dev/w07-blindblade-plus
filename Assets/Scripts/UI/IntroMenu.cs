@@ -18,7 +18,7 @@ public class IntroMenu : MonoBehaviour
     [SerializeField] private UnityEngine.UI.Button _tutorialNoButton;
     [SerializeField, FormerlySerializedAs("_gameSceneName")] private string _onboardingSceneName = "Onboarding";
     [SerializeField] private string _stage1SceneName = "BambooStage1";
-    [SerializeField] private string _rainyStageSceneName = "RainyStage";
+    [SerializeField] private string _rainyStageSceneName = "RainyTwinBoss";
     [SerializeField, Min(0.01f)] private float _transitionFadeDuration = 0.5f;
 
     [Header("버튼 절단 상태")]
