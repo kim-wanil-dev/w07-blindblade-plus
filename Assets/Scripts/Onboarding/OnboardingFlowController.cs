@@ -711,10 +711,13 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (!_transitionInputLocked && _stage == RANGED_STAGE && IsFollowUpObjective()) QueueAdvance();
     }
 
-    /// <summary>극한 회피·원거리 방어·궁극기 연습 중 실제 발사된 수리검 공격 ID를 기록한다.</summary>
+    /// <summary>
+    /// 극한 회피·원거리 방어·거합 연습 중 실제 발사된 수리검 공격 ID를 기록한다.
+    /// 목표 전환 중 발사된 수리검도 전환 후 접촉할 수 있으므로 입력 잠금과 무관하게 저장한다.
+    /// </summary>
     private void HandleShurikenLaunched(DefenseShuriken shuriken)
     {
-        if (_transitionInputLocked || (_stage != PERFECT_DODGE_STAGE && _stage != RANGED_STAGE
+        if ((_stage != PERFECT_DODGE_STAGE && _stage != RANGED_STAGE
             && _stage != FINAL_STAGE) || shuriken == null) return;
         _launchedShurikenAttackIds.Add(shuriken.AttackId);
     }
