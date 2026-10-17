@@ -30,7 +30,7 @@ public static class BambooStage1Progress
         PlayerPrefs.Save();
     }
 
-    /// <summary>1막 보스 격파를 저장해 이어 하기에서 RainyStage를 열도록 한다.</summary>
+    /// <summary>1막 보스 격파를 저장해 이어 하기에서 RainyTwinBoss를 열도록 한다.</summary>
     public static void MarkRainyStageReached()
     {
         if (RainyStageReached) return;
@@ -38,7 +38,7 @@ public static class BambooStage1Progress
         PlayerPrefs.Save();
     }
 
-    /// <summary>2막 보스 등장을 저장해 RainyStage 재도전과 이어 하기에서 일반 웨이브를 건너뛴다.</summary>
+    /// <summary>2막 보스 등장을 저장해 RainyTwinBoss 재도전과 이어 하기에서 일반 웨이브를 건너뛴다.</summary>
     public static void MarkRainyBossCheckpointReached()
     {
         if (RainyBossCheckpointReached) return;
