@@ -679,6 +679,17 @@ MonoBehaviour:
     _spherical: 1
   _burrowCry: 32
   _burrowCryVolume: 2
+  _diveMinSpeed: 7
+  _diveMaxSpeed: 14
+  _emergeLeapSpeed: 7
+  _prowlRadius: 9
+  _prowlKeepAway: 6
+  _prowlBackHysteresis: 1.5
+  _prowlSpeed: 9
+  _prowlAcceleration: 14
+  _prowlLookAhead: 0.8
+  _prowlSwitchMin: 2.5
+  _prowlSwitchMax: 5
 --- !u!114 &330
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4537,6 +4548,7 @@ MonoBehaviour:
   _gallopStride: 6
   _fullStrideSpeed: 4
   _gallopSpeed: 9
+  _alwaysGallop: 1
   _speedSmoothing: 10
   _bodyBob: 0.12
   _gallopPitch: 12
@@ -4569,6 +4581,8 @@ MonoBehaviour:
   _headTurnStiffness: 35
   _maxBodyTurnLag: 60
   _maxHeadTurnLag: 70
+  _maxHeadLook: 80
+  _headLookStiffness: 30
   _stanceDrop: 0.16
   _stancePitch: 6
   _stanceHeadPitch: 16
@@ -4587,7 +4601,7 @@ MonoBehaviour:
   _poseBlendSpeed: 10
   _burrowSinkDepth: 3.2
   _diveNosePitch: 55
-  _diveForwardDrift: 1.6
+  _diveForwardDrift: 0
   _diveHop: 0.5
   _emergeNosePitch: 45
   _emergeHop: 0.6

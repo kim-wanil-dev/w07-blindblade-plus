@@ -101,6 +101,7 @@ public sealed class TwinBossController : MonoBehaviour
     private float _beastAcceleration;
     private float _humanInvulnerableUntil;
     private float _beastInvulnerableUntil;
+    private bool _beastEvadeMoving;
 
     public TwinBossPattern Pattern => _pattern;
     public event Action<TwinBossPattern> PatternChanged;
@@ -131,6 +132,25 @@ public sealed class TwinBossController : MonoBehaviour
             _beastInvulnerableUntil = 0f;
             _beast.Health.SetInvulnerable(false);
         }
+        UpdateBeastProwl();
+    }
+
+    /// <summary>
+    /// 패턴 대기·회피 회복 중에는 짐승이 멈추지 않고 플레이어 주위를 배회하게 하고, 그 밖에는 배회를 끝낸다.
+    /// 피격당한 짐승이 회피 이동 중이면 배회하지 않는다.
+    /// </summary>
+    private void UpdateBeastProwl()
+    {
+        bool prowl = _beast.Health.IsAlive && _player.IsAlive && !_beastEvadeMoving
+            && (_pattern == TwinBossPattern.Idle || _pattern == TwinBossPattern.Evading);
+        if (!prowl)
+        {
+            _beast.EndProwl();
+            return;
+        }
+        if (_beast.IsProwling) return;
+        GetArenaCircle(out Vector3 center, out float radius);
+        _beast.BeginProwl(_player.transform, center, radius);
     }
 
     /// <summary>
@@ -171,6 +191,7 @@ public sealed class TwinBossController : MonoBehaviour
         _hitRequested = false;
         _hitBoss = null;
         _interrupted = false;
+        _beastEvadeMoving = false;
         _human.Health.Damaged += HandleHumanDamaged;
         _beast.Health.Damaged += HandleBeastDamaged;
         _human.Health.DamageBlocked += HandleHumanDamageBlocked;
@@ -352,6 +373,9 @@ public sealed class TwinBossController : MonoBehaviour
         EnemyMotor motor = humanHit ? _humanMotor : _beastMotor;
         NavMeshAgent agent = humanHit ? _humanAgent : _beastAgent;
         Vector3 position = agent.transform.position;
+        // 맞은 짐승은 배회 대신 회피 이동을 하고, 인간이 맞았으면 짐승은 계속 배회한다.
+        _beastEvadeMoving = !humanHit;
+        if (_beastEvadeMoving) _beast.EndProwl();
         bool moving = _hitBoss != null && _hitBoss.IsAlive && motor.IsReady
             && TryEscape(agent, out position);
         if (moving) moving = BeginMove(motor, agent, position, _evadeSpeed);
@@ -359,6 +383,7 @@ public sealed class TwinBossController : MonoBehaviour
         while (Time.time < until && CanBattle() && moving && _hitBoss != null
             && _hitBoss.IsAlive && !motor.HasArrived) yield return null;
         RestoreMovement();
+        _beastEvadeMoving = false;
         until = Time.time + _breakRecovery;
         while (Time.time < until && CanBattle()) yield return null;
         _hitRequested = false;
@@ -414,7 +439,7 @@ public sealed class TwinBossController : MonoBehaviour
         return motor.MoveTo(destination, 0.1f);
     }
 
-    /// <summary>두 보스의 빠른 이동을 정지하고 초기 속도·가속도를 복원한다.</summary>
+    /// <summary>두 보스의 빠른 이동을 정지하고 초기 속도·가속도를 복원한다. 배회 중인 짐승은 멈추지 않는다.</summary>
     private void RestoreMovement()
     {
         if (_humanAgent != null)
@@ -423,7 +448,7 @@ public sealed class TwinBossController : MonoBehaviour
             _humanAgent.speed = _humanSpeed;
             _humanAgent.acceleration = _humanAcceleration;
         }
-        if (_beastAgent != null)
+        if (_beastAgent != null && !_beast.IsProwling)
         {
             _beastMotor.Stop();
             _beastAgent.speed = _beastSpeed;
@@ -593,11 +618,13 @@ public sealed class TwinBossController : MonoBehaviour
         RestoreMovement();
     }
 
-    /// <summary>pattern 변경을 저장하고 표현 담당자에게 전달한다.</summary>
+    /// <summary>pattern 변경을 저장하고 표현 담당자에게 전달한다. 대기·회피가 아닌 패턴으로 바뀌면 짐승 배회를 끝낸다.</summary>
     private void ChangePattern(TwinBossPattern pattern)
     {
         if (_pattern == pattern) return;
         _pattern = pattern;
+        // 패턴이 시작되는 프레임에 바로 배회를 끝내 패턴 이동과 겹치지 않게 한다.
+        if (pattern != TwinBossPattern.Idle && pattern != TwinBossPattern.Evading && _beast != null) _beast.EndProwl();
         PatternChanged?.Invoke(pattern);
     }
 

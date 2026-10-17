@@ -57,6 +57,8 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private float _fullStrideSpeed = 3f;
     [SerializeField, Min(0.1f), Tooltip("이 속도 이상이면 질주 리듬으로 바뀐다(m/s)")]
     private float _gallopSpeed = 8f;
+    [SerializeField, Tooltip("켜면 속도와 상관없이 걷기 없이 항상 질주 리듬으로 발을 놀린다.")]
+    private bool _alwaysGallop = true;
     [SerializeField, Min(0.1f)] private float _speedSmoothing = 10f;
     [SerializeField] private float _bodyBob = 0.06f;
     [SerializeField, Tooltip("질주할 때 척추를 굽혔다 펴며 앞뒤로 기울이는 각도")]
@@ -76,6 +78,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private float _speed;
     private float _phase;
     private float _idleTime;
+    private float _gaitDirection = 1f;
     private readonly float[] _previousLegPhases = new float[LEG_COUNT];
 
     [Header("발 디딤")]
@@ -144,6 +147,14 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private float _bodyTurnVelocity;
     private float _headTurnLag;
     private float _headTurnVelocity;
+
+    [Header("시선")]
+    [SerializeField, Min(0f), Tooltip("배회 중 몸 방향과 상관없이 플레이어 쪽으로 고개를 돌리는 최대 각도")]
+    private float _maxHeadLook = 80f;
+    [SerializeField, Min(0.1f), Tooltip("고개가 플레이어 쪽을 따라가는 스프링 세기")]
+    private float _headLookStiffness = 30f;
+    private float _headLook;
+    private float _headLookVelocity;
 
     [Header("전투 자세")]
     [SerializeField, Tooltip("평소에도 몸을 낮추는 깊이(m)")]
@@ -281,6 +292,8 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         _lastRootYaw = _beast.transform.eulerAngles.y;
         _bodyTurnLag = 0f;
         _headTurnLag = 0f;
+        _headLook = 0f;
+        _gaitDirection = 1f;
         _health.Damaged += HandleDamaged;
     }
 
@@ -304,12 +317,14 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         _bite = Mathf.Lerp(_bite, _beast.IsBiting ? 1f : 0f, quickBlend);
         // 도약·잠수 중에는 다리를 뻗은 자세로 고정하므로 걸음 주기를 진행하지 않는다.
         // 멈춰 있어도 제자리에서 발을 바꿔 딛도록 최소 걸음 주기를 둔다.
+        // 뒷걸음질할 때는 걸음 주기를 거꾸로 돌려 발이 앞으로 밀리며 몸이 뒤로 물러나게 한다.
         if (!airborne && !_beast.IsBurrowed)
-            _phase = Mathf.Repeat(_phase + Mathf.Max(_speed / GetStride(), _idleStepCadence) * deltaTime, 1f);
+            _phase = Mathf.Repeat(_phase + _gaitDirection * Mathf.Max(_speed / GetStride(), _idleStepCadence) * deltaTime, 1f);
         _idleTime += deltaTime;
         UpdateSpring(deltaTime);
         UpdateIdleAction(deltaTime);
         UpdateTurnLag(deltaTime, airborne || _beast.IsBiting || _beast.IsBurrowed);
+        UpdateHeadLook(deltaTime);
         ApplyPose();
         UpdateSmoke();
     }
@@ -363,6 +378,25 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         StepCriticalSpring(ref _headTurnLag, ref _headTurnVelocity, _headTurnStiffness, deltaTime);
     }
 
+    /// <summary>
+    /// 짐승이 배회하며 보는 대상이 있으면 몸 정면에서 대상까지의 수평 각도를 _maxHeadLook 안으로 잘라 목표로 삼고, 없으면 정면을 목표로 한다.
+    /// _headLook을 임계 감쇠 스프링으로 deltaTime만큼 목표에 다가가게 해 고개가 부드럽게 돌아가게 한다.
+    /// </summary>
+    private void UpdateHeadLook(float deltaTime)
+    {
+        float target = 0f;
+        if (_beast.HasLookTarget)
+        {
+            Vector3 forward = Vector3.ProjectOnPlane(_beast.transform.forward, Vector3.up);
+            Vector3 toTarget = Vector3.ProjectOnPlane(_beast.LookTarget - _beast.transform.position, Vector3.up);
+            if (forward.sqrMagnitude > 0.0001f && toTarget.sqrMagnitude > 0.0001f)
+                target = Mathf.Clamp(Vector3.SignedAngle(forward, toTarget, Vector3.up), -_maxHeadLook, _maxHeadLook);
+        }
+        float offset = _headLook - target;
+        StepCriticalSpring(ref offset, ref _headLookVelocity, _headLookStiffness, deltaTime);
+        _headLook = target + offset;
+    }
+
     /// <summary>value를 0으로 되돌리는 임계 감쇠 스프링을 stiffness 세기로 deltaTime만큼 진행해 value·velocity를 갱신한다.</summary>
     private static void StepCriticalSpring(ref float value, ref float velocity, float stiffness, float deltaTime)
     {
@@ -372,7 +406,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
     /// <summary>
     /// 짐승 루트의 수평 이동 거리와 deltaTime으로 현재 속도를 구해 _speed를 부드럽게 갱신한다.
-    /// 순간이동처럼 비정상적으로 큰 값은 상한으로 자른다.
+    /// 순간이동처럼 비정상적으로 큰 값은 상한으로 자르고, 몸 정면 기준 앞뒤 이동 방향을 _gaitDirection에 기록한다.
     /// </summary>
     private void UpdateSpeed(float deltaTime)
     {
@@ -380,6 +414,9 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         Vector3 moved = Vector3.ProjectOnPlane(position - _previousPosition, Vector3.up);
         _previousPosition = position;
         float measured = Mathf.Min(MAX_MEASURED_SPEED, moved.magnitude / deltaTime);
+        float forwardSpeed = Vector3.Dot(moved, _beast.transform.forward) / deltaTime;
+        if (forwardSpeed < -0.3f) _gaitDirection = -1f;
+        else if (forwardSpeed > 0.3f) _gaitDirection = 1f;
         // 멈출 때는 더 천천히 줄여 걸음이 점점 느려지며 서게 한다.
         float smoothing = measured >= _speed ? _speedSmoothing : _decelerationSmoothing;
         _speed = Mathf.Lerp(_speed, measured, 1f - Mathf.Exp(-smoothing * deltaTime));
@@ -388,7 +425,13 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     /// <summary>현재 속도의 질주 비중으로 걷기와 질주 사이 한 주기 이동 거리(m)를 반환한다.</summary>
     private float GetStride()
     {
-        return Mathf.Lerp(_walkStride, _gallopStride, Mathf.InverseLerp(_gallopSpeed * 0.6f, _gallopSpeed, _speed));
+        return Mathf.Lerp(_walkStride, _gallopStride, GetGallop());
+    }
+
+    /// <summary>질주 리듬 비중(0~1)을 반환한다. _alwaysGallop이면 1, 아니면 현재 속도 _speed로 걷기와 질주 사이를 정한다.</summary>
+    private float GetGallop()
+    {
+        return _alwaysGallop ? 1f : Mathf.InverseLerp(_gallopSpeed * 0.6f, _gallopSpeed, _speed);
     }
 
     /// <summary>
@@ -399,7 +442,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     {
         float burrow = ApplyRoot(out float howl);
         float stride = Mathf.Clamp01(_speed / _fullStrideSpeed) * (1f - _leap) * (1f - burrow);
-        float gallop = Mathf.InverseLerp(_gallopSpeed * 0.6f, _gallopSpeed, _speed);
+        float gallop = GetGallop();
         float run = gallop * stride;
         float cycle = _phase * Mathf.PI * 2f;
         float idle = 1f - stride;
@@ -434,7 +477,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
             + _crouchPitch * _crouch + 6f * run - 8f * _bite + _howlHeadPitch * howl - 12f * flinch
             + (_sniffPitch + Mathf.Sin(_idleTime * 9f) * 2f) * sniff;
         float headYaw = Mathf.Sin(_idleTime * 0.6f) * _idleScanYaw * Mathf.Max(scan, 0.3f * idleMix)
-            + Mathf.Sin(cycle) * _headSway * stride * (1f - gallop) + _headTurnLag - _bodyTurnLag;
+            + Mathf.Sin(cycle) * _headSway * stride * (1f - gallop) + _headTurnLag - _bodyTurnLag + _headLook;
         _head.localPosition = _headBasePosition + Vector3.forward * (_biteLunge * _bite);
         _head.localRotation = _headBaseRotation * Quaternion.Euler(headPitch, headYaw, 0f);
 
@@ -475,7 +518,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
             _hips[i].localRotation = Quaternion.Euler(hip, 0f, 0f);
             _knees[i].localRotation = Quaternion.Euler(knee, 0f, 0f);
             _ankles[i].localRotation = Quaternion.Euler(ankle, 0f, 0f);
-            NotifyPawContact(i, legPhase, stride * (1f - air), paw);
+            NotifyPawContact(i, legPhase, duty, stride * (1f - air), paw);
         }
     }
 
@@ -593,14 +636,18 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     }
 
     /// <summary>
-    /// leg 다리의 이번 위상 legPhase가 한 바퀴 돌아 0(발이 닿는 순간)을 지나면 걸음 비중 stride만큼 몸을 눌러 스프링 반발을 일으킨다.
+    /// leg 다리의 이번 위상 legPhase가 발이 닿는 순간을 지나면 걸음 비중 stride만큼 몸을 눌러 스프링 반발을 일으킨다.
+    /// 앞으로 걸을 때는 위상이 한 바퀴 돌아 0을, 뒷걸음질할 때는 거꾸로 돌며 디딤 비율 duty를 지나는 순간이 발이 닿는 때다.
     /// stride가 충분하면 늑대 루트 기준 발바닥 위치 paw를 지면 높이로 내려 PawPlanted로도 알린다. 지난 위상은 _previousLegPhases에 저장한다.
     /// </summary>
-    private void NotifyPawContact(int leg, float legPhase, float stride, Vector3 paw)
+    private void NotifyPawContact(int leg, float legPhase, float duty, float stride, Vector3 paw)
     {
         float previous = _previousLegPhases[leg];
         _previousLegPhases[leg] = legPhase;
-        if (previous - legPhase < 0.5f) return;
+        bool planted = _gaitDirection > 0f
+            ? previous - legPhase >= 0.5f
+            : previous >= duty && legPhase < duty && previous - legPhase < 0.5f;
+        if (!planted) return;
         // 제자리 발 바꿈도 약하게 눌러 숨 쉬듯 출렁이게 한다.
         _springVelocity -= _contactImpulse * Mathf.Max(stride, 0.15f);
         if (stride < 0.2f) return;
