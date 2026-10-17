@@ -55360,20 +55360,6 @@ MonoBehaviour:
   _cameraShakeAmplitude: 0.13
   _cameraShakeDuration: 0.55
   _cameraShakeFrequency: 24
---- !u!114 &2200000100
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1919222286}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7bcbbfe2a8194692b1a3c0d04a84f123, type: 3}
-  m_Name:
-  m_EditorClassIdentifier: Assembly-CSharp::RainyStageAudio
-  _crossfadeDuration: 3
-  _rainVolume: 0.7
 --- !u!4 &1919222288
 Transform:
   m_ObjectHideFlags: 0
@@ -56247,7 +56233,7 @@ MonoBehaviour:
   m_OverrideVoxelSize: 0
   m_VoxelSize: 0.16666667
   m_MinRegionArea: 2
-  m_NavMeshData: {fileID: 23800000, guid: cf336a3533adb1245942337987058d95, type: 2}
+  m_NavMeshData: {fileID: 23800000, guid: fd4bbc71520037341b46dcf271796f6e, type: 2}
   m_BuildHeightMesh: 0
 --- !u!114 &1943110757
 MonoBehaviour:
@@ -56700,6 +56686,10 @@ MonoBehaviour:
   _meleeStartTime: 5
   _meleeSpawnsPerMinute: 20
   _meleeSpawnGrowthPerMinute: 16
+  _firstMeleeKillThreshold: 0
+  _firstMeleeSpawnsPerMinute: 0
+  _secondMeleeKillThreshold: 0
+  _secondMeleeSpawnsPerMinute: 0
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 20
@@ -62465,6 +62455,20 @@ MonoBehaviour:
   _bambooRainHitExpandDuration: 0.25
   _bambooRainHitAfterimage: 0.3
   _bambooRainHitStrength: 0.35
+--- !u!114 &2200000100
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1919222286}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7bcbbfe2a8194692b1a3c0d04a84f123, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RainyStageAudio
+  _crossfadeDuration: 3
+  _rainVolume: 0.7
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
