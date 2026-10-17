@@ -89,10 +89,28 @@ public sealed class HumanBossAttack : MonoBehaviour
     [SerializeField] private SoundId _slashTelegraphSound = SoundId.EnemyMeleeWarning;
     [SerializeField] private SoundId _slashSound = SoundId.EnemySwordSwing;
     private readonly RaycastHit[] _slashHits = new RaycastHit[16];
+    [SerializeField, Min(0f), Tooltip("돌진 베기가 퍼펙트 패링에 막혔을 때 떨며 뒤로 밀려나는 거리(미터)")]
+    private float _parryRecoilDistance = 10f;
+    [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링에 막혀 밀려나는 시간(초)")]
+    private float _parryRecoilDuration = 0.45f;
+    [SerializeField, Min(0f), Tooltip("밀려나는 동안 좌우로 떠는 폭(미터). 밀려날수록 잦아든다.")]
+    private float _recoilShake = 0.25f;
+    [SerializeField, Min(0f), Tooltip("밀려나는 동안 좌우로 떠는 빠르기(초당 횟수)")]
+    private float _recoilShakeFrequency = 18f;
+    [SerializeField, Min(0f), Tooltip("교대 근접에서 돌진 베기를 마치고 짐승 덮치기를 기다리는 동안 크게 뒤로 물러나는 거리(미터)")]
+    private float _backstepDistance = 30f;
+    [SerializeField, Min(0.01f), Tooltip("크게 뒤로 물러나는 시간(초)")]
+    private float _backstepDuration = 0.6f;
     private TwinBossWarningVisual _warning;
     private PerceptionRevealMap _revealMap;
     private bool _slashing;
     private bool _dashHit;
+    private bool _dashParried;
+
+    [Header("기운 구슬")]
+    [SerializeField, Min(1), Tooltip("허리춤 구슬 개수이자 거합에 필요한 기운 수. 근접 공격이 플레이어에게 피해를 줄 때마다 하나씩 찬다.")]
+    private int _maxCharges = 3;
+    private int _charges;
 
     public EnemyHealth Health => _health;
     public bool IsAttacking => _shooting != null;
@@ -100,6 +118,9 @@ public sealed class HumanBossAttack : MonoBehaviour
     public bool IsReady => _motor.IsReady;
     public bool IsMounted => _mounted;
     public bool IsSlashing => _slashing;
+    public int Charges => _charges;
+    public int MaxCharges => _maxCharges;
+    public bool IsChargeFull => _charges >= _maxCharges;
     public bool IsConfigured => _projectilePrefab != null && _muzzle != null && _hitCollider != null;
     public event Action ShotPreparing;
     public event Action ShotFired;
@@ -239,8 +260,77 @@ public sealed class HumanBossAttack : MonoBehaviour
         if (CanSlash()) yield return Dash();
         _slashing = false;
         _warning.EndWarning();
+        // 퍼펙트 패링에 막혔으면 지그재그 후퇴 대신 떨며 뒤로 밀려난다.
+        if (_dashParried && CanSlash())
+        {
+            Vector3 back = Vector3.ProjectOnPlane(transform.position - _player.transform.position, Vector3.up);
+            yield return Recoil(back.sqrMagnitude > 0.0001f ? back.normalized : -transform.forward,
+                _parryRecoilDistance, _parryRecoilDuration, false);
+            yield break;
+        }
         if (CanSlash() && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 retreat))
             yield return Retreat(retreat);
+    }
+
+    /// <summary>
+    /// direction으로 distance만큼 duration 동안 감속하며 밀려나고, 밀려나는 방향의 옆으로 _recoilShake 폭·_recoilShakeFrequency 빠르기로 잦아들며 떤다.
+    /// realTime이면 일시정지를 제외한 실제 시간으로, 아니면 게임 시간으로 진행하며 플레이어를 바라본 채 걸을 수 있는 지면 끝에서 멈춘다.
+    /// 퍼펙트 패링에 막힌 돌진 베기와 거합에서 쓴다.
+    /// </summary>
+    public IEnumerator Recoil(Vector3 direction, float distance, float duration, bool realTime)
+    {
+        yield return Slide(direction, distance, duration, _recoilShake, realTime);
+    }
+
+    /// <summary>
+    /// player 반대쪽으로 _backstepDistance만큼 _backstepDuration 동안 감속하며 크게 뒤로 물러난다. 떨지 않고 플레이어를 바라본 채 물러나며 걸을 수 있는 지면 끝에서 멈춘다.
+    /// 교대 근접에서 돌진 베기를 마치고 짐승의 덮치기를 기다리는 동안 쓴다.
+    /// </summary>
+    public IEnumerator Backstep(KatanaDamageReceiver player)
+    {
+        _player = player;
+        _playerMotor = player.GetComponent<PlayerMotor>();
+        if (!CanSlash()) yield break;
+        Vector3 away = Vector3.ProjectOnPlane(transform.position - player.transform.position, Vector3.up);
+        yield return Slide(away.sqrMagnitude > 0.0001f ? away.normalized : -transform.forward,
+            _backstepDistance, _backstepDuration, 0f, false);
+    }
+
+    /// <summary>
+    /// direction으로 distance만큼 duration 동안 감속하며 미끄러지고, 옆으로 shakeWidth 폭·_recoilShakeFrequency 빠르기로 잦아들며 떤다.
+    /// realTime이면 일시정지를 제외한 실제 시간으로, 아니면 게임 시간으로 진행하며 플레이어를 바라본 채 걸을 수 있는 지면 끝에서 멈춘다.
+    /// </summary>
+    private IEnumerator Slide(Vector3 direction, float distance, float duration, float shakeWidth, bool realTime)
+    {
+        _motor.Stop();
+        Vector3 side = Vector3.Cross(Vector3.up, direction);
+        Vector3 start = transform.position;
+        float elapsed = 0f;
+        while (elapsed < duration && _health.IsAlive && _motor.IsReady)
+        {
+            elapsed += realTime ? EmpowerOverlay.RealDeltaTime() : Time.deltaTime;
+            float progress = Mathf.Clamp01(elapsed / duration);
+            float pushed = distance * (1f - (1f - progress) * (1f - progress));
+            float shake = Mathf.Sin(elapsed * _recoilShakeFrequency * Mathf.PI * 2f) * shakeWidth * (1f - progress);
+            Vector3 destination = start + direction * pushed + side * shake;
+            if (_agent.Raycast(destination, out NavMeshHit boundary)) destination = boundary.position;
+            _agent.Move(destination - transform.position);
+            if (_player != null) FacePlayer();
+            yield return null;
+        }
+        _motor.Stop();
+    }
+
+    /// <summary>근접 공격이 플레이어에게 피해를 줬을 때 기운을 하나 채운다. _maxCharges를 넘지 않는다.</summary>
+    private void AddCharge()
+    {
+        _charges = Mathf.Min(_maxCharges, _charges + 1);
+    }
+
+    /// <summary>모인 기운을 모두 써서 비운다. 거합을 낼 때 호출한다.</summary>
+    public void ConsumeCharges()
+    {
+        _charges = 0;
     }
 
     /// <summary>
@@ -258,6 +348,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
         int legs = _zigzagTurns + 1;
         _dashHit = false;
+        _dashParried = false;
         if (_slashSound != SoundId.None)
             Managers.Sound.Play(_slashSound, transform.position, 1f, gameObject, true);
         for (int leg = 0; leg < legs && CanSlash() && !_dashHit; leg++)
@@ -371,8 +462,15 @@ public sealed class HumanBossAttack : MonoBehaviour
             contact = _slashHits[i].distance;
             Vector3 point = _slashHits[i].distance > 0f ? _slashHits[i].point : _player.transform.position + Vector3.up;
             DamageContext context = new DamageContext(_slashDamage, gameObject, point, direction, "TwinHumanSlash");
-            if (_player.TryDefendProjectile(context, out _)) return true;
+            if (_player.TryDefendProjectile(context, out bool parried))
+            {
+                _dashParried = parried;
+                return true;
+            }
+            float healthBefore = _player.CurrentHealth;
             _player.TakeDamage(context);
+            // 회피·무적으로 피해가 없으면 공격 성공이 아니므로 기운을 채우지 않는다.
+            if (_player.CurrentHealth < healthBefore) AddCharge();
             if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
             return true;
         }

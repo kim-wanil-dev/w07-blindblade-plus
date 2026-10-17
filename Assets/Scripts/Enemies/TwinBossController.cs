@@ -28,6 +28,7 @@ public sealed class TwinBossController : MonoBehaviour
     private Coroutine _battle;
     private Coroutine _patternRoutine;
     private Coroutine _beastRoutine;
+    private Coroutine _humanRoutine;
     private bool _started;
     private bool _subscribed;
     private bool _patternFinished;
@@ -40,8 +41,8 @@ public sealed class TwinBossController : MonoBehaviour
     [Header("패턴 선택 가중치")]
     [SerializeField, Min(0f), Tooltip("둘 다 생존: 탑승 가장자리 질주 난사")]
     private float _cooperationWeight = 2f;
-    [SerializeField, Min(0f), Tooltip("둘 다 생존: 인간 거합 차징과 짐승 잠수 방해")]
-    private float _iaiChargeWeight = 1.5f;
+    [SerializeField, Min(0f), Tooltip("둘 다 생존: 인간 거합 차징과 짐승 잠수 방해. 인간 허리춤 구슬 3개가 모두 찼을 때만 쓰며, 다른 패턴보다 훨씬 크게 두어 구슬이 차면 거의 바로 거합을 쓴다.")]
+    private float _iaiChargeWeight = 20f;
     [SerializeField, Min(0f), Tooltip("둘 다 생존: 인간 베기와 짐승 잠수 물기 교대 근접")]
     private float _alternatingMeleeWeight = 2f;
     [SerializeField, Min(0f)] private float _humanRangedWeight = 1f;
@@ -295,7 +296,8 @@ public sealed class TwinBossController : MonoBehaviour
         while (BothAlive() && _player.IsAlive)
         {
             GetArenaCircle(out Vector3 center, out float radius);
-            yield return _beast.Ambush(_player, strikeAt, center, radius);
+            // 거합 차징의 붉은 파동과 섞이지 않도록 방해 덮치기는 전조 파동을 내지 않는다.
+            yield return _beast.Ambush(_player, strikeAt, center, radius, false);
             strikeAt = Time.time + _harassInterval;
             yield return null;
         }
@@ -315,7 +317,7 @@ public sealed class TwinBossController : MonoBehaviour
     /// <summary>
     /// 인간 연속 돌진 베기와 짐승 가장자리 덮치기를 서로 겹치지 않게 _alternatingRounds번 번갈아 한다.
     /// 한 차례마다 짐승이 땅에 뛰어드는 동안 인간이 스테이지1 보스 돌진처럼 _humanSlashInterval 간격으로 _humanSlashesPerRound번 돌진해 베고 물러나며,
-    /// 마지막 돌진 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진한다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
+    /// 마지막 돌진 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진하고, 그동안 인간은 크게 뒤로 물러난다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
     /// </summary>
     private IEnumerator AlternateMelee()
     {
@@ -329,10 +331,19 @@ public sealed class TwinBossController : MonoBehaviour
             while (_beastRoutine != null) yield return null;
             if (!BothAlive()) break;
             GetArenaCircle(out Vector3 center, out float radius);
+            // 돌진 베기를 마친 인간은 짐승이 덮치는 동안 크게 뒤로 물러나 자리를 비킨다.
+            _humanRoutine = StartCoroutine(HumanBackstep());
             yield return _beast.Ambush(_player, Time.time, center, radius);
             firstStrikeAt = Time.time + _alternatingLead;
         }
         yield return _beast.Resurface();
+    }
+
+    /// <summary>인간을 플레이어 반대쪽으로 크게 뒤로 물러나게 하고 끝나면 실행 참조를 비운다.</summary>
+    private IEnumerator HumanBackstep()
+    {
+        yield return _human.Backstep(_player);
+        _humanRoutine = null;
     }
 
     /// <summary>짐승을 땅에 뛰어들게 하고 끝나면 실행 참조를 비운다.</summary>
@@ -342,11 +353,13 @@ public sealed class TwinBossController : MonoBehaviour
         _beastRoutine = null;
     }
 
-    /// <summary>패턴이 따로 돌리던 짐승 코루틴을 멈추고 참조를 비운다.</summary>
+    /// <summary>패턴이 따로 돌리던 짐승·인간 코루틴을 멈추고 참조를 비운다.</summary>
     private void StopSideRoutines()
     {
         if (_beastRoutine != null) StopCoroutine(_beastRoutine);
         _beastRoutine = null;
+        if (_humanRoutine != null) StopCoroutine(_humanRoutine);
+        _humanRoutine = null;
     }
 
     /// <summary>
@@ -483,12 +496,14 @@ public sealed class TwinBossController : MonoBehaviour
 
     /// <summary>
     /// 질주 난사·거합 차징·교대 근접을 가중치로 고르되 바로 앞 협력 패턴은 다른 후보가 있으면 빼서 연속 반복을 막는다.
+    /// 거합 차징은 인간 허리춤 기운(HumanBossAttack.IsChargeFull)이 모두 찼을 때만 후보가 된다.
     /// 고른 패턴을 _lastPairPattern에 기록해 반환하며 가중치가 모두 0이면 질주 난사를 쓴다.
     /// </summary>
     private TwinBossPattern SelectPairPattern()
     {
         TwinBossPattern[] patterns = { TwinBossPattern.Cooperation, TwinBossPattern.IaiCharge, TwinBossPattern.AlternatingMelee };
-        float[] weights = { _cooperationWeight, _iaiChargeWeight, _alternatingMeleeWeight };
+        // 거합은 인간 허리춤 구슬 기운이 모두 차 있어야만 고른다.
+        float[] weights = { _cooperationWeight, _human.IsChargeFull ? _iaiChargeWeight : 0f, _alternatingMeleeWeight };
         float total = 0f;
         for (int i = 0; i < patterns.Length; i++)
             if (patterns[i] != _lastPairPattern) total += weights[i];
@@ -594,9 +609,19 @@ public sealed class TwinBossController : MonoBehaviour
         Managers.Sound.Play(SoundId.ParryClash, context.Point, 1f, gameObject);
     }
 
-    /// <summary>health 사망을 기록해 남은 연계를 중단하며 회피 중에는 생존자 이동을 유지한다.</summary>
+    /// <summary>
+    /// health 사망을 기록해 남은 연계를 중단하며 회피 중에는 생존자 이동을 유지한다.
+    /// 거합 차징·발동 중 짐승이 쓰러지면 짐승 방해만 멈추고 인간의 거합은 그대로 이어간다.
+    /// </summary>
     private void HandleBossDied(EnemyHealth health)
     {
+        // 거합 기 모으기는 인간이 공격받을 때만 끊긴다.
+        if (_pattern == TwinBossPattern.IaiCharge && health == _beast.Health && (_iai.IsCharging || _iai.IsReleasing))
+        {
+            StopSideRoutines();
+            _beast.CancelAttack();
+            return;
+        }
         _interrupted = true;
         if (_pattern != TwinBossPattern.Evading) CancelPattern();
     }

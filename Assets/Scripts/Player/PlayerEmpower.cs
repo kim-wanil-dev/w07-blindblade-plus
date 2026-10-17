@@ -56,6 +56,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _chargeElapsed;
     private float _appliedChargeScale;
     private bool _useChargeOwnerB;
+    private float _presentationProgress;
+    private float _presentationSlowProgress;
 
     [Header("퍼펙트 패링 토큰")]
     private int _tokens;
@@ -87,8 +89,11 @@ public sealed class PlayerEmpower : MonoBehaviour
     public int MaxTokens => MAX_TOKENS;
     public bool IsCharging => IsReady && _charging;
     public bool IsUltimateChargeComplete => IsCharging && _chargeElapsed >= _ultimateChargeDuration;
-    public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : 0f;
-    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : 0f;
+    public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : _presentationProgress;
+    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : _presentationSlowProgress;
+    public float UltimateChargeDuration => _ultimateChargeDuration;
+    public float ChargeSlowDuration => _chargeSlowDuration;
+    public float ChargeWorldTimeScale => _chargeWorldTimeScale;
 
     /// <summary>거합 게이지가 가득 찬 상태에서 퍼펙트 패링이 성공했을 때 알린다.</summary>
     public event Action UltimateReadyParry;
@@ -243,6 +248,17 @@ public sealed class PlayerEmpower : MonoBehaviour
         _chargeElapsed = 0f;
         _appliedChargeScale = _worldTimeScale;
         return true;
+    }
+
+    /// <summary>
+    /// 보스 거합을 받아쳐 X자로 되받아 칠 때처럼, 준비·토큰·입력 없이 좌클릭을 꾹 눌러 궁극기를 모으던 화면·소리 연출만 보이게 한다.
+    /// progress(0~1)는 차징 비네트·토큰 HUD가 읽는 ChargeProgress로, slowProgress(0~1)는 불릿 타임 소리가 읽는 ChargeSlowProgress로 그대로 쓴다.
+    /// 세계 감속은 호출자가 맡으며, 0·0을 넘기면 연출을 끝낸다. 실제 차징 중에는 실제 진행도가 우선한다.
+    /// </summary>
+    public void SetChargePresentation(float progress, float slowProgress)
+    {
+        _presentationProgress = Mathf.Clamp01(progress);
+        _presentationSlowProgress = Mathf.Clamp01(slowProgress);
     }
 
     /// <summary>

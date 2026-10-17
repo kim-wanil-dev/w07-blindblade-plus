@@ -210,7 +210,17 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     public void BeginAt(Vector3 point, Vector3 normal, Color ringColor, Color revealTint, float radius, float tintAmount,
         bool spherical = false)
     {
-        StartPulse(point, normal, radius, _expandDuration, _fadeDuration, ringColor, true);
+        BeginAt(point, normal, ringColor, revealTint, radius, tintAmount, spherical, _expandDuration);
+    }
+
+    /// <summary>
+    /// 위 BeginAt과 같지만 확산 시간을 expandDuration(초)으로 정한다. 쌍둥이 거합 돌진처럼 빠르게 퍼지는 보스 파동에 쓴다.
+    /// 페이드는 퍼펙트 패링과 같다.
+    /// </summary>
+    public void BeginAt(Vector3 point, Vector3 normal, Color ringColor, Color revealTint, float radius, float tintAmount,
+        bool spherical, float expandDuration)
+    {
+        StartPulse(point, normal, radius, expandDuration, _fadeDuration, ringColor, true);
         if (_mask == null) return;
         _mask.SetPulseTint(revealTint, tintAmount);
         _mask.SetPulseSpherical(spherical);
