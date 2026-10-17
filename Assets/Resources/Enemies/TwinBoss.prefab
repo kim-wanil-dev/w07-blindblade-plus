@@ -65,7 +65,7 @@ MonoBehaviour:
   _harassFirstDelay: 1.5
   _harassInterval: 1.8
   _alternatingRounds: 2
-  _humanSlashesPerRound: 4
+  _humanSlashesPerRound: 3
   _humanSlashInterval: 2
   _alternatingLead: 1.2
   _hitInvulnerabilityDuration: 2
@@ -290,7 +290,17 @@ MonoBehaviour:
   _dashArc: 40
   _dashTelegraph: 0.6
   _dashSpeed: 48
-  _dashMaxDistance: 30
+  _dashOvershoot: 2
+  _zigzagTurns: 2
+  _zigzagWidth: 2.5
+  _turnRipple:
+    _radius: 7
+    _expandDuration: 0.5
+    _ringCount: 1
+    _ringInterval: 0.1
+    _afterimage: 0.8
+    _ringColor: {r: 1, g: 0.1, b: 0.06, a: 0.95}
+    _spherical: 1
   _repositionSpeed: 30
   _repositionTimeout: 0.6
   _slashContactRadius: 0.8
@@ -775,10 +785,11 @@ MonoBehaviour:
   _emergeArc: 140
   _edgeMargin: 0.5
   _biteTelegraph: 2
-  _biteDuration: 1
+  _biteDuration: 0.35
   _pounceBarkLeadTime: 0.9
-  _pounceHeight: 0.8
   _pounceOvershoot: 3
+  _parryRecoilDistance: 5
+  _parryRecoilDuration: 0.3
   _chargeSound: 43
   _chargeSoundPitch: 0.6
   _chargeSoundVolume: 1.4

@@ -11045,7 +11045,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _dashSpeed
-      value: 48
+      value: 36
+      objectReference: {fileID: 0}
+    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _zigzagTurns
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _dashMaxDistance
@@ -11053,15 +11057,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _repositionSpeed
-      value: 30
+      value: 48
       objectReference: {fileID: 0}
     - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _dashStartDistance
       value: 12
       objectReference: {fileID: 0}
     - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _prowlSpeed
+      value: 14
+      objectReference: {fileID: 0}
+    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _prowlRadius
+      value: 18
+      objectReference: {fileID: 0}
+    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _jumpDuration
       value: 0.55
+      objectReference: {fileID: 0}
+    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _prowlKeepAway
+      value: 12
+      objectReference: {fileID: 0}
+    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _parryRecoilDistance
+      value: 15
+      objectReference: {fileID: 0}
+    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _parryRecoilDuration
+      value: 0.15
       objectReference: {fileID: 0}
     - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _riseForce

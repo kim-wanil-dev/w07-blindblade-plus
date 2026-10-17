@@ -65,11 +65,18 @@ public sealed class HumanBossAttack : MonoBehaviour
     private float _dashArc = 140f;
     [SerializeField, Min(0.05f), Tooltip("돌진 전 플레이어를 노려보며 붉게 물드는 시간(초)")]
     private float _dashTelegraph = 0.6f;
-    [SerializeField, Min(0.1f), Tooltip("돌진 속도(미터/초). 스테이지1 보스 돌진과 같다.")]
-    private float _dashSpeed = 14f;
-    [SerializeField, Min(0.1f), Tooltip("플레이어에 닿지 않으면 멈추는 최대 돌진 거리(미터)")]
-    private float _dashMaxDistance = 12f;
-    [SerializeField, Min(0.1f), Tooltip("돌진 시작 위치로 다가가거나 베고 물러나는 빠른 이동 속도(미터/초). 스테이지1 보스 재배치와 같다.")]
+    [SerializeField, Min(0.1f), Tooltip("지그재그 돌진 속도(미터/초)")]
+    private float _dashSpeed = 18f;
+    [SerializeField, Min(0f), Tooltip("마지막 꺾음 뒤 플레이어에 닿지 않으면 플레이어 위치를 지나 더 나아가는 거리(미터)")]
+    private float _dashOvershoot = 2f;
+    [SerializeField, Min(0), Tooltip("돌진·후퇴 한 번에 방향을 꺾는 횟수")]
+    private int _zigzagTurns = 2;
+    [SerializeField, Min(0f), Tooltip("지그재그로 꺾을 때 곧은 경로에서 옆으로 벗어나는 거리(미터)")]
+    private float _zigzagWidth = 2.5f;
+    [SerializeField, Tooltip("방향을 꺾을 때마다 그 자리에서 퍼지는 붉은 파동")]
+    private RevealRippleSettings _turnRipple = new RevealRippleSettings(7f, 0.5f, 1, 0.1f, 0.8f,
+        new Color(1f, 0.1f, 0.06f, 0.95f), true);
+    [SerializeField, Min(0.1f), Tooltip("돌진 시작 위치로 다가가거나 베고 지그재그로 물러나는 빠른 이동 속도(미터/초). 스테이지1 보스 재배치와 같다.")]
     private float _repositionSpeed = 25f;
     [SerializeField, Min(0.05f), Tooltip("빠른 이동이 길이 막혀도 끝나는 최대 시간(초)")]
     private float _repositionTimeout = 0.6f;
@@ -83,7 +90,9 @@ public sealed class HumanBossAttack : MonoBehaviour
     [SerializeField] private SoundId _slashSound = SoundId.EnemySwordSwing;
     private readonly RaycastHit[] _slashHits = new RaycastHit[16];
     private TwinBossWarningVisual _warning;
+    private PerceptionRevealMap _revealMap;
     private bool _slashing;
+    private bool _dashHit;
 
     public EnemyHealth Health => _health;
     public bool IsAttacking => _shooting != null;
@@ -202,8 +211,8 @@ public sealed class HumanBossAttack : MonoBehaviour
 
     /// <summary>
     /// 스테이지1 보스 돌진처럼 플레이어 정면 쪽 _dashStartDistance 지점에서 strikeAt(게임 시간)에 돌진해 베고 다시 물러난다.
-    /// 그 거리에서 벗어나 있으면 전조 전에 _repositionSpeed로 시작 지점까지 달려가고, _dashTelegraph 동안 플레이어를 노려보며 붉게 물든 뒤 방향을 고정해 돌진한다.
-    /// 플레이어에 닿으면 그 자리에서 멈춰 한 번만 막기·쳐내기를 확인해 피해를 주고, 끝나면 플레이어를 바라본 채 정면 쪽 같은 거리로 빠르게 물러난다.
+    /// 그 거리에서 벗어나 있으면 전조 전에 _repositionSpeed로 시작 지점까지 달려가고, _dashTelegraph 동안 플레이어를 노려보며 붉게 물든 뒤 지그재그로 돌진한다.
+    /// 플레이어에 닿으면 그 자리에서 멈춰 한 번만 막기·쳐내기를 확인해 피해를 주고, 끝나면 플레이어를 바라본 채 정면 쪽 같은 거리로 지그재그로 물러난다.
     /// </summary>
     public IEnumerator DashStrike(KatanaDamageReceiver player, float strikeAt)
     {
@@ -214,7 +223,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         float distance = Vector3.ProjectOnPlane(_player.transform.position - transform.position, Vector3.up).magnitude;
         if (Mathf.Abs(distance - _dashStartDistance) > 1.5f
             && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 start))
-            yield return MoveQuickly(start, false);
+            yield return MoveQuickly(start);
         if (!CanSlash()) yield break;
         // 달려가느라 늦었어도 전조를 절반은 보여준 뒤 돌진한다.
         float dashAt = Mathf.Max(strikeAt, Time.time + _dashTelegraph * 0.5f);
@@ -231,41 +240,117 @@ public sealed class HumanBossAttack : MonoBehaviour
         _slashing = false;
         _warning.EndWarning();
         if (CanSlash() && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 retreat))
-            yield return MoveQuickly(retreat, true);
+            yield return Retreat(retreat);
     }
 
     /// <summary>
-    /// 플레이어 쪽으로 방향을 고정해 _dashSpeed로 최대 _dashMaxDistance까지 NavMesh 안에서 돌진하며 베기 소리를 낸다.
-    /// 이동 구간마다 몸 캡슐로 플레이어 접촉을 검사해 닿으면 그 앞에서 멈추고, 지나간 경로는 비 시스템에 전달한다.
+    /// 지금 위치에서 플레이어 쪽으로 _zigzagTurns번 좌우로 _zigzagWidth만큼 꺾으며 _dashSpeed로 돌진하고 베기 소리를 낸다.
+    /// 꺾을 때마다 붉은 파동을 내고, 마지막 구간은 그 순간 플레이어 위치를 겨눠 _dashOvershoot만큼 지나칠 때까지 달린다.
+    /// 어느 구간에서든 플레이어에 닿으면 그 앞에서 멈춘다.
     /// </summary>
     private IEnumerator Dash()
     {
-        Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - transform.position, Vector3.up);
-        Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
-        float remaining = _dashMaxDistance;
-        transform.rotation = Quaternion.LookRotation(direction);
+        Vector3 start = transform.position;
+        Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
+        Vector3 forward = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        float span = toPlayer.magnitude;
+        float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+        int legs = _zigzagTurns + 1;
+        _dashHit = false;
         if (_slashSound != SoundId.None)
             Managers.Sound.Play(_slashSound, transform.position, 1f, gameObject, true);
+        for (int leg = 0; leg < legs && CanSlash() && !_dashHit; leg++)
+        {
+            Vector3 target;
+            float extra = 0f;
+            if (leg == legs - 1)
+            {
+                target = _player.transform.position;
+                extra = _dashOvershoot;
+            }
+            else
+            {
+                target = start + forward * (span * (leg + 1) / legs) + right * (side * _zigzagWidth);
+                side = -side;
+            }
+            if (leg > 0) EmitTurnRipple();
+            Vector3 offset = Vector3.ProjectOnPlane(target - transform.position, Vector3.up);
+            if (offset.sqrMagnitude < 0.0001f) continue;
+            yield return MoveStraight(offset.normalized, offset.magnitude + extra, _dashSpeed, true);
+        }
+        _motor.Stop();
+    }
+
+    /// <summary>
+    /// destination까지 _zigzagTurns번 좌우로 _zigzagWidth만큼 꺾으며 _repositionSpeed로 플레이어를 바라본 채 물러난다.
+    /// 꺾을 때마다 붉은 파동을 낸다.
+    /// </summary>
+    private IEnumerator Retreat(Vector3 destination)
+    {
+        Vector3 start = transform.position;
+        Vector3 path = Vector3.ProjectOnPlane(destination - start, Vector3.up);
+        if (path.sqrMagnitude < 0.0001f) yield break;
+        Vector3 right = Vector3.Cross(Vector3.up, path.normalized);
+        float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+        int legs = _zigzagTurns + 1;
+        for (int leg = 0; leg < legs && CanSlash(); leg++)
+        {
+            Vector3 target = start + path * ((leg + 1f) / legs);
+            if (leg < legs - 1)
+            {
+                target += right * (side * _zigzagWidth);
+                side = -side;
+            }
+            if (leg > 0) EmitTurnRipple();
+            Vector3 offset = Vector3.ProjectOnPlane(target - transform.position, Vector3.up);
+            if (offset.sqrMagnitude < 0.0001f) continue;
+            yield return MoveStraight(offset.normalized, offset.magnitude, _repositionSpeed, false);
+        }
+        _motor.Stop();
+    }
+
+    /// <summary>
+    /// direction으로 distance만큼 speed로 NavMesh 안에서 곧게 움직이며, 걸을 수 있는 지면 끝에 막히면 멈춘다.
+    /// strike면 이동 방향을 보며 몸 캡슐로 플레이어 접촉을 검사해 닿으면 그 앞에서 멈추고 _dashHit을 켜며 지나간 경로를 비 시스템에 전달한다.
+    /// strike가 아니면 플레이어를 바라본다.
+    /// </summary>
+    private IEnumerator MoveStraight(Vector3 direction, float distance, float speed, bool strike)
+    {
+        float remaining = distance;
         while (remaining > 0.01f && CanSlash())
         {
             Vector3 previous = transform.position;
-            Vector3 destination = previous + direction * Mathf.Min(_dashSpeed * Time.deltaTime, remaining);
+            Vector3 destination = previous + direction * Mathf.Min(speed * Time.deltaTime, remaining);
             if (_agent.Raycast(destination, out NavMeshHit boundary))
                 destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
             float travel = Vector3.Distance(previous, destination);
-            if (TryHitSlash(previous, direction, travel, out float contact))
+            if (strike)
             {
-                _agent.Move(direction * Mathf.Max(0f, contact - 0.05f));
-                RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
-                break;
+                transform.rotation = Quaternion.LookRotation(direction);
+                if (TryHitSlash(previous, direction, travel, out float contact))
+                {
+                    _agent.Move(direction * Mathf.Max(0f, contact - 0.05f));
+                    RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
+                    _dashHit = true;
+                    yield break;
+                }
             }
             _agent.Move(destination - previous);
-            RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
+            if (strike) RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
+            else FacePlayer();
             remaining -= travel;
-            if (travel < 0.001f && Time.deltaTime > 0f) break;
+            if (travel < 0.001f && Time.deltaTime > 0f) yield break;
             yield return null;
         }
-        _motor.Stop();
+    }
+
+    /// <summary>지금 자리에서 방향을 꺾었음을 알리는 붉은 파동 _turnRipple을 시야 맵에 등록한다.</summary>
+    private void EmitTurnRipple()
+    {
+        if (_revealMap == null && Game.IsInitialized && Game.Instance.SensoryManager != null)
+            _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
+        if (_revealMap != null) _revealMap.EmitRipple(transform.position, _turnRipple);
     }
 
     /// <summary>
@@ -295,10 +380,9 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// destination까지 NavMesh 경로 모서리를 따라 _repositionSpeed로 빠르게 이동한다. _repositionTimeout이 지나거나 막히면 멈춘다.
-    /// facePlayer면 플레이어를 바라본 채 물러나고, 아니면 이동 방향을 바라본다.
+    /// destination까지 NavMesh 경로 모서리를 따라 _repositionSpeed로 이동 방향을 보며 빠르게 다가간다. _repositionTimeout이 지나거나 막히면 멈춘다.
     /// </summary>
-    private IEnumerator MoveQuickly(Vector3 destination, bool facePlayer)
+    private IEnumerator MoveQuickly(Vector3 destination)
     {
         _motor.Stop();
         if (!_agent.CalculatePath(destination, _teleportPath)
@@ -312,8 +396,7 @@ public sealed class HumanBossAttack : MonoBehaviour
                 Vector3 previous = transform.position;
                 _agent.Move(Vector3.MoveTowards(previous, corners[i], _repositionSpeed * Time.deltaTime) - previous);
                 Vector3 moved = Vector3.ProjectOnPlane(transform.position - previous, Vector3.up);
-                if (facePlayer) FacePlayer();
-                else if (moved.sqrMagnitude > 0.000001f) transform.rotation = Quaternion.LookRotation(moved);
+                if (moved.sqrMagnitude > 0.000001f) transform.rotation = Quaternion.LookRotation(moved);
                 if (Time.deltaTime > 0f && moved.sqrMagnitude < 0.000001f) break;
                 yield return null;
             }
