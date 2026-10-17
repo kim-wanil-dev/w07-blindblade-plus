@@ -60,6 +60,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             TEXTURE2D_X(_OutlineSceneryMask);
             TEXTURE2D_X(_OutlineThreatMask);
             TEXTURE2D_X(_OutlineMeleeWarningMask);
+            TEXTURE2D_X(_OutlineBeastOutlineExclusionMask);
             TEXTURE2D_X(_OutlineForcedReveal);
             TEXTURE2D_X(_ThreatPresentationColor);
             TEXTURE2D_X(_ThreatPresentationData);
@@ -528,6 +529,15 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 float2 thirdUv = saturate(uv + float2(-lowerOffset, upperOffset) * texelSize);
                 float2 fourthUv = saturate(uv + float2(upperOffset, -lowerOffset) * texelSize);
                 float3 edge = max(EdgeBetween(firstUv, secondUv), EdgeBetween(thirdUv, fourthUv));
+                float beastBodyCoverage = max(
+                    SAMPLE_TEXTURE2D_X(_OutlineBeastOutlineExclusionMask, sampler_PointClamp, uv).r,
+                    max(max(
+                        SAMPLE_TEXTURE2D_X(_OutlineBeastOutlineExclusionMask, sampler_PointClamp, firstUv).r,
+                        SAMPLE_TEXTURE2D_X(_OutlineBeastOutlineExclusionMask, sampler_PointClamp, secondUv).r),
+                        max(
+                            SAMPLE_TEXTURE2D_X(_OutlineBeastOutlineExclusionMask, sampler_PointClamp, thirdUv).r,
+                            SAMPLE_TEXTURE2D_X(_OutlineBeastOutlineExclusionMask, sampler_PointClamp, fourthUv).r)));
+                edge *= 1.0 - beastBodyCoverage;
                 edge *= 1.0 - TransparentCoverage(uv);
                 float3 transparentEdge = max(TransparentEdgeBetween(firstUv, secondUv),
                     TransparentEdgeBetween(thirdUv, fourthUv));

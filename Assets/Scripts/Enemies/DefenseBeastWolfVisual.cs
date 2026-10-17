@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using UnityEngine;
 
 /// <summary>
@@ -11,6 +13,8 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     private const float MAX_MEASURED_SPEED = 20f;
 
     private static readonly float[] LEG_PHASE_OFFSETS = { 0f, 0.5f, 0.5f, 0f };
+    private static readonly HashSet<DefenseBeastWolfVisual> _active = new HashSet<DefenseBeastWolfVisual>();
+    private static readonly int _warningIntensityId = Shader.PropertyToID("_MeleeWarningIntensity");
 
     [Header("몸체 연결")]
     [SerializeField] private DefenseBeastLeapAttack _defenseBeast;
@@ -21,6 +25,7 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     [SerializeField] private Transform[] _knees = new Transform[LEG_COUNT];
     [SerializeField] private Transform[] _ankles = new Transform[LEG_COUNT];
     [SerializeField] private Renderer[] _bodyRenderers;
+    [SerializeField] private TwinBossWarningVisual _warningVisual;
 
     [Header("걸음")]
     [SerializeField, Min(0.1f), Tooltip("걸음 한 주기 동안 이동하는 거리(m)")]
@@ -74,6 +79,12 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     private float _crouch;
     private float _leap;
     private float _flinchAt = -1f;
+    private MaterialPropertyBlock _maskProperties;
+    private float _publishedWarningIntensity = -1f;
+
+    internal static IReadOnlyCollection<DefenseBeastWolfVisual> ActiveInstances => _active;
+    public IReadOnlyList<Renderer> BodyRenderers => _bodyRenderers;
+    public float WarningIntensity => _warningVisual.Intensity;
 
     void Awake()
     {
@@ -83,9 +94,7 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
         _spineBaseRotation = _spine.localRotation;
         _headBaseRotation = _head.localRotation;
         _tailBaseRotation = _tail.localRotation;
-
-        for (int i = 0; i < _bodyRenderers.Length; i++)
-            _bodyRenderers[i].enabled = false;
+        _maskProperties = new MaterialPropertyBlock();
 
         for (int i = 0; i < LEG_COUNT; i++)
         {
@@ -107,12 +116,15 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
         _crouch = 0f;
         _leap = 0f;
         _flinchAt = -1f;
+        _publishedWarningIntensity = -1f;
         _health.Damaged += HandleDamaged;
+        _active.Add(this);
     }
 
     void OnDisable()
     {
         _health.Damaged -= HandleDamaged;
+        _active.Remove(this);
     }
 
     void LateUpdate()
@@ -133,6 +145,7 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
 
         _idleTime += deltaTime;
         ApplyPose(quickBlend);
+        PublishWarningMask();
     }
 
     /// <summary>
@@ -206,5 +219,24 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     private void HandleDamaged(DamageContext context)
     {
         _flinchAt = Time.time;
+    }
+
+    /// <summary>
+    /// 전조의 현재 붉은 세기를 몸체 렌더러의 속성 블록에 전달한다.
+    /// 화면 연기 마스크는 이 값을 읽고 외곽선 색을 흰색에서 붉은색으로 바꾼다.
+    /// </summary>
+    private void PublishWarningMask()
+    {
+        float intensity = _warningVisual.Intensity;
+        if (Mathf.Approximately(_publishedWarningIntensity, intensity))
+            return;
+
+        _publishedWarningIntensity = intensity;
+        foreach (Renderer renderer in _bodyRenderers)
+        {
+            renderer.GetPropertyBlock(_maskProperties);
+            _maskProperties.SetFloat(_warningIntensityId, intensity);
+            renderer.SetPropertyBlock(_maskProperties);
+        }
     }
 }

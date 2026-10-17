@@ -6,6 +6,7 @@ using BlindBlade.Combat.Contracts;
 [DisallowMultipleComponent]
 [RequireComponent(typeof(EnemySensor), typeof(EnemyMotor), typeof(EnemyHealth))]
 [RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(TwinBossWarningVisual))]
 public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 {
     private const int CONTACT_BUFFER_SIZE = 32;
@@ -43,6 +44,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private EnemyMotor _motor;
     private EnemyHealth _health;
     private NavMeshAgent _agent;
+    private TwinBossWarningVisual _warning;
     private NavMeshPath _path;
     private readonly Collider[] _landingContacts = new Collider[CONTACT_BUFFER_SIZE];
     private readonly RaycastHit[] _obstacleHits = new RaycastHit[CONTACT_BUFFER_SIZE];
@@ -83,6 +85,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _motor = GetComponent<EnemyMotor>();
         _health = GetComponent<EnemyHealth>();
         _agent = GetComponent<NavMeshAgent>();
+        _warning = GetComponent<TwinBossWarningVisual>();
         _path = new NavMeshPath();
     }
 
@@ -121,6 +124,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     protected override void PrepareTelegraph(EnemyAttackContext context)
     {
         _preparing = true;
+        _warning.BeginWarning(context.TelegraphDuration);
         _startPosition = transform.position;
         _leapDirection = Vector3.ProjectOnPlane(context.Direction, Vector3.up).normalized;
         if (_leapDirection.sqrMagnitude < 0.0001f)
@@ -138,6 +142,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         if (!_health.IsAlive || !_motor.IsReady
             || !TryFindLeapDestination(context.AimPosition, context.Target, out _landingPosition))
         {
+            _warning.EndWarning();
             CompleteAttackMotion();
             BeginRecovery();
             return;
@@ -268,6 +273,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         Vector3 desiredDestination = moveToOppositeSide
             ? GetOppositeDestination(targetHealth.transform.position)
             : _startPosition;
+        _warning.EndWarning();
         BeginReposition(desiredDestination, targetHealth.transform);
     }
 
@@ -333,6 +339,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     /// </summary>
     protected override void OnAttackEnded(EnemyAttackContext context, bool cancelled)
     {
+        _warning.EndWarning();
         _preparing = false;
         bool wasJumping = _jumping;
         _jumping = false;

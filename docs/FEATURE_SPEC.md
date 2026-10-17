@@ -85,7 +85,7 @@
 | 전투·인지·HUD 공통 계약 | [명세](features/전투_인지_HUD_공통_계약.md) | v0.2.0 HUD 연결, D5 로컬 저장/전송 코드 구현·실제 수집 확인 대기, 스태미너 공급자·팀 검토 대기 |
 | RainyStage 비 연출 | [명세](features/RainyStage_비_연출.md) | 시험 씬 구현, 실제 Play 연출·성능 확인 대기 |
 | 비 내리는 쌍둥이 보스전 | [명세](features/비_쌍둥이_보스전.md) | RainyTwinBoss 씬·컨트롤러·쌍둥이 연기 외형 및 생존 3패턴(질주 난사·거합 차징·교대 근접), 늑대 확대·발 디딤 걸음 구현. 등장·사격 Play 확인, 새 패턴·클리어·재도전 최신 외형 Play 확인 대기 |
-| DefenseBeast 일반 적 | [구현 명세](features/DefenseBeast.md) | 독립 Variant·도약 패턴 구현. 일반 적 전용 DefenseBeastWolfVisual 분리 및 프리팹 GUID 교체 완료, 최종 Unity 컴파일·Play 확인 대기·스테이지 미연결 |
+| DefenseBeast 일반 적 | [구현 명세](features/DefenseBeast.md) | 일반 적/Beast 가중치 스폰과 도약 패턴 연결. Spine 실루엣을 따라 겹치는 연기와 완만히 상승하는 wisps, 머리 움직임을 따라 푸르게 빛나는 눈을 적용했다. Beast 전용 마스크로 몸체 메시 선을 숨긴다. Unity 에셋·셰이더 확인 완료, 실제 전투 화면과 성능 확인 대기 |
 
 ### 기존 모드 기록 (씬은 S7에서 삭제, 일부 코드·Resources 프리팹은 남음)
 
@@ -129,3 +129,9 @@
 | Feature | Specification | Current behavior |
 | --- | --- | --- |
 | Intro settings popup and gameplay pause | [Feature specification](features/intro_settings_and_gameplay_pause.md) | Persistent settings UI, volume preview, mouse sensitivity, and Escape/Start pause including active effect sounds |
+
+### 2026-10-17 BambooStage1 enemy spawn investigation
+
+| Feature | Specification | Current behavior |
+| --- | --- | --- |
+| BambooStage1 melee enemy spawning | [대숲 스테이지 1](features/대숲_스테이지1.md) | Saved NavMeshSurface data now points to the scene's NavMesh asset; random placement has a deterministic fallback, and a saved boss checkpoint logs why the normal wave is skipped. |
