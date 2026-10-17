@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{c468eb3e-e952-48ae-a343-01f085014d86}">
+		<property name="assetPath"><value>BossMonsterDog/ChargeBark/260776__deleted_user_3424813__angry-dog-bark-snarl-flat.wav</value></property>
+		<property name="frequencyInKHz"><value>44.1</value></property>
+		<property name="channelCount"><value>2</value></property>
+		<property name="length"><value>2.415668934240363</value></property>
+		<relationship name="masterAssetFolder"><destination>{eaacc823-8802-44ec-b35a-5bbed5c487d9}</destination></relationship>
+	</object>
+</objects>

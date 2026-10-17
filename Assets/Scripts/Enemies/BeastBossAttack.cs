@@ -105,6 +105,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _biteTelegraph = 2f;
     [SerializeField, Min(0.05f), Tooltip("플레이어를 지나 반대편 가장자리까지 뛰어 덮치는 비행 시간(초)")]
     private float _biteDuration = 1f;
+    [SerializeField, Min(0f), Tooltip("덮치기 도약 몇 초 전에 짖음을 재생할지 정한다. 0이면 도약 순간에 재생한다.")]
+    private float _pounceBarkLeadTime = 1f;
     [SerializeField, Min(0f), Tooltip("덮치며 날아갈 때 포물선의 가장 높은 높이(미터). 낮을수록 플레이어 몸을 그대로 꿰뚫고 지나간다.")]
     private float _pounceHeight = 0.8f;
     [SerializeField, Min(0f), Tooltip("덮치기가 플레이어 위치를 지나 최소한 더 나아가는 거리(미터)")]
@@ -139,6 +141,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     public float BurrowDepth { get; private set; }
     public event Action AttackPreparing;
     public event Action AttackStarted;
+    public event Action PounceApproaching;
+    public event Action PounceStarted;
     public event Action Landed;
 
     void Awake()
@@ -341,8 +345,15 @@ public sealed class BeastBossAttack : MonoBehaviour
         _warning.BeginWarning(_biteTelegraph);
         _preparing = true;
         float until = Time.time + _biteTelegraph;
+        bool barkPlayed = false;
         while (Time.time < until && CanAttack(player))
         {
+            if (!barkPlayed && _pounceBarkLeadTime > 0f
+                && until - Time.time <= _pounceBarkLeadTime)
+            {
+                PounceApproaching?.Invoke();
+                barkPlayed = true;
+            }
             FaceTowards(player.transform.position);
             yield return null;
         }
@@ -368,6 +379,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         _attackResolved = false;
         _biting = true;
         AttackStarted?.Invoke();
+        if (!barkPlayed) PounceApproaching?.Invoke();
+        PounceStarted?.Invoke();
         Quaternion facing = Quaternion.LookRotation(direction);
         Vector3 groundPrevious = start;
         float elapsed = 0f;

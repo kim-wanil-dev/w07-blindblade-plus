@@ -10,16 +10,28 @@ public sealed class BeastBossAudio : MonoBehaviour
     [SerializeField] private SoundId _hitSound = SoundId.BeastBossHit;
     [SerializeField] private SoundId _deathSound = SoundId.BeastBossDie;
     [SerializeField] private SoundId _idleSound = SoundId.BeastBossIdle;
+    [SerializeField] private SoundId _chargeBarkSound = SoundId.BeastBossChargeBark;
+
+    [Header("물 발소리")]
+    [SerializeField, Min(0f), Tooltip("플레이어 일반 보행의 물 발소리 배율 0.6 대비 약 10dB 큰 짐승 발소리 배율")]
+    private float _waterFootstepVolume = 1.9f;
+    [SerializeField, Min(0.01f)] private float _waterFootstepInterval = 0.12f;
+
     [Header("칼 적중음")]
     [SerializeField, Min(0f)] private float _swordHitVolume = 1.1f;
     [SerializeField, Range(0.25f, 4f)] private float _swordHitPitch = 1.15f;
     private BeastBossAttack _attack;
+    private TwinBeastWolfVisual _wolfVisual;
+    private RainyStageAudio _rainAudio;
     private EnemyHealth _health;
     private TwinBossController _controller;
+    private float _nextWaterFootstepTime;
 
     void Awake()
     {
         _attack = GetComponent<BeastBossAttack>();
+        _wolfVisual = GetComponentInChildren<TwinBeastWolfVisual>(true);
+        _rainAudio = FindFirstObjectByType<RainyStageAudio>();
         _health = GetComponent<EnemyHealth>();
         _controller = GetComponentInParent<TwinBossController>();
     }
@@ -27,6 +39,10 @@ public sealed class BeastBossAudio : MonoBehaviour
     void OnEnable()
     {
         _attack.AttackPreparing += HandleAttack;
+        _attack.AttackStarted += HandleAttackStarted;
+        _attack.PounceApproaching += HandlePounceApproaching;
+        _attack.Landed += HandleLanding;
+        _wolfVisual.PawPlanted += HandlePawPlanted;
         _health.Damaged += HandleDamage;
         _health.Died += HandleDeath;
         _controller.PatternChanged += HandlePattern;
@@ -37,6 +53,42 @@ public sealed class BeastBossAudio : MonoBehaviour
     {
         Managers.Sound.StopFor(gameObject, _idleSound, forceStop: true);
         Managers.Sound.Play(_attackSound, transform.position, owner: gameObject, playDuringMovement: true);
+    }
+
+    /// <summary>짐승이 돌진 또는 점프를 시작하면 같은 물 발소리로 출발 충격을 재생한다.</summary>
+    private void HandleAttackStarted()
+    {
+        PlayWaterFootstep(transform.position, true);
+    }
+
+    /// <summary>짐승의 덮치기 도약 전 정해진 시각에 낮춘 짖음 이벤트를 한 번 재생한다.</summary>
+    private void HandlePounceApproaching()
+    {
+        Managers.Sound.Play(_chargeBarkSound, transform.position, owner: gameObject,
+            playDuringMovement: true);
+    }
+
+    /// <summary>짐승이 돌진 또는 점프 착지에 성공하면 같은 물 발소리로 착지 충격을 재생한다.</summary>
+    private void HandleLanding()
+    {
+        PlayWaterFootstep(transform.position, true);
+    }
+
+    /// <summary>짐승의 네 발 중 하나가 position에 닿으면 짧은 간격을 두고 물 발소리를 재생한다.</summary>
+    private void HandlePawPlanted(Vector3 position)
+    {
+        PlayWaterFootstep(position, false);
+    }
+
+    /// <summary>씬의 물 발소리 옵션이 켜졌을 때 position에 소리를 재생한다. force가 거짓이면 연속 발디딤을 제한하고 다음 허용 시각을 갱신한다.</summary>
+    private void PlayWaterFootstep(Vector3 position, bool force)
+    {
+        if (_rainAudio == null || !_rainAudio.isActiveAndEnabled || !_rainAudio.UseWaterFootsteps)
+            return;
+        if (!force && Time.time < _nextWaterFootstepTime) return;
+        _nextWaterFootstepTime = Time.time + _waterFootstepInterval;
+        Managers.Sound.Play(SoundId.RainFootstep, position, volume: _waterFootstepVolume,
+            owner: gameObject, playDuringMovement: true);
     }
 
     /// <summary>context의 실제 적중 위치에서 칼 적중음을 재생하고 생존 피격에 짐승 고통 음성을 추가한다.</summary>
@@ -69,6 +121,10 @@ public sealed class BeastBossAudio : MonoBehaviour
     void OnDisable()
     {
         _attack.AttackPreparing -= HandleAttack;
+        _attack.AttackStarted -= HandleAttackStarted;
+        _attack.PounceApproaching -= HandlePounceApproaching;
+        _attack.Landed -= HandleLanding;
+        _wolfVisual.PawPlanted -= HandlePawPlanted;
         _health.Damaged -= HandleDamage;
         _health.Died -= HandleDeath;
         _controller.PatternChanged -= HandlePattern;
