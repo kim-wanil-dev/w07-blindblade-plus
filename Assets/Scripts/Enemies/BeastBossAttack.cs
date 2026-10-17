@@ -55,6 +55,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     [SerializeField, Min(0.05f), InspectorName("마지막 박동 후 공격 지연 (초)"), Tooltip("점프는 이 시간 뒤 도약하며 실제 피해는 기존 착지 시점에 적용합니다.")]
     private float _postHeartbeatAttackDelay = 0.5f;
     private bool _preparationSucceeded;
+    private bool _preparing;
     private SoundId _playingHeartbeat;
 
     [Header("점프")]
@@ -71,6 +72,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     public EnemyHealth Health => _health;
     public Transform RiderSeat => _riderSeat;
     public bool IsReady => _motor.IsReady;
+    public bool IsPreparing => _preparing;
+    public bool IsJumping => _jumping;
     public event Action AttackPreparing;
     public event Action AttackStarted;
     public event Action Landed;
@@ -217,10 +220,21 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
+    /// 준비 중 상태 _preparing을 켠 채 PrepareHeartbeat로 점프·돌진 준비를 실행하고 끝나면 끈다.
+    /// player와 legacyDuration을 그대로 전달하며 성공 여부는 _preparationSucceeded에 남는다.
+    /// </summary>
+    private IEnumerator PrepareMeleeAttack(KatanaDamageReceiver player, float legacyDuration)
+    {
+        _preparing = true;
+        yield return PrepareHeartbeat(player, legacyDuration);
+        _preparing = false;
+    }
+
+    /// <summary>
     /// player 생존과 이동 상태를 확인하며 설정한 첫 대기·횟수·간격·마지막 지연으로 점프·돌진 준비를 실행한다.
     /// 박동을 끄면 legacyDuration을 사용하고 성공 여부를 저장하며 중단·큰 지연은 잔여 박동을 정리한다.
     /// </summary>
-    private IEnumerator PrepareMeleeAttack(KatanaDamageReceiver player, float legacyDuration)
+    private IEnumerator PrepareHeartbeat(KatanaDamageReceiver player, float legacyDuration)
     {
         StopHeartbeat();
         _preparationSucceeded = false;
@@ -380,6 +394,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     public void CancelAttack()
     {
         _preparationSucceeded = false;
+        // 패턴 코루틴이 외부에서 멈추면 준비 종료 처리가 실행되지 않으므로 여기서 함께 끈다.
+        _preparing = false;
         StopHeartbeat();
         EndOrbit();
         RestoreNavigation();
