@@ -178,6 +178,16 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     }
 
     /// <summary>
+    /// point 지면에서 normal을 위로 하여 퍼펙트 파동을 처음부터 시작한다. 보스 반격처럼 플레이어가 아닌 곳에서 내는 파동에 쓴다.
+    /// 칼날 빛줄기 없이 퍼펙트 패링과 같은 반경·확산·페이드를 쓰고 바닥 링은 ringColor, 파동이 밝힌 윤곽선은 revealTint 색으로 그린다.
+    /// </summary>
+    public void BeginAt(Vector3 point, Vector3 normal, Color ringColor, Color revealTint)
+    {
+        StartPulse(point, normal, _radius, _expandDuration, _fadeDuration, ringColor, true);
+        if (_mask != null) _mask.SetPulseTint(revealTint, 1f);
+    }
+
+    /// <summary>
     /// 발밑 지면에서 극한 회피 파동을 처음부터 시작한다. 칼날 빛줄기 없이 바닥 링·지형 기억·시야 공개만 낸다.
     /// 퍼펙트 파동이 진행 중이면 아무것도 바꾸지 않고 false를, 파동을 시작했으면 true를 반환한다.
     /// </summary>
@@ -240,9 +250,20 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     /// </summary>
     private void StartPulse(float radius, float expandDuration, float fadeDuration, Color ringColor, bool perfect)
     {
+        FindGround(out Vector3 point, out Vector3 normal);
+        StartPulse(point, normal, radius, expandDuration, fadeDuration, ringColor, perfect);
+    }
+
+    /// <summary>
+    /// point 지면과 normal에서 radius·expandDuration·fadeDuration·ringColor를 복사해 파동을 시작하고 바닥 링을 켠다.
+    /// perfect가 참이면 강화 동안 공개를 유지하는 퍼펙트 파동으로 표시하며, 진행 상태와 지면 중심을 갱신한다.
+    /// 감각 매니저가 준비되지 않았으면 시야 공개 없이 링만 보인다.
+    /// </summary>
+    private void StartPulse(Vector3 point, Vector3 normal, float radius, float expandDuration, float fadeDuration,
+        Color ringColor, bool perfect)
+    {
         _mask = FindMask();
         if (_terrainMemory == null) _terrainMemory = FindAnyObjectByType<TerrainMemory>();
-        FindGround(out Vector3 point, out Vector3 normal);
         _center = point;
         _activeRadius = Mathf.Max(0f, radius);
         _activeExpandDuration = Mathf.Max(0.01f, expandDuration);

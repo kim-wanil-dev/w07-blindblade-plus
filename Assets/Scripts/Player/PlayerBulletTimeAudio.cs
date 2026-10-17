@@ -26,7 +26,10 @@ public sealed class PlayerBulletTimeAudio : MonoBehaviour
     private PlayerEmpower _empower;
     private float _weight;
     private float _chargeWeight;
+    private float _externalWeight;
+    private float _externalCinematicWeight;
     private bool _applied;
+    private bool _cinematicApplied;
 
     void Awake()
     {
@@ -37,9 +40,14 @@ public sealed class PlayerBulletTimeAudio : MonoBehaviour
     {
         _weight = 0f;
         _chargeWeight = 0f;
+        _externalWeight = 0f;
+        _externalCinematicWeight = 0f;
         if (_applied && Managers.IsInitialized)
             Managers.Sound.SetTimeWarp(1f, 0f);
+        if (_cinematicApplied && Managers.IsInitialized)
+            Managers.Sound.SetCinematicTimeWarp(1f, 0f);
         _applied = false;
+        _cinematicApplied = false;
     }
 
     void Update()
@@ -56,20 +64,43 @@ public sealed class PlayerBulletTimeAudio : MonoBehaviour
     }
 
     /// <summary>
-    /// _weight로 재생 배율과 저역 통과 주파수를 원래 값과 설정값 사이에서 보간해 SoundManager에 적용한다.
+    /// 보스 반격 감속처럼 강화 밖의 연출이 weight(0~1)만큼 효과음·BGM에, cinematicWeight(0~1)만큼 연출음에 불릿 타임 소리를 걸도록 요청하고 바로 적용한다.
+    /// 효과음·BGM은 강화 소리와 겹치면 더 강한 쪽을 쓰며 0이면 요청을 해제한다. 페이드는 호출자가 비중으로 조절한다.
+    /// </summary>
+    public void SetExternalWarp(float weight, float cinematicWeight = 0f)
+    {
+        _externalWeight = Mathf.Clamp01(weight);
+        _externalCinematicWeight = Mathf.Clamp01(cinematicWeight);
+        ApplyWarp();
+    }
+
+    /// <summary>
+    /// _weight와 _externalWeight 중 큰 비중으로 재생 배율과 저역 통과 주파수를 원래 값과 설정값 사이에서 보간해 SoundManager에 적용한다.
     /// 궁극기 차징 중이면 불릿 타임 배율을 _chargeWeight만큼 _chargePitch 쪽으로 더 낮춘다.
-    /// 주파수는 로그 보간해 귀에 고르게 줄어들게 하며, 효과가 꺼진 상태가 이어지면 다시 호출하지 않는다.
+    /// 연출음 버스에는 _externalCinematicWeight만 같은 방식으로 적용하며, 효과가 꺼진 상태가 이어지면 다시 호출하지 않는다.
     /// </summary>
     private void ApplyWarp()
     {
-        if (!_applied && _weight <= 0f)
-            return;
-        float warpedPitch = Mathf.Lerp(_pitch, _chargePitch, _chargeWeight);
-        float pitch = Mathf.Lerp(1f, warpedPitch, _weight);
-        float cutoff = _weight > 0f
-            ? Mathf.Exp(Mathf.Lerp(Mathf.Log(FULL_BAND_FREQUENCY), Mathf.Log(_lowpassCutoff), _weight))
+        float weight = Mathf.Max(_weight, _externalWeight);
+        if (_applied || weight > 0f)
+        {
+            float warpedPitch = Mathf.Lerp(_pitch, _chargePitch, _chargeWeight);
+            Managers.Sound.SetTimeWarp(Mathf.Lerp(1f, warpedPitch, weight), GetCutoff(weight));
+            _applied = weight > 0f;
+        }
+        if (_cinematicApplied || _externalCinematicWeight > 0f)
+        {
+            Managers.Sound.SetCinematicTimeWarp(Mathf.Lerp(1f, _pitch, _externalCinematicWeight),
+                GetCutoff(_externalCinematicWeight));
+            _cinematicApplied = _externalCinematicWeight > 0f;
+        }
+    }
+
+    /// <summary>weight(0~1)로 전 대역과 _lowpassCutoff 사이를 로그 보간한 저역 통과 주파수를 반환한다. weight가 0이면 필터 해제 값 0을 반환한다.</summary>
+    private float GetCutoff(float weight)
+    {
+        return weight > 0f
+            ? Mathf.Exp(Mathf.Lerp(Mathf.Log(FULL_BAND_FREQUENCY), Mathf.Log(_lowpassCutoff), weight))
             : 0f;
-        Managers.Sound.SetTimeWarp(pitch, cutoff);
-        _applied = _weight > 0f;
     }
 }
