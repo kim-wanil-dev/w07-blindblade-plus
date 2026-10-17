@@ -874,7 +874,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             desc.name = "Melee Warning Mask";
             desc.depthBufferBits = DepthBits.None;
             desc.msaaSamples = MSAASamples.None;
-            desc.colorFormat = GraphicsFormat.R8_UNorm;
+            // G 채널에는 파동 없이도 보이는 붉은 테두리 대상(쌍둥이 늑대 공격)을 기록한다.
+            desc.colorFormat = GraphicsFormat.R8G8_UNorm;
             desc.filterMode = FilterMode.Point;
             desc.clearBuffer = true;
             desc.clearColor = Color.clear;
@@ -932,7 +933,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             var desc = renderingData.cameraData.cameraTargetDescriptor;
             desc.depthBufferBits = 0;
             desc.msaaSamples = 1;
-            desc.graphicsFormat = GraphicsFormat.R8_UNorm;
+            desc.graphicsFormat = GraphicsFormat.R8G8_UNorm;
 
             RenderingUtils.ReAllocateHandleIfNeeded(
                 ref _legacyMask, desc, FilterMode.Point,

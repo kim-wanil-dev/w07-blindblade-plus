@@ -5,6 +5,7 @@ using UnityEngine;
 /// <summary>
 /// 쌍둥이 보스가 공격을 준비하는 동안 연기 몸체를 근접 적 전조와 같은 붉은 테두리로 점차 물들이고,
 /// 공격이 끝나면 짧게 흰색으로 되돌린다. 붉은 정도는 화면 윤곽선의 근접 경고 마스크가 읽는다.
+/// 돌진처럼 SetAlwaysVisible로 켠 동안에는 파동으로 드러나지 않아도 붉은 테두리를 그리도록 마스크에 따로 알린다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TwinBossWarningVisual : MonoBehaviour
@@ -13,6 +14,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     private static readonly int _baseMapId = Shader.PropertyToID("_BaseMap");
     private static readonly int _baseColorId = Shader.PropertyToID("_BaseColor");
     private static readonly int _warningIntensityId = Shader.PropertyToID("_MeleeWarningIntensity");
+    private static readonly int _warningAlwaysVisibleId = Shader.PropertyToID("_MeleeWarningAlwaysVisible");
 
     [Header("연기 몸체")]
     [SerializeField, Tooltip("붉은 테두리를 적용할 연기 파티클 렌더러를 찾는 루트")]
@@ -27,7 +29,9 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     private float _rampEndAt;
     private float _rampFrom;
     private bool _warning;
+    private bool _alwaysVisible;
     private float _publishedIntensity = -1f;
+    private bool _publishedAlwaysVisible;
 
     internal static IReadOnlyCollection<TwinBossWarningVisual> ActiveInstances => _active;
     public IReadOnlyList<Renderer> WarningRenderers => _renderers;
@@ -43,6 +47,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     {
         Intensity = 0f;
         _warning = false;
+        _alwaysVisible = false;
         _active.Add(this);
     }
 
@@ -51,6 +56,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
         _active.Remove(this);
         Intensity = 0f;
         _warning = false;
+        _alwaysVisible = false;
         Publish();
     }
 
@@ -80,20 +86,31 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
         _warning = true;
     }
 
-    /// <summary>붉은 유지 상태를 끝내고 _whiteReturnDuration 동안 흰색으로 되돌린다.</summary>
+    /// <summary>
+    /// visible이 참인 동안 파동으로 드러나지 않아도 붉은 정도만큼 연기 몸체의 테두리를 붉게 그리게 한다.
+    /// 돌진을 시작할 때 켜고 착지하면 끄며, EndWarning도 함께 끈다. _alwaysVisible을 바꾼다.
+    /// </summary>
+    public void SetAlwaysVisible(bool visible)
+    {
+        _alwaysVisible = visible;
+    }
+
+    /// <summary>붉은 유지 상태와 파동 없는 붉은 테두리를 끝내고 _whiteReturnDuration 동안 흰색으로 되돌린다.</summary>
     public void EndWarning()
     {
         _warning = false;
+        _alwaysVisible = false;
     }
 
     /// <summary>
-    /// 현재 Intensity가 바뀌었으면 연기 렌더러마다 파티클 텍스처·기본색과 경고 세기를 속성 블록으로 넘긴다.
+    /// 현재 Intensity나 파동 없는 테두리 여부가 바뀌었으면 연기 렌더러마다 파티클 텍스처·기본색과 경고 세기·항상 보임 여부를 속성 블록으로 넘긴다.
     /// 근접 경고 마스크 재질이 같은 속성을 읽으며 렌더러의 기존 속성 블록 값은 보존한다.
     /// </summary>
     private void Publish()
     {
-        if (Mathf.Approximately(_publishedIntensity, Intensity)) return;
+        if (Mathf.Approximately(_publishedIntensity, Intensity) && _publishedAlwaysVisible == _alwaysVisible) return;
         _publishedIntensity = Intensity;
+        _publishedAlwaysVisible = _alwaysVisible;
         foreach (ParticleSystemRenderer renderer in _renderers)
         {
             Material source = renderer.sharedMaterial;
@@ -102,6 +119,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
             _properties.SetTexture(_baseMapId, source.GetTexture(_baseMapId));
             _properties.SetColor(_baseColorId, source.GetColor(_baseColorId));
             _properties.SetFloat(_warningIntensityId, Intensity);
+            _properties.SetFloat(_warningAlwaysVisibleId, _alwaysVisible ? 1f : 0f);
             renderer.SetPropertyBlock(_properties);
         }
     }

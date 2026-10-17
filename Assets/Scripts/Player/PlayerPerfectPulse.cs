@@ -189,8 +189,18 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     /// </summary>
     public void Begin()
     {
+        Begin(1f, 0f);
+    }
+
+    /// <summary>
+    /// Begin과 같지만 퍼펙트 파동 반경을 radiusMultiplier배로 넓히고 다 퍼진 뒤 사라지는 잔상 시간을 extraFade초 늘려 시작한다.
+    /// 보스 거합 받아치기처럼 더 멀리 퍼지고 오래 남아야 하는 파동에 쓴다.
+    /// </summary>
+    public void Begin(float radiusMultiplier, float extraFade)
+    {
         _overlay.Glint(_glintDuration);
-        StartPulse(_radius, _expandDuration, _fadeDuration, _ringColor, true);
+        StartPulse(_radius * Mathf.Max(0f, radiusMultiplier), _expandDuration, _fadeDuration + Mathf.Max(0f, extraFade),
+            _ringColor, true);
     }
 
     /// <summary>

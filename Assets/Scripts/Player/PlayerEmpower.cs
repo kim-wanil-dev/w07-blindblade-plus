@@ -308,6 +308,33 @@ public sealed class PlayerEmpower : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// 보스 거합을 받아쳐 플레이어 강화 공격을 받아치기 연출(적의 enemyCutColor 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자)로 한 번 발동하고 true를 반환한다.
+    /// 토큰과 차징 없이 시작하며 토큰은 쓰지 않는다. 판정·피해·불릿 타임·무적은 평소 강화 공격과 같고 Started를 발행한다.
+    /// 이미 강화 공격 중이거나 사망·일시정지이면 false다. 진행 중이던 준비가 있으면 강화 공격으로 이어받는다.
+    /// </summary>
+    public bool BeginCounterStrike(Color enemyCutColor)
+    {
+        if (IsStriking || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
+
+        if (!_active)
+        {
+            _active = true;
+            _empowerId++;
+            _sourceAttackId = 0;
+        }
+        _onboardingReadyHeld = false;
+        _charging = false;
+        _stage = PlayerEmpowerStage.Started;
+        _hitStopRemaining = 0f;
+        ChangeTimeRequest(STRIKE_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _worldTimeScale);
+        _combat.CancelForEmpowerStrike();
+        _player.CancelActionForEmpowerStrike();
+        Publish(PlayerEmpowerStage.Started, PlayerEmpowerEndReason.None);
+        _strike.PlayCounter(HandleStrikeFinished, enemyCutColor);
+        return true;
+    }
+
     /// <summary>강화 공격 연출이 끝나면 강화 공격을 Completed로 끝낸다.</summary>
     private void HandleStrikeFinished()
     {

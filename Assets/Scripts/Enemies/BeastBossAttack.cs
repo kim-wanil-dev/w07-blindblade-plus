@@ -484,11 +484,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 점점 붉게 물들이고, 완전히 붉어지는 순간 플레이어 쪽으로 방향을 고정해
-    /// 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지 _biteDuration 동안 땅 높이 직선으로 돌진한다.
-    /// 정해진 직선 경로를 장애물과 상관없이 끝까지 달리며, 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 피해를 준다.
-    /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 뒤로 물러난다.
-    /// 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다. chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다.
+    /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 점점 붉게 물들이고, 완전히 붉어지는 순간 Pounce로 _biteDamage 직선 덮치기를 한다.
+    /// chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다.
     /// </summary>
     private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float radius, bool chargeRipple)
     {
@@ -520,6 +517,17 @@ public sealed class BeastBossAttack : MonoBehaviour
             _warning.EndWarning();
             yield break;
         }
+        if (!barkPlayed) PounceApproaching?.Invoke();
+        yield return Pounce(player, center, radius, _biteDamage, "TwinBeastBite");
+    }
+
+    /// <summary>
+    /// 그 순간 플레이어 쪽으로 방향을 고정해 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지
+    /// _biteDuration 동안 땅 높이 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
+    /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
+    /// </summary>
+    private IEnumerator Pounce(KatanaDamageReceiver player, Vector3 center, float radius, float damage, string pattern)
+    {
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
         // 플레이어를 반드시 지나 원을 빠져나가는 반대편 가장자리에 내려앉도록 정해진 직선으로 뛴다.
@@ -535,8 +543,10 @@ public sealed class BeastBossAttack : MonoBehaviour
         _jumping = true;
         _attackResolved = false;
         _biting = true;
+        // 덮치기를 시작할 때부터 내려앉을 때까지 완전히 붉은 채 파동 없이도 붉은 테두리가 보이게 한다.
+        _warning.BeginWarning(0f);
+        _warning.SetAlwaysVisible(true);
         AttackStarted?.Invoke();
-        if (!barkPlayed) PounceApproaching?.Invoke();
         PounceStarted?.Invoke();
         Quaternion facing = Quaternion.LookRotation(direction);
         Vector3 previous = start;
@@ -549,7 +559,7 @@ public sealed class BeastBossAttack : MonoBehaviour
             transform.SetPositionAndRotation(next, facing);
             Vector3 step = next - previous;
             if (!_attackResolved && step.sqrMagnitude > 0.000001f)
-                CheckChargeContact(player, previous, step.normalized, step.magnitude, _biteDamage, "TwinBeastBite");
+                CheckChargeContact(player, previous, step.normalized, step.magnitude, damage, pattern);
             previous = next;
             if (_lastAttackParried) break;
             yield return null;

@@ -61,7 +61,6 @@ public sealed class EmpowerOverlay : MonoBehaviour
     private float _crossAge = -1f;
     private float _crossFadeAge = -1f;
     private float _crossFadeDuration;
-    private Color _crossLineColor = Color.white;
 
     public Color AccentColor => _accentColor;
     public Vector2 Size => _canvasRect.rect.size;
@@ -236,10 +235,10 @@ public sealed class EmpowerOverlay : MonoBehaviour
     }
 
     /// <summary>
-    /// 갈라진 선과 겹쳐 X자를 이루는 두 번째 color 색 한 줄을 화면 중심을 지나 angle도로 thickness 두께로 extendDuration 동안 양 끝까지 뻗게 한다.
-    /// 보스 거합을 퍼펙트 패링해 되받아 칠 때 붉은 사선 위에 플레이어 사선을 더하는 데 쓰며 ScatterCutLine이 함께 흩뜨린다.
+    /// 갈라진 선과 겹쳐 X자를 이루는 두 번째 강조색 한 줄을 화면 중심을 지나 angle도로 thickness 두께로 extendDuration 동안 양 끝까지 뻗게 한다.
+    /// 보스 거합 받아치기에서 반대 사선과 기본 사선을 함께 그을 때 쓰며 ScatterCutLine이 함께 흩뜨린다.
     /// </summary>
-    public void ShowCrossLine(float angle, float thickness, float extendDuration, Color color)
+    public void ShowCrossLine(float angle, float thickness, float extendDuration)
     {
         RectTransform rect = _crossLine.rectTransform;
         rect.localRotation = Quaternion.Euler(0f, 0f, angle);
@@ -247,8 +246,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _crossExtend = Mathf.Max(0.01f, extendDuration);
         _crossAge = 0f;
         _crossFadeAge = -1f;
-        _crossLineColor = color;
-        _crossLine.color = color;
+        _crossLine.color = _accentColor;
         _crossLine.gameObject.SetActive(true);
     }
 
@@ -260,7 +258,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
     {
         if (_crossLine.gameObject.activeSelf)
         {
-            ScatterLine(_crossLine.rectTransform, _crossLineColor, count, lifetime);
+            ScatterLine(_crossLine.rectTransform, _accentColor, count, lifetime);
             _crossFadeDuration = Mathf.Max(0.01f, lifetime * 0.15f);
             _crossFadeAge = 0f;
         }
@@ -417,7 +415,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
             _crossLine.gameObject.SetActive(false);
             return;
         }
-        SetAlpha(_crossLine, _crossLineColor.a * (1f - t));
+        SetAlpha(_crossLine, _accentColor.a * (1f - t));
     }
 
     /// <summary>보이는 입자를 dt만큼 움직이고 나이에 맞춰 크기·투명도를 바꾸며 수명이 끝나면 숨긴다.</summary>

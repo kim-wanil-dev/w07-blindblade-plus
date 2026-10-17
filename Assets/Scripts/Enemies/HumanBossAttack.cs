@@ -106,6 +106,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     private bool _slashing;
     private bool _dashHit;
     private bool _dashParried;
+    private float _strikeDamage;
 
     [Header("기운 구슬")]
     [SerializeField, Min(1), Tooltip("허리춤 구슬 개수이자 거합에 필요한 기운 수. 근접 공격이 플레이어에게 피해를 줄 때마다 하나씩 찬다.")]
@@ -257,19 +258,40 @@ public sealed class HumanBossAttack : MonoBehaviour
             FacePlayer();
             yield return null;
         }
-        if (CanSlash()) yield return Dash();
+        if (CanSlash()) yield return Dash(_slashDamage);
         _slashing = false;
         _warning.EndWarning();
         // 퍼펙트 패링에 막혔으면 지그재그 후퇴 대신 떨며 뒤로 밀려난다.
         if (_dashParried && CanSlash())
         {
-            Vector3 back = Vector3.ProjectOnPlane(transform.position - _player.transform.position, Vector3.up);
-            yield return Recoil(back.sqrMagnitude > 0.0001f ? back.normalized : -transform.forward,
-                _parryRecoilDistance, _parryRecoilDuration, false);
+            yield return RecoilFromPlayer();
             yield break;
         }
         if (CanSlash() && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 retreat))
             yield return Retreat(retreat);
+    }
+
+    /// <summary>
+    /// 피격 무적 중 플레이어에게 다시 베이면 쓰는 받아치기 돌진. 전조 없이 바로 지그재그로 돌진해 damage 피해를 주고,
+    /// 퍼펙트 패링에 막히면 돌진 베기와 같이 떨며 밀려난다. 전조·감속·후퇴는 제어자가 맡는다.
+    /// </summary>
+    public IEnumerator CounterDash(KatanaDamageReceiver player, float damage)
+    {
+        _player = player;
+        _playerMotor = player.GetComponent<PlayerMotor>();
+        if (!CanSlash()) yield break;
+        _slashing = true;
+        yield return Dash(damage);
+        _slashing = false;
+        if (_dashParried && CanSlash()) yield return RecoilFromPlayer();
+    }
+
+    /// <summary>플레이어 반대쪽으로 _parryRecoilDistance만큼 _parryRecoilDuration 동안 떨며 밀려난다.</summary>
+    private IEnumerator RecoilFromPlayer()
+    {
+        Vector3 back = Vector3.ProjectOnPlane(transform.position - _player.transform.position, Vector3.up);
+        yield return Recoil(back.sqrMagnitude > 0.0001f ? back.normalized : -transform.forward,
+            _parryRecoilDistance, _parryRecoilDuration, false);
     }
 
     /// <summary>
@@ -336,10 +358,11 @@ public sealed class HumanBossAttack : MonoBehaviour
     /// <summary>
     /// 지금 위치에서 플레이어 쪽으로 _zigzagTurns번 좌우로 _zigzagWidth만큼 꺾으며 _dashSpeed로 돌진하고 베기 소리를 낸다.
     /// 꺾을 때마다 붉은 파동을 내고, 마지막 구간은 그 순간 플레이어 위치를 겨눠 _dashOvershoot만큼 지나칠 때까지 달린다.
-    /// 어느 구간에서든 플레이어에 닿으면 그 앞에서 멈춘다.
+    /// 어느 구간에서든 플레이어에 닿으면 그 앞에서 멈추며 damage 피해를 판정한다.
     /// </summary>
-    private IEnumerator Dash()
+    private IEnumerator Dash(float damage)
     {
+        _strikeDamage = damage;
         Vector3 start = transform.position;
         Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
         Vector3 forward = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
@@ -445,7 +468,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// start에서 direction으로 travel만큼 몸 캡슐을 밀어 플레이어에 닿으면 전방 막기·쳐내기를 확인하고 실패 시 _slashDamage 피해를 주며 밀어낸다.
+    /// start에서 direction으로 travel만큼 몸 캡슐을 밀어 플레이어에 닿으면 전방 막기·쳐내기를 확인하고 실패 시 이번 돌진 피해 _strikeDamage를 주며 밀어낸다.
     /// 닿은 거리를 contact로 출력하고 판정했으면 true를 반환한다.
     /// </summary>
     private bool TryHitSlash(Vector3 start, Vector3 direction, float travel, out float contact)
@@ -461,7 +484,7 @@ public sealed class HumanBossAttack : MonoBehaviour
             if (_slashHits[i].collider.GetComponentInParent<PlayerHealth>() != _player) continue;
             contact = _slashHits[i].distance;
             Vector3 point = _slashHits[i].distance > 0f ? _slashHits[i].point : _player.transform.position + Vector3.up;
-            DamageContext context = new DamageContext(_slashDamage, gameObject, point, direction, "TwinHumanSlash");
+            DamageContext context = new DamageContext(_strikeDamage, gameObject, point, direction, "TwinHumanSlash");
             if (_player.TryDefendProjectile(context, out bool parried))
             {
                 _dashParried = parried;

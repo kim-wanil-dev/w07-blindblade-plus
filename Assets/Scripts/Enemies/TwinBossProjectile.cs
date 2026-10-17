@@ -136,6 +136,8 @@ public sealed class TwinBossProjectile : MonoBehaviour
                     _reflected = true;
                     _elapsed = 0f;
                     StopFlightSound();
+                    // 스테이지1 보스 수리검처럼 반사되면 붉은 위협 실루엣을 끄고 일반 흰 윤곽선으로 보인다.
+                    if (TryGetComponent(out OutlineLayer threatLayer)) threatLayer.enabled = false;
                     _damage = new DamageContext(_damage.Amount, _player.gameObject,
                         point, -_direction, "ReflectedProjectile");
                     return;

@@ -68,9 +68,23 @@ MonoBehaviour:
   _humanSlashesPerRound: 3
   _humanSlashInterval: 2
   _alternatingLead: 1.2
+  _hitInvulnerableDelay: 0.08
   _hitInvulnerabilityDuration: 2
-  _deflectPushDistance: 3
-  _deflectPushDuration: 0.16
+  _counterSlowDuration: 1.5
+  _counterSlowFadeIn: 0.2
+  _counterSlowFadeOut: 0.3
+  _counterWarningAt: 0.33333334
+  _counterDashAt: 0.6666667
+  _counterBackstepDistance: 18
+  _counterDamage: 25
+  _counterPulseColor: {r: 1, g: 0.1, b: 0.06, a: 1}
+  _counterViewAssistAngle: 20
+  _counterViewAssistSpeed: 120
+  _counterCameraKickPitch: 4
+  _counterCameraShake: 0.05
+  _counterCameraShakeDuration: 0.3
+  _counterStaggerDistance: 1.5
+  _counterStaggerDuration: 0.3
   _evadeRadius: 6
   _evadeSpeed: 10
   _evadeMinimumDistance: 3
@@ -383,6 +397,10 @@ MonoBehaviour:
   _bodyRenderers:
   - {fileID: 213}
   _rangedRevealRadius: 5
+  _guardWeaponPrefab: {fileID: 4775461175289693859, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  _guardWeaponController: {fileID: 9100000, guid: 1eb1cf08b0ba4cd3b001f3714f5f04d7, type: 2}
+  _guardWeaponOffset: {x: 0, y: 1.6, z: 0.6}
+  _guardWeaponScale: 1.5
 --- !u!114 &231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -458,9 +476,8 @@ MonoBehaviour:
   _parryReach: 1
   _parryRecoilDistance: 15
   _parryRecoilDuration: 0.6
-  _counterCrossDelay: 0.15
-  _counterBlackoutDuration: 0.8
-  _counterDamage: 50
+  _counterPulseRadiusScale: 2
+  _counterPulseExtraAfterimage: 2
   _parryFrontArc: 120
   _counterFocusDuration: 0
 --- !u!114 &233

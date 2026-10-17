@@ -110,18 +110,16 @@ public sealed class TwinHumanIai : MonoBehaviour
     private float _parryReach = 1f;
     [SerializeField, Range(1f, 180f), Tooltip("플레이어 시점 정면 기준 거합을 받아칠 수 있는 각도(도). 플레이어 칼 정면 방어 각도와 같다.")]
     private float _parryFrontArc = 120f;
-    [SerializeField, Min(0f), Tooltip("받아친 뒤 X자를 긋기 전 좌클릭을 꾹 누르던 궁극기 모으기 연출을 보이는 실제 시간(초). 0이면 플레이어 궁극기 차징 시간을 쓴다.")]
+    [SerializeField, Min(0f), Tooltip("받아친 뒤 반대 사선 강화 공격을 내기 전 좌클릭을 꾹 누르던 궁극기 모으기 연출을 보이는 실제 시간(초). 0이면 플레이어 궁극기 차징 시간을 쓴다.")]
     private float _counterFocusDuration = 0f;
     [SerializeField, Min(0f), Tooltip("거합이 퍼펙트 패링에 막혔을 때 인간이 떨며 뒤로 밀려나는 거리(미터)")]
     private float _parryRecoilDistance = 15f;
     [SerializeField, Min(0.01f), Tooltip("밀려나는 실제 시간(초)")]
     private float _parryRecoilDuration = 0.6f;
-    [SerializeField, Min(0f), Tooltip("붉은 거합 사선이 그어진 뒤 플레이어 사선이 겹쳐 X자를 이루기까지의 실제 시간(초)")]
-    private float _counterCrossDelay = 0.15f;
-    [SerializeField, Min(0.01f), Tooltip("X자 반격 뒤 화면이 어두운 채 머무는 실제 시간(초)")]
-    private float _counterBlackoutDuration = 0.8f;
-    [SerializeField, Min(0f), Tooltip("X자 반격이 납도 순간 인간에게 주는 피해. 플레이어 강화 공격 피해와 같다.")]
-    private float _counterDamage = 50f;
+    [SerializeField, Min(0f), Tooltip("받아치기 순간 플레이어 발밑에서 퍼지는 퍼펙트 패링 파동의 반경 배율(평소 퍼펙트 패링 대비)")]
+    private float _counterPulseRadiusScale = 2f;
+    [SerializeField, Min(0f), Tooltip("받아치기 퍼펙트 패링 파동이 다 퍼진 뒤 평소보다 더 남아 있는 잔상 시간(초)")]
+    private float _counterPulseExtraAfterimage = 2f;
 
     private HumanBossAttack _attack;
     private NavMeshAgent _agent;
@@ -133,14 +131,13 @@ public sealed class TwinHumanIai : MonoBehaviour
     private PlayerPerfectPulse _playerPerfectPulse;
     private EmpowerOverlay _overlay;
     private PlayerUltimateGroundMark _groundMark;
-    private PlayerEmpowerStrike _playerStrike;
     private KatanaCombatCoordinator _playerCombat;
-    private Camera _playerCamera;
     private bool _releasing;
     private bool _blackout;
 
     public bool IsCharging { get; private set; }
     public bool IsReleasing => _releasing;
+    public event System.Action CounterStarted;
     public float ChargeProgress { get; private set; }
 
     void Awake()
@@ -237,9 +234,7 @@ public sealed class TwinHumanIai : MonoBehaviour
         _playerPerfectPulse = player.GetComponent<PlayerPerfectPulse>();
         _overlay = player.GetComponent<EmpowerOverlay>();
         _groundMark = player.GetComponent<PlayerUltimateGroundMark>();
-        _playerStrike = player.GetComponent<PlayerEmpowerStrike>();
         _playerCombat = player.GetComponent<KatanaCombatCoordinator>();
-        _playerCamera = player.GetComponentInChildren<Camera>();
     }
 
     /// <summary>
@@ -346,7 +341,8 @@ public sealed class TwinHumanIai : MonoBehaviour
             elapsed += EmpowerOverlay.RealDeltaTime();
             float slow = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / slowDuration));
             _playerEmpower.SetChargePresentation(elapsed / duration, slow);
-            _playerBulletTimeAudio.SetExternalWarp(slow, slow);
+            // 플레이어 궁극기처럼 효과음·BGM만 먹먹하게 하고 암전음이 나가는 연출음 버스는 그대로 둔다.
+            _playerBulletTimeAudio.SetExternalWarp(slow, 0f);
             float scale = Mathf.Lerp(1f, _playerEmpower.ChargeWorldTimeScale, slow);
             if (Mathf.Abs(scale - _appliedTimeScale) >= 0.001f)
             {
@@ -382,77 +378,26 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// 퍼펙트 패링에 막힌 거합을 멈추고, 인간이 forward 반대쪽으로 _parryRecoilDistance만큼 떨며 밀려나는 동안
-    /// 실제 퍼펙트 패링 불릿 타임 대신 좌클릭을 꾹 눌러 궁극기를 모으던 연출(Focus)로 시간이 느려진다. 연출이 끝나면 그 순간 카메라로 X자 두 평면을 잡고
-    /// 화면이 암전되며 거합의 붉은 사선이 그어지고 _counterCrossDelay 뒤 플레이어 강화 공격 사선이 겹쳐 X자를 이룬다.
-    /// _counterBlackoutDuration 뒤 납도하며 두 선을 흩뜨리고, 플레이어 사선 평면과 그것을 화면 세로축으로 뒤집은 평면 두 개로
-    /// 땅 흔적·대나무 베기·빗방울 폭발을 대칭 X자로 낸다. 감속을 푼 다음, 마지막으로 인간에게 _counterDamage 피해를 준다.
-    /// 피해가 패턴 취소로 이어지므로 연출을 모두 끝낸 뒤에 준다.
+    /// 퍼펙트 패링에 막힌 거합을 멈추고 플레이어 발밑에서 평소보다 _counterPulseRadiusScale배 넓고 _counterPulseExtraAfterimage초 더 남는 퍼펙트 패링 파동을 먼저 낸 뒤,
+    /// 인간이 forward 반대쪽으로 _parryRecoilDistance만큼 떨며 밀려나는 동안 좌클릭을 꾹 눌러 궁극기를 모으던 연출(Focus)로 시간이 느려진다.
+    /// 연출이 끝나면 감속을 풀고 거합의 붉은 사선(_cutColor) 위에 플레이어 대칭 사선을 덮고 기본 사선을 더한 X자 강화 공격을 한 번 발동한다
+    /// (PlayerEmpower.BeginCounterStrike). 판정과 피해는 평소 강화 공격과 같이 한 번이다.
     /// </summary>
     private IEnumerator Countered(Vector3 forward)
     {
+        // 받아치기가 발동하면 제어자가 인간의 피격 무적을 초기화한다.
+        CounterStarted?.Invoke();
         _warning.EndWarning();
         _overlay.Flash(_cutFlash, 0.15f);
+        // 퍼펙트 패링에 성공한 순간 플레이어 발밑에서 퍼펙트 패링 파동이 먼저 퍼진다.
+        _playerPerfectPulse.Begin(_counterPulseRadiusScale, _counterPulseExtraAfterimage);
         // 인간이 떨며 밀려나는 동안 좌클릭을 꾹 눌러 궁극기를 모으던 연출로 시간이 느려진다.
         StartCoroutine(_attack.Recoil(-forward, _parryRecoilDistance, _parryRecoilDuration, true));
         yield return Focus();
-
-        // 적의 공격까지 되받아 친 X자라 플레이어 사선과 화면 세로축 대칭 사선 두 평면으로 세계를 벤다.
-        // 플레이어 궁극기처럼 암전 직전 화면을 기준으로 잡아 화면의 두 선과 세계의 두 평면이 겹치게 한다.
-        float crossAngle = _playerStrike != null ? _playerStrike.CutAngle : -_screenCutAngle;
-        Vector3 playerOrigin = _player.transform.position;
-        Vector3 cameraPoint = _playerCamera.transform.position;
-        Vector3 cameraForward = _playerCamera.transform.forward;
-        Vector3 playerNormal = GetScreenCutNormal(crossAngle);
-        Vector3 mirrorNormal = GetScreenCutNormal(-crossAngle);
-        Matrix4x4 cameraView = _playerCamera.projectionMatrix * _playerCamera.worldToCameraMatrix;
-
-        // 서걱: 거합의 붉은 사선 위에 플레이어의 사선이 겹쳐 X자로 되받아 벤다.
-        _blackout = true;
-        _overlay.SetVoid(1f);
-        SlashAcross(-crossAngle);
-        _overlay.ShowCutLine(-crossAngle, _seamThickness, 0.08f, _cutColor);
-        PlaySound(_slashSound, _player.transform.position);
-        yield return WaitReal(_counterCrossDelay);
-        float rotation = crossAngle - 90f;
-        Vector2 bulge = new Vector2(Mathf.Cos(rotation * Mathf.Deg2Rad), Mathf.Sin(rotation * Mathf.Deg2Rad));
-        _overlay.Slash(-bulge * (_cutSlashSize * 0.42f), _cutSlashSize, rotation, false, 0.1f, 0.5f, _overlay.AccentColor);
-        _overlay.ShowCrossLine(crossAngle, _seamThickness, 0.08f, _overlay.AccentColor);
-        _overlay.Flash(_cutFlash, 0.2f);
-        PlaySound(_slashSound, _player.transform.position);
-        yield return WaitReal(_counterBlackoutDuration);
-
-        // 납도: 화면이 돌아오며 X자가 흩어지고 인간이 베인다.
-        _blackout = false;
-        _overlay.SetVoid(0f);
-        PlaySound(_sheatheSound, _player.transform.position);
-        _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
-        _overlay.Flash(_sheatheFlash, 0.2f);
-        _groundMark.Show(cameraPoint, playerNormal, cameraView);
-        _groundMark.Show(cameraPoint, mirrorNormal, cameraView);
-        BambooGrove.CutInView(cameraView, _bambooViewMargin, playerOrigin, cameraPoint, playerNormal);
-        BambooGrove.CutInView(cameraView, _bambooViewMargin, playerOrigin, cameraPoint, mirrorNormal);
-        RainStageWeather.RecordCutPlaneBurst(cameraPoint, playerNormal, cameraForward);
-        RainStageWeather.RecordCutPlaneBurst(cameraPoint, mirrorNormal, cameraForward);
         StopSlowNow();
         _releasing = false;
-        if (_attack.Health.IsAlive)
-            _attack.Health.TakeDamage(new DamageContext(_counterDamage, _player.gameObject, transform.position + Vector3.up,
-                forward, "TwinHumanIaiCounter", 0, 0, IncomingAttackKind.PlayerOwned));
-    }
-
-    /// <summary>
-    /// 플레이어 화면 중심을 지나 angle도 기운 화면 선과 겹쳐 보이도록, 플레이어 카메라를 지나는 평면의 법선을 반환한다.
-    /// 화면 선 위 두 점으로 향하는 시선 광선의 외적을 쓰며 플레이어 강화 공격의 대나무 베기 평면과 같은 방식이다.
-    /// </summary>
-    private Vector3 GetScreenCutNormal(float angle)
-    {
-        Vector2 center = new Vector2(_playerCamera.pixelWidth * 0.5f, _playerCamera.pixelHeight * 0.5f);
-        float radians = angle * Mathf.Deg2Rad;
-        Vector2 along = new Vector2(Mathf.Cos(radians), Mathf.Sin(radians)) * (_playerCamera.pixelHeight * 0.25f);
-        Vector3 left = _playerCamera.ScreenPointToRay(center - along).direction;
-        Vector3 right = _playerCamera.ScreenPointToRay(center + along).direction;
-        return Vector3.Cross(left, right).normalized;
+        // 거합의 붉은 사선 위에 플레이어 대칭 사선을 덮고 기본 사선을 더한 강화 공격을 한 번 발동한다.
+        _playerEmpower.BeginCounterStrike(_cutColor);
     }
 
     /// <summary>
@@ -540,7 +485,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// _slowTarget 쪽으로 감속 비중을 실제 시간 페이드로 옮기고, 비중만큼 세계를 플레이어 불릿 타임 배율로 늦추며 불릿 타임 소리를 건다.
+    /// _slowTarget 쪽으로 감속 비중을 실제 시간 페이드로 옮기고, 비중만큼 세계를 플레이어 불릿 타임 배율로 늦추며 효과음·BGM에만 불릿 타임 소리를 건다(연출음 버스 제외).
     /// 일시정지 중에는 진행하지 않으며 배율이 바뀔 때만 시간 요청을 다시 등록한다.
     /// </summary>
     private void UpdateSlow()
@@ -550,7 +495,8 @@ public sealed class TwinHumanIai : MonoBehaviour
         float fade = _slowTarget > _slowWeight ? _slowFadeIn : _slowFadeOut;
         _slowWeight = fade > 0f
             ? Mathf.MoveTowards(_slowWeight, _slowTarget, Time.unscaledDeltaTime / fade) : _slowTarget;
-        _playerBulletTimeAudio.SetExternalWarp(_slowWeight, _slowWeight);
+        // 연출음 버스까지 먹먹하게 하면 암전음(발도음)이 거의 들리지 않으므로 효과음·BGM에만 건다.
+        _playerBulletTimeAudio.SetExternalWarp(_slowWeight, 0f);
         float scale = Mathf.Lerp(1f, _playerEmpower.WorldTimeScale, _slowWeight);
         if (_slowWeight <= 0f)
         {
@@ -595,13 +541,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     /// <summary>화면 중심을 지나 _screenCutAngle만큼 기운 큰 붉은 곡선 검격을 화면에 긋는다.</summary>
     private void SlashAcross()
     {
-        SlashAcross(_screenCutAngle);
-    }
-
-    /// <summary>화면 중심을 지나 angle도 기운 큰 붉은 곡선 검격을 화면에 긋는다. 받아치기 X자의 붉은 획처럼 기울기를 따로 정할 때 쓴다.</summary>
-    private void SlashAcross(float angle)
-    {
-        float rotation = angle - 90f;
+        float rotation = _screenCutAngle - 90f;
         Vector2 bulge = new Vector2(Mathf.Cos(rotation * Mathf.Deg2Rad), Mathf.Sin(rotation * Mathf.Deg2Rad));
         _overlay.Slash(-bulge * (_cutSlashSize * 0.42f), _cutSlashSize, rotation, true, 0.1f, 0.5f, _cutColor);
     }
