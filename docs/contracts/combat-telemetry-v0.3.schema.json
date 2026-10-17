@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Onboarding and Stage1 telemetry 0.3.0",
+  "description": "Onboarding stages 0-1 through 0-7, objective attempts, and Stage1 combat attempts. Contract API remains 0.2.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "contractVersion",
+    "buildVersion",
+    "configVersion",
+    "anonymousPlayerId",
+    "sessionId",
+    "sessionGeneration",
+    "eventSequence",
+    "sourceId",
+    "sourceSequence",
+    "eventType",
+    "occurredAt",
+    "recordedAt",
+    "correlation",
+    "payload",
+    "stageId",
+    "stageAttemptId",
+    "occurredAtKst",
+    "recordedAtKst"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "0.3.0"
+    },
+    "contractVersion": {
+      "const": "0.2.0"
+    },
+    "buildVersion": {
+      "type": "string"
+    },
+    "configVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "anonymousPlayerId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "sessionGeneration": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "eventSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "sourceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sourceSequence": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "eventType": {
+      "enum": [
+        "session_started",
+        "session_ended",
+        "stage_started",
+        "stage_summary",
+        "stage_ended",
+        "movement_sample",
+        "player_input",
+        "player_died",
+        "dodge_changed",
+        "state_changed",
+        "reaction_candidate",
+        "enemy_attack_started",
+        "enemy_attack_committed",
+        "enemy_attack_resolved",
+        "onboarding_attempt",
+        "onboarding_step"
+      ]
+    },
+    "occurredAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realtimeSeconds",
+        "gameplaySeconds",
+        "activeUnscaledSeconds"
+      ],
+      "properties": {
+        "realtimeSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gameplaySeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "activeUnscaledSeconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "occurredAtKst": {
+      "type": "string",
+      "pattern": "\\+09:00$"
+    },
+    "recordedAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realtimeSeconds",
+        "gameplaySeconds",
+        "activeUnscaledSeconds"
+      ],
+      "properties": {
+        "realtimeSeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gameplaySeconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "activeUnscaledSeconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "recordedAtKst": {
+      "type": "string",
+      "pattern": "\\+09:00$"
+    },
+    "correlation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputId",
+        "actionId",
+        "attackId",
+        "hitId",
+        "projectileId",
+        "dodgeId"
+      ],
+      "properties": {
+        "inputId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "actionId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "attackId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "hitId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "projectileId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "dodgeId": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "payload": {
+      "type": "object"
+    },
+    "stageId": {
+      "enum": [
+        "0-1",
+        "0-2",
+        "0-3",
+        "0-4",
+        "0-5",
+        "0-6",
+        "0-7",
+        "1-1",
+        "1-2",
+        "unassigned"
+      ]
+    },
+    "stageAttemptId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}:(0-[1-7]|1-1|1-2|unassigned)$"
+    }
+  }
+}

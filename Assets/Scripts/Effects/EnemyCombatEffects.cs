@@ -1,3 +1,5 @@
+using System;
+
 using UnityEngine;
 
 /// <summary>적 프리팹에 배치된 두 방향의 EnemySlash를 실제 베기 때 재생한다. 사용자 Transform을 유지한다.</summary>
@@ -16,6 +18,7 @@ public sealed class EnemyCombatEffects : MonoBehaviour
     private ParticleSystem[] _currentSystems;
     private float[] _currentSpeeds;
     private EnemyMeleeAttack _melee;
+    private EnemyMeleeAttack _slashOwner;
     private float _releaseAt;
 
     [Header("기타 공격 표시 위치")]
@@ -24,6 +27,8 @@ public sealed class EnemyCombatEffects : MonoBehaviour
     private EnemyAttackBehaviour[] _patterns;
     private EffectManager _effects;
     private bool _isPrimary;
+    public bool HasSlashVisual => _currentSlash != null;
+    public event Action SlashVisualFinished;
 
     void Awake()
     {
@@ -66,8 +71,11 @@ public sealed class EnemyCombatEffects : MonoBehaviour
 
     void Update()
     {
-        if (_currentSlash == null) return;
-        if (!_currentSlash.IsAlive(true) || (_melee == null && Time.time >= _releaseAt)) StopSlash();
+        if (_currentSlash == null || _melee != null) return;
+        if (_currentSlash.IsAlive(true) && Time.time < _releaseAt) return;
+
+        StopSlash();
+        SlashVisualFinished?.Invoke();
     }
 
     /// <summary>기존 씬 컴포넌트의 비어 있는 슬롯을 childName의 프리팹 자식 파티클로 연결한다. 자식이 없으면 null을 반환한다.</summary>
@@ -109,7 +117,8 @@ public sealed class EnemyCombatEffects : MonoBehaviour
             Debug.LogError("적 프리팹에 해당 방향 EnemySlash 연결이 없습니다.", this);
             return;
         }
-        _melee = melee;
+        _slashOwner = melee;
+        _melee = melee;        
         _currentSystems = left ? _leftSystems : _rightSystems;
         _currentSpeeds = left ? _leftSpeeds : _rightSpeeds;
         float visualDuration = GetVisualDuration(_currentSystems, _currentSpeeds);
@@ -159,7 +168,8 @@ public sealed class EnemyCombatEffects : MonoBehaviour
     /// <summary>context의 베기가 취소되면 진행 중인 검기를 즉시 비활성화한다.</summary>
     private void HandleCancelled(EnemyAttackContext context)
     {
-        if (_melee == context.Pattern) StopSlash();
+        if (_slashOwner == context.Pattern)
+            StopSlash();
     }
 
     /// <summary>현재 검기 입자를 정리하고 원래 재생 속도를 복원한다. 자식 GameObject를 비활성화하며 Transform은 유지한다.</summary>
@@ -179,5 +189,6 @@ public sealed class EnemyCombatEffects : MonoBehaviour
         _currentSystems = null;
         _currentSpeeds = null;
         _melee = null;
+        _slashOwner = null;
     }
 }

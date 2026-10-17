@@ -37,6 +37,12 @@ public sealed class DefenseShuriken : MonoBehaviour
     private int _projectileId;
     private bool _terminalFlight;
     private bool _hasPassedPlayer;
+    [Header("비행 외형")]
+    [SerializeField, Range(0f, 45f), Tooltip("외형 진행 방향에 추가할 고정 하향 pitch 각도")]
+    private float _visualPitchDownAngle = 12f;
+
+    [SerializeField, Range(0f, 85f), Tooltip("외형 pitch가 월드 수평선에서 벗어날 수 있는 최대 각도")]
+    private float _maximumVisualPitch = 50f;    
 
     [Header("소리")]
     [SerializeField, Tooltip("적대 비행 동안 수리검을 따라 반복하는 비행음. 반사·소멸하면 멈춘다.")]
@@ -90,6 +96,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         Vector3 playerPoint = _targetMotor.ViewOrigin;
         UpdateFlightPhase(transform.position, transform.position, playerPoint);
         SteerTowardsTarget(Vector3.Distance(playerPoint, transform.position));
+        ApplyVisualPitch();
 
         int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius, _contacts, _collisionMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < overlaps; i++)
@@ -130,6 +137,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (!_flying)
             return;
         _flying = false;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Cancelled", transform.position);
         Released?.Invoke(this);
     }
 
@@ -137,8 +145,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     /// instigator, target, damage, direction, director를 설정하고 수리검 비행을 시작한다.
     /// 활성 전투 세션에서 공격 ID와 투사체 ID를 발급받아 비행 상태에 저장한다.
     /// </summary>
-    public void Launch(GameObject instigator, PlayerHealth target, float damage, Vector3 direction,
-        BambooDefenseDirector director)
+    public void Launch(GameObject instigator, PlayerHealth target, float damage, Vector3 direction, BambooDefenseDirector director, int attackId = 0)
     {
         _instigator = instigator;
         _target = target;
@@ -147,13 +154,14 @@ public sealed class DefenseShuriken : MonoBehaviour
         _damage = damage;
         _direction = direction.normalized;
         CombatSessionRuntime session = CombatSessionRuntime.Active;
-        _attackId = session.AllocateAttackId();
+        _attackId = attackId != 0 ? attackId : BlindBlade.Telemetry.CombatTelemetrySignals.Begin(PATTERN_ID, "Projectile", transform.position, target.transform.position);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_attackId, transform.position);
         _projectileId = session.AllocateProjectileId();
         _elapsed = 0f;
         _terminalFlight = false;
         _hasPassedPlayer = false;
         _flying = true;
-        transform.rotation = Quaternion.LookRotation(_direction);
+        ApplyVisualPitch();
         // 소멸하면 소유자 파괴로 SoundManager가 정지하고, 반사는 TryReflect에서 직접 멈춘다.
         if (_flightSound != SoundId.None)
             Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
@@ -189,8 +197,35 @@ public sealed class DefenseShuriken : MonoBehaviour
             return;
 
         _direction = Vector3.RotateTowards(_direction, aim.normalized, _homingTurnRate * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
-        transform.rotation = Quaternion.LookRotation(_direction);
     }
+
+    /// <summary>
+/// 진행 방향의 pitch에 고정 하향 각도를 적용한다.
+/// _direction을 사용하며, 수리검의 외형 회전을 갱신한다.
+/// </summary>
+private void ApplyVisualPitch()
+{
+    Vector3 horizontalFlight = Vector3.ProjectOnPlane(_direction, Vector3.up);
+    float horizontalFlightMagnitude = horizontalFlight.magnitude;
+    Vector3 horizontalHeading = horizontalFlight;
+
+    if (horizontalHeading.sqrMagnitude < 0.0001f)
+        horizontalHeading = Vector3.ProjectOnPlane(_targetMotor.ViewForward, Vector3.up);
+
+    if (horizontalHeading.sqrMagnitude < 0.0001f)
+        return;
+
+    float flightPitch = Mathf.Atan2(_direction.y, horizontalFlightMagnitude) * Mathf.Rad2Deg;
+    float visualPitch = flightPitch - _visualPitchDownAngle;
+    visualPitch = Mathf.Clamp(visualPitch, -_maximumVisualPitch, _maximumVisualPitch);
+
+    float pitchRadians = visualPitch * Mathf.Deg2Rad;
+    Vector3 visualForward =
+        horizontalHeading.normalized * Mathf.Cos(pitchRadians) +
+        Vector3.up * Mathf.Sin(pitchRadians);
+
+    transform.rotation = Quaternion.LookRotation(visualForward, Vector3.up);
+}
 
     /// <summary>
     /// start부터 end까지의 이동 구간과 playerPoint를 사용해 근접 진입과 통과를 판정한다.
@@ -224,6 +259,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (!_flying)
             return;
         _flying = false;
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Miss", transform.position);
         Released?.Invoke(this);
         Destroy(gameObject);
     }
@@ -255,6 +291,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     /// </summary>
     public void ReleaseBlocked()
     {
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Destroyed", transform.position);
         Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
         Release();
     }
@@ -273,7 +310,7 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     /// <summary>
     /// collider의 point에 공격 ID와 Projectile 종류를 붙여 A의 단일 방어 판정에 전달한다.
-    /// 일반 패링이면 반사 비행으로 바꾸고, 그 외 결과나 반사할 적이 없으면 수리검을 소멸한다.
+    /// 퍼펙트 패링이면 반사 비행으로 바꾸고, 그 외 결과나 반사할 적이 없으면 수리검을 소멸한다.
     /// 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
     /// </summary>
     private void ProcessHit(Collider collider, Vector3 point)
@@ -287,7 +324,7 @@ public sealed class DefenseShuriken : MonoBehaviour
             if (resolver != null)
             {
                 DefenseResolution resolution = resolver.ResolveIncomingAttack(context);
-                if (resolution.Outcome == DefenseOutcome.NormalParry && TryReflect(player.gameObject))
+                if (resolution.Outcome == DefenseOutcome.PerfectParry && TryReflect(player.gameObject))
                     return;
             }
             else
@@ -330,6 +367,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (_flightSound != SoundId.None)
             Managers.Sound.StopFor(gameObject, _flightSound, true, true);
         ShowAsReflected();
+        BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Miss", transform.position);
         Released?.Invoke(this);
         return true;
     }

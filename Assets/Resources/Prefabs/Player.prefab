@@ -261,6 +261,7 @@ GameObject:
   - component: {fileID: 7719342256018403924}
   - component: {fileID: 7719342256018403925}
   - component: {fileID: 7719342256018403926}
+  - component: {fileID: 7719342256018403927}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -358,6 +359,7 @@ MonoBehaviour:
   _attackFollowThroughSpeedMultiplier: 0.3
   _combatResumeAcceleration: 14
   _recoilReturnSpeed: 18
+  _kickReturnSpeed: 6
 --- !u!114 &6616511219798166873
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -451,13 +453,9 @@ MonoBehaviour:
   _targetedAttackMinimumDuration: 0.45
   _perfectParryStart: 0
   _perfectParryEnd: 0.1
-  _normalParryStart: 0.1
-  _normalParryEnd: 0.25
   _blockInputRecovery: 0
   _guardPushDistance: 0.9
   _guardPushDuration: 0.12
-  _counterWindow: 0.5
-  _automaticCounterDelay: 0.12
   _parryStaggerDuration: 0.9
   _counterInvulnerabilityAfter: 0.3
   _sheatheDuration: 0.3
@@ -727,7 +725,7 @@ MonoBehaviour:
   _readyDuration: 5
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
-  _perfectParryInvulnerableDuration: 0.3
+  _perfectParryInvulnerableDuration: 1.5
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
   _ultimateChargeDuration: 1.5
@@ -1725,3 +1723,19 @@ MonoBehaviour:
   _fullGlowPulseDepth: 0.35
   _fullGlowPulseSpeed: 1.2
   _fullTransitionDuration: 0.3
+--- !u!114 &7719342256018403927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab0053a0255a4cf09aa406939c0346e5, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
+  _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
+  _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
+  _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
+  _fadeDuration: 0.15

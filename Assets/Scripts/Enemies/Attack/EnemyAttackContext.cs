@@ -4,6 +4,7 @@ public readonly struct EnemyAttackContext
 {
     public EnemyAttackBehaviour Pattern { get; }
     public string PatternId { get; }
+    public int AttackId { get; }
     public Transform Source { get; }
     public Transform Target { get; }
     public Vector3 Origin { get; }
@@ -27,5 +28,7 @@ public readonly struct EnemyAttackContext
         Direction = (AimPosition - Origin).normalized;
         TelegraphDuration = telegraphDuration;
         ActiveDuration = pattern.ExecutionDuration;
+        AttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin(PatternId,
+            pattern is EnemyRangedAttack ? "Projectile" : pattern is EnemyMeleeAttack ? "Melee" : "Charge", Origin, AimPosition);
     }
 }

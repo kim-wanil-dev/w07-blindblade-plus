@@ -14,6 +14,7 @@ namespace BlindBlade.Telemetry
     internal sealed class TelemetryDiskStore
     {
         private readonly object _gate = new object();
+        private readonly HashSet<string> _activeSessions = new HashSet<string>();
         private readonly string _root;
         private readonly long _maximumBytes;
         private long _writtenBytes;
@@ -40,10 +41,11 @@ namespace BlindBlade.Telemetry
                     Initialize();
                     foreach (IGrouping<string, string> group in records.GroupBy(line => (string)JObject.Parse(line)["sessionId"]))
                     {
+                        _activeSessions.Add(group.Key);
                         string content = string.Join("\n", group) + "\n";
                         long bytes = Encoding.UTF8.GetByteCount(content);
                         if (_writtenBytes + bytes > _maximumBytes)
-                            throw new IOException("로컬 로그 용량 한도에 도달했습니다. 원본을 백업한 뒤 공간을 확보하세요.");
+                            throw new IOException("현재 스키마의 로컬 로그 용량 한도에 도달했습니다. 원본을 백업한 뒤 공간을 확보하세요.");
                         string path = Path.Combine(_root, group.Key + ".jsonl");
                         using (FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read))
                         {
@@ -58,12 +60,14 @@ namespace BlindBlade.Telemetry
                             JObject first = JObject.Parse(group.First());
                             File.WriteAllText(metadataPath, first.ToString(Formatting.Indented), new UTF8Encoding(false));
                         }
+                        if ((string)JObject.Parse(group.Last())["eventType"] == "session_ended")
+                            _activeSessions.Remove(group.Key);
                     }
                 }
             });
         }
 
-        /// <summary>destination별 커서 뒤의 완전한 줄을 limit·byteLimit 안에서 읽어 한 파일의 배치를 반환한다. 원본은 변경하지 않는다.</summary>
+        /// <summary>destination에서 전송 완료된 비활성 세션을 정리하고 커서 뒤의 완전한 줄을 limit·byteLimit 안에서 읽어 배치를 반환한다. 미확인 원본은 보존한다.</summary>
         internal Task<UploadBatch> ReadBatchAsync(int limit, int byteLimit, string destination)
         {
             return Task.Run(() =>
@@ -77,6 +81,15 @@ namespace BlindBlade.Telemetry
                         try
                         {
                             string cursorPath = path + "." + destination + ".cursor";
+                            if (DeleteAcknowledgedSession(path, cursorPath)) continue;
+                            // 이전 빌드의 세션은 새 수신기에 재전송하지 않는다.
+                            using (StreamReader reader = new StreamReader(path, Encoding.UTF8))
+                            {
+                                string first = reader.ReadLine();
+                                if (string.IsNullOrWhiteSpace(first)
+                                    || (string)JObject.Parse(first)["schemaVersion"] != TelemetryJson.SCHEMA_VERSION)
+                                    continue;
+                            }
                             long offset = File.Exists(cursorPath) ? long.Parse(File.ReadAllText(cursorPath)) : 0L;
                             JArray rows = new JArray();
                             long end = offset;
@@ -125,7 +138,7 @@ namespace BlindBlade.Telemetry
             });
         }
 
-        /// <summary>서버가 확인한 batch의 끝 위치를 원자적 교체로 저장한다. 실패하면 같은 사건을 다시 보낸다.</summary>
+        /// <summary>서버가 확인한 batch의 끝 위치를 원자적으로 저장하고 종료된 세션 전체가 ACK되면 로컬 파일을 삭제한다. 미확인 사건은 재전송 대상으로 남긴다.</summary>
         internal Task AcknowledgeAsync(UploadBatch batch)
         {
             return Task.Run(() =>
@@ -137,17 +150,56 @@ namespace BlindBlade.Telemetry
                     File.WriteAllText(temporary, batch.EndOffset.ToString(), new UTF8Encoding(false));
                     if (File.Exists(path)) File.Replace(temporary, path, null);
                     else File.Move(temporary, path);
+                    string sessionId = (string)batch.Records[0]["sessionId"];
+                    DeleteAcknowledgedSession(Path.Combine(_root, sessionId + ".jsonl"), path);
                 }
             });
         }
 
-        /// <summary>전용 폴더를 준비하고 기존 JSONL 용량을 한 번 집계한다. 호출자는 _gate를 소유한다.</summary>
+        /// <summary>path가 종료된 세션이고 cursorPath가 파일 전체의 ACK를 나타내면 원본과 부속 파일을 삭제한다. 삭제한 용량을 예산에서 차감하고 성공 여부를 반환한다.</summary>
+        private bool DeleteAcknowledgedSession(string path, string cursorPath)
+        {
+            string sessionId = Path.GetFileNameWithoutExtension(path);
+            if (!Guid.TryParseExact(sessionId, "N", out _) || _activeSessions.Contains(sessionId)
+                || !File.Exists(path) || !File.Exists(cursorPath)) return false;
+            long length = new FileInfo(path).Length;
+            if (length == 0 || !long.TryParse(File.ReadAllText(cursorPath), out long offset) || offset != length)
+                return false;
+
+            long budgetBytes = GetStorageBudgetBytes(path);
+            File.Delete(path);
+            _writtenBytes = Math.Max(0L, _writtenBytes - budgetBytes);
+            File.Delete(Path.Combine(_root, sessionId + ".json"));
+            foreach (string cursor in Directory.GetFiles(_root, sessionId + ".jsonl.*.cursor"))
+                File.Delete(cursor);
+            return true;
+        }
+
+        /// <summary>전용 폴더를 준비하고 현재 스키마의 JSONL 용량을 집계한다. 구버전 원본을 보존하며 _writtenBytes를 초기화한다. 호출자는 _gate를 소유한다.</summary>
         private void Initialize()
         {
             if (_initialized) return;
             Directory.CreateDirectory(_root);
-            _writtenBytes = Directory.GetFiles(_root, "*.jsonl").Sum(path => new FileInfo(path).Length);
+            _writtenBytes = Directory.GetFiles(_root, "*.jsonl").Sum(GetStorageBudgetBytes);
             _initialized = true;
+        }
+
+        /// <summary>path의 첫 사건에서 스키마를 읽어 현재 저장 한도에 포함할 바이트를 반환한다. 다른 버전은 제외하고 판독 불가 파일은 용량에 포함한다.</summary>
+        private long GetStorageBudgetBytes(string path)
+        {
+            long bytes = new FileInfo(path).Length;
+            try
+            {
+                using (StreamReader reader = new StreamReader(path, Encoding.UTF8))
+                {
+                    string first = reader.ReadLine();
+                    if (string.IsNullOrWhiteSpace(first)) return bytes;
+                    string schema = (string)JObject.Parse(first)["schemaVersion"];
+                    if (!string.IsNullOrEmpty(schema) && schema != TelemetryJson.SCHEMA_VERSION) return 0L;
+                }
+            }
+            catch (JsonException) { return bytes; }
+            return bytes;
         }
     }
 

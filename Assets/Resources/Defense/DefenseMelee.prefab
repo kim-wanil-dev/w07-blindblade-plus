@@ -16,6 +16,34 @@ PrefabInstance:
       propertyPath: _acceleration
       value: 12
       objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _warningSound
+      value: 39
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _firstHeartbeatDelay
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _postHeartbeatAttackDelay
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 3589661639432246125, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startSizeY.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3589661639432246125, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startSizeZ.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3589661639432246125, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startRotationX.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3589661639432246125, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startRotationY.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 5135211428147630035, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -60,6 +88,22 @@ PrefabInstance:
       propertyPath: _stepDistance
       value: 1.05
       objectReference: {fileID: 0}
+    - target: {fileID: 7523857855964521133, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startSizeY.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7523857855964521133, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startSizeZ.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7523857855964521133, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startRotationX.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7523857855964521133, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: InitialModule.startRotationY.minMaxState
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 7608795753784398461, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: m_Enabled
       value: 0
@@ -78,7 +122,15 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 8382106560393218092, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3960347396053785730}
+    - targetCorrespondingSourceObject: {fileID: 8382106560393218092, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6111355706357920765}
   m_SourcePrefab: {fileID: 100100000, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+--- !u!199 &1834155031653856871 stripped
+ParticleSystemRenderer:
+  m_CorrespondingSourceObject: {fileID: 5191585202396945875, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+  m_PrefabInstance: {fileID: 5870456909746826164}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &2678292632270529432 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8382106560393218092, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
@@ -118,4 +170,24 @@ MonoBehaviour:
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
   _stepsPerRipple: 2
-  _hideOwner: 1
+--- !u!114 &6111355706357920765
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2678292632270529432}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a899f6a86de339143b891f01a4180105, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyMeleeWarningVisual
+  _bodyRenderers:
+  - {fileID: 1834155031653856871}
+  - {fileID: 5193066500150499745}
+  _whiteReturnDuration: 0.12
+--- !u!199 &5193066500150499745 stripped
+ParticleSystemRenderer:
+  m_CorrespondingSourceObject: {fileID: 1831125578586124821, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+  m_PrefabInstance: {fileID: 5870456909746826164}
+  m_PrefabAsset: {fileID: 0}

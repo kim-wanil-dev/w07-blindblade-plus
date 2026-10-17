@@ -9,8 +9,8 @@ EditorBuildSettings:
     path: Assets/Scenes/IntroEndingScene/IntroScene.unity
     guid: c5dfa6ff21aff364eb81cac3bce34500
   - enabled: 1
-    path: Assets/Scenes/Defense/BambooDefense.unity
-    guid: fd5ed0d67c306224caefd9fc4983caff
+    path: Assets/Scenes/Onboarding/Onboarding.unity
+    guid: 8e215c1a463124540be9a39499b9daaa
   - enabled: 1
     path: Assets/Scenes/Defense/BambooStage1.unity
     guid: 29bc612417d10514c8df40709f9ada9e

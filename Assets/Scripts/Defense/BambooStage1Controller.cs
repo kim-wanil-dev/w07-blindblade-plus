@@ -4,7 +4,8 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>일반 적 처치 수에 따라 보스 경고, 원형 공터 가장자리 등장 연출과 스테이지 완료를 관리한다.</summary>
-[DefaultExecutionOrder(1000)]
+// 등장 흔들림은 PlayerMotor(0)와 GameSceneInitializer(100) 뒤, 칼 궤적(200)·돌진 대상 실(300)·칼 구슬(310) 앞에 적용한다.
+[DefaultExecutionOrder(120)]
 [DisallowMultipleComponent]
 public sealed class BambooStage1Controller : MonoBehaviour
 {
@@ -54,6 +55,9 @@ public sealed class BambooStage1Controller : MonoBehaviour
     void Awake()
     {
         _bossHealth = _boss.GetComponent<EnemyHealth>();
+        // 보스 출현에 필요한 처치 수보다 많은 근접 적은 내보내지 않는다.
+        _director.SetMeleeSpawnLimit(_requiredKills);
+        _director.SetKillGoal(_requiredKills);
         _warning.alpha = 0f;
         _warning.blocksRaycasts = false;
         _warning.interactable = false;
@@ -61,6 +65,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 
     void Start()
     {
+        BambooStage1Progress.MarkStage1Started();
         if (!BambooStage1Progress.BossCheckpointReached) return;
 
         PlayerController player = Game.Player;
@@ -104,7 +109,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         float phase = _shakeElapsed * _cameraShakeFrequency * Mathf.PI * 2f;
         Vector3 offset = new Vector3(Mathf.Sin(phase), Mathf.Cos(phase * 1.37f), 0f)
             * (_cameraShakeAmplitude * fade);
-        // PlayerMotor가 같은 프레임에 카메라 기본 위치를 갱신한 뒤 등장 흔들림을 더한다.
+        // PlayerMotor가 카메라 기본 위치를 갱신한 뒤, 칼 실처럼 월드 좌표로 그리는 표현보다 먼저 흔들림을 더한다.
         _playerCamera.transform.localPosition += offset;
     }
 
@@ -149,17 +154,21 @@ public sealed class BambooStage1Controller : MonoBehaviour
     }
 
     /// <summary>
-    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정한다.
+    /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정하며 플레이어 체력을 최대로 회복한다.
     /// 등장 파동은 첫 진입과 재도전 모두 시작하며 shakeCamera가 참인 첫 진입에서만 카메라를 흔든다.
     /// </summary>
     private void ActivateBoss(Vector3 position, bool shakeCamera)
     {
+        PlayerHealth playerHealth = Game.Player.GetComponent<PlayerHealth>();
+        playerHealth.Heal(playerHealth.MaxHealth);
         Vector3 toPlayer = Game.Player.transform.position - position;
         toPlayer.y = 0f;
         _boss.transform.SetPositionAndRotation(position,
             toPlayer.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(toPlayer) : Quaternion.identity);
         _boss.GetComponent<BossController>().ConfigureArena(_arena, _edgeInset);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2");
         _boss.SetActive(true);
+        _director.HideRecord();
         _phase = StagePhase.Boss;
         BambooStage1Progress.MarkBossCheckpointReached();
         _entranceWaveRoutine = StartCoroutine(PlayEntranceWaves(position));
@@ -278,6 +287,11 @@ public sealed class BambooStage1Controller : MonoBehaviour
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         if (bossHealth == _bossHealth && _phase == StagePhase.Boss)
+        {
             _phase = StagePhase.Complete;
+            BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2", true);
+            BambooStage1Progress.MarkBossCheckpointReached();
+            Game.Instance.GameStateManager.RequestGameClear();
+        }
     }
 }

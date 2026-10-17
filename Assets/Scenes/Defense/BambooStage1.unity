@@ -6744,11 +6744,12 @@ MonoBehaviour:
   _spawner: {fileID: 1968806062}
   _presentation: {fileID: 1968806063}
   _recordingEnabled: 1
-  _configVersion: bamboo-2026-10-14
+  _configVersion: stage1-analysis-v3
   _bufferLimit: 4096
   _flushIntervalSeconds: 2
   _maximumStorageMegabytes: 100
-  _sampleIntervalSeconds: 5
+  _movementSampleIntervalSeconds: 1
+  _summaryIntervalSeconds: 15
   _allowAutomaticUpload: 1
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100
@@ -55254,7 +55255,7 @@ MonoBehaviour:
   _arena: {fileID: 1943110757}
   _boss: {fileID: 350192290}
   _warning: {fileID: 132706044}
-  _requiredKills: 5
+  _requiredKills: 15
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
@@ -61557,10 +61558,10 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: BOSS WARNING
+  m_text: "\uAC15\uC801 \uCD9C\uD604"
   m_isRightToLeft: 0
-  m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  m_fontAsset: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
+  m_sharedMaterial: {fileID: -2410460447488063956, guid: b11c4c70569688e42ab6166059d06671, type: 2}
   m_fontSharedMaterials: []
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
@@ -61590,7 +61591,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 1
+  m_fontStyle: 0
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512
   m_textAlignment: 65535

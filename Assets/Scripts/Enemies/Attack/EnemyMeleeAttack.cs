@@ -37,6 +37,9 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     [SerializeField] private bool _showAttackGizmos = true;
     [SerializeField] private bool _showBladeTrajectoryGizmos;
     [SerializeField, Min(0.1f)] private float _gizmoDuration = 2f;
+
+    [Header("근접 공격 전조음")]
+    [SerializeField] private SoundId _warningSound = SoundId.None;
 #if UNITY_EDITOR
     private readonly List<Vector3> _debugBlades = new List<Vector3>();
     private float _debugUntil;
@@ -183,7 +186,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         if (receiver == null || IsBlocked(context, point, receiver)) { BeginRecovery(); return; }
         Vector3 direction = (BladeTip - _previousTip).normalized;
         if (direction.sqrMagnitude < 0.001f) direction = _swingForward;
-        receiver.TakeDamage(new DamageContext(_damage, gameObject, point, direction, context.PatternId));
+        receiver.TakeDamage(new DamageContext(_damage, gameObject, point, direction, context.PatternId, context.AttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         if (Phase == EnemyAttackPhase.Active) BeginRecovery();
     }
 
@@ -217,6 +220,23 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
             return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// stage와 이 공격의 전조음 설정으로 재생할 소리 ID를 반환한다.
+    /// 전조음이 지정되면 첫 박동을 그 소리로 바꾸고 검격 직전 기합음을 제외한다.
+    /// </summary>
+    protected override SoundId ResolveActionSound(EnemySoundStage stage)
+    {
+        if (_warningSound != SoundId.None)
+        {
+            if (stage == EnemySoundStage.Heartbeat)
+                return _warningSound;
+            if (stage == EnemySoundStage.AttackVoice)
+                return SoundId.None;
+        }
+
+        return base.ResolveActionSound(stage);
     }
 
 #if UNITY_EDITOR

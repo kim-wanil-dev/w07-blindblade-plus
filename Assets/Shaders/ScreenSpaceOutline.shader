@@ -10,6 +10,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
         _SceneryColor ("Scenery Color", Color) = (0.3, 0.3, 0.3, 1)
         _ThreatColor ("Threat Color", Color) = (1, 0.1, 0.06, 1)
         _ThreatFillOpacity ("Threat Fill Opacity", Float) = 0.6
+        _MeleeWarningColor ("Melee Warning Color", Color) = (1, 0.1, 0.06, 1)
     }
 
     SubShader
@@ -45,6 +46,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 half4 _SceneryColor;
                 half4 _ThreatColor;
                 float _ThreatFillOpacity;
+                half4 _MeleeWarningColor;
             CBUFFER_END
 
             TEXTURE2D_X(_OutlineOpaqueColor);
@@ -52,6 +54,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             TEXTURE2D_X(_OutlineTransparentDepth);
             TEXTURE2D_X(_OutlineSceneryMask);
             TEXTURE2D_X(_OutlineThreatMask);
+            TEXTURE2D_X(_OutlineMeleeWarningMask);
             TEXTURE2D_X(_OutlineForcedReveal);
             TEXTURE2D_X(_ThreatPresentationColor);
             TEXTURE2D_X(_ThreatPresentationData);
@@ -69,6 +72,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float _OutlinePerceptionTime;
             float4 _OutlinePulseRegion;
             float _OutlinePulseVisibility;
+            // rgb: 파동이 밝힌 윤곽선 색, a: 물들이는 정도. 보스 반격 파동만 붉게 쓴다.
+            float4 _OutlinePulseTint;
             TEXTURE2D(_OutlineTerrainMemory);
             SAMPLER(sampler_OutlineTerrainMemory);
             float4 _OutlineMemoryBounds;
@@ -227,10 +232,11 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     visibility = max(visibility, soundVisibility);
                 }
                 // 보상 파동은 높이를 무시하고 C의 대상 판정과 같은 수평거리로 공개한다.
-                visibility = max(visibility, RegionVisibility(
+                float pulseVisibility = RegionVisibility(
                     float3(position.x, 0.0, position.z),
                     float3(_OutlinePulseRegion.x, 0.0, _OutlinePulseRegion.z),
-                    _OutlinePulseRegion.w) * _OutlinePulseVisibility);
+                    _OutlinePulseRegion.w) * _OutlinePulseVisibility;
+                visibility = max(visibility, pulseVisibility);
                 visibility = max(visibility, RevealMapVisibility(position, isScenery));
                 visibility = max(visibility, ImpactRippleVisibility(position));
                 visibility = max(visibility, SphereRippleVisibility(position, _OutlinePerceptionTime, _OutlineEdgeFade));
@@ -248,7 +254,10 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                             sampler_OutlineTerrainMemory, memoryUv, 0).r;
                 }
                 float3 memoryColor = _OutlineMemoryColor.rgb * _OutlineMemoryColor.a * memoryVisibility;
-                return memoryColor * (1.0 - visibility) + _LineColor.rgb * _LineColor.a * visibility;
+                // 파동이 밝힌 만큼만 선 색을 파동 색조로 바꿔 보스 반격 파동 안의 윤곽을 붉게 보인다.
+                float3 lineColor = lerp(_LineColor.rgb * _LineColor.a, _OutlinePulseTint.rgb,
+                    saturate(pulseVisibility) * _OutlinePulseTint.a);
+                return memoryColor * (1.0 - visibility) + lineColor * visibility;
             }
 
             // 배경 표면은 상시 표시하지 않고 현재 인지로만 드러내며 지형 기억에는 남기지 않는다.
@@ -467,7 +476,29 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 edge *= 1.0 - TransparentCoverage(uv);
                 float3 transparentEdge = max(TransparentEdgeBetween(firstUv, secondUv),
                     TransparentEdgeBetween(thirdUv, fourthUv));
+                float warningCenter = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, uv).r;
+                float warningFirst = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, firstUv).r;
+                float warningSecond = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, secondUv).r;
+                float warningThird = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, thirdUv).r;
+                float warningFourth = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, fourthUv).r;
+
+                float warningAmount = saturate(max(
+                    warningCenter,
+                    max(max(warningFirst, warningSecond),
+                        max(warningThird, warningFourth))));
+
+                float transparentBrightness = max(transparentEdge.r, max(transparentEdge.g, transparentEdge.b));
+
+            // 연기에서 검출된 테두리 픽셀에만 전조 색을 적용한다.
                 edge = max(edge, transparentEdge);
+                float edgeBrightness = max(edge.r, max(edge.g, edge.b));
+                float outlineTint = warningAmount * step(0.0001, transparentBrightness);
+                edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a * edgeBrightness, outlineTint);
                 edge *= 1.0 - AlwaysVisibleCoverage(uv);
                 float foregroundEdge = saturate(max(
                     abs(AlwaysVisibleCoverage(firstUv) - AlwaysVisibleCoverage(secondUv)),

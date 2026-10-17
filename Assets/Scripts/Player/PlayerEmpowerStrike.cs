@@ -202,7 +202,10 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         }
     }
 
-    /// <summary>현재 적대 비행 중인 모든 DefenseShuriken을 그 위치에서 가드 성공 소리를 내며 없앤다. 반사된 수리검은 그대로 둔다.</summary>
+    /// <summary>
+    /// 현재 적대 비행 중인 모든 DefenseShuriken과 제거 가능 EnemyProjectile(보스 수리검)을 그 위치에서 가드 성공 소리를 내며 없앤다.
+    /// 반사된 수리검은 그대로 둔다.
+    /// </summary>
     private static void ReleaseProjectiles()
     {
         foreach (DefenseShuriken projectile in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
@@ -210,6 +213,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             if (!projectile.IsFlying) continue;
             projectile.ReleaseBlocked();
         }
+        EnemyProjectile.ReleaseAllClearable();
     }
 
     /// <summary>
