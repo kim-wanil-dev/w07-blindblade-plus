@@ -151,6 +151,8 @@ public sealed class BossController : MonoBehaviour
     [Header("방어 반격 관통 베기")]
     [SerializeField, Min(0f), Tooltip("실제 피격 후 방어 상태를 유지하는 시간. 근접 베기·발도에 한 번 반격하면 즉시 종료합니다.")]
     private float _hitDeflectDuration = 2f;
+    [SerializeField, Min(0f), Tooltip("실제 피격 뒤 무적과 방어 상태가 시작되기까지의 지연(초). 이 사이에는 무적 없이 맞습니다.")]
+    private float _hitInvulnerableDelay = 0.08f;
     [SerializeField, Min(0f), Tooltip("반격 직전 세계를 불릿 타임 배율로 늦추는 전체 실제 시간(초). 페이드인·아웃 구간을 포함합니다.")]
     private float _counterSlowDuration = 1.5f;
     [SerializeField, Min(0f), Tooltip("감속과 먹먹한 소리가 최대로 걸리기까지의 실제 시간(초)")]
@@ -189,6 +191,7 @@ public sealed class BossController : MonoBehaviour
     [SerializeField, Min(0.01f), Tooltip("플레이어 뒷걸음질 시간(초, 플레이어 시간)")]
     private float _counterStaggerDuration = 0.3f;
     private float _hitDeflectUntil;
+    private float _pendingDefenseAt;
     private bool _counterSlashing;
     private IPlayerDefenseResolver _playerDefense;
     private PlayerBulletTimeAudio _playerBulletTimeAudio;
@@ -237,6 +240,7 @@ public sealed class BossController : MonoBehaviour
     void Update()
     {
         if (_counterSlowActive) UpdateCounterSlow();
+        if (_pendingDefenseAt > 0f && Time.time >= _pendingDefenseAt) BeginDefense();
         if (_hitDeflectUntil > 0f && Time.time >= _hitDeflectUntil)
             RestoreAfterDisappearance();
         if (_routine != null && (_player == null || !_playerHealth.IsAlive || !_motor.IsReady))
@@ -773,7 +777,7 @@ public sealed class BossController : MonoBehaviour
     }
 
     /// <summary>
-    /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고 외형을 유지한 채 무적 방어 상태로 다음 패턴을 준비한다.
+    /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고 외형을 유지한 채 _hitInvulnerableDelay 뒤 무적 방어 상태가 시작되도록 예약하며 다음 패턴을 준비한다.
     /// 짧은 시간의 누적 피해가 기준 이상이면 기존 회복 대신 무적 없이 도주 난사를 시작한다.
     /// 플레이어 불릿 타임(강화 준비·강화 공격) 중이거나 반사된 수리검에 맞았으면 무적과 방어 상태 없이 회복한다.
     /// </summary>
@@ -796,7 +800,6 @@ public sealed class BossController : MonoBehaviour
         _motor.Stop();
         IsRepositioning = false;
         ChangeState(BossState.Idle);
-        _health.SetInvulnerable(true);
         if (RegisterBurstDamage(context.Amount))
         {
             // 도주 난사는 무적 없이 진행하므로 피격 무적과 쳐내기 창을 바로 해제한다.
@@ -807,8 +810,12 @@ public sealed class BossController : MonoBehaviour
         // 플레이어 불릿 타임 중이거나 반사된 수리검에 맞으면 피격 후 무적과 방어 상태를 만들지 않는다.
         if (_playerEmpower.IsReady || _playerEmpower.IsStriking || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID)
             RestoreAfterDisappearance(true);
-        else
-            _hitDeflectUntil = Time.time + _hitDeflectDuration;
+        else if (_pendingDefenseAt <= 0f)
+        {
+            // 피격 직후 짧은 지연 동안은 무적 없이 맞을 수 있고, 지연이 끝나면 무적 방어 상태가 시작된다.
+            _pendingDefenseAt = Time.time + _hitInvulnerableDelay;
+            if (_hitInvulnerableDelay <= 0f) BeginDefense();
+        }
         _routine = StartCoroutine(RecoverFromHit());
     }
 
@@ -1216,15 +1223,27 @@ public sealed class BossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 피격 후 쳐내기 시간이 끝났으면 무적과 종료 시각을 초기화한다.
-    /// force가 true인 쳐내기 성공·전투 중단에서는 남은 시간과 무관하게 즉시 해제한다.
+    /// 피격 후 쳐내기 시간이 끝났고 예약된 방어 시작도 없으면 무적과 종료 시각을 초기화한다.
+    /// force가 true인 쳐내기 성공·전투 중단에서는 남은 시간·예약과 무관하게 즉시 해제하고 예약도 취소한다.
     /// </summary>
     private void RestoreAfterDisappearance(bool force = false)
     {
-        if (!force && Time.time < _hitDeflectUntil) return;
+        if (!force && (Time.time < _hitDeflectUntil || _pendingDefenseAt > 0f)) return;
         _hitDeflectUntil = 0f;
+        _pendingDefenseAt = 0f;
 
         _health.SetInvulnerable(false);
+    }
+
+    /// <summary>
+    /// 피격 후 _hitInvulnerableDelay가 지나면 무적을 켜고 _hitDeflectDuration 동안 방어 상태를 시작한다.
+    /// 예약 시각 _pendingDefenseAt을 비우며 이후 방어 상태 종료는 RestoreAfterDisappearance가 맡는다.
+    /// </summary>
+    private void BeginDefense()
+    {
+        _pendingDefenseAt = 0f;
+        _health.SetInvulnerable(true);
+        _hitDeflectUntil = Time.time + _hitDeflectDuration;
     }
 
     /// <summary>사망한 health의 행동을 종료하고 사망 상태를 구독자에게 전달한다.</summary>

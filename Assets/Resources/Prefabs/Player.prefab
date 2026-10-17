@@ -725,7 +725,7 @@ MonoBehaviour:
   _readyDuration: 5
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
-  _perfectParryInvulnerableDuration: 0.3
+  _perfectParryInvulnerableDuration: 1.5
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
   _ultimateChargeDuration: 1.5

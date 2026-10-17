@@ -16,6 +16,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     [System.NonSerialized] private PlayerEmpower _empower;
     [System.NonSerialized] private PlayerClock _playerClock;
     [System.NonSerialized] private PlayerPerfectPulse _perfectPulse;
+    [System.NonSerialized] private PlayerSwordWaveLauncher _swordWave;
 
     [Header("회피 판정")]
     [SerializeField, Min(0f), InspectorName("극한 회피 시작 (초)")]
@@ -41,6 +42,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         _empower = GetComponent<PlayerEmpower>();
         _playerClock = GetComponent<PlayerClock>();
         _perfectPulse = GetComponent<PlayerPerfectPulse>();
+        _swordWave = GetComponent<PlayerSwordWaveLauncher>();
         if (_combat == null) _combat = GetComponent<KatanaCombatCoordinator>();
         if (_view == null)
         {
@@ -78,7 +80,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     /// <summary>
     /// context의 공격 1회를 회피·가드·패링으로 판정하고 막지 못하면 체력을 줄인 뒤 결과를 반환한다.
-    /// 회피 판정 구간이면 가드보다 먼저 DodgeAvoided 또는 Invulnerable로, 반격 무적·강화 공격·퍼펙트 패링 직후 무적 중이면 보상 없는 Invulnerable로 확정한다.
+    /// 회피 판정 구간이면 가드보다 먼저 DodgeAvoided 또는 Invulnerable로, 반격 무적·강화 공격·퍼펙트 패링 직후 무적·검기 예약부터 발사(돌진 포함) 중이면 보상 없는 Invulnerable로 확정한다.
     /// 그 외에는 Kind가 Projectile이면 진입 방향과 반격 없음 규칙을, 아니면 기존 전방 근접·보스 공격 규칙을 사용하며
     /// 가드가 열린 뒤 지난 시간으로 PerfectParry·Guard를 나눈다.
     /// 사망·일시정지·시간 정지에서는 Ignored를 반환한다. 모든 결과는 반환 전에 DefenseResolved 사건으로 한 번 발행한다.
@@ -92,7 +94,8 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         // 회피 무적은 가드·패링보다 먼저 판정한다. 접촉은 계속 이 경로로 들어오고 피해만 막는다.
         if (TryGetDodgeOutcome(out DefenseOutcome dodgeOutcome))
             return ResolveDodge(context, dodgeOutcome);
-        if (_combat.IsCounterInvulnerable || _empower.IsStriking || _empower.IsPerfectParryInvulnerable)
+        if (_combat.IsCounterInvulnerable || _empower.IsStriking || _empower.IsPerfectParryInvulnerable
+            || _swordWave.IsAttackInvulnerable)
             return PublishResolution(context, DefenseOutcome.Invulnerable, 0f);
 
         // 투사체는 반사·강화 보상을 투사체 쪽에서 처리하므로 근접 자동 반격을 만들지 않는다.
@@ -112,14 +115,14 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// <summary>
     /// context의 투사체 진입 방향으로 전방 가드·패링을 검사하고 방어 성공 여부를 반환한다.
     /// parried에 퍼펙트 패링 여부를 출력하며 기존 방어 효과를 적용한다. allowCounter가 false이면 반격 기회를 만들지 않는다.
-    /// 회피 판정 구간이나 반격 무적·강화 공격·퍼펙트 패링 직후 무적 중이면 막지 않고 false를 반환해 호출자의 TakeDamage가 무적 결과로 처리하게 한다.
+    /// 회피 판정 구간이나 반격 무적·강화 공격·퍼펙트 패링 직후 무적·검기 공격 무적 중이면 막지 않고 false를 반환해 호출자의 TakeDamage가 무적 결과로 처리하게 한다.
     /// 방어에 성공한 경우에만 DefenseResolved를 발행하고, 실패는 호출자의 TakeDamage가 발행한다.
     /// </summary>
     public bool TryDefendProjectile(DamageContext context, out bool parried, bool allowCounter = true)
     {
         parried = false;
         if (!isActiveAndEnabled || TryGetDodgeOutcome(out _) || _combat.IsCounterInvulnerable
-            || _empower.IsStriking || _empower.IsPerfectParryInvulnerable) return false;
+            || _empower.IsStriking || _empower.IsPerfectParryInvulnerable || _swordWave.IsAttackInvulnerable) return false;
         bool eligible = IsFrontProjectile(context);
         DefenseOutcome guardOutcome = _combat.GuardContactOutcome;
         if (!_combat.TryDefendIncoming(context, eligible, allowCounter)) return false;

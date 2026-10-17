@@ -80,6 +80,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     public float DashDistance => _dashDistance;
     public bool IsLaunchSlowActive => _launchElapsed >= 0f;
+    public bool IsAttackInvulnerable => _armed || _dashing;
     public event Action<DefenseSwordWave> SwordWaveLaunched;
 
     void Awake()

@@ -333,6 +333,7 @@ MonoBehaviour:
     m_Bits: 51
   _repositionSpeed: 25
   _hitDeflectDuration: 2
+  _hitInvulnerableDelay: 0.08
   _counterSlowDuration: 1.5
   _counterSlowFadeIn: 0.2
   _counterSlowFadeOut: 0.3
