@@ -71,14 +71,14 @@ public sealed class TwinBossController : MonoBehaviour
     private float _harassInterval = 1.8f;
 
     [Header("교대 근접")]
-    [SerializeField, Min(1), Tooltip("인간 연속 베기와 짐승 가장자리 돌진을 한 번씩 하는 차례 수")]
+    [SerializeField, Min(1), Tooltip("인간 연속 돌진 베기와 짐승 가장자리 덮치기를 한 번씩 하는 차례 수")]
     private int _alternatingRounds = 2;
-    [SerializeField, Min(1), Tooltip("한 차례에 인간이 연달아 베는 횟수")]
-    private int _humanSlashesPerRound = 3;
-    [SerializeField, Min(0.1f), Tooltip("인간 베기 사이 간격(초). 베기마다 붉은 전조가 앞에 붙는다.")]
-    private float _humanSlashInterval = 1f;
-    [SerializeField, Min(0f), Tooltip("패턴 시작부터 첫 베기까지의 준비 시간(초)")]
-    private float _alternatingLead = 0.9f;
+    [SerializeField, Min(1), Tooltip("한 차례에 인간이 돌진·베기·후퇴를 반복하는 횟수")]
+    private int _humanSlashesPerRound = 4;
+    [SerializeField, Min(0.1f), Tooltip("인간 돌진 사이 간격(초). 돌진마다 붉은 전조가 앞에 붙고 베고 나면 물러난다.")]
+    private float _humanSlashInterval = 2f;
+    [SerializeField, Min(0f), Tooltip("패턴 시작부터 첫 돌진까지의 준비 시간(초). 시작 위치로 달려가고 전조를 보이는 시간을 포함한다.")]
+    private float _alternatingLead = 1.2f;
 
     [Header("피격 회피 이동")]
     [SerializeField, Min(0f), Tooltip("실제 피격 후 추가 타격을 패링하는 무적 시간(초)")]
@@ -101,6 +101,7 @@ public sealed class TwinBossController : MonoBehaviour
     private float _beastAcceleration;
     private float _humanInvulnerableUntil;
     private float _beastInvulnerableUntil;
+    private bool _beastEvadeMoving;
 
     public TwinBossPattern Pattern => _pattern;
     public event Action<TwinBossPattern> PatternChanged;
@@ -131,6 +132,25 @@ public sealed class TwinBossController : MonoBehaviour
             _beastInvulnerableUntil = 0f;
             _beast.Health.SetInvulnerable(false);
         }
+        UpdateBeastProwl();
+    }
+
+    /// <summary>
+    /// 패턴 대기·회피 회복 중에는 짐승이 멈추지 않고 플레이어 주위를 배회하게 하고, 그 밖에는 배회를 끝낸다.
+    /// 피격당한 짐승이 회피 이동 중이면 배회하지 않는다.
+    /// </summary>
+    private void UpdateBeastProwl()
+    {
+        bool prowl = _beast.Health.IsAlive && _player.IsAlive && !_beastEvadeMoving
+            && (_pattern == TwinBossPattern.Idle || _pattern == TwinBossPattern.Evading);
+        if (!prowl)
+        {
+            _beast.EndProwl();
+            return;
+        }
+        if (_beast.IsProwling) return;
+        GetArenaCircle(out Vector3 center, out float radius);
+        _beast.BeginProwl(_player.transform, center, radius);
     }
 
     /// <summary>
@@ -171,6 +191,7 @@ public sealed class TwinBossController : MonoBehaviour
         _hitRequested = false;
         _hitBoss = null;
         _interrupted = false;
+        _beastEvadeMoving = false;
         _human.Health.Damaged += HandleHumanDamaged;
         _beast.Health.Damaged += HandleBeastDamaged;
         _human.Health.DamageBlocked += HandleHumanDamageBlocked;
@@ -292,9 +313,9 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 인간 연속 베기와 짐승 가장자리 돌진을 서로 겹치지 않게 _alternatingRounds번 번갈아 한다.
-    /// 한 차례마다 짐승이 땅에 뛰어드는 동안 인간이 _humanSlashInterval 간격으로 _humanSlashesPerRound번 베고,
-    /// 마지막 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진한다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
+    /// 인간 연속 돌진 베기와 짐승 가장자리 덮치기를 서로 겹치지 않게 _alternatingRounds번 번갈아 한다.
+    /// 한 차례마다 짐승이 땅에 뛰어드는 동안 인간이 스테이지1 보스 돌진처럼 _humanSlashInterval 간격으로 _humanSlashesPerRound번 돌진해 베고 물러나며,
+    /// 마지막 돌진 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진한다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
     /// </summary>
     private IEnumerator AlternateMelee()
     {
@@ -304,7 +325,7 @@ public sealed class TwinBossController : MonoBehaviour
             // 땅에 뛰어드는 것은 공격이 아니므로 인간 베기와 함께 진행한다.
             _beastRoutine = StartCoroutine(BeastDive());
             for (int i = 0; i < _humanSlashesPerRound && BothAlive(); i++)
-                yield return _human.Slash(_player, firstStrikeAt + _humanSlashInterval * i);
+                yield return _human.DashStrike(_player, firstStrikeAt + _humanSlashInterval * i);
             while (_beastRoutine != null) yield return null;
             if (!BothAlive()) break;
             GetArenaCircle(out Vector3 center, out float radius);
@@ -352,6 +373,9 @@ public sealed class TwinBossController : MonoBehaviour
         EnemyMotor motor = humanHit ? _humanMotor : _beastMotor;
         NavMeshAgent agent = humanHit ? _humanAgent : _beastAgent;
         Vector3 position = agent.transform.position;
+        // 맞은 짐승은 배회 대신 회피 이동을 하고, 인간이 맞았으면 짐승은 계속 배회한다.
+        _beastEvadeMoving = !humanHit;
+        if (_beastEvadeMoving) _beast.EndProwl();
         bool moving = _hitBoss != null && _hitBoss.IsAlive && motor.IsReady
             && TryEscape(agent, out position);
         if (moving) moving = BeginMove(motor, agent, position, _evadeSpeed);
@@ -359,6 +383,7 @@ public sealed class TwinBossController : MonoBehaviour
         while (Time.time < until && CanBattle() && moving && _hitBoss != null
             && _hitBoss.IsAlive && !motor.HasArrived) yield return null;
         RestoreMovement();
+        _beastEvadeMoving = false;
         until = Time.time + _breakRecovery;
         while (Time.time < until && CanBattle()) yield return null;
         _hitRequested = false;
@@ -414,7 +439,7 @@ public sealed class TwinBossController : MonoBehaviour
         return motor.MoveTo(destination, 0.1f);
     }
 
-    /// <summary>두 보스의 빠른 이동을 정지하고 초기 속도·가속도를 복원한다.</summary>
+    /// <summary>두 보스의 빠른 이동을 정지하고 초기 속도·가속도를 복원한다. 배회 중인 짐승은 멈추지 않는다.</summary>
     private void RestoreMovement()
     {
         if (_humanAgent != null)
@@ -423,7 +448,7 @@ public sealed class TwinBossController : MonoBehaviour
             _humanAgent.speed = _humanSpeed;
             _humanAgent.acceleration = _humanAcceleration;
         }
-        if (_beastAgent != null)
+        if (_beastAgent != null && !_beast.IsProwling)
         {
             _beastMotor.Stop();
             _beastAgent.speed = _beastSpeed;
@@ -593,11 +618,13 @@ public sealed class TwinBossController : MonoBehaviour
         RestoreMovement();
     }
 
-    /// <summary>pattern 변경을 저장하고 표현 담당자에게 전달한다.</summary>
+    /// <summary>pattern 변경을 저장하고 표현 담당자에게 전달한다. 대기·회피가 아닌 패턴으로 바뀌면 짐승 배회를 끝낸다.</summary>
     private void ChangePattern(TwinBossPattern pattern)
     {
         if (_pattern == pattern) return;
         _pattern = pattern;
+        // 패턴이 시작되는 프레임에 바로 배회를 끝내 패턴 이동과 겹치지 않게 한다.
+        if (pattern != TwinBossPattern.Idle && pattern != TwinBossPattern.Evading && _beast != null) _beast.EndProwl();
         PatternChanged?.Invoke(pattern);
     }
 

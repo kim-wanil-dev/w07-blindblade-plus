@@ -303,7 +303,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         }
     }
 
-    /// <summary>2막 문구를 잠시 보여 준 뒤 페이드와 함께 RainyStage 씬으로 이동한다.</summary>
+    /// <summary>2막 문구를 잠시 보여 준 뒤 페이드와 함께 RainyTwinBoss 씬으로 이동한다.</summary>
     private IEnumerator ShowActTwoThenTransition()
     {
         _warning.GetComponentInChildren<TMP_Text>(true).text = "2막";
@@ -313,6 +313,6 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _stageTransitionRoutine = null;
         if (Game.Instance.GameStateManager.State != GameplayState.Playing)
             yield break;
-        SceneTransitionOverlay.TransitionToScene("RainyStage", 0.5f, null);
+        SceneTransitionOverlay.TransitionToScene("RainyTwinBoss", 0.5f, null);
     }
 }

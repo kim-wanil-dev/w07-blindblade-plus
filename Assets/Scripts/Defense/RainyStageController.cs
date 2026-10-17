@@ -76,6 +76,7 @@ public sealed class RainyStageController : MonoBehaviour
 
     void Start()
     {
+        _twinBoss.GetComponent<TwinBossController>().ConfigureArena(_arena, _edgeInset);
         BambooStage1Progress.MarkRainyStageReached();
         if (BambooStage1Progress.RainyBossCheckpointReached)
         {
