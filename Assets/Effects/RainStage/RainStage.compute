@@ -7,6 +7,12 @@ struct RainDrop
     float4 Data;
 };
 
+struct GroundRipple
+{
+    float4 PositionStart;
+    float4 Data;
+};
+
 struct Sweep
 {
     float4 A;
@@ -18,8 +24,12 @@ struct Sweep
 RWStructuredBuffer<RainDrop> _Drops;
 StructuredBuffer<Sweep> _HitSweeps;
 StructuredBuffer<Sweep> _TrailSweeps;
+RWStructuredBuffer<GroundRipple> _GroundRipples;
+RWStructuredBuffer<uint> _GroundRippleCounter;
 
 int _DropCount;
+int _NearDropCount;
+float _FarRadius;
 int _HitCount;
 int _TrailCount;
 int _Frame;
@@ -31,6 +41,12 @@ float _FallSpeed;
 float _RainDeltaTime;
 float _SplashDeltaTime;
 float _SplashDuration;
+int _GroundRippleCapacity;
+float _GroundY;
+float _GroundRippleChance;
+float _GroundRippleRadiusMin;
+float _GroundRippleRadiusMax;
+float _RainClock;
 
 uint Hash(uint value)
 {
@@ -47,11 +63,19 @@ float Random01(uint value)
     return (Hash(value) & 0x00ffffffu) / 16777216.0;
 }
 
+// 앞쪽 _NearDropCount개는 카메라 주변 원, 나머지는 그 바깥 _FarRadius까지의 고리를 맡는다.
+float OuterRadius(uint id)
+{
+    return id < (uint)_NearDropCount ? _Radius : _FarRadius;
+}
+
 float3 SpawnPosition(uint id, uint sequence)
 {
     uint seed = id * 747796405u + sequence * 2891336453u;
     float angle = Random01(seed + 1u) * 6.2831853;
-    float radius = sqrt(Random01(seed + 2u)) * _Radius;
+    float innerRadius = id < (uint)_NearDropCount ? 0.0 : _Radius;
+    float outerRadius = OuterRadius(id);
+    float radius = sqrt(lerp(innerRadius * innerRadius, outerRadius * outerRadius, Random01(seed + 2u)));
     float spawnBottom = _Bottom + min(0.5, max(0.0, (_Top - _Bottom) * 0.1));
     float height = lerp(spawnBottom, _Top, Random01(seed + 3u));
     return float3(_Center.x + cos(angle) * radius, height,
@@ -142,6 +166,32 @@ bool TouchesSweep(float3 previous, float3 current, Sweep sweep)
     return false;
 }
 
+// sweep에 맞은 position의 파열이 튈 단위 방향을 반환한다.
+// 기본은 이전 변 중점에서 현재 변 중점으로 가는 검격 진행 방향이다. B.w가 1이면 면에서 바깥쪽,
+// 네 모서리가 한 선분으로 모인 경로라면 그 선분에서 바깥쪽으로 튄다.
+float3 BurstDirection(float3 position, Sweep sweep)
+{
+    float3 a = sweep.A.xyz;
+    float3 b = sweep.B.xyz;
+    float3 c = sweep.C.xyz;
+    float3 d = sweep.D.xyz;
+    if (sweep.B.w < 0.5)
+    {
+        float3 motion = (c + d - a - b) * 0.5;
+        return dot(motion, motion) > 0.00000001 ? normalize(motion) : float3(0, 1, 0);
+    }
+    float3 normal = cross(b - a, c - a);
+    if (dot(normal, normal) > 0.000001)
+    {
+        normal = normalize(normal);
+        return dot(position - a, normal) >= 0 ? normal : -normal;
+    }
+    float3 path = c - a;
+    float t = saturate(dot(position - a, path) / max(dot(path, path), 0.000001));
+    float3 offset = position - (a + path * t);
+    return dot(offset, offset) > 0.00000001 ? normalize(offset) : float3(0, 1, 0);
+}
+
 bool TouchesAnyTrail(float3 previous, float3 current)
 {
     [loop]
@@ -189,7 +239,25 @@ void UpdateRain(uint3 threadId : SV_DispatchThreadID)
     float3 previous = drop.PositionState.xyz;
     float3 current = previous - float3(0, _FallSpeed * _RainDeltaTime, 0);
     float2 offset = current.xz - _Center.xz;
-    if (current.y < _Bottom || dot(offset, offset) > (_Radius + 2) * (_Radius + 2))
+    float outerRadius = OuterRadius(id);
+    if (current.y < _GroundY && previous.y >= _GroundY)
+    {
+        // 지면을 지난 방울은 가까운 원과 바깥 고리 모두에서 확률에 따라 땅 파동을 남기고 비 영역 위쪽에서 다시 떨어진다.
+        uint seed = id * 1664525u + (uint)_Frame * 1013904223u;
+        if (Random01(seed + 7u) < _GroundRippleChance)
+        {
+            uint slot;
+            InterlockedAdd(_GroundRippleCounter[0], 1u, slot);
+            GroundRipple ripple;
+            ripple.PositionStart = float4(current.x, _GroundY, current.z, _RainClock);
+            ripple.Data = float4(lerp(_GroundRippleRadiusMin, _GroundRippleRadiusMax, Random01(seed + 8u)),
+                Random01(seed + 9u), 0, 0);
+            _GroundRipples[slot % (uint)_GroundRippleCapacity] = ripple;
+        }
+        current = SpawnPosition(id, (uint)_Frame);
+        previous = current;
+    }
+    else if (current.y < _Bottom || dot(offset, offset) > (outerRadius + 2) * (outerRadius + 2))
     {
         current = SpawnPosition(id, (uint)_Frame);
         previous = current;
@@ -199,9 +267,14 @@ void UpdateRain(uint3 threadId : SV_DispatchThreadID)
     [loop]
     for (int i = 0; i < _HitCount; i++)
     {
-        if (!TouchesSweep(previous, current, _HitSweeps[i])) continue;
+        Sweep sweep = _HitSweeps[i];
+        if (!TouchesSweep(previous, current, sweep)) continue;
+        // 파열이 튀는 방향을 방위각·고도각으로 저장한다.
+        float3 direction = BurstDirection(current, sweep);
         drop.PositionState.w = 1;
         drop.Data.y = 0;
+        drop.Data.z = atan2(direction.z, direction.x);
+        drop.Data.w = asin(clamp(direction.y, -1.0, 1.0));
         _Drops[id] = drop;
         return;
     }
