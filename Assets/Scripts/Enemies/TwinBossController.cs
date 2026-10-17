@@ -71,14 +71,14 @@ public sealed class TwinBossController : MonoBehaviour
     private float _harassInterval = 1.8f;
 
     [Header("교대 근접")]
-    [SerializeField, Min(1), Tooltip("인간 연속 베기와 짐승 가장자리 돌진을 한 번씩 하는 차례 수")]
+    [SerializeField, Min(1), Tooltip("인간 연속 돌진 베기와 짐승 가장자리 덮치기를 한 번씩 하는 차례 수")]
     private int _alternatingRounds = 2;
-    [SerializeField, Min(1), Tooltip("한 차례에 인간이 연달아 베는 횟수")]
-    private int _humanSlashesPerRound = 3;
-    [SerializeField, Min(0.1f), Tooltip("인간 베기 사이 간격(초). 베기마다 붉은 전조가 앞에 붙는다.")]
-    private float _humanSlashInterval = 1f;
-    [SerializeField, Min(0f), Tooltip("패턴 시작부터 첫 베기까지의 준비 시간(초)")]
-    private float _alternatingLead = 0.9f;
+    [SerializeField, Min(1), Tooltip("한 차례에 인간이 돌진·베기·후퇴를 반복하는 횟수")]
+    private int _humanSlashesPerRound = 4;
+    [SerializeField, Min(0.1f), Tooltip("인간 돌진 사이 간격(초). 돌진마다 붉은 전조가 앞에 붙고 베고 나면 물러난다.")]
+    private float _humanSlashInterval = 2f;
+    [SerializeField, Min(0f), Tooltip("패턴 시작부터 첫 돌진까지의 준비 시간(초). 시작 위치로 달려가고 전조를 보이는 시간을 포함한다.")]
+    private float _alternatingLead = 1.2f;
 
     [Header("피격 회피 이동")]
     [SerializeField, Min(0f), Tooltip("실제 피격 후 추가 타격을 패링하는 무적 시간(초)")]
@@ -313,9 +313,9 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 인간 연속 베기와 짐승 가장자리 돌진을 서로 겹치지 않게 _alternatingRounds번 번갈아 한다.
-    /// 한 차례마다 짐승이 땅에 뛰어드는 동안 인간이 _humanSlashInterval 간격으로 _humanSlashesPerRound번 베고,
-    /// 마지막 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진한다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
+    /// 인간 연속 돌진 베기와 짐승 가장자리 덮치기를 서로 겹치지 않게 _alternatingRounds번 번갈아 한다.
+    /// 한 차례마다 짐승이 땅에 뛰어드는 동안 인간이 스테이지1 보스 돌진처럼 _humanSlashInterval 간격으로 _humanSlashesPerRound번 돌진해 베고 물러나며,
+    /// 마지막 돌진 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진한다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
     /// </summary>
     private IEnumerator AlternateMelee()
     {
@@ -325,7 +325,7 @@ public sealed class TwinBossController : MonoBehaviour
             // 땅에 뛰어드는 것은 공격이 아니므로 인간 베기와 함께 진행한다.
             _beastRoutine = StartCoroutine(BeastDive());
             for (int i = 0; i < _humanSlashesPerRound && BothAlive(); i++)
-                yield return _human.Slash(_player, firstStrikeAt + _humanSlashInterval * i);
+                yield return _human.DashStrike(_player, firstStrikeAt + _humanSlashInterval * i);
             while (_beastRoutine != null) yield return null;
             if (!BothAlive()) break;
             GetArenaCircle(out Vector3 center, out float radius);

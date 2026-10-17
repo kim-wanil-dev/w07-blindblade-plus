@@ -17,7 +17,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &101
 Transform:
   m_ObjectHideFlags: 0
@@ -65,9 +65,9 @@ MonoBehaviour:
   _harassFirstDelay: 1.5
   _harassInterval: 1.8
   _alternatingRounds: 2
-  _humanSlashesPerRound: 3
-  _humanSlashInterval: 1
-  _alternatingLead: 0.9
+  _humanSlashesPerRound: 4
+  _humanSlashInterval: 2
+  _alternatingLead: 1.2
   _hitInvulnerabilityDuration: 2
   _deflectPushDistance: 3
   _deflectPushDuration: 0.16
@@ -119,6 +119,7 @@ GameObject:
   - component: {fileID: 230}
   - component: {fileID: 231}
   - component: {fileID: 232}
+  - component: {fileID: 1245688655514279910}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -285,13 +286,17 @@ MonoBehaviour:
   _barrageSpreadAngle: 16
   _barragePreparation: 0.2
   _barrageInterval: 0.4
-  _slashDistance: 2.6
-  _slashArc: 100
-  _slashTelegraph: 0.45
-  _slashOvershoot: 1.5
-  _slashDuration: 0.14
+  _dashStartDistance: 12
+  _dashArc: 40
+  _dashTelegraph: 0.6
+  _dashSpeed: 48
+  _dashMaxDistance: 30
+  _repositionSpeed: 30
+  _repositionTimeout: 0.6
   _slashContactRadius: 0.8
   _slashDamage: 12
+  _dashPushDistance: 3
+  _dashPushDuration: 0.16
   _slashTelegraphSound: 39
   _slashSound: 9
 --- !u!114 &208
@@ -430,6 +435,22 @@ MonoBehaviour:
   _cutViewFov: 70
   _cutViewDistance: 80
   _bambooViewMargin: 0.1
+--- !u!114 &1245688655514279910
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bf433078aee4c0780b6c08863813ba4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BossHealthBar
+  _size: {x: 420, y: 16}
+  _topOffset: 72
+  _followDuration: 0.8
+  _followColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &210
 GameObject:
   m_ObjectHideFlags: 0
@@ -570,6 +591,7 @@ GameObject:
   - component: {fileID: 309}
   - component: {fileID: 329}
   - component: {fileID: 331}
+  - component: {fileID: 7691288376787478426}
   m_Layer: 0
   m_Name: Beast
   m_TagString: Untagged
@@ -850,6 +872,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TwinBossWarningVisual
   _smokeRoot: {fileID: 401}
   _whiteReturnDuration: 0.15
+--- !u!114 &7691288376787478426
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 300}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bf433078aee4c0780b6c08863813ba4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BossHealthBar
+  _size: {x: 420, y: 16}
+  _topOffset: 96
+  _followDuration: 0.8
+  _followColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &320
 GameObject:
   m_ObjectHideFlags: 0
@@ -1099,11 +1137,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 808b93b5e01542ccbca1099878c8abf6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TwinBeastSmokeTuning
-  _densityScale: 3
-  _sizeScale: 4
-  _lengthScale: 0.5
-  _lifetimeScale: 1
-  _flowSpeedScale: 1
+  _densityScale: 150
+  _sizeScale: 1
+  _lengthScale: 0.3
+  _lifetimeScale: 0.5
+  _flowSpeedScale: 0.03
   _riseForce: 3
   _surfacePushScale: 0
   _flutterStrength: 0.6
