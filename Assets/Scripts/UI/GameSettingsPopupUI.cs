@@ -21,14 +21,12 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     private static GameSettingsPopupUI _instance;
 
     [Header("영속 설정 UI")]
-    private Canvas _canvas;
-    private GameObject _modalRoot;
-    private RectTransform _cardRect;
-    private Button _closeButton;
-    private TMP_Text _controlsText;
-    private Slider _volumeSlider;
-    private Slider _sensitivitySlider;
-    private GameObject _previewAudioOwner;
+    [SerializeField] private GameObject _modalRoot;
+    [SerializeField] private Button _closeButton;
+    [SerializeField] private TMP_Text _controlsText;
+    [SerializeField] private Slider _volumeSlider;
+    [SerializeField] private Slider _sensitivitySlider;
+    [SerializeField] private GameObject _previewAudioOwner;
     private Coroutine _previewRoutine;
     private Button _introButton;
     private Button[] _menuButtons;
@@ -49,6 +47,7 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         }
 
         _instance = this;
+        _closeButton.onClick.AddListener(ClosePopup);
         DontDestroyOnLoad(gameObject);
     }
 
@@ -90,63 +89,33 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         _instance = null;
     }
 
-    /// <summary>저장 음량을 복원하고 인트로 버튼·기존 슬라이더를 영속 설정 팝업에 연결한다.</summary>
+    /// <summary>scenePopup 또는 기존 영속 팝업을 골라 settingsButton·menuButtons와 저장된 음량·감도를 연결하고 팝업을 반환한다.</summary>
     public static GameSettingsPopupUI ConfigureFromIntro(
-        Button settingsButton,
-        GameObject sourcePanelContainer,
-        Slider volumeSlider,
-        TMP_Text styleSource,
-        Button[] menuButtons)
+        GameSettingsPopupUI scenePopup, Button settingsButton, Button[] menuButtons)
     {
         if (_instance == null)
         {
-            GameSettingsPopupUI staleInstance = FindFirstObjectByType<GameSettingsPopupUI>(FindObjectsInactive.Include);
-            if (staleInstance != null)
-                Destroy(staleInstance.gameObject);
-
-            GameObject host = new GameObject("PersistentSettingsCanvas", typeof(RectTransform));
-            host.layer = 5;
-            Canvas canvas = host.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 32767;
-            CanvasScaler scaler = host.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
-            host.AddComponent<GraphicRaycaster>();
-            _instance = host.AddComponent<GameSettingsPopupUI>();
+            _instance = scenePopup;
+            if (_instance == null)
+                _instance = FindFirstObjectByType<GameSettingsPopupUI>(FindObjectsInactive.Include);
         }
 
-        _instance.Configure(settingsButton, sourcePanelContainer, volumeSlider, styleSource, menuButtons);
+        if (_instance == null)
+        {
+            Debug.LogError("[GameSettingsPopupUI] IntroScene의 GameSettingsPopup 프리팹 연결을 확인해주세요.");
+            return null;
+        }
+
+        _instance._introButton = settingsButton;
+        _instance._menuButtons = menuButtons;
+        _instance._menuButtonStates = new bool[menuButtons.Length];
+        _instance.Configure();
         return _instance;
     }
 
-    /// <summary>기존 슬라이더와 메뉴 참조를 새 인트로 씬의 설정 팝업에 연결하고 저장값을 복원한다.</summary>
-    private void Configure(
-        Button settingsButton,
-        GameObject sourcePanelContainer,
-        Slider volumeSlider,
-        TMP_Text styleSource,
-        Button[] menuButtons)
+    /// <summary>직렬화된 슬라이더에 저장값과 변경 리스너를 연결하고 조작 안내를 갱신한다.</summary>
+    private void Configure()
     {
-        _canvas = GetComponent<Canvas>();
-        _introButton = settingsButton;
-        _menuButtons = menuButtons;
-        _menuButtonStates = new bool[_menuButtons.Length];
-
-        if (_modalRoot == null)
-            CreateModal(volumeSlider, styleSource);
-
-        if (_volumeSlider != null && _volumeSlider != volumeSlider)
-        {
-            _volumeSlider.onValueChanged.RemoveListener(ChangeVolume);
-            Destroy(_volumeSlider.gameObject);
-        }
-
-        _volumeSlider = volumeSlider;
-        _volumeSlider.transform.SetParent(_cardRect, false);
-        ConfigureSlider(_volumeSlider, new Vector2(0f, 112f), 0f, 1f);
         _volumeSlider.onValueChanged.RemoveListener(ChangeVolume);
         _volumeSlider.onValueChanged.AddListener(ChangeVolume);
 
@@ -161,141 +130,8 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         _sensitivitySlider.onValueChanged.RemoveListener(ChangeLookSensitivity);
         _sensitivitySlider.onValueChanged.AddListener(ChangeLookSensitivity);
         ApplyLookSensitivity(sensitivity);
-
-        if (sourcePanelContainer != null)
-            sourcePanelContainer.SetActive(false);
         RefreshControlsText();
     }
-
-    /// <summary>화면 중앙 카드, 60% 어두운 배경, 기존 슬라이더 복제본과 조작 안내를 만든다.</summary>
-    private void CreateModal(Slider sourceSlider, TMP_Text styleSource)
-    {
-        _modalRoot = new GameObject("GameSettingsModal", typeof(RectTransform), typeof(Image));
-        _modalRoot.layer = gameObject.layer;
-        RectTransform modalRect = (RectTransform)_modalRoot.transform;
-        modalRect.SetParent(_canvas.transform, false);
-        modalRect.anchorMin = Vector2.zero;
-        modalRect.anchorMax = Vector2.one;
-        modalRect.offsetMin = Vector2.zero;
-        modalRect.offsetMax = Vector2.zero;
-        Image backdrop = _modalRoot.GetComponent<Image>();
-        backdrop.color = new Color(0f, 0f, 0f, 0.6f);
-        backdrop.raycastTarget = true;
-
-        GameObject card = new GameObject("SettingsCard", typeof(RectTransform), typeof(Image));
-        card.layer = gameObject.layer;
-        card.transform.SetParent(_modalRoot.transform, false);
-        _cardRect = (RectTransform)card.transform;
-        _cardRect.anchorMin = new Vector2(0.5f, 0.5f);
-        _cardRect.anchorMax = new Vector2(0.5f, 0.5f);
-        _cardRect.pivot = new Vector2(0.5f, 0.5f);
-        _cardRect.sizeDelta = new Vector2(760f, 660f);
-        Image cardImage = card.GetComponent<Image>();
-        cardImage.color = new Color(0.045f, 0.04f, 0.035f, 0.98f);
-        cardImage.raycastTarget = true;
-
-        CreateText("SettingsTitle", "설정", styleSource, _cardRect, new Vector2(-35f, 270f),
-            new Vector2(440f, 58f), 42f, TextAlignmentOptions.Center);
-        CreateText("VolumeLabel", "전체 음량", styleSource, _cardRect, new Vector2(0f, 176f),
-            new Vector2(520f, 40f), 28f, TextAlignmentOptions.Center);
-        CreateText("SensitivityLabel", "마우스 감도", styleSource, _cardRect, new Vector2(0f, 42f),
-            new Vector2(520f, 40f), 28f, TextAlignmentOptions.Center);
-        CreateText("ControlsTitle", "조작법", styleSource, _cardRect, new Vector2(0f, -82f),
-            new Vector2(520f, 42f), 28f, TextAlignmentOptions.Center);
-        _controlsText = CreateText("ControlsText", string.Empty, styleSource, _cardRect,
-            new Vector2(0f, -202f), new Vector2(640f, 184f), 24f, TextAlignmentOptions.Center);
-
-        GameObject sensitivitySliderObject = Instantiate(sourceSlider.gameObject, _cardRect, false);
-        sensitivitySliderObject.name = "MouseSensitivitySlider";
-        _sensitivitySlider = sensitivitySliderObject.GetComponent<Slider>();
-        ConfigureSlider(_sensitivitySlider, new Vector2(0f, -8f), MIN_LOOK_SENSITIVITY, MAX_LOOK_SENSITIVITY);
-
-        _closeButton = CreateButton("SettingsCloseButton", "닫기", styleSource, _cardRect,
-            new Vector2(302f, 270f), new Vector2(112f, 48f));
-        _closeButton.onClick.AddListener(ClosePopup);
-
-        _previewAudioOwner = new GameObject("SettingsShurikenPreview");
-        _previewAudioOwner.transform.SetParent(transform, false);
-        _modalRoot.SetActive(false);
-    }
-
-    /// <summary>source의 TMP 글꼴과 정렬을 사용해 카드 안에 위치·크기·문구가 지정된 텍스트를 만든다.</summary>
-    private TMP_Text CreateText(
-        string objectName,
-        string value,
-        TMP_Text source,
-        RectTransform parent,
-        Vector2 position,
-        Vector2 size,
-        float fontSize,
-        TextAlignmentOptions alignment)
-    {
-        GameObject textObject = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer),
-            typeof(TextMeshProUGUI));
-        textObject.layer = gameObject.layer;
-        textObject.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)textObject.transform;
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = position;
-        rect.sizeDelta = size;
-
-        TextMeshProUGUI text = textObject.GetComponent<TextMeshProUGUI>();
-        text.font = source.font;
-        text.fontSharedMaterial = source.fontSharedMaterial;
-        text.text = value;
-        text.fontSize = fontSize;
-        text.color = new Color(0.94f, 0.9f, 0.82f, 1f);
-        text.alignment = alignment;
-        text.raycastTarget = false;
-        return text;
-    }
-
-    /// <summary>source의 글꼴 색상과 배경색을 사용해 지정 위치와 크기의 닫기 버튼을 만든다.</summary>
-    private Button CreateButton(
-        string objectName,
-        string label,
-        TMP_Text source,
-        RectTransform parent,
-        Vector2 position,
-        Vector2 size)
-    {
-        GameObject buttonObject = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonObject.layer = gameObject.layer;
-        buttonObject.transform.SetParent(parent, false);
-        RectTransform rect = (RectTransform)buttonObject.transform;
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = position;
-        rect.sizeDelta = size;
-
-        Image image = buttonObject.GetComponent<Image>();
-        image.color = new Color(0.2f, 0.16f, 0.1f, 1f);
-        Button button = buttonObject.GetComponent<Button>();
-        button.targetGraphic = image;
-
-        TMP_Text text = CreateText("Label", label, source, rect, Vector2.zero, size, 24f,
-            TextAlignmentOptions.Center);
-        text.transform.SetAsLastSibling();
-        return button;
-    }
-
-    /// <summary>slider를 카드 좌표에 맞추고 minValue와 maxValue로 조작 범위를 지정한다.</summary>
-    private static void ConfigureSlider(Slider slider, Vector2 position, float minValue, float maxValue)
-    {
-        slider.minValue = minValue;
-        slider.maxValue = maxValue;
-        RectTransform rect = (RectTransform)slider.transform;
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = position;
-        rect.sizeDelta = new Vector2(440f, 32f);
-        rect.localScale = Vector3.one;
-    }
-
     /// <summary>인트로에서 설정 팝업을 열고 닫기 버튼을 UI 포커스로 선택한다.</summary>
     public void OpenFromIntro(Button settingsButton)
     {

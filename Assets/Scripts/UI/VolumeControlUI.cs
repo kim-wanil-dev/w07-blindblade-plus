@@ -4,18 +4,15 @@ using UnityEngine;
 
 using UnityEngine.UI;
 
-using TMPro;
-
 /// <summary>인트로 설정 버튼을 영속 설정 팝업에 연결하고 메뉴 전환 연출 이벤트를 전달한다.</summary>
 public sealed class VolumeControlUI : MonoBehaviour
 {
-    [Header("설정 버튼과 기존 음량 UI")]
+    [Header("설정 버튼과 팝업 프리팹")]
     [SerializeField] private Button _volumeButton;
-    [SerializeField] private GameObject _volumePanel;
-    [SerializeField] private Slider _volumeSlider;
+    [SerializeField] private GameSettingsPopupUI _settingsPopup;
 
-    private TMP_Text _buttonText;
-    private GameSettingsPopupUI _settingsPopup;
+    /// <summary>인트로 메뉴가 대나무 배경과 절단 연출을 연결할 설정 버튼을 반환한다.</summary>
+    internal Button SettingsButton => _volumeButton;
 
     public event Action<Button, Action> OpenRequested;
     public event Action PanelClosed;
@@ -49,19 +46,12 @@ public sealed class VolumeControlUI : MonoBehaviour
         PlayerPrefs.Save();
     }
 
-    /// <summary>저장 음량을 복원하고 인트로 버튼·기존 슬라이더를 영속 설정 팝업에 연결한다.</summary>
+    /// <summary>settingsPopup에 설정 버튼과 메뉴 입력 대상을 전달해 직렬화된 슬라이더의 저장값을 복원한다.</summary>
     private void InitializeSettingsPopup()
     {
-        float volume = Mathf.Clamp01(PlayerPrefs.GetFloat(GameSettingsPopupUI.VOLUME_PREF_KEY, 1f));
-        _volumeSlider.SetValueWithoutNotify(volume);
-        GameSettingsPopupUI.ApplyVolume(volume);
-        _buttonText = _volumeButton.GetComponentInChildren<TMP_Text>(true);
-        _buttonText.text = "설정";
         _settingsPopup = GameSettingsPopupUI.ConfigureFromIntro(
+            _settingsPopup,
             _volumeButton,
-            _volumePanel.transform.parent.gameObject,
-            _volumeSlider,
-            _buttonText,
             _volumeButton.transform.parent.GetComponentsInChildren<Button>(true));
     }
 
