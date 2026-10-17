@@ -60,6 +60,9 @@
 		<property name="dopplerEnabled">
 			<value>true</value>
 		</property>
+		<property name="dopplerScale">
+			<value>200</value>
+		</property>
 		<property name="minimumDistance">
 			<value>10</value>
 		</property>

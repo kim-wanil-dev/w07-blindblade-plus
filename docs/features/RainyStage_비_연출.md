@@ -42,6 +42,7 @@
 #### 연결 및 협업
 
 - 연결된 기능: 대숲 스테이지 1, 대나무 베기, 퍼펙트 패링 토큰, 게임 씬 공통 구성.
+- 연결된 기능(2026-10-17 추가): `RainyTwinBoss` 씬은 RainyStage를 복제해 같은 `RainStageWeather` 설정을 그대로 사용한다. RainyStage 씬은 변경하지 않았다. [비 내리는 쌍둥이 보스전](비_쌍둥이_보스전.md) 참고.
 - 공유하는 코드 및 상태: `PlayerEmpower.IsBulletTimeActive`, `PlayerController.IsPaused`, 기존 칼날·검기 베기 경로를 읽는다. `Time.timeScale`이나 공격 판정을 변경하지 않는다.
 - 공유하는 코드 및 상태(2026-10-16 추가): `PlayerPerfectPulse`가 `SensoryPerceptionMask`로 넘기는 `_OutlinePulseRegion`·`_OutlinePulseVisibility`를 읽는다. 윤곽선 셰이더에 전역 `_OutlineRainReveal`·`_OutlineRainRevealEnabled`를 넘기며, RainyStage가 아니면 Enabled가 0이라 읽지 않는다.
 - 중복 또는 충돌 사항(2026-10-16 추가): `PlayerSwordWaveLauncher`·`PlayerEmpowerStrike`에 비 시스템 호출만 추가했다. 궁극기 폭발은 기존 납도 멈춤 시간 안에서 기다리므로 궁극기 전체 길이와 피해·대나무 베기 시점은 그대로다.
