@@ -125,4 +125,4 @@
 
 | Feature | Specification | Current behavior |
 | --- | --- | --- |
-| Intro settings popup and gameplay pause | [Feature specification](features/intro_settings_and_gameplay_pause.md) | Persistent settings UI, volume preview, mouse sensitivity, and Escape/Start pause |
+| Intro settings popup and gameplay pause | [Feature specification](features/intro_settings_and_gameplay_pause.md) | Persistent settings UI, volume preview, mouse sensitivity, and Escape/Start pause including active effect sounds |

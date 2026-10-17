@@ -49,6 +49,7 @@ public sealed class GameStateManager : MonoBehaviour
         _player.SetPaused(true);
         if (CombatSessionRuntime.Active != null)
             CombatSessionRuntime.Active.SetFrozen(true);
+        Managers.Sound.SetEffectsPaused(true);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
         ChangeState(GameplayState.Paused);
@@ -65,6 +66,7 @@ public sealed class GameStateManager : MonoBehaviour
             _player.SetPaused(false);
         if (CombatSessionRuntime.Active != null)
             CombatSessionRuntime.Active.SetFrozen(false);
+        Managers.Sound.SetEffectsPaused(false);
         _frozen = false;
         ChangeState(GameplayState.Playing);
         Cursor.lockState = _previousCursorLock;
@@ -155,6 +157,8 @@ public sealed class GameStateManager : MonoBehaviour
     {
         if (State == GameplayState.Paused && _player != null)
             _player.SetPaused(false);
+        if (State == GameplayState.Paused && Managers.IsInitialized)
+            Managers.Sound.SetEffectsPaused(false);
         RestoreTimeAndCursor();
         if (_player != null) _player.ActionEvent -= HandleAction;
         _player = null;

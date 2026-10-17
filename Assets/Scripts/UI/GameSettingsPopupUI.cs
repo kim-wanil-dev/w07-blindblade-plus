@@ -1,12 +1,10 @@
 using System;
 using System.Collections;
-
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
-
-using TMPro;
 
 /// <summary>인트로와 전투에서 공유하는 영속 설정 팝업과 입력·음량·시점 감도 적용을 관리한다.</summary>
 public sealed class GameSettingsPopupUI : MonoBehaviour
@@ -23,16 +21,20 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     [Header("영속 설정 UI")]
     [SerializeField] private GameObject _modalRoot;
     [SerializeField] private Button _closeButton;
+    [SerializeField] private IntroBambooButtonSliceEffect _closeButtonSliceEffect;
     [SerializeField] private TMP_Text _controlsText;
     [SerializeField] private Slider _volumeSlider;
     [SerializeField] private Slider _sensitivitySlider;
     [SerializeField] private GameObject _previewAudioOwner;
+    [SerializeField, TextArea] private string keyboardControls;
     private Coroutine _previewRoutine;
+    private bool _bgmPausedForPreview;
     private Button _introButton;
     private Button[] _menuButtons;
     private bool[] _menuButtonStates;
     private bool _menuInputBlocked;
     private bool _openedForGameplay;
+    private bool _isCloseAnimating;
 
     public static GameSettingsPopupUI Instance => _instance;
     public bool IsVisible => _modalRoot != null && _modalRoot.activeSelf;
@@ -47,7 +49,7 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         }
 
         _instance = this;
-        _closeButton.onClick.AddListener(ClosePopup);
+        _closeButton.onClick.AddListener(RequestClose);
         DontDestroyOnLoad(gameObject);
     }
 
@@ -72,6 +74,21 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         }
         if (Managers.IsInitialized && _previewAudioOwner != null)
             Managers.Sound.StopFor(_previewAudioOwner, SoundId.ShurikenFlight, false, true);
+        ResumeBgmAfterPreview();
+    }
+
+    /// <summary>
+    /// 수리검 미리듣기로 멈춘 BGM을 다시 재생한다.
+    /// 미리듣기 중지 상태를 해제하고 SoundManager에 재개를 전달한다.
+    /// </summary>
+    private void ResumeBgmAfterPreview()
+    {
+        if (!_bgmPausedForPreview)
+            return;
+
+        if (Managers.IsInitialized)
+            Managers.Sound.SetBgmPaused(false);
+        _bgmPausedForPreview = false;
     }
 
     void OnDestroy()
@@ -191,6 +208,9 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     /// <summary>60% 검은 배경과 설정 카드를 표시하고 전투 메뉴 입력을 차단한다.</summary>
     private void OpenPopup()
     {
+        _isCloseAnimating = false;
+        _closeButton.interactable = true;
+        _closeButtonSliceEffect.RestoreOriginal();
         for (int i = 0; i < _menuButtons.Length; i++)
         {
             if (_menuButtons[i] == null)
@@ -223,6 +243,7 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         if (!IsVisible)
             return;
 
+        _isCloseAnimating = false;
         StopShurikenPreviewImmediately();
         _modalRoot.SetActive(false);
         RestoreMenuInput();
@@ -236,6 +257,29 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
             EventSystem.current.SetSelectedGameObject(_introButton.gameObject);
 
         PanelClosed?.Invoke();
+    }
+
+    /// <summary>닫기 버튼 입력을 받아 절단 연출을 끝낸 뒤 팝업을 닫는다.</summary>
+    private void RequestClose()
+    {
+        if (!IsVisible || _isCloseAnimating)
+            return;
+
+        if (_closeButtonSliceEffect != null && _closeButtonSliceEffect.Play(CompleteCloseSlice))
+        {
+            _isCloseAnimating = true;
+            _closeButton.interactable = false;
+            return;
+        }
+
+        ClosePopup();
+    }
+
+    /// <summary>닫기 버튼 절단 연출을 마친 뒤 팝업을 숨기고 저장된 상태를 정리한다.</summary>
+    private void CompleteCloseSlice()
+    {
+        _isCloseAnimating = false;
+        ClosePopup();
     }
 
     /// <summary>팝업 진입 전에 기록한 인트로 버튼별 interactable 상태를 원래 값으로 복원한다.</summary>
@@ -315,6 +359,8 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
 
         if (!Managers.Sound.PlayAttachedLoop(SoundId.ShurikenFlight, _previewAudioOwner))
             return;
+        Managers.Sound.SetBgmPaused(true);
+        _bgmPausedForPreview = true;
         _previewRoutine = StartCoroutine(StopShurikenPreview());
     }
 
@@ -324,6 +370,7 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         yield return new WaitForSecondsRealtime(SHURIKEN_PREVIEW_DURATION);
         if (Managers.IsInitialized && _previewAudioOwner != null)
             Managers.Sound.StopFor(_previewAudioOwner, SoundId.ShurikenFlight, false, true);
+        ResumeBgmAfterPreview();
         _previewRoutine = null;
     }
 
@@ -333,8 +380,8 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         if (_controlsText == null)
             return;
 
-        const string keyboardControls =
-            "이동: WASD    시점: MOUSE\n공격: 좌클릭    방어/패링: 우클릭\n회피: SPACE    상호작용: [F]\n설정 / 일시정지: ESC";
+        //const string keyboardControls =
+        //    "이동: WASD    시점: MOUSE\n공격: 좌클릭    방어: 우클릭\n회피: SPACE    \n설정 / 일시정지: ESC";
         _controlsText.text = InputDeviceDisplay.FormatKeys(keyboardControls);
     }
 

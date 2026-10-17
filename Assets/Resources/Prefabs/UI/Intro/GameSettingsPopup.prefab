@@ -766,7 +766,7 @@ RectTransform:
   m_Father: {fileID: 2494948588129963293}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 10, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -1009,10 +1009,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameSettingsPopupUI
   _modalRoot: {fileID: 5486997798105967667}
   _closeButton: {fileID: 7288032052652028535}
+  _closeButtonSliceEffect: {fileID: 9046296621900889933}
   _controlsText: {fileID: 1431881556679756770}
   _volumeSlider: {fileID: 6750287706557792787}
   _sensitivitySlider: {fileID: 1960150867440602621}
   _previewAudioOwner: {fileID: 3942692676798938389}
+  keyboardControls: "\uC774\uB3D9: WASD    \uC2DC\uC810: \uB9C8\uC6B0\uC2A4 \uD68C\uC804\n\uACF5\uACA9:
+    \uC88C\uD074\uB9AD    \uBC29\uC5B4: \uC6B0\uD074\uB9AD\n\uD68C\uD53C: SPACE   
+    \uC124\uC815 / \uC77C\uC2DC\uC815\uC9C0: ESC"
 --- !u!1 &5486997798105967667
 GameObject:
   m_ObjectHideFlags: 0
@@ -1030,7 +1034,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &3502392638948316619
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1158,7 +1162,7 @@ RectTransform:
   m_Father: {fileID: 2736233345287658636}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 20, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -1654,7 +1658,7 @@ RectTransform:
   m_Father: {fileID: 4940859505688993439}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 20, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -1729,7 +1733,7 @@ RectTransform:
   m_Father: {fileID: 1166744698991925669}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 10, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -1916,3 +1920,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &9046296621900889933 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8206856991103753002, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+  m_PrefabInstance: {fileID: 895787699722282087}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eeeeb964c9aeaf843bd2f134eee8b5c9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntroBambooButtonSliceEffect
