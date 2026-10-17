@@ -18,6 +18,7 @@ public class IntroMenu : MonoBehaviour
     [SerializeField] private UnityEngine.UI.Button _tutorialNoButton;
     [SerializeField, FormerlySerializedAs("_gameSceneName")] private string _onboardingSceneName = "Onboarding";
     [SerializeField] private string _stage1SceneName = "BambooStage1";
+    [SerializeField] private string _rainyStageSceneName = "RainyStage";
     [SerializeField, Min(0.01f)] private float _transitionFadeDuration = 0.5f;
 
     [Header("버튼 절단 상태")]
@@ -93,14 +94,16 @@ public class IntroMenu : MonoBehaviour
             return;
         }
 
-        if (!Application.CanStreamedLevelBeLoaded(_stage1SceneName))
+        string destinationScene = BambooStage1Progress.RainyStageReached
+            ? _rainyStageSceneName : _stage1SceneName;
+        if (!Application.CanStreamedLevelBeLoaded(destinationScene))
         {
-            Debug.LogError("[IntroMenu] Stage 1 scene is not in the build scene list: " + _stage1SceneName);
+            Debug.LogError("[IntroMenu] Continue scene is not in the build scene list: " + destinationScene);
             return;
         }
 
         PlayerPrefs.Save();
-        SceneTransitionOverlay.TransitionToScene(_stage1SceneName, _transitionFadeDuration, null);
+        SceneTransitionOverlay.TransitionToScene(destinationScene, _transitionFadeDuration, null);
     }
 
     /// <summary>새로 하기 버튼의 절단 연출을 요청하고 연출 후 튜토리얼 선택 창을 표시한다.</summary>

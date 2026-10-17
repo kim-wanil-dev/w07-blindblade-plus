@@ -393,6 +393,29 @@ public sealed class RainStageWeather : MonoBehaviour
         _initialized = false;
     }
 
+    /// <summary>count를 가까운 빗방울 수로 적용하고 GPU 방울 버퍼를 새 수량으로 다시 채운다.</summary>
+    public void SetDropletCount(int count)
+    {
+        int clamped = Mathf.Clamp(count, 256, 8192);
+        if (_dropletCount == clamped)
+            return;
+        _dropletCount = clamped;
+        if (!_initialized)
+            return;
+
+        _totalDropletCount = _dropletCount + _farDropletCount;
+        _drops.Release();
+        _drops = new ComputeBuffer(_totalDropletCount, DROP_STRIDE);
+        _properties.SetBuffer("_RainDrops", _drops);
+        _rippleProperties.SetBuffer("_RainDrops", _drops);
+        int initKernel = _simulation.FindKernel("Initialize");
+        _simulation.SetBuffer(initKernel, "_Drops", _drops);
+        _simulation.SetBuffer(_updateKernel, "_Drops", _drops);
+        _simulation.SetInt("_DropCount", _totalDropletCount);
+        _simulation.SetInt("_NearDropCount", _dropletCount);
+        _simulation.Dispatch(initKernel, Mathf.CeilToInt(_totalDropletCount / (float)THREAD_GROUP_SIZE), 1, 1);
+    }
+
     /// <summary>
     /// 이전 칼날과 현재 칼날의 양 끝으로 베기 면을 기록한다.
     /// RainyStage에 비가 활성화된 경우에만 thickness 범위의 물방울과 빈 자국을 갱신한다.

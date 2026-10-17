@@ -762,6 +762,7 @@ MonoBehaviour:
   _tutorialNoButton: {fileID: 676242014}
   _onboardingSceneName: Stage_1
   _stage1SceneName: BambooStage1
+  _rainyStageSceneName: RainyStage
   _transitionFadeDuration: 0.5
 --- !u!4 &1241303692
 Transform:
@@ -1390,6 +1391,7 @@ MonoBehaviour:
   _tutorialNoButton: {fileID: 676242014}
   _onboardingSceneName: Onboarding
   _stage1SceneName: BambooStage1
+  _rainyStageSceneName: RainyStage
   _transitionFadeDuration: 0.5
 --- !u!114 &1585326234
 MonoBehaviour:

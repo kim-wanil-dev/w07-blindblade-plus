@@ -10,6 +10,8 @@ using Random = UnityEngine.Random;
 [DisallowMultipleComponent]
 public sealed class DefenseEnemySpawner : MonoBehaviour
 {
+    private const float TIMED_WAVE_INITIAL_WEIGHT = 3f;
+
     [Header("스폰 공통")]
     [SerializeField, Min(0f), Tooltip("플레이어와 이 수평 거리 안에서는 적을 스폰하지 않는다.")]
     private float _minimumSpawnDistance = 8f;
@@ -67,6 +69,10 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private int _meleeSpawnLimit;
     private int _meleeSpawned;
     private int _meleeSpawnTier;
+    private int _timedWaveSpawnCount;
+    private float _timedWaveDuration;
+    private float _timedWaveInterval;
+    private float _timedWavePreparationDelay;
     private readonly Plane[] _reflectCameraPlanes = new Plane[6];
 
     [Header("세션 연결")]
@@ -126,6 +132,15 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     internal void SetMeleeSpawnLimit(int limit)
     {
         _meleeSpawnLimit = Mathf.Max(0, limit);
+    }
+
+    /// <summary>count·duration·interval과 preparationDelay를 사용해 Playing 시작 기준 근접 적 생성 일정을 저장한다.</summary>
+    internal void ConfigureTimedMeleeWave(int count, float duration, float interval, float preparationDelay)
+    {
+        _timedWaveSpawnCount = Mathf.Max(1, count);
+        _timedWaveDuration = Mathf.Max(1f, duration);
+        _timedWaveInterval = Mathf.Clamp(interval, 1f, _timedWaveDuration);
+        _timedWavePreparationDelay = Mathf.Max(0f, preparationDelay);
     }
 
     /// <summary>입력 없이 현재 투척수·근접 적을 대기 풀로 되돌리고 이후 스폰을 막는다. 처치 사건은 만들지 않는다.</summary>
@@ -196,6 +211,11 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     {
         if (_meleePrefab == null || (_meleeSpawnLimit > 0 && _meleeSpawned >= _meleeSpawnLimit))
             return;
+        if (_timedWaveSpawnCount > 0)
+        {
+            UpdateTimedMelee(elapsed);
+            return;
+        }
         float minutes = Mathf.Max(0f, elapsed - _meleeStartTime) / 60f;
         float spawnsPerMinute = _meleeSpawnsPerMinute + _meleeSpawnGrowthPerMinute * minutes;
         int tier = 0;
@@ -219,8 +239,42 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         if (Time.time < _nextMeleeSpawnAt)
             return;
         _nextMeleeSpawnAt = Time.time + 60f / Mathf.Max(0.01f, spawnsPerMinute);
+        TrySpawnMelee(elapsed);
+    }
+
+    /// <summary>elapsed와 준비 시간으로 Playing 경과를 구해 interval마다 생성 빈도를 높이고 누적 예정 수까지 근접 적을 배치한다.</summary>
+    private void UpdateTimedMelee(float elapsed)
+    {
+        float stageElapsed = Mathf.Clamp(elapsed + _timedWavePreparationDelay, 0f, _timedWaveDuration);
+        int intervals = Mathf.CeilToInt(_timedWaveDuration / _timedWaveInterval);
+        float totalWeight = 0f;
+        float elapsedWeight = 0f;
+        for (int index = 0; index < intervals; index++)
+        {
+            float start = index * _timedWaveInterval;
+            float length = Mathf.Min(_timedWaveInterval, _timedWaveDuration - start);
+            float weight = TIMED_WAVE_INITIAL_WEIGHT + index;
+            totalWeight += length * weight;
+            elapsedWeight += Mathf.Clamp(stageElapsed - start, 0f, length) * weight;
+        }
+
+        int due = stageElapsed >= _timedWaveDuration
+            ? _timedWaveSpawnCount
+            : Mathf.FloorToInt(_timedWaveSpawnCount * elapsedWeight / totalWeight + 0.00001f);
+        if (_meleeSpawnLimit > 0)
+            due = Mathf.Min(due, _meleeSpawnLimit);
+        while (_meleeSpawned < due)
+        {
+            if (!TrySpawnMelee(elapsed))
+                break;
+        }
+    }
+
+    /// <summary>elapsed로 돌진형 여부를 정해 유효한 NavMesh 위치에 근접 적 한 명을 배치하고 생성 수를 갱신한다. 성공 여부를 반환한다.</summary>
+    private bool TrySpawnMelee(float elapsed)
+    {
         if (_activeMelee.Count >= _maximumMelee || !TryFindMeleePosition(out Vector3 position))
-            return;
+            return false;
 
         MeleeUnit unit = _idleMelee.Count > 0 ? _idleMelee.Pop() : CreateMelee();
         bool chargeType = elapsed >= _chargeTypeStartTime && Random.value < _chargeTypeChance;
@@ -232,6 +286,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         unit.Controller.SetTarget(Game.Player.transform);
         _activeMelee.Add(unit);
         _meleeSpawned++;
+        return true;
     }
 
     /// <summary>
