@@ -120,7 +120,7 @@ MonoBehaviour:
   _segments: 24
   _endScale: 1.8
   _centerArc: 1
-  _launchSound: 15
+  _launchSound: 40
 --- !u!114 &7494757157295272122
 MonoBehaviour:
   m_ObjectHideFlags: 0

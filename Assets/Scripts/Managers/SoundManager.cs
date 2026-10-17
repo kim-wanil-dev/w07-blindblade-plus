@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 
 using UnityEngine;
 
@@ -10,6 +12,8 @@ using FMODUnity;
 /// </summary>
 public class SoundManager
 {
+    private const int MAX_PENDING_STREAMING_EFFECTS = 8;
+
     [Header("Configuration")]
     private readonly SoundLibrary _library;
     private readonly CombatSoundProfile _combatProfile;
@@ -17,6 +21,9 @@ public class SoundManager
 
     [Header("Effects")]
     private readonly List<ActiveEffect> _effects = new List<ActiveEffect>();
+    private readonly List<ActiveStreamingEffect> _streamingEffects = new List<ActiveStreamingEffect>();
+    private readonly List<PendingStreamingEffect> _pendingStreamingEffects = new List<PendingStreamingEffect>();
+    private bool _effectsPaused;
     private float _combatFocusUntil;
     private readonly List<PendingCue> _pendingCues = new List<PendingCue>();
     private bool _processingCues;
@@ -33,6 +40,10 @@ public class SoundManager
     private bool _hasBgmOwner;
     private bool _loopBgm;
     private float _bgmPlaybackVolume = 1f;
+    private FMOD.Sound _streamingBgmSound;
+    private FMOD.Channel _streamingBgmChannel;
+    private string _streamingBgmPath;
+    private bool _bgmPaused;
 
     [Header("Mixer")]
     private FMOD.Studio.Bus _bgmBus;
@@ -81,7 +92,9 @@ public class SoundManager
         set
         {
             _effectVolume = Mathf.Clamp01(value);
-            if (RuntimeManager.IsInitialized && TryInitializeBuses())
+            if (!RuntimeManager.IsInitialized)
+                return;
+            if (TryInitializeBuses())
             {
                 _effectBus.setVolume(_effectVolume);
                 if (_cinematicBus.isValid())
@@ -120,6 +133,108 @@ public class SoundManager
         if (_combatProfile != null && (soundId == SoundId.SwordHit || soundId == SoundId.PlayerDamaged))
             return PlayCue(CombatSoundCue.Damage, position, owner, false);
         return PlayEffect(soundId, position, owner, false, volume, playDuringMovement, pitch: pitch);
+    }
+
+    /// <summary>
+    /// StreamingAssets의 relativePath 파일을 2D 효과음으로 재생한다.
+    /// FMOD Bus 준비 전 요청은 owner와 함께 보관하며 volume·pitch를 적용해 준비 후 재생한다.
+    /// </summary>
+    public bool PlayStreamingEffect(string relativePath, float volume = 1f, float pitch = 1f, GameObject owner = null)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            Debug.LogWarning("[SoundManager] Streaming effect requires a file path.");
+            return false;
+        }
+
+        string path = Path.Combine(Application.streamingAssetsPath, relativePath);
+        if (!File.Exists(path))
+        {
+            Debug.LogWarning("[SoundManager] Streaming effect file not found: " + path);
+            return false;
+        }
+
+        if (!AreStreamingAudioBusesReady(false, true))
+        {
+            QueuePendingStreamingEffect(path, volume, pitch, owner);
+            return true;
+        }
+
+        return StartStreamingEffect(path, volume, pitch, owner);
+    }
+
+    /// <summary>
+    /// 준비된 SFX Bus에서 path 파일을 volume·pitch 배율로 재생한다.
+    /// owner를 초기화 대기 요청에 보관하며 재생이 시작되면 true를 반환한다.
+    /// </summary>
+    private bool StartStreamingEffect(string path, float volume, float pitch, GameObject owner)
+    {
+        FMOD.Sound sound = default;
+        FMOD.Channel channel = default;
+        FMOD.ChannelGroup effectGroup = default;
+        try
+        {
+            FMOD.System system = RuntimeManager.CoreSystem;
+            FMOD.RESULT result = system.createSound(path, FMOD.MODE._2D | FMOD.MODE.CREATESTREAM, out sound);
+            if (result == FMOD.RESULT.OK)
+                result = _effectBus.getChannelGroup(out effectGroup);
+            if (result == FMOD.RESULT.OK)
+                result = system.playSound(sound, effectGroup, true, out channel);
+            if (result == FMOD.RESULT.OK)
+                result = channel.setVolume(Mathf.Max(0f, volume));
+            if (result == FMOD.RESULT.OK)
+                result = channel.setPitch(Mathf.Clamp(pitch, 0.25f, 4f));
+            if (result == FMOD.RESULT.OK)
+                result = channel.setPaused(_effectsPaused);
+            if (result != FMOD.RESULT.OK)
+            {
+                ReleaseStreamingEffect(new ActiveStreamingEffect(sound, channel));
+                if (result == FMOD.RESULT.ERR_STUDIO_NOT_LOADED)
+                {
+                    QueuePendingStreamingEffect(path, volume, pitch, owner);
+                    return true;
+                }
+                Debug.LogWarning("[SoundManager] Failed to start streaming effect: " + result);
+                return false;
+            }
+
+            _streamingEffects.Add(new ActiveStreamingEffect(sound, channel));
+            return true;
+        }
+        catch (Exception exception)
+        {
+            ReleaseStreamingEffect(new ActiveStreamingEffect(sound, channel));
+            Debug.LogWarning("[SoundManager] Streaming effect playback failed: " + exception.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// FMOD의 BGM Bus와 채널 그룹을 사용할 수 있는지 확인한다.
+    /// FMOD 런타임 초기화를 시작하고 뱅크 및 비동기 채널 그룹 준비가 끝나면 true를 반환한다.
+    /// </summary>
+    public bool IsStreamingBgmReady => AreStreamingAudioBusesReady(true, false);
+
+    /// <summary>
+    /// Studio Bus가 준비되기 전에 들어온 파일형 효과음 요청을 저장한다.
+    /// 같은 경로와 owner의 요청은 합치고 최대 개수를 넘으면 가장 오래된 요청을 지운다.
+    /// </summary>
+    private void QueuePendingStreamingEffect(string path, float volume, float pitch, GameObject owner)
+    {
+        for (int i = 0; i < _pendingStreamingEffects.Count; i++)
+        {
+            PendingStreamingEffect pending = _pendingStreamingEffects[i];
+            if (string.Equals(pending.Path, path, StringComparison.OrdinalIgnoreCase)
+                && pending.Owner == owner)
+            {
+                _pendingStreamingEffects[i] = new PendingStreamingEffect(path, volume, pitch, owner);
+                return;
+            }
+        }
+
+        if (_pendingStreamingEffects.Count >= MAX_PENDING_STREAMING_EFFECTS)
+            _pendingStreamingEffects.RemoveAt(0);
+        _pendingStreamingEffects.Add(new PendingStreamingEffect(path, volume, pitch, owner));
     }
 
     /// <summary>
@@ -238,6 +353,7 @@ public class SoundManager
         _library.GetPlaybackSettings(soundId, out bool enabled, out float volumeMultiplier, out float pitchMultiplier, out _);
         if (!enabled) return false;
         volume *= volumeMultiplier;
+        StopStreamingBgmInternal();
         if (_bgm.isValid() && _bgmId == soundId && _bgm.getPlaybackState(out var state) == FMOD.RESULT.OK && state != FMOD.Studio.PLAYBACK_STATE.STOPPED)
         {
             if (state == FMOD.Studio.PLAYBACK_STATE.STOPPING)
@@ -248,6 +364,7 @@ public class SoundManager
             _bgmPlaybackVolume = Mathf.Clamp01(volume);
             _bgm.setVolume(_footstepOnlyOwner != null ? 0f : _bgmPlaybackVolume);
             _bgm.setPitch(pitchMultiplier);
+            _bgm.setPaused(_bgmPaused);
             return true;
         }
         try
@@ -268,6 +385,7 @@ public class SoundManager
             _bgmPlaybackVolume = Mathf.Clamp01(volume);
             _bgm.setVolume(_footstepOnlyOwner != null ? 0f : _bgmPlaybackVolume);
             _bgm.setPitch(pitchMultiplier);
+            _bgm.setPaused(_bgmPaused);
             FMOD.RESULT result = _bgm.start();
             if (result == FMOD.RESULT.OK)
                 return true;
@@ -282,12 +400,114 @@ public class SoundManager
     }
 
     /// <summary>
-    /// allowFadeOut에 따라 BGM을 페이드 또는 즉시 정지하고 해제를 요청한다.
-    /// 페이드 중 핸들은 중복 재생 방지와 Clear의 즉시 정지를 위해 보관하며 FMOD가 종료 후 자원을 반환한다.
+    /// StreamingAssets의 파일을 BGM Bus에서 반복 재생한다.
+    /// relativePath와 volume을 사용하며 기존 BGM을 교체하고 재생 성공 여부를 반환한다.
+    /// </summary>
+    public bool PlayStreamingBgm(string relativePath, float volume = 1f)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+        {
+            Debug.LogWarning("[SoundManager] Streaming BGM requires a file path.");
+            return false;
+        }
+
+        string path = Path.GetFullPath(Path.Combine(Application.streamingAssetsPath, relativePath));
+        if (!File.Exists(path))
+        {
+            Debug.LogWarning("[SoundManager] Streaming BGM file not found: " + path);
+            return false;
+        }
+
+        if (!IsStreamingBgmReady)
+        {
+            Debug.LogWarning("[SoundManager] Streaming BGM bus is not ready.");
+            return false;
+        }
+
+        if (string.Equals(path, _streamingBgmPath, StringComparison.OrdinalIgnoreCase)
+            && _streamingBgmChannel.hasHandle()
+            && _streamingBgmChannel.isPlaying(out bool isPlaying) == FMOD.RESULT.OK && isPlaying)
+        {
+            _streamingBgmChannel.setVolume(Mathf.Max(0f, volume));
+            _streamingBgmChannel.setPaused(_bgmPaused);
+            return true;
+        }
+
+        StopBgm(false);
+        FMOD.Sound sound = default;
+        FMOD.Channel channel = default;
+        FMOD.ChannelGroup bgmGroup = default;
+        try
+        {
+            FMOD.System system = RuntimeManager.CoreSystem;
+            FMOD.RESULT result = system.createSound(path,
+                FMOD.MODE._2D | FMOD.MODE.CREATESTREAM | FMOD.MODE.LOOP_NORMAL, out sound);
+            if (result == FMOD.RESULT.OK)
+                result = _bgmBus.getChannelGroup(out bgmGroup);
+            if (result == FMOD.RESULT.OK)
+                result = system.playSound(sound, bgmGroup, true, out channel);
+            if (result == FMOD.RESULT.OK)
+                result = channel.setVolume(Mathf.Max(0f, volume));
+            if (result == FMOD.RESULT.OK)
+                result = channel.setPaused(_bgmPaused);
+            if (result != FMOD.RESULT.OK)
+            {
+                ReleaseStreamingBgm(sound, channel);
+                Debug.LogWarning("[SoundManager] Failed to start streaming BGM: " + result);
+                return false;
+            }
+
+            _streamingBgmSound = sound;
+            _streamingBgmChannel = channel;
+            _streamingBgmPath = path;
+            return true;
+        }
+        catch (Exception exception)
+        {
+            ReleaseStreamingBgm(sound, channel);
+            Debug.LogWarning("[SoundManager] Streaming BGM playback failed: " + exception.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 상대 경로가 현재 파일형 BGM과 일치할 때 해당 재생을 정지한다.
+    /// relativePath를 사용해 장면 소유자가 자신의 BGM만 해제하도록 한다.
+    /// </summary>
+    public void StopStreamingBgm(string relativePath)
+    {
+        if (string.IsNullOrWhiteSpace(relativePath))
+            return;
+
+        string path = Path.GetFullPath(Path.Combine(Application.streamingAssetsPath, relativePath));
+        if (string.Equals(path, _streamingBgmPath, StringComparison.OrdinalIgnoreCase))
+            StopStreamingBgmInternal();
+    }
+
+    /// <summary>
+    /// 현재 BGM을 멈추거나 이어 재생한다.
+    /// paused를 저장해 새로 시작하는 BGM에도 같은 일시정지 상태를 적용한다.
+    /// </summary>
+    public void SetBgmPaused(bool paused)
+    {
+        _bgmPaused = paused;
+        if (!RuntimeManager.IsInitialized)
+            return;
+
+        if (_bgm.isValid())
+            _bgm.setPaused(paused);
+        if (_streamingBgmChannel.hasHandle())
+            _streamingBgmChannel.setPaused(paused);
+    }
+
+    /// <summary>
+    /// FMOD 이벤트 BGM을 allowFadeOut에 따라 페이드 또는 즉시 정지하고 파일형 BGM은 즉시 정지한다.
+    /// 페이드 중 이벤트 핸들은 Clear의 즉시 정지를 위해 보관하고 파일 스트림은 채널과 Sound 자원을 해제한다.
     /// </summary>
     public void StopBgm(bool allowFadeOut = true)
     {
         _loopBgm = false;
+        StopStreamingBgmInternal();
         if (_bgm.isValid() && RuntimeManager.IsInitialized)
         {
             _bgm.stop(allowFadeOut ? FMOD.Studio.STOP_MODE.ALLOWFADEOUT : FMOD.Studio.STOP_MODE.IMMEDIATE);
@@ -321,6 +541,7 @@ public class SoundManager
         if (owner == null)
             return;
         _pendingCues.RemoveAll(pending => pending.HasOwner && pending.Owner == owner);
+        _pendingStreamingEffects.RemoveAll(pending => pending.HasOwner && pending.Owner == owner);
         foreach (ActiveEffect effect in _effects)
         {
             if (effect.HasOwner && effect.Owner == owner)
@@ -360,7 +581,30 @@ public class SoundManager
                 StopEffect(effect.Instance, false);
         }
         _effects.Clear();
+        StopStreamingEffects();
+        _effectsPaused = false;
         _combatFocusUntil = 0f;
+    }
+
+    /// <summary>
+    /// 이미 재생 중인 효과음과 파일 스트림의 일시정지 상태를 변경한다.
+    /// paused에 따라 FMOD 인스턴스와 채널을 멈추거나 이어 재생한다.
+    /// </summary>
+    public void SetEffectsPaused(bool paused)
+    {
+        if (_effectsPaused == paused)
+            return;
+
+        _effectsPaused = paused;
+        if (!RuntimeManager.IsInitialized)
+            return;
+
+        foreach (ActiveEffect effect in _effects)
+            if (effect.Instance.isValid())
+                effect.Instance.setPaused(paused);
+        foreach (ActiveStreamingEffect effect in _streamingEffects)
+            if (effect.Channel.hasHandle())
+                effect.Channel.setPaused(paused);
     }
 
     /// <summary>
@@ -462,6 +706,8 @@ public class SoundManager
     internal void Update()
     {
         UpdatePendingCues();
+        UpdatePendingStreamingEffects();
+        UpdateStreamingEffects();
         for (int i = _effects.Count - 1; i >= 0; i--)
         {
             ActiveEffect effect = _effects[i];
@@ -476,12 +722,103 @@ public class SoundManager
         }
         if (_hasBgmOwner && (_bgmOwner == null || !_bgmOwner.activeInHierarchy))
             StopBgm(false);
-        else if (!_bgm.isValid() || !RuntimeManager.IsInitialized)
+        else if (_bgm.isValid() && !RuntimeManager.IsInitialized)
             StopBgm(false);
-        else if (_bgm.getPlaybackState(out var state) == FMOD.RESULT.OK && state == FMOD.Studio.PLAYBACK_STATE.STOPPED)
+        else if (_bgm.isValid() && _bgm.getPlaybackState(out var state) == FMOD.RESULT.OK && state == FMOD.Studio.PLAYBACK_STATE.STOPPED)
         {
             if (!_loopBgm || _bgm.start() != FMOD.RESULT.OK) StopBgm(false);
         }
+    }
+
+    /// <summary>
+    /// StreamingAssets 효과음의 재생 완료 여부를 확인하고 끝난 sound와 channel을 정리한다.
+    /// 살아 있는 재생은 다음 프레임까지 목록에 유지한다.
+    /// </summary>
+    private void UpdateStreamingEffects()
+    {
+        for (int i = _streamingEffects.Count - 1; i >= 0; i--)
+        {
+            ActiveStreamingEffect effect = _streamingEffects[i];
+            if (RuntimeManager.IsInitialized && effect.Channel.hasHandle()
+                && effect.Channel.isPlaying(out bool isPlaying) == FMOD.RESULT.OK && isPlaying)
+                continue;
+
+            ReleaseStreamingEffect(effect);
+            _streamingEffects.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// 대기 중인 파일형 효과음의 owner와 FMOD Bus 준비 상태를 확인한다.
+    /// 살아 있는 owner의 요청을 준비된 SFX Bus에서 시작하고 파괴된 owner의 요청은 제거한다.
+    /// </summary>
+    private void UpdatePendingStreamingEffects()
+    {
+        for (int i = _pendingStreamingEffects.Count - 1; i >= 0; i--)
+        {
+            PendingStreamingEffect pending = _pendingStreamingEffects[i];
+            if (pending.HasOwner && pending.Owner == null)
+                _pendingStreamingEffects.RemoveAt(i);
+        }
+
+        if (_pendingStreamingEffects.Count == 0 || !AreStreamingAudioBusesReady(false, true))
+            return;
+
+        int pendingCount = _pendingStreamingEffects.Count;
+        for (int i = 0; i < pendingCount; i++)
+        {
+            PendingStreamingEffect pending = _pendingStreamingEffects[0];
+            _pendingStreamingEffects.RemoveAt(0);
+            StartStreamingEffect(pending.Path, pending.Volume, pending.Pitch, pending.Owner);
+        }
+    }
+
+    /// <summary>
+    /// 보유한 StreamingAssets 효과음을 즉시 멈추고 sound와 channel 자원을 반환한다.
+    /// 전체 효과음 정리에서 호출하며 재생 목록을 비운다.
+    /// </summary>
+    private void StopStreamingEffects()
+    {
+        for (int i = 0; i < _streamingEffects.Count; i++)
+            ReleaseStreamingEffect(_streamingEffects[i]);
+        _streamingEffects.Clear();
+        _pendingStreamingEffects.Clear();
+    }
+
+    /// <summary>
+    /// 파일형 BGM 채널을 멈추고 FMOD Sound 자원을 해제한다.
+    /// SoundManager가 BGM을 교체하거나 정리할 때 재생 핸들을 비운다.
+    /// </summary>
+    private void StopStreamingBgmInternal()
+    {
+        ReleaseStreamingBgm(_streamingBgmSound, _streamingBgmChannel);
+        _streamingBgmSound = default;
+        _streamingBgmChannel = default;
+        _streamingBgmPath = null;
+    }
+
+    /// <summary>
+    /// FMOD Core 채널을 정지하고 Sound 자원을 해제한다.
+    /// sound와 channel 핸들을 사용하며 이미 비어 있는 핸들은 건너뛴다.
+    /// </summary>
+    private static void ReleaseStreamingBgm(FMOD.Sound sound, FMOD.Channel channel)
+    {
+        if (channel.hasHandle())
+            channel.stop();
+        if (sound.hasHandle())
+            sound.release();
+    }
+
+    /// <summary>
+    /// effect의 FMOD Core 재생을 중단하고 Sound 자원을 반환한다.
+    /// 유효한 handle만 정리하고 이후 재생에 재사용하지 않는다.
+    /// </summary>
+    private static void ReleaseStreamingEffect(ActiveStreamingEffect effect)
+    {
+        if (effect.Channel.hasHandle())
+            effect.Channel.stop();
+        if (effect.Sound.hasHandle())
+            effect.Sound.release();
     }
 
     /// <summary>
@@ -694,6 +1031,24 @@ public class SoundManager
     }
 
     /// <summary>
+    /// FMOD 시스템, Master Bank, 지정 Bus 및 그 채널 그룹의 준비 상태를 확인한다.
+    /// needBgm과 needEffect로 검사할 Bus를 선택하고 모두 준비되면 true를 반환한다.
+    /// </summary>
+    private bool AreStreamingAudioBusesReady(bool needBgm, bool needEffect)
+    {
+        FMOD.Studio.System studioSystem = RuntimeManager.StudioSystem;
+        if (!studioSystem.isValid() || !RuntimeManager.HaveAllBanksLoaded || !RuntimeManager.HaveMasterBanksLoaded)
+            return false;
+        if (!TryInitializeBuses())
+            return false;
+        if (needBgm && _bgmBus.getChannelGroup(out _) != FMOD.RESULT.OK)
+            return false;
+        if (needEffect && _effectBus.getChannelGroup(out _) != FMOD.RESULT.OK)
+            return false;
+        return true;
+    }
+
+    /// <summary>
     /// 연출음 Bus를 찾아 효과음 음량 옵션을 적용한다. 뱅크에 없으면 경고 없이 비워 두어 기존 버스 준비를 막지 않는다.
     /// _cinematicBus를 변경한다.
     /// </summary>
@@ -794,6 +1149,53 @@ public class SoundManager
             _spatialize2D = spatialize2D;
             _minimumDistance = minimumDistance;
             _maximumDistance = maximumDistance;
+        }
+    }
+
+    private readonly struct ActiveStreamingEffect
+    {
+        private readonly FMOD.Sound _sound;
+        private readonly FMOD.Channel _channel;
+
+        internal FMOD.Sound Sound => _sound;
+        internal FMOD.Channel Channel => _channel;
+
+        /// <summary>
+        /// sound와 channel 핸들을 보관한다.
+        /// 재생 완료 여부 확인과 자원 해제에 사용한다.
+        /// </summary>
+        internal ActiveStreamingEffect(FMOD.Sound sound, FMOD.Channel channel)
+        {
+            _sound = sound;
+            _channel = channel;
+        }
+    }
+
+    private readonly struct PendingStreamingEffect
+    {
+        private readonly string _path;
+        private readonly float _volume;
+        private readonly float _pitch;
+        private readonly GameObject _owner;
+        private readonly bool _hasOwner;
+
+        internal string Path => _path;
+        internal float Volume => _volume;
+        internal float Pitch => _pitch;
+        internal GameObject Owner => _owner;
+        internal bool HasOwner => _hasOwner;
+
+        /// <summary>
+        /// 재생 파일, 음량·피치 배율 및 owner를 저장한다.
+        /// FMOD Bus 준비 후 재생할 요청을 보관하며 owner 파괴 시 취소한다.
+        /// </summary>
+        internal PendingStreamingEffect(string path, float volume, float pitch, GameObject owner)
+        {
+            _path = path;
+            _volume = volume;
+            _pitch = pitch;
+            _owner = owner;
+            _hasOwner = owner != null;
         }
     }
 }

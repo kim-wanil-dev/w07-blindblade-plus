@@ -665,7 +665,7 @@ MonoBehaviour:
   _biteDuration: 1
   _pounceHeight: 0.8
   _pounceOvershoot: 3
-  _chargeSound: 40
+  _chargeSound: 42
   _chargeSoundPitch: 0.6
   _chargeSoundVolume: 1.4
   _biteDamage: 15
@@ -4699,10 +4699,10 @@ MonoBehaviour:
   _pulseInterval: 3
   _chargeStartSound: 0
   _chargeStartPitch: 0.8
-  _pulseSound: 40
+  _pulseSound: 42
   _pulsePitch: 0.4
-  _finalPulseSound: 40
-  _finalPulsePitch: 0.3
+  _finalPulseSound: 43
+  _finalPulsePitch: 0.4
   _firstPulseVolume: 1
   _lastPulseVolume: 1.8
   _pulseColor: {r: 1, g: 0.1, b: 0.06, a: 1}

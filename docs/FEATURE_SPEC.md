@@ -121,3 +121,9 @@
 - 중복 또는 충돌 사항:
 - 승인 필요 사항 및 결과:
 
+
+### 2026-10-17 Settings and gameplay pause
+
+| Feature | Specification | Current behavior |
+| --- | --- | --- |
+| Intro settings popup and gameplay pause | [Feature specification](features/intro_settings_and_gameplay_pause.md) | Persistent settings UI, volume preview, mouse sensitivity, and Escape/Start pause including active effect sounds |

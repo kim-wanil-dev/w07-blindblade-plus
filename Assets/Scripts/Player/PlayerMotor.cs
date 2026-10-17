@@ -32,6 +32,10 @@ public struct PlayerDashEnd
 [RequireComponent(typeof(CharacterController))]
 public sealed class PlayerMotor : MonoBehaviour
 {
+    private const string LOOK_SENSITIVITY_PREF_KEY = "GameSettings.MouseSensitivity";
+    private const float MIN_LOOK_SENSITIVITY = 0.02f;
+    private const float MAX_LOOK_SENSITIVITY = 0.5f;
+
     [Header("References")]
     [SerializeField] private CharacterController _characterController;
     [SerializeField] private Transform _cameraPivot;
@@ -53,7 +57,7 @@ public sealed class PlayerMotor : MonoBehaviour
     [SerializeField] private LayerMask _crouchCollisionMask = ~0;
 
     [Header("Look")]
-    [SerializeField, Min(0f)] private float _lookSensitivity = 0.12f;
+    [SerializeField, Range(0.02f, 0.5f)] private float _lookSensitivity = 0.12f;
     [SerializeField, Range(45f, 89f)] private float _verticalLookLimit = 80f;
 
     [Header("Footsteps")]
@@ -211,9 +215,15 @@ private Vector3 _attackLungeDirection;
     // 다른 컴포넌트의 OnEnable이 이 컴포넌트의 Awake보다 먼저 시간을 읽을 수 있어 처음 쓸 때 찾는다.
     private PlayerClock Clock => _playerClock != null ? _playerClock : _playerClock = GetComponent<PlayerClock>();
     public float DodgeStartedAt => _dodgeStartedAt;
+    public float LookSensitivity => _lookSensitivity;
 
     private void Awake()
     {
+        _lookSensitivity = Mathf.Clamp(
+            PlayerPrefs.GetFloat(LOOK_SENSITIVITY_PREF_KEY, _lookSensitivity),
+            MIN_LOOK_SENSITIVITY,
+            MAX_LOOK_SENSITIVITY);
+
         if (_characterController == null)
             _characterController = GetComponent<CharacterController>();
 
@@ -237,6 +247,12 @@ private Vector3 _attackLungeDirection;
             _crouchedCameraHeight = Mathf.Clamp(
                 _crouchedCameraHeight, 0f, Mathf.Max(0f, _standingCameraLocalPosition.y));
         }
+    }
+
+    /// <summary>sensitivity를 설정 범위로 제한해 마우스 시점 회전량에 반영한다.</summary>
+    public void SetLookSensitivity(float sensitivity)
+    {
+        _lookSensitivity = Mathf.Clamp(sensitivity, MIN_LOOK_SENSITIVITY, MAX_LOOK_SENSITIVITY);
     }
 
     /// <summary>벽 충돌을 소유하는 맵 서비스 계약을 이동 장치에 등록합니다.</summary>
@@ -1124,6 +1140,7 @@ private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out Rayc
 #if UNITY_EDITOR
     private void OnValidate()
     {
+        _lookSensitivity = Mathf.Clamp(_lookSensitivity, MIN_LOOK_SENSITIVITY, MAX_LOOK_SENSITIVITY);
         _iaidoMaxDistance = Mathf.Max(0f, _iaidoMaxDistance);
         _iaidoSpeed = Mathf.Max(0f, _iaidoSpeed);
         _crouchWalkSpeed = Mathf.Max(0f, _crouchWalkSpeed);

@@ -578,6 +578,7 @@ MonoBehaviour:
   _damageVolumeMultiplier: 1
   _damagePitch: 1
   _perfectParrySound: 37
+  _ultimateReadySound: 41
   _contactService: {fileID: 1080894898460965423}
 --- !u!114 &8491623887222581670
 MonoBehaviour:

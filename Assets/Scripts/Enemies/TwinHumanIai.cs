@@ -36,9 +36,9 @@ public sealed class TwinHumanIai : MonoBehaviour
     [SerializeField, Tooltip("파동마다 인간에게서 울리는 소리. 퍼펙트 패링음을 낮춰 쓴다.")]
     private SoundId _pulseSound = SoundId.TwinBossChargePulse;
     [SerializeField, Range(0.1f, 3f)] private float _pulsePitch = 0.4f;
-    [SerializeField, Tooltip("마지막 파동에서만 울리는 소리. 토큰 3개를 모았을 때 소리가 생기면 여기에 넣는다.")]
-    private SoundId _finalPulseSound = SoundId.TwinBossChargePulse;
-    [SerializeField, Range(0.1f, 3f)] private float _finalPulsePitch = 0.3f;
+    [SerializeField, Tooltip("마지막 파동에서만 울리는 소리. 플레이어 토큰 3개 쳐내기 소리(UltimateReady)를 입체로 등록한 ID를 낮춰 쓴다.")]
+    private SoundId _finalPulseSound = SoundId.TwinBossChargeFinalPulse;
+    [SerializeField, Range(0.1f, 3f)] private float _finalPulsePitch = 0.4f;
     [SerializeField, Min(0f), Tooltip("첫 파동 소리 음량. 마지막 파동까지 Last Pulse Volume으로 커진다.")]
     private float _firstPulseVolume = 1f;
     [SerializeField, Min(0f)] private float _lastPulseVolume = 1.8f;

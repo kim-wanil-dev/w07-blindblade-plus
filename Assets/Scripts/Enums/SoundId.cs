@@ -44,5 +44,8 @@ public enum SoundId
     PerfectParryClash = 37,
     BambooBreak = 38,
     EnemyMeleeWarning = 39,
-    TwinBossChargePulse = 40,
+    EmpowerSwordWaveLaunch = 40,
+    EmpowerUltimateReady = 41,
+    TwinBossChargePulse = 42,
+    TwinBossChargeFinalPulse = 43,
 }
