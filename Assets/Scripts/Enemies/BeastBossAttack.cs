@@ -105,10 +105,12 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _biteTelegraph = 2f;
     [SerializeField, Min(0.05f), Tooltip("플레이어를 지나 반대편 가장자리까지 뛰어 덮치는 비행 시간(초)")]
     private float _biteDuration = 1f;
-    [SerializeField, Min(0f), Tooltip("덮치며 날아갈 때 포물선의 가장 높은 높이(미터)")]
-    private float _pounceHeight = 2.5f;
+    [SerializeField, Min(0f), Tooltip("덮치며 날아갈 때 포물선의 가장 높은 높이(미터). 낮을수록 플레이어 몸을 그대로 꿰뚫고 지나간다.")]
+    private float _pounceHeight = 0.8f;
+    [SerializeField, Min(0f), Tooltip("덮치기가 플레이어 위치를 지나 최소한 더 나아가는 거리(미터)")]
+    private float _pounceOvershoot = 3f;
     [SerializeField, Tooltip("가장자리에서 붉게 물들기 시작할 때 짐승에게서 울리는 소리. 퍼펙트 패링음을 낮춰 쓴다.")]
-    private SoundId _chargeSound = SoundId.PerfectParryClash;
+    private SoundId _chargeSound = SoundId.TwinBossChargePulse;
     [SerializeField, Range(0.1f, 3f)] private float _chargeSoundPitch = 0.6f;
     [SerializeField, Min(0f)] private float _chargeSoundVolume = 1.4f;
     [SerializeField, Min(0f)] private float _biteDamage = 15f;
@@ -123,6 +125,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     private PerceptionRevealMap _revealMap;
     private bool _burrowed;
     private bool _biting;
+    private bool _hasLandingSpot;
 
     public EnemyHealth Health => _health;
     public Transform RiderSeat => _riderSeat;
@@ -276,8 +279,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 잠수한 채 strikeAt(게임 시간) 돌진에 맞춰 center·radius 원형 공터의 플레이어 정면 쪽 가장자리로 옮겨 튀어나오고,
-    /// 붉게 물들며 웅크린 뒤 플레이어를 지나 반대편 가장자리까지 가로질러 돌진한다.
+    /// 잠수한 채 strikeAt(게임 시간) 덮치기에 맞춰 튀어나오고, 붉게 물들며 웅크린 뒤 플레이어를 지나 반대편 가장자리까지 덮친다.
+    /// 이전 덮치기로 내려앉은 자리가 있으면 그 자리에서 다시 나오고, 없으면 center·radius 원형 공터의 플레이어 정면 쪽 가장자리로 옮겨 나온다.
     /// 땅 위에 있으면 먼저 뛰어든다. player나 자신이 쓰러지면 남은 단계를 건너뛰고 땅 위에서 끝낸다.
     /// </summary>
     public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius)
@@ -286,7 +289,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         float emergeAt = strikeAt - _biteTelegraph - _emergeDuration;
         while (Time.time < emergeAt && CanAttack(player)) yield return null;
         if (!CanAttack(player)) yield break;
-        Vector3 start = TryGetEmergePosition(player, center, radius, out Vector3 position) ? position : transform.position;
+        Vector3 start = _hasLandingSpot || !TryGetEmergePosition(player, center, radius, out Vector3 position)
+            ? transform.position : position;
         yield return Emerge(start, player);
         if (CanAttack(player)) yield return Bite(player, center, radius);
     }
@@ -324,9 +328,9 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 붉게 물들인 뒤, 그 순간 플레이어 쪽으로 방향을 고정해
-    /// center·radius 원의 반대편 가장자리까지 _biteDuration 동안 포물선으로 뛰어올라 덮치며 날아간다.
-    /// 바닥에 투영한 비행 경로로 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 피해를 주고 그대로 지나가며,
-    /// 장애물에 막히면 그 자리에 내려앉는다. 끝나면 NavMesh 위치를 복원하고 붉은색을 되돌린다.
+    /// 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지 _biteDuration 동안 낮은 포물선으로 덮친다.
+    /// 정해진 직선 경로를 장애물과 상관없이 끝까지 날아가며, 바닥에 투영한 경로로 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 피해를 준다.
+    /// 내려앉은 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
     /// </summary>
     private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float radius)
     {
@@ -350,11 +354,11 @@ public sealed class BeastBossAttack : MonoBehaviour
         }
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
-        // 플레이어를 지나 원을 빠져나가는 반대편 가장자리에 내려앉도록 뛴다.
-        float length = Mathf.Max(toPlayer.magnitude,
+        // 플레이어를 반드시 지나 원을 빠져나가는 반대편 가장자리에 내려앉도록 정해진 직선으로 뛴다.
+        float length = Mathf.Max(toPlayer.magnitude + _pounceOvershoot,
             GetCircleExitDistance(transform.position, direction, center, radius) - _edgeMargin);
         Vector3 start = transform.position;
-        Vector3 landing = TryDestination(start + direction * length, out Vector3 sampled) ? sampled : start + direction * length;
+        Vector3 landing = start + direction * length;
         _navigationPosition = _agent.nextPosition;
         _previousUpdatePosition = _agent.updatePosition;
         _previousUpdateRotation = _agent.updateRotation;
@@ -373,10 +377,6 @@ public sealed class BeastBossAttack : MonoBehaviour
             float progress = Mathf.Clamp01(elapsed / _biteDuration);
             Vector3 ground = Vector3.Lerp(start, landing, progress);
             Vector3 next = ground + Vector3.up * (4f * _pounceHeight * progress * (1f - progress));
-            Vector3 movement = next - transform.position;
-            if (movement.sqrMagnitude > 0.000001f
-                && GetClearDistance(movement.normalized, movement.magnitude) + 0.001f < movement.magnitude)
-                break;
             transform.SetPositionAndRotation(next, facing);
             // 덮치는 몸이 플레이어 위를 지나도 맞도록 비행 경로를 바닥 높이로 내려 접촉을 검사한다.
             Vector3 groundStep = ground - groundPrevious;
@@ -388,6 +388,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         }
         if (_health.IsAlive) Landed?.Invoke();
         RestoreNavigation();
+        _hasLandingSpot = true;
         _biting = false;
         _motor.Stop();
         _warning.EndWarning();
@@ -757,7 +758,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         };
         Vector3 desired = transform.position;
         desired.y = _navigationPosition.y;
-        Vector3 destination = NavMesh.SamplePosition(desired, out NavMeshHit hit, 2f, filter)
+        // 덮치기는 정해진 직선으로 내려앉아 걸을 수 있는 지면 밖일 수 있으므로 가까운 지면을 넓게 찾는다.
+        Vector3 destination = NavMesh.SamplePosition(desired, out NavMeshHit hit, 5f, filter)
             ? hit.position : _navigationPosition;
         _agent.updatePosition = _previousUpdatePosition;
         _agent.updateRotation = _previousUpdateRotation;
@@ -781,6 +783,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         _warning.EndWarning();
         // 잠수·출현 도중 멈춰도 다음 패턴에서 보이고 맞을 수 있도록 땅 위 상태로 되돌린다.
         if (_burrowed) SetBurrowed(false);
+        // 패턴이 끝나면 다음 패턴의 첫 덮치기는 다시 가장자리를 골라 나온다.
+        _hasLandingSpot = false;
         BurrowDepth = 0f;
         BurrowMotion = BeastBurrowMotion.None;
         _motor.Stop();

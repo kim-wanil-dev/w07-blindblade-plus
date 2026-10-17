@@ -527,6 +527,7 @@ public class SoundManager
                 dopplerEnabled = dopplerenabled;
 
             description.getMinMaxDistance(out float minimumDistance, out float maximumDistance);
+            _library.ApplySpatialRange(soundId, ref minimumDistance, ref maximumDistance);
             if (attach)
             {
                 if (is3D && dopplerEnabled)

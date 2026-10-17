@@ -16,11 +16,11 @@ public sealed class TwinHumanIai : MonoBehaviour
 {
     private const string TIME_OWNER_A = "TwinHumanIai.SlowA";
     private const string TIME_OWNER_B = "TwinHumanIai.SlowB";
-    private const int CHARGE_POSITION_DIRECTIONS = 16;
+    private const int CHARGE_POSITION_DIRECTIONS = 32;
 
     [Header("차징 위치")]
-    [SerializeField, Range(0.1f, 1f), Tooltip("공터 반경에 곱해 차징 위치 후보를 찾는 원의 반경 비율")]
-    private float _chargeRingRatio = 0.75f;
+    [SerializeField, Range(0.1f, 1f), Tooltip("공터 반경에 곱해 차징 위치 후보를 찾는 원의 반경 비율. 1이면 공터 가장자리에서 플레이어와 가장 먼 반대편에 선다.")]
+    private float _chargeRingRatio = 1f;
     [SerializeField] private LayerMask _placementObstacleMask = Physics.DefaultRaycastLayers;
     private readonly Collider[] _placementContacts = new Collider[16];
     private NavMeshPath _path;
@@ -30,14 +30,15 @@ public sealed class TwinHumanIai : MonoBehaviour
     private float _chargeDuration = 10f;
     [SerializeField, Min(0.1f), Tooltip("붉은 파동을 내는 간격(초). 차징 시작 뒤 이 간격마다 낸다(10초 차징이면 3·6·9초).")]
     private float _pulseInterval = 3f;
-    [SerializeField] private SoundId _chargeStartSound = SoundId.BossChargeCry;
+    [SerializeField, Tooltip("차징을 시작할 때 소리. 기 모으는 소리는 파동 때만 내도록 기본값은 None이다.")]
+    private SoundId _chargeStartSound = SoundId.None;
     [SerializeField, Range(0.1f, 3f)] private float _chargeStartPitch = 0.8f;
     [SerializeField, Tooltip("파동마다 인간에게서 울리는 소리. 퍼펙트 패링음을 낮춰 쓴다.")]
-    private SoundId _pulseSound = SoundId.PerfectParryClash;
-    [SerializeField, Range(0.1f, 3f)] private float _pulsePitch = 0.6f;
+    private SoundId _pulseSound = SoundId.TwinBossChargePulse;
+    [SerializeField, Range(0.1f, 3f)] private float _pulsePitch = 0.4f;
     [SerializeField, Tooltip("마지막 파동에서만 울리는 소리. 토큰 3개를 모았을 때 소리가 생기면 여기에 넣는다.")]
-    private SoundId _finalPulseSound = SoundId.PerfectParryClash;
-    [SerializeField, Range(0.1f, 3f)] private float _finalPulsePitch = 0.45f;
+    private SoundId _finalPulseSound = SoundId.TwinBossChargePulse;
+    [SerializeField, Range(0.1f, 3f)] private float _finalPulsePitch = 0.3f;
     [SerializeField, Min(0f), Tooltip("첫 파동 소리 음량. 마지막 파동까지 Last Pulse Volume으로 커진다.")]
     private float _firstPulseVolume = 1f;
     [SerializeField, Min(0f)] private float _lastPulseVolume = 1.8f;
