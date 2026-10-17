@@ -21,6 +21,7 @@ using UnityEngine;
         private static readonly int _pulseRegionId = Shader.PropertyToID("_OutlinePulseRegion");
         private static readonly int _pulseVisibilityId = Shader.PropertyToID("_OutlinePulseVisibility");
         private static readonly int _pulseTintId = Shader.PropertyToID("_OutlinePulseTint");
+        private static readonly int _pulseSphericalId = Shader.PropertyToID("_OutlinePulseSpherical");
 
         [Header("플레이어 주변 인지")]
         [SerializeField, Min(0f), Tooltip("관측자 주변을 상시 표시하는 반경(미터). 0이면 상시 표시하지 않는다.")]
@@ -51,6 +52,7 @@ using UnityEngine;
         private Vector4 _pulseRegion;
         private float _pulseVisibility;
         private Vector4 _pulseTint;
+        private bool _pulseSpherical;
 
         void Awake()
         {
@@ -128,12 +130,22 @@ using UnityEngine;
             _pulseTint = new Vector4(color.r, color.g, color.b, Mathf.Clamp01(amount));
         }
 
-        /// <summary>퍼펙트 패링 파동 영역과 색조를 지워 더 이상 표시하지 않는다.</summary>
+        /// <summary>
+        /// spherical이 참이면 퍼펙트 패링 파동 영역을 중심 높이까지 쓴 3D 거리 구로 공개하고, 거짓이면 기존 수평거리로 공개한다.
+        /// 보스 파동처럼 높은 곳을 늦게 밝히는 입체 실루엣에 쓰며 다음 ClearPulseRegion에서 함께 초기화된다.
+        /// </summary>
+        public void SetPulseSpherical(bool spherical)
+        {
+            _pulseSpherical = spherical;
+        }
+
+        /// <summary>퍼펙트 패링 파동 영역과 색조·구형 여부를 지워 더 이상 표시하지 않는다.</summary>
         public void ClearPulseRegion()
         {
             _pulseRegion = Vector4.zero;
             _pulseVisibility = 0f;
             _pulseTint = Vector4.zero;
+            _pulseSpherical = false;
         }
 
         /// <summary>
@@ -144,7 +156,8 @@ using UnityEngine;
         {
             if (!Application.isPlaying || !isActiveAndEnabled || !_sensoryManager.IsReady || _pulseRegion.w <= 0f)
                 return 0f;
-            Vector2 offset = new Vector2(position.x - _pulseRegion.x, position.z - _pulseRegion.z);
+            Vector3 offset = new Vector3(position.x - _pulseRegion.x,
+                _pulseSpherical ? position.y - _pulseRegion.y : 0f, position.z - _pulseRegion.z);
             float innerRadius = Mathf.Max(0f, _pulseRegion.w - Mathf.Max(_edgeFade, 0.0001f));
             float progress = Mathf.InverseLerp(innerRadius, _pulseRegion.w, offset.magnitude);
             return (1f - Mathf.SmoothStep(0f, 1f, progress)) * _pulseVisibility;
@@ -289,6 +302,7 @@ using UnityEngine;
             Shader.SetGlobalVector(_pulseRegionId, _pulseRegion);
             Shader.SetGlobalFloat(_pulseVisibilityId, _pulseVisibility);
             Shader.SetGlobalVector(_pulseTintId, _pulseTint);
+            Shader.SetGlobalFloat(_pulseSphericalId, _pulseSpherical ? 1f : 0f);
             Shader.SetGlobalInt(_soundCountId, _soundCount);
             if (_soundCount > 0)
             {
@@ -307,6 +321,7 @@ using UnityEngine;
             Shader.SetGlobalVector(_observerRegionId, Vector4.zero);
             Shader.SetGlobalFloat(_pulseVisibilityId, 0f);
             Shader.SetGlobalVector(_pulseTintId, Vector4.zero);
+            Shader.SetGlobalFloat(_pulseSphericalId, 0f);
             Shader.SetGlobalInt(_soundCountId, 0);
         }
     }

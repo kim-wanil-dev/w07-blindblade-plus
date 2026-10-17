@@ -47,4 +47,6 @@ public enum SoundId
     EmpowerSwordWaveLaunch = 40,
     EmpowerUltimateReady = 41,
     RainFootstep = 42,
+    TwinBossChargePulse = 42,
+    TwinBossChargeFinalPulse = 43,
 }
