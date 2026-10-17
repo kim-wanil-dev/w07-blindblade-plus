@@ -588,6 +588,90 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.startLifetime.scalar
+      value: 0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.startLifetime.minScalar
+      value: 0.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.startSize.scalar
+      value: 0.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.startSize.minScalar
+      value: 0.35
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: EmissionModule.rateOverTime.scalar
+      value: 72
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: VelocityModule.y.scalar
+      value: 0.9
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].outSlope
+      value: -0.85
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].value
+      value: 0.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].inSlope
+      value: -0.85
+      objectReference: {fileID: 0}
+    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: m_RenderMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: m_LengthScale
+      value: 1.8
+      objectReference: {fileID: 0}
+    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: m_VelocityScale
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: VelocityModule.y.scalar
+      value: 1.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].value
+      value: 0.8
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].outSlope
+      value: -0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].value
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].inSlope
+      value: -0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: m_RenderMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: m_LengthScale
+      value: 1.6
+      objectReference: {fileID: 0}
+    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: m_VelocityScale
+      value: 0.25
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
