@@ -301,10 +301,11 @@ MonoBehaviour:
   _postHeartbeatAttackDelay: 0.5
   _projectilePrefab: {fileID: 2115214498364783961, guid: 5884e76ee1bf02144afab106081fabd4, type: 3}
   _rangedDamage: 15
-  _rangedPreparation: 0.8
+  _rangedPreparation: 0.26666668
   _rangedShots: 3
-  _rangedInterval: 0.8
-  _rangedBackstepDistance: 10
+  _rangedInterval: 0.26666668
+  _rangedProjectileSpeedMultiplier: 1.5
+  _rangedBackstepDistance: 15
   _rangedBackstepSpeed: 12
   _burstDamageWindow: 4
   _burstDamageThreshold: 30

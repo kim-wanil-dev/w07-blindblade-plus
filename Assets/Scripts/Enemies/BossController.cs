@@ -76,6 +76,8 @@ public sealed class BossController : MonoBehaviour
     [SerializeField, Min(1)] private int _rangedShots = 3;
     [SerializeField, Min(0.1f), Tooltip("발사 후 다음 전조까지의 휴식 시간(초)")]
     private float _rangedInterval = 0.8f;
+    [SerializeField, Min(0.01f), Tooltip("3연발 원거리 수리검의 비행 속도 배율. 도주 난사 수리검은 프리팹 속도를 그대로 씁니다.")]
+    private float _rangedProjectileSpeedMultiplier = 1.5f;
     private int _telemetryAttackId;
 
     public event Action RangedPreparing;
@@ -329,7 +331,7 @@ public sealed class BossController : MonoBehaviour
 
     /// <summary>
     /// 패턴 시작 시 플레이어에게서 멀어지는 위치로 한 번 백스텝한 뒤 설정 횟수와 준비 시간을 사용해 플레이어 시점보다 0.1m 아래로 투사체를 발사한다.
-    /// 비행 유도는 투사체 프리팹이 설정한다.
+    /// 비행 유도는 투사체 프리팹이 설정하며 비행 속도는 _rangedProjectileSpeedMultiplier배로 바꾼다.
     /// </summary>
     private IEnumerator Ranged()
     {
@@ -353,6 +355,7 @@ public sealed class BossController : MonoBehaviour
             EnemyProjectile projectile = Instantiate(_projectilePrefab, origin, Quaternion.LookRotation(direction));
             projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction, "BossRanged", _telemetryAttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Projectile),
                 direction, _player.transform);
+            projectile.SetSpeedMultiplier(_rangedProjectileSpeedMultiplier);
             _telemetryAttackId = 0;
             if (i + 1 < _rangedShots) yield return new WaitForSeconds(_rangedInterval);
         }
