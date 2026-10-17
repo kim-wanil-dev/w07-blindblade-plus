@@ -111,6 +111,12 @@ public sealed class BossController : MonoBehaviour
     private float _barrageTopAimHeight = 3.2f;
     [SerializeField, Tooltip("마지막 묶음이 조준하는 플레이어 발 기준 높이(미터)")]
     private float _barrageBottomAimHeight = 0.2f;
+    [SerializeField, Min(0.01f), Tooltip("난사 수리검마다 고르는 비행 속도 배율의 최솟값(프리팹 속도 기준)")]
+    private float _barrageSpeedMultiplierMin = 2.5f;
+    [SerializeField, Min(0.01f), Tooltip("난사 수리검마다 고르는 비행 속도 배율의 최댓값. 최솟값보다 작으면 최솟값을 씁니다.")]
+    private float _barrageSpeedMultiplierMax = 3.5f;
+    [SerializeField, Min(0f), Tooltip("난사 수리검 속도 배율이 유도 세기에 반영되는 비율. 1이면 속도 배율만큼 유도가 강해지고 0이면 프리팹 유도를 그대로 씁니다.")]
+    private float _barrageHomingSpeedScale = 1f;
     private int[] _barrageAttackIds;
     private bool[] _barrageAttackLaunched;
     private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
@@ -493,6 +499,7 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// volley 순번으로 위에서 아래로 낮아지는 조준 높이를 정하고 왼쪽·가운데·오른쪽 수리검 3발을 동시에 발사한다.
     /// _barrageSpreadAngle과 기존 원거리 피해 _rangedDamage를 사용하며 보스를 플레이어 쪽으로 회전시킨다.
+    /// 수리검마다 _barrageSpeedMultiplierMin~Max 사이의 비행 속도 배율을 랜덤으로 고르고 _barrageHomingSpeedScale로 유도 세기도 함께 키운다.
     /// </summary>
     private void FireBarrageVolley(int volley)
     {
@@ -517,6 +524,11 @@ public sealed class BossController : MonoBehaviour
             projectile.Initialize(new DamageContext(_rangedDamage, gameObject, origin, direction,
                     "BossEscapeBarrage", attackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Projectile),
                 direction, _player.transform);
+            float speedMultiplier = UnityEngine.Random.Range(_barrageSpeedMultiplierMin,
+                Mathf.Max(_barrageSpeedMultiplierMin, _barrageSpeedMultiplierMax));
+            projectile.SetSpeedMultiplier(speedMultiplier);
+            // 빠른 수리검일수록 유도도 강해지며 비례 1이면 휘는 반경이 속도와 무관하게 같다.
+            projectile.SetHomingMultiplier(1f + (speedMultiplier - 1f) * _barrageHomingSpeedScale);
         }
     }
 

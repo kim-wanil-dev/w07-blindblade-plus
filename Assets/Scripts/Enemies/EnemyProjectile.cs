@@ -23,6 +23,7 @@ public class EnemyProjectile : MonoBehaviour
     private PlayerMotor _targetMotor;
     private Vector3 _direction;
     private float _speedMultiplier = 1f;
+    private float _homingMultiplier = 1f;
     private float _elapsedTime;
     private bool _isFlying;
     private bool _reflected;
@@ -108,13 +109,14 @@ public class EnemyProjectile : MonoBehaviour
     }
 
     /// <summary>
-    /// damage와 direction 및 target을 저장하고 이동 방향, 수명 누적, 속도 배율 및 비행 상태를 초기화한다.
+    /// damage와 direction 및 target을 저장하고 이동 방향, 수명 누적, 속도·유도 배율 및 비행 상태를 초기화한다.
     /// 풀에서 재사용하는 경우에도 호출하며 초기 방향으로 이동을 시작하고 _flightSound가 있으면 비행음을 반복 재생한다.
     /// </summary>
     public virtual void Initialize(DamageContext damage, Vector3 direction, Transform target = null)
     {
         _damage = damage;
         _speedMultiplier = 1f;
+        _homingMultiplier = 1f;
         _reflected = false;
         _target = target;
         _targetMotor = target != null ? target.GetComponent<PlayerMotor>() : null;
@@ -145,6 +147,15 @@ public class EnemyProjectile : MonoBehaviour
     }
 
     /// <summary>
+    /// 이번 비행의 유도 각속도를 프리팹 Homing Turn Rate의 multiplier배로 바꾼다. Initialize 뒤에 호출하며 다음 Initialize에서 1로 돌아간다.
+    /// 유도가 꺼진 프리팹(0)은 배율과 무관하게 직진한다.
+    /// </summary>
+    public void SetHomingMultiplier(float multiplier)
+    {
+        _homingMultiplier = Mathf.Max(0f, multiplier);
+    }
+
+    /// <summary>
     /// 비행 중 target의 시점과 현재 위치를 사용해 설정 각속도만큼 진행 방향을 보정한다.
     /// 반사 후와 근거리에서는 방향을 유지하며, 유도할 때 _direction과 회전을 갱신한다.
     /// </summary>
@@ -155,7 +166,7 @@ public class EnemyProjectile : MonoBehaviour
         Vector3 toTarget = aim - transform.position;
         if (toTarget.sqrMagnitude <= _homingStopDistance * _homingStopDistance) return;
         _direction = Vector3.RotateTowards(_direction, toTarget.normalized,
-            _homingTurnRate * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
+            _homingTurnRate * _homingMultiplier * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
         transform.rotation = Quaternion.LookRotation(_direction);
     }
 

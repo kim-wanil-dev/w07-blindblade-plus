@@ -304,7 +304,7 @@ MonoBehaviour:
   _rangedPreparation: 0.26666668
   _rangedShots: 3
   _rangedInterval: 0.26666668
-  _rangedProjectileSpeedMultiplier: 2.25
+  _rangedProjectileSpeedMultiplier: 1.6666666
   _rangedBackstepDistance: 30
   _rangedBackstepSpeed: 12
   _burstDamageWindow: 4
@@ -314,9 +314,12 @@ MonoBehaviour:
   _barragePreparation: 0.6
   _barrageVolleys: 4
   _barrageInterval: 0.5
-  _barrageSpreadAngle: 20
-  _barrageTopAimHeight: 3.2
+  _barrageSpreadAngle: 30
+  _barrageTopAimHeight: 5.3
   _barrageBottomAimHeight: 0.2
+  _barrageSpeedMultiplierMin: 1
+  _barrageSpeedMultiplierMax: 2.0833333
+  _barrageHomingSpeedScale: 1
   _chargePreparation: 0.9
   _chargeSpeed: 14
   _chargeDistance: 12
