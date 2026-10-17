@@ -77,6 +77,7 @@ MonoBehaviour:
   _sceneryColor: {r: 0.3, g: 0.3, b: 0.3, a: 1}
   _threatColor: {r: 1, g: 0.1, b: 0.06, a: 1}
   _threatFillOpacity: 0.6
+  _threatHighlightFillOpacity: 0.6
   _shader: {fileID: 4800000, guid: c7c52e823b854534adfb6cc98ed70499, type: 3}
   _transparentDepthShader: {fileID: 4800000, guid: a93ad5573676a1a4fbb7f81bd5031075, type: 3}
   _layerMaskShader: {fileID: 4800000, guid: 250a1a1f07798ef49bdfc7a908c6c983, type: 3}

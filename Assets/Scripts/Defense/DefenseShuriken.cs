@@ -374,7 +374,7 @@ private void ApplyVisualPitch()
 
     /// <summary>
     /// 반사한 수리검을 흰 윤곽선으로 보이게 바꾼다. 빨간 위협 분류(OutlineLayer)를 끄고,
-    /// 자식 렌더러 재질을 흰 Unlit 재질로 바꾼 뒤 인지와 무관하게 보이는 OutlineVFX를 붙인다.
+    /// 파티클을 제외한 자식 렌더러 재질을 흰 Unlit 재질로 바꾼 뒤 인지와 무관하게 보이는 OutlineVFX를 붙인다.
     /// 재질은 윤곽선 검출에만 쓰이며 처음 반사할 때 한 번 만들어 모든 수리검이 함께 쓴다.
     /// </summary>
     private void ShowAsReflected()
@@ -387,8 +387,10 @@ private void ApplyVisualPitch()
             _reflectMaterial.SetColor("_BaseColor", Color.white);
         }
         // 어두운 장면에서 원래 Lit 재질은 검게 그려져 흰 윤곽선이 검출되지 않으므로 Unlit 흰색으로 바꾼다.
+        // 연기 파티클은 텍스처 모양을 잃지 않도록 원래 재질을 유지한다.
         foreach (Renderer target in GetComponentsInChildren<Renderer>())
-            target.sharedMaterial = _reflectMaterial;
+            if (!(target is ParticleSystemRenderer))
+                target.sharedMaterial = _reflectMaterial;
         gameObject.AddComponent<OutlineVFX>().IgnorePerception = true;
     }
 

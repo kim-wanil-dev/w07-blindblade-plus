@@ -21,6 +21,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     private static readonly int _sceneryColorId = Shader.PropertyToID("_SceneryColor");
     private static readonly int _threatColorId = Shader.PropertyToID("_ThreatColor");
     private static readonly int _threatFillOpacityId = Shader.PropertyToID("_ThreatFillOpacity");
+    private static readonly int _threatHighlightFillOpacityId = Shader.PropertyToID("_ThreatHighlightFillOpacity");
     private static readonly int _meleeWarningColorId = Shader.PropertyToID("_MeleeWarningColor");
 
     [Header("윤곽선 표현")]
@@ -40,6 +41,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     private Color _threatColor = new Color(1f, 0.1f, 0.06f, 1f);
     [SerializeField, Range(0f, 1f), Tooltip("위협 실루엣 내부를 채우는 불투명도다.")]
     private float _threatFillOpacity = 0.6f;
+    [SerializeField, Range(0f, 1f), Tooltip("불릿 타임과 극한 회피 파동 동안 위협 실루엣 내부를 채우는 불투명도다.")]
+    private float _threatHighlightFillOpacity = 0.6f;
 
     [Header("근접 공격 전조")]
     [SerializeField] private Color _meleeWarningColor = new Color(1f, 0.1f, 0.06f, 1f);
@@ -175,10 +178,13 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _material.SetFloat(_normalSensitivityId, _normalSensitivity);
         _material.SetFloat(_transparentThresholdId, _transparentThreshold);
         _meleeWarningMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
+        _sceneryMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
+        _threatMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
         _material.SetFloat(_usePerceptionMaskId, Application.isPlaying ? 1f : 0f);
         _material.SetColor(_sceneryColorId, _sceneryColor);
         _material.SetColor(_threatColorId, _threatColor);
         _material.SetFloat(_threatFillOpacityId, _threatFillOpacity);
+        _material.SetFloat(_threatHighlightFillOpacityId, _threatHighlightFillOpacity);
         _material.SetColor(_meleeWarningColorId, _meleeWarningColor);
         renderer.EnqueuePass(_capture);
         renderer.EnqueuePass(_alwaysVisibleCapture);
