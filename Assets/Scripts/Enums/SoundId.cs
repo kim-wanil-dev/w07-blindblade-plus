@@ -44,4 +44,6 @@ public enum SoundId
     PerfectParryClash = 37,
     BambooBreak = 38,
     EnemyMeleeWarning = 39,
+    EmpowerSwordWaveLaunch = 40,
+    EmpowerUltimateReady = 41,
 }
