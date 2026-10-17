@@ -1,5 +1,14 @@
 ### FMOD 사운드 매니저
 
+#### 수리검 비행음 도플러 (2026-10-17)
+
+- 3D 이벤트의 Doppler가 켜져 있으면 PlayEffect의 부착 재생(PlayAttached·PlayAttachedLoop 등)이 AttachInstanceWithVelocity로 발음체의 속도를 FMOD에 전달한다. Rigidbody가 있으면 그 속도를 쓰고, 없으면 Transform 이동량으로 속도를 계산한다. Doppler가 꺼진 이벤트는 기존 부착 방식을 유지한다.
+- 현재 Doppler를 켠 이벤트는 수리검 비행음 `event:/Shuriken/Shuriken_Flight`(SoundId ShurikenFlight=36) 하나다. Event Macros의 Doppler Scale은 200%로, 기본 100%의 2배로 음높이가 변한다. Studio에서 설정할 수 있는 범위는 0~500%다. 전역 `set3DSettings`의 dopplerscale은 기본값 1을 유지한다.
+- Player 프리팹 StudioListener의 nonRigidbodyVelocity를 켜서 Rigidbody가 없는 청취자의 이동 속도도 반영한다.
+- 수치 조정: FMOD Studio에서 이벤트의 Doppler Scale을 바꾸고 SFX Bank를 빌드한다. 현재 프로젝트는 압축·스트리밍 설정이 충돌하는 기존 에셋 경고 때문에 CLI 빌드에 `-ignore-warnings`가 필요하다.
+- 관련 코드: Assets/Scripts/Managers/SoundManager.cs / AttachInstanceWithVelocity; FMODProject/week06-blindblade/Metadata/Event/{c2cf47f6-a28a-4c08-8669-a7688c9ce18c}.xml; FMODProject/week06-blindblade/Build/Desktop/SFX.bank.
+- 검증: fmodstudiocl로 Desktop SFX Bank 빌드 성공. Play에서의 실제 청취는 미확인이다.
+
 #### 적 리듬 공격 등록 및 취소 기반 — 2단계 (2026-10-12)
 
 - 새 이벤트 6개를 SoundId 23~28 및 기존 SoundLibrary에 등록했다. 중앙 편집·기본 설정·검증은 [사운드 중앙 편집](사운드_중앙_편집.md)의 「적 리듬 공격 사운드 중앙 등록」을 따른다. 기존 ID와 재생 호출부는 유지했다.
