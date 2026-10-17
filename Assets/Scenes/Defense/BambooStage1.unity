@@ -55253,7 +55253,7 @@ MonoBehaviour:
   _arena: {fileID: 1943110757}
   _boss: {fileID: 350192290}
   _warning: {fileID: 132706044}
-  _requiredKills: 30
+  _requiredKills: 20
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
@@ -56583,14 +56583,14 @@ MonoBehaviour:
   _throwerMinimumHeight: 0.6
   _throwerMaximumHeight: 5.5
   _throwerSeparation: 3
-  _initialThrowers: 2
-  _throwersPerMinute: 1.5
+  _initialThrowers: 1
+  _throwersPerMinute: 2
   _maximumThrowers: 6
   _throwerSpawnInterval: 1.33
   _meleePrefab: {fileID: 2678292632270529432, guid: 69709147bb3f3ad4fb6c4e311ac6ce72, type: 3}
   _meleeSpawnMinimumRadius: 24
   _meleeSpawnMaximumRadius: 28.6
-  _meleeStartTime: 5
+  _meleeStartTime: 0
   _meleeSpawnsPerMinute: 18
   _meleeSpawnGrowthPerMinute: 4.5
   _firstMeleeKillThreshold: 10
@@ -56600,6 +56600,13 @@ MonoBehaviour:
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 20
+  _beastPrefab: {fileID: 0}
+  _weightBlendStartSpawnCount: 0
+  _weightBlendEndSpawnCount: 30
+  _meleeWeightAtStart: 1
+  _beastWeightAtStart: 0
+  _meleeWeightAtEnd: 1
+  _beastWeightAtEnd: 0
 --- !u!114 &1968806063
 MonoBehaviour:
   m_ObjectHideFlags: 0

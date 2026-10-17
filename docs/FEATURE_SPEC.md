@@ -64,6 +64,7 @@
 | 패드 입력 및 장치별 안내 | [명세](features/패드_입력_안내.md) |
 | 적 추적 | [명세](features/적_추적.md) |
 | 적 공격 패턴 | [명세](features/적_공격_패턴.md) |
+| 일반 Beast 적 | [명세](features/DefenseBeast.md) |
 | 적 전투 및 체력 | [명세](features/적_전투_체력.md) |
 | 감각 표현 | [명세](features/감각_표현.md) |
 | 발자국 시스템 | [감각 표현](features/감각_표현.md)에서 관리 (FootstepEmitter·발자국·파동) |
