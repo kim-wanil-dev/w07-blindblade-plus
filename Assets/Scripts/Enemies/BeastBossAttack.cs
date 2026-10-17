@@ -8,7 +8,7 @@ using UnityEngine.AI;
 /// <summary>짐승이 땅에 뛰어들고 튀어나오는 동작의 진행 구간이다.</summary>
 public enum BeastBurrowMotion { None, Diving, Emerging }
 
-/// <summary>짐승의 원형 이동·가장자리 질주·지그재그 돌진·점프·잠수 기습 공격과 NavMesh 복원을 담당한다.</summary>
+/// <summary>짐승의 패턴 사이 배회·원형 이동·가장자리 질주·지그재그 돌진·점프·잠수 기습 공격과 NavMesh 복원을 담당한다.</summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(EnemyHealth), typeof(EnemyMotor), typeof(NavMeshAgent))]
 public sealed class BeastBossAttack : MonoBehaviour
@@ -120,12 +120,46 @@ public sealed class BeastBossAttack : MonoBehaviour
     [SerializeField, Tooltip("뛰어들고 튀어나올 때 크게 울리는 울음소리")]
     private SoundId _burrowCry = SoundId.BeastBossIdle;
     [SerializeField, Min(0f)] private float _burrowCryVolume = 2f;
+    [SerializeField, Min(0f), Tooltip("멈춰 있다가 뛰어들 때도 앞으로 뛰어드는 최소 속도(미터/초). 달리던 중이면 그 기세를 이어받는다.")]
+    private float _diveMinSpeed = 7f;
+    [SerializeField, Min(0f), Tooltip("뛰어들며 이어받는 기세의 최대 속도(미터/초)")]
+    private float _diveMaxSpeed = 14f;
+    [SerializeField, Min(0f), Tooltip("땅에서 튀어나오며 앞으로 뛰쳐나가는 속도(미터/초)")]
+    private float _emergeLeapSpeed = 7f;
+    private Vector3 _momentum;
     private Collider _hitCollider;
     private TwinBossWarningVisual _warning;
     private PerceptionRevealMap _revealMap;
     private bool _burrowed;
     private bool _biting;
     private bool _hasLandingSpot;
+
+    [Header("배회")]
+    [SerializeField, Min(1f), Tooltip("패턴 사이 플레이어 주위를 맴도는 거리(미터)")]
+    private float _prowlRadius = 9f;
+    [SerializeField, Min(0.5f), Tooltip("플레이어가 이 거리(미터)보다 가까우면 고개를 플레이어 쪽에 둔 채 바깥으로 호를 그리며 달려 거리를 벌린다.")]
+    private float _prowlKeepAway = 6f;
+    [SerializeField, Min(0f), Tooltip("거리 벌리기를 멈추고 다시 맴돌기까지 더 벌릴 거리(미터)")]
+    private float _prowlBackHysteresis = 1.5f;
+    [SerializeField, Min(0.1f), Tooltip("배회하며 달리는 속도(미터/초). 걷지 않도록 질주 속도로 둔다.")]
+    private float _prowlSpeed = 9f;
+    [SerializeField, Min(0.1f), Tooltip("배회 가속도(미터/초 제곱). 작을수록 출발·방향 전환이 부드럽다.")]
+    private float _prowlAcceleration = 14f;
+    [SerializeField, Min(0.05f), Tooltip("현재 위치에서 몇 초 앞의 지점을 이동 목표로 삼을지")]
+    private float _prowlLookAhead = 0.8f;
+    [SerializeField, Min(0.1f), Tooltip("맴도는 방향을 바꾸는 최소 간격(초)")]
+    private float _prowlSwitchMin = 2.5f;
+    [SerializeField, Min(0.1f)] private float _prowlSwitchMax = 5f;
+    private Transform _prowlTarget;
+    private Vector3 _prowlCenter;
+    private float _prowlArenaRadius;
+    private float _prowlSign;
+    private float _nextProwlSwitch;
+    private float _nextProwlDestination;
+    private float _prowlBaseSpeed;
+    private float _prowlBaseAcceleration;
+    private bool _prowlEscaping;
+    private bool _prowling;
 
     public EnemyHealth Health => _health;
     public Transform RiderSeat => _riderSeat;
@@ -137,6 +171,9 @@ public sealed class BeastBossAttack : MonoBehaviour
     public bool IsBiting => _biting;
     public BeastBurrowMotion BurrowMotion { get; private set; }
     public float BurrowDepth { get; private set; }
+    public bool IsProwling => _prowling;
+    public bool HasLookTarget => _prowling && _prowlTarget != null;
+    public Vector3 LookTarget => _prowlTarget.position;
     public event Action AttackPreparing;
     public event Action AttackStarted;
     public event Action Landed;
@@ -149,6 +186,102 @@ public sealed class BeastBossAttack : MonoBehaviour
         _hitCollider = GetComponent<Collider>();
         _warning = GetComponent<TwinBossWarningVisual>();
         _path = new NavMeshPath();
+    }
+
+    void Update()
+    {
+        if (_prowling) TickProwl();
+    }
+
+    /// <summary>
+    /// 패턴 사이에 멈추지 않고 player 주위를 달리며 배회하기 시작한다. center·radius 원형 공터 안에서만 움직인다.
+    /// 기존 이동 속도·가속도를 저장하고 맴도는 방향을 무작위로 정한다. 이미 배회 중이면 아무것도 하지 않는다.
+    /// </summary>
+    public void BeginProwl(Transform player, Vector3 center, float radius)
+    {
+        if (_prowling) return;
+        _prowlBaseSpeed = _agent.speed;
+        _prowlBaseAcceleration = _agent.acceleration;
+        _prowlTarget = player;
+        _prowlCenter = center;
+        _prowlArenaRadius = Mathf.Max(1f, radius);
+        _prowlSign = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+        _nextProwlSwitch = Time.time + UnityEngine.Random.Range(_prowlSwitchMin, Mathf.Max(_prowlSwitchMin, _prowlSwitchMax));
+        _nextProwlDestination = 0f;
+        _prowlEscaping = false;
+        _prowling = true;
+    }
+
+    /// <summary>
+    /// 항상 _prowlSpeed로 달린다. 플레이어가 _prowlKeepAway보다 가까우면 바깥으로 호를 그리며 달려 거리를 벌리고,
+    /// _prowlBackHysteresis만큼 더 벌어지면 _prowlRadius 거리에서 플레이어 주위를 맴돈다. 고개는 시각 담당자가 플레이어 쪽으로 돌린다.
+    /// 일정 간격으로 앞쪽 목표 지점을 공터 안으로 당겨 이동 목표로 정하고, 막히거나 정해진 시간이 지나면 맴도는 방향을 바꾼다.
+    /// 잠수·도약 중이거나 NavMesh 위에 없으면 건너뛴다.
+    /// </summary>
+    private void TickProwl()
+    {
+        if (_burrowed || _jumping || BurrowMotion != BeastBurrowMotion.None || !_motor.IsReady || _prowlTarget == null) return;
+        Vector3 offset = Vector3.ProjectOnPlane(transform.position - _prowlTarget.position, Vector3.up);
+        float distance = offset.magnitude;
+        if (distance < _prowlKeepAway) _prowlEscaping = true;
+        else if (distance > _prowlKeepAway + _prowlBackHysteresis) _prowlEscaping = false;
+        if (Time.time >= _nextProwlSwitch)
+        {
+            _prowlSign = -_prowlSign;
+            _nextProwlSwitch = Time.time + UnityEngine.Random.Range(_prowlSwitchMin, Mathf.Max(_prowlSwitchMin, _prowlSwitchMax));
+        }
+        if (Time.time < _nextProwlDestination) return;
+        _nextProwlDestination = Time.time + _orbitDestinationInterval;
+        Vector3 away = distance > 0.01f ? offset / distance : transform.forward;
+        _agent.speed = _prowlSpeed;
+        _agent.acceleration = _prowlAcceleration;
+        float reach = _prowlSpeed * _prowlLookAhead + 1f;
+        Vector3 desired;
+        if (_prowlEscaping)
+        {
+            // 돌아서 등지지 않도록 옆으로 크게 비껴 바깥쪽 호로 달린다.
+            Vector3 side = Vector3.Cross(Vector3.up, away) * _prowlSign;
+            desired = transform.position + (away * 0.6f + side).normalized * reach;
+        }
+        else
+        {
+            float ring = Mathf.Max(_prowlKeepAway + _prowlBackHysteresis, _prowlRadius);
+            float step = _prowlSign * reach / ring * Mathf.Rad2Deg;
+            desired = _prowlTarget.position + Quaternion.AngleAxis(step, Vector3.up) * away * ring;
+        }
+        desired = ClampToProwlArena(desired);
+        // 공터 가장자리나 장애물에 막혀 더 갈 곳이 없으면 반대로 돈다.
+        if (Vector3.ProjectOnPlane(desired - transform.position, Vector3.up).sqrMagnitude < 0.25f
+            || !TryDestination(desired, out Vector3 destination))
+        {
+            _prowlSign = -_prowlSign;
+            return;
+        }
+        _motor.MoveTo(destination, 0.1f);
+    }
+
+    /// <summary>position을 배회 공터 가장자리에서 _edgeMargin과 짐승 반경만큼 안쪽 원 안으로 당겨 반환한다.</summary>
+    private Vector3 ClampToProwlArena(Vector3 position)
+    {
+        Vector3 fromCenter = Vector3.ProjectOnPlane(position - _prowlCenter, Vector3.up);
+        float limit = Mathf.Max(0.5f, _prowlArenaRadius - _edgeMargin - _agent.radius);
+        if (fromCenter.sqrMagnitude <= limit * limit) return position;
+        Vector3 clamped = _prowlCenter + fromCenter.normalized * limit;
+        clamped.y = position.y;
+        return clamped;
+    }
+
+    /// <summary>
+    /// 배회를 끝내고 저장한 이동 속도·가속도를 되돌린다. 달리던 속도는 멈추지 않고 남겨 바로 이어지는 잠수·질주가 그 기세를 이어받게 한다.
+    /// </summary>
+    public void EndProwl()
+    {
+        if (!_prowling) return;
+        _prowling = false;
+        _prowlTarget = null;
+        _prowlEscaping = false;
+        _agent.speed = _prowlBaseSpeed;
+        _agent.acceleration = _prowlBaseAcceleration;
     }
 
     /// <summary>player 주변의 현재 각도에서 원형 이동을 시작하고 기존 이동 속도를 저장한다.</summary>
@@ -259,12 +392,20 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 땅 위에 있으면 지금 자리에서 울음소리와 큰 물 파동을 내며 _diveDuration 동안 땅속으로 뛰어든다.
+    /// 달리던 속도나 덮치기 착지 기세 _momentum 중 큰 쪽을 _diveMinSpeed~_diveMaxSpeed로 잘라 그 방향으로 점점 느려지며 앞으로 뛰어든다.
     /// BurrowMotion과 BurrowDepth로 진행을 알리고 끝나면 피격 판정을 끈 잠수 상태가 된다. 이미 잠수 중이면 바로 끝낸다.
     /// </summary>
     public IEnumerator Dive()
     {
         if (_burrowed) yield break;
+        Vector3 velocity = Vector3.ProjectOnPlane(_agent.velocity, Vector3.up);
+        if (_momentum.sqrMagnitude > velocity.sqrMagnitude) velocity = _momentum;
+        _momentum = Vector3.zero;
+        Vector3 direction = velocity.sqrMagnitude > 0.01f
+            ? velocity.normalized : Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+        float speed = Mathf.Clamp(velocity.magnitude, _diveMinSpeed, Mathf.Max(_diveMinSpeed, _diveMaxSpeed));
         _motor.Stop();
+        if (direction.sqrMagnitude > 0.0001f) transform.rotation = Quaternion.LookRotation(direction);
         EmitBurrowSignal(transform.position);
         BurrowMotion = BeastBurrowMotion.Diving;
         float elapsed = 0f;
@@ -272,6 +413,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         {
             elapsed += Time.deltaTime;
             BurrowDepth = Mathf.Clamp01(elapsed / _diveDuration);
+            // 달리던 기세 그대로 앞으로 뛰어들며 물속으로 잠길수록 느려진다.
+            MoveAlongGround(direction, speed * (1f - 0.6f * BurrowDepth) * Time.deltaTime);
             yield return null;
         }
         BurrowMotion = BeastBurrowMotion.None;
@@ -305,6 +448,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// <summary>
     /// 잠수한 채 position으로 옮긴 뒤 울음소리와 큰 물 파동을 내고 _emergeDuration 동안 땅에서 튀어나온다.
     /// player가 있으면 그쪽을 바라보며 나오고, 시작과 함께 피격 판정을 다시 켠다.
+    /// 튀어나오는 동안 바라보는 쪽으로 _emergeLeapSpeed로 뛰쳐나가 다음 동작으로 기세가 이어지게 한다.
     /// </summary>
     private IEnumerator Emerge(Vector3 position, KatanaDamageReceiver player)
     {
@@ -320,6 +464,8 @@ public sealed class BeastBossAttack : MonoBehaviour
             elapsed += Time.deltaTime;
             BurrowDepth = 1f - Mathf.Clamp01(elapsed / _emergeDuration);
             if (player != null) FaceTowards(player.transform.position);
+            MoveAlongGround(Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized,
+                _emergeLeapSpeed * Time.deltaTime);
             yield return null;
         }
         BurrowDepth = 0f;
@@ -389,6 +535,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (_health.IsAlive) Landed?.Invoke();
         RestoreNavigation();
         _hasLandingSpot = true;
+        // 착지한 기세를 남겨 바로 이어지는 뛰어들기가 덮치던 방향으로 미끄러지듯 이어지게 한다.
+        _momentum = direction * Mathf.Min(length / _biteDuration, _diveMaxSpeed);
         _biting = false;
         _motor.Stop();
         _warning.EndWarning();
@@ -464,6 +612,15 @@ public sealed class BeastBossAttack : MonoBehaviour
             return true;
         }
         return false;
+    }
+
+    /// <summary>direction으로 distance만큼 NavMesh 지면을 따라 옮기고, 걸을 수 있는 지면 끝에 닿으면 그 앞에서 멈춘다.</summary>
+    private void MoveAlongGround(Vector3 direction, float distance)
+    {
+        if (distance <= 0f || direction.sqrMagnitude < 0.0001f || !_motor.IsReady) return;
+        Vector3 destination = transform.position + direction * distance;
+        if (_agent.Raycast(destination, out NavMeshHit boundary)) destination = boundary.position;
+        _agent.Move(destination - transform.position);
     }
 
     /// <summary>target 쪽으로 수평 방향만 돌려 바라본다.</summary>
@@ -767,7 +924,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 원형 이동·가장자리 질주·점프·잠수 기습을 중단하고 기존 NavMesh 설정과 이동 정지 상태를 복원한다.
+    /// 배회·원형 이동·가장자리 질주·점프·잠수 기습을 중단하고 기존 NavMesh 설정과 이동 정지 상태를 복원한다.
     /// 잠수 중이었으면 지금 자리에서 바로 땅 위로 돌려 피격 판정을 켠다.
     /// </summary>
     public void CancelAttack()
@@ -777,6 +934,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         _preparing = false;
         _biting = false;
         StopHeartbeat();
+        EndProwl();
         EndOrbit();
         EndEdgeRun();
         RestoreNavigation();
@@ -785,6 +943,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (_burrowed) SetBurrowed(false);
         // 패턴이 끝나면 다음 패턴의 첫 덮치기는 다시 가장자리를 골라 나온다.
         _hasLandingSpot = false;
+        _momentum = Vector3.zero;
         BurrowDepth = 0f;
         BurrowMotion = BeastBurrowMotion.None;
         _motor.Stop();
