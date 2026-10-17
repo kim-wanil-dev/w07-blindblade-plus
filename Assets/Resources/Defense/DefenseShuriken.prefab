@@ -158,6 +158,8 @@ MonoBehaviour:
   _collisionMask:
     serializedVersion: 2
     m_Bits: 51
+  _playerPitchInfluence: 1
+  _maximumVisualPitch: 50
   _flightSound: 36
   _aimDrop: 0.1
   _leadAccuracy: 0.8
