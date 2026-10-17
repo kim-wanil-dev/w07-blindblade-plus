@@ -16,6 +16,11 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private const float DIVE_REAR_PORTION = 0.3f;
     private const float GALLOP_SUSPENSION_CENTER = 0.925f;
     private const float GALLOP_SUSPENSION_WIDTH = 0.15f;
+    private const int IDLE_ACTION_COUNT = 4;
+    private const int IDLE_SCAN = 0;
+    private const int IDLE_SNIFF = 1;
+    private const int IDLE_SHIFT = 2;
+    private const int IDLE_GROWL = 3;
 
     // 앞왼쪽, 앞오른쪽, 뒤왼쪽, 뒤오른쪽 다리가 땅에 닿는 위상이다.
     // 걷기는 뒷왼쪽→앞왼쪽→뒷오른쪽→앞오른쪽 네 박자, 질주는 뒷발 둘이 먼저 닿고 앞발 둘이 뒤따르는 엇갈림 질주다.
@@ -92,6 +97,53 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private readonly float[] _restAnkleAngles = new float[LEG_COUNT];
     private readonly Vector2[] _pawOffsets = new Vector2[LEG_COUNT];
     private readonly Vector3[] _restPaws = new Vector3[LEG_COUNT];
+
+    [Header("반발")]
+    [SerializeField, Min(0f), Tooltip("움직이는 동안 몸을 낮춰 관절을 땅 가까이 굽히는 깊이(m). 걸음 비중에 비례한다.")]
+    private float _moveLowering = 0.25f;
+    [SerializeField, Min(0f), Tooltip("발이 땅에 닿을 때 몸을 눌러 내리는 속도(m/s). 스프링으로 되튀어 땅을 밀어내는 반발력을 보인다.")]
+    private float _contactImpulse = 0.8f;
+    [SerializeField, Min(1f), Tooltip("몸 출렁임 스프링 세기. 클수록 빠르게 되튄다.")]
+    private float _springStiffness = 140f;
+    [SerializeField, Range(0f, 2f), Tooltip("몸 출렁임 감쇠 비율. 1이면 되튐 없이 돌아오고 작을수록 크게 되튄다.")]
+    private float _springDampingRatio = 0.45f;
+    private float _springOffset;
+    private float _springVelocity;
+
+    [Header("감속·대기")]
+    [SerializeField, Min(0.1f), Tooltip("멈출 때 걸음 속도가 줄어드는 빠르기. 작을수록 걸음을 천천히 늦추며 멈춘다.")]
+    private float _decelerationSmoothing = 2.5f;
+    [SerializeField, Min(0f), Tooltip("멈춰 있을 때 제자리에서 발을 바꿔 딛는 높이(m)")]
+    private float _idleStepLift = 0.12f;
+    [SerializeField, Min(0f), Tooltip("멈춰 있을 때 제자리 발 바꿈 주기(초당 횟수)")]
+    private float _idleStepCadence = 0.4f;
+    [SerializeField, Min(0.1f), Tooltip("대기 동작(살피기·냄새 맡기·무게 옮기기·으르렁) 하나를 이어가는 최소 시간(초)")]
+    private float _idleActionMin = 1.8f;
+    [SerializeField, Min(0.1f)] private float _idleActionMax = 3.5f;
+    [SerializeField, Min(0.1f), Tooltip("대기 동작이 다음 동작으로 섞여 넘어가는 빠르기(초당)")]
+    private float _idleActionBlend = 1.5f;
+    [SerializeField, Tooltip("냄새 맡을 때 머리를 숙이는 각도")]
+    private float _sniffPitch = 26f;
+    [SerializeField, Tooltip("무게를 옮길 때 몸을 좌우로 기울이는 각도")]
+    private float _shiftRoll = 6f;
+    [SerializeField, Tooltip("무게를 옮길 때 몸을 좌우로 미는 거리(m)")]
+    private float _shiftSway = 0.12f;
+    private readonly float[] _idleWeights = new float[IDLE_ACTION_COUNT];
+    private int _idleAction;
+    private float _nextIdleActionAt;
+
+    [Header("몸·고개 돌림")]
+    [SerializeField, Min(0.1f), Tooltip("짐승 방향이 바뀔 때 도형 몸이 따라 도는 스프링 세기. 작을수록 천천히 부드럽게 돈다.")]
+    private float _bodyTurnStiffness = 90f;
+    [SerializeField, Min(0.1f), Tooltip("머리가 몸보다 늦게 따라 도는 스프링 세기")]
+    private float _headTurnStiffness = 35f;
+    [SerializeField, Min(0f)] private float _maxBodyTurnLag = 60f;
+    [SerializeField, Min(0f)] private float _maxHeadTurnLag = 70f;
+    private float _lastRootYaw;
+    private float _bodyTurnLag;
+    private float _bodyTurnVelocity;
+    private float _headTurnLag;
+    private float _headTurnVelocity;
 
     [Header("전투 자세")]
     [SerializeField, Tooltip("평소에도 몸을 낮추는 깊이(m)")]
@@ -226,6 +278,9 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         _leap = 0f;
         _bite = 0f;
         _flinchAt = -1f;
+        _lastRootYaw = _beast.transform.eulerAngles.y;
+        _bodyTurnLag = 0f;
+        _headTurnLag = 0f;
         _health.Damaged += HandleDamaged;
     }
 
@@ -248,11 +303,71 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         _leap = Mathf.Lerp(_leap, airborne ? 1f : 0f, blend);
         _bite = Mathf.Lerp(_bite, _beast.IsBiting ? 1f : 0f, quickBlend);
         // 도약·잠수 중에는 다리를 뻗은 자세로 고정하므로 걸음 주기를 진행하지 않는다.
+        // 멈춰 있어도 제자리에서 발을 바꿔 딛도록 최소 걸음 주기를 둔다.
         if (!airborne && !_beast.IsBurrowed)
-            _phase = Mathf.Repeat(_phase + _speed / GetStride() * deltaTime, 1f);
+            _phase = Mathf.Repeat(_phase + Mathf.Max(_speed / GetStride(), _idleStepCadence) * deltaTime, 1f);
         _idleTime += deltaTime;
+        UpdateSpring(deltaTime);
+        UpdateIdleAction(deltaTime);
+        UpdateTurnLag(deltaTime, airborne || _beast.IsBiting || _beast.IsBurrowed);
         ApplyPose();
         UpdateSmoke();
+    }
+
+    /// <summary>
+    /// 몸 출렁임 스프링 _springOffset·_springVelocity를 deltaTime만큼 진행한다.
+    /// _springStiffness와 _springDampingRatio로 발 디딤 충격 뒤 눌렸다가 되튀는 움직임을 만든다.
+    /// </summary>
+    private void UpdateSpring(float deltaTime)
+    {
+        float damping = 2f * _springDampingRatio * Mathf.Sqrt(_springStiffness);
+        _springVelocity += (-_springStiffness * _springOffset - damping * _springVelocity) * deltaTime;
+        _springOffset += _springVelocity * deltaTime;
+    }
+
+    /// <summary>
+    /// 정해진 시간마다 살피기·냄새 맡기·무게 옮기기·으르렁 중 직전과 다른 대기 동작을 고르고,
+    /// 각 동작 비중 _idleWeights를 _idleActionBlend 빠르기로 옮겨 동작이 끊기지 않고 섞이며 넘어가게 한다.
+    /// </summary>
+    private void UpdateIdleAction(float deltaTime)
+    {
+        if (Time.time >= _nextIdleActionAt)
+        {
+            _idleAction = (_idleAction + UnityEngine.Random.Range(1, IDLE_ACTION_COUNT)) % IDLE_ACTION_COUNT;
+            _nextIdleActionAt = Time.time + UnityEngine.Random.Range(_idleActionMin, Mathf.Max(_idleActionMin, _idleActionMax));
+        }
+        for (int i = 0; i < IDLE_ACTION_COUNT; i++)
+            _idleWeights[i] = Mathf.MoveTowards(_idleWeights[i], i == _idleAction ? 1f : 0f, _idleActionBlend * deltaTime);
+    }
+
+    /// <summary>
+    /// 짐승 루트의 수평 방향 변화만큼 몸·머리 회전 지연을 쌓고 임계 감쇠 스프링으로 부드럽게 따라가게 한다.
+    /// 머리는 몸보다 약한 스프링이라 더 늦게 돈다. snap이 참인 덮치기·도약·잠수 중에는 지연을 비워 바로 방향을 맞춘다.
+    /// </summary>
+    private void UpdateTurnLag(float deltaTime, bool snap)
+    {
+        float yaw = _beast.transform.eulerAngles.y;
+        float delta = Mathf.DeltaAngle(_lastRootYaw, yaw);
+        _lastRootYaw = yaw;
+        if (snap)
+        {
+            _bodyTurnLag = 0f;
+            _bodyTurnVelocity = 0f;
+            _headTurnLag = 0f;
+            _headTurnVelocity = 0f;
+            return;
+        }
+        _bodyTurnLag = Mathf.Clamp(_bodyTurnLag - delta, -_maxBodyTurnLag, _maxBodyTurnLag);
+        _headTurnLag = Mathf.Clamp(_headTurnLag - delta, -_maxHeadTurnLag, _maxHeadTurnLag);
+        StepCriticalSpring(ref _bodyTurnLag, ref _bodyTurnVelocity, _bodyTurnStiffness, deltaTime);
+        StepCriticalSpring(ref _headTurnLag, ref _headTurnVelocity, _headTurnStiffness, deltaTime);
+    }
+
+    /// <summary>value를 0으로 되돌리는 임계 감쇠 스프링을 stiffness 세기로 deltaTime만큼 진행해 value·velocity를 갱신한다.</summary>
+    private static void StepCriticalSpring(ref float value, ref float velocity, float stiffness, float deltaTime)
+    {
+        velocity += (-stiffness * value - 2f * Mathf.Sqrt(stiffness) * velocity) * deltaTime;
+        value += velocity * deltaTime;
     }
 
     /// <summary>
@@ -265,7 +380,9 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         Vector3 moved = Vector3.ProjectOnPlane(position - _previousPosition, Vector3.up);
         _previousPosition = position;
         float measured = Mathf.Min(MAX_MEASURED_SPEED, moved.magnitude / deltaTime);
-        _speed = Mathf.Lerp(_speed, measured, 1f - Mathf.Exp(-_speedSmoothing * deltaTime));
+        // 멈출 때는 더 천천히 줄여 걸음이 점점 느려지며 서게 한다.
+        float smoothing = measured >= _speed ? _speedSmoothing : _decelerationSmoothing;
+        _speed = Mathf.Lerp(_speed, measured, 1f - Mathf.Exp(-smoothing * deltaTime));
     }
 
     /// <summary>현재 속도의 질주 비중으로 걷기와 질주 사이 한 주기 이동 거리(m)를 반환한다.</summary>
@@ -287,6 +404,13 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         float cycle = _phase * Mathf.PI * 2f;
         float idle = 1f - stride;
         float flinch = _flinchAt >= 0f ? 1f - Mathf.Clamp01((Time.time - _flinchAt) / _flinchDuration) : 0f;
+        // 대기 동작은 멈춰 있고 웅크림·도약이 아닐 때만 섞는다.
+        float idleMix = idle * (1f - _crouch) * (1f - Mathf.Max(_leap, burrow));
+        float scan = Smooth(_idleWeights[IDLE_SCAN]) * idleMix;
+        float sniff = Smooth(_idleWeights[IDLE_SNIFF]) * idleMix;
+        float shift = Smooth(_idleWeights[IDLE_SHIFT]) * idleMix;
+        float growl = Smooth(_idleWeights[IDLE_GROWL]) * idleMix;
+        float shiftWave = Mathf.Sin(_idleTime * 0.9f);
 
         // 걷기는 한 주기에 두 번 출렁이고 어깨를 굴리며, 질주는 척추를 굽혔다 펴며 앞뒤로 기운다.
         // 질주는 앞발이 땅을 밀어낸 뒤 네 발이 모두 뜨는 구간에 몸을 크게 솟구친다.
@@ -295,39 +419,47 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         float bob = (1f - Mathf.Cos(cycle * 2f)) * 0.5f * _bodyBob * stride * (1f - gallop)
             + bound * _gallopBound * run
             + Mathf.Sin(_idleTime * 2.2f) * _breathing * idle
-            - _crouchDepth * _crouch - _stanceDrop;
+            - _crouchDepth * _crouch - _stanceDrop
+            // 움직일수록 몸을 낮춰 관절을 땅 가까이 굽히고, 발 디딤 스프링으로 눌렸다 되튄다.
+            - _moveLowering * stride + _springOffset - 0.06f * growl;
         float spinePitch = Mathf.Sin(cycle) * _gallopPitch * run + _crouchPitch * _crouch + _leapPitch * _leap
-            + _stancePitch + 6f * _bite - _flinchPitch * flinch;
-        float spineRoll = Mathf.Sin(cycle) * _shoulderRoll * stride * (1f - gallop);
-        _spine.localPosition = _spineBasePosition + Vector3.up * bob;
+            + _stancePitch + 6f * _bite - _flinchPitch * flinch + 4f * sniff;
+        float spineRoll = Mathf.Sin(cycle) * _shoulderRoll * stride * (1f - gallop) + shiftWave * _shiftRoll * shift;
+        _spine.localPosition = _spineBasePosition + Vector3.up * bob + Vector3.right * (shiftWave * _shiftSway * shift);
         _spine.localRotation = _spineBaseRotation * Quaternion.Euler(spinePitch, 0f, spineRoll);
 
         // 머리는 낮게 깔고 노려보다가 질주하면 앞으로 뻗고, 물 때는 내밀며, 울 때는 쳐든다.
+        // 몸이 돌 때 머리는 스프링으로 한 박자 늦게 따라 돌아 직선적으로 꺾이지 않는다.
         float headPitch = _stanceHeadPitch * (1f - howl) + Mathf.Sin(cycle * 2f + 0.6f) * _headNod * stride
-            + _crouchPitch * _crouch + 6f * run - 8f * _bite + _howlHeadPitch * howl - 12f * flinch;
-        float headYaw = Mathf.Sin(_idleTime * 0.7f) * _idleScanYaw * idle * (1f - _crouch)
-            + Mathf.Sin(cycle) * _headSway * stride * (1f - gallop);
+            + _crouchPitch * _crouch + 6f * run - 8f * _bite + _howlHeadPitch * howl - 12f * flinch
+            + (_sniffPitch + Mathf.Sin(_idleTime * 9f) * 2f) * sniff;
+        float headYaw = Mathf.Sin(_idleTime * 0.6f) * _idleScanYaw * Mathf.Max(scan, 0.3f * idleMix)
+            + Mathf.Sin(cycle) * _headSway * stride * (1f - gallop) + _headTurnLag - _bodyTurnLag;
         _head.localPosition = _headBasePosition + Vector3.forward * (_biteLunge * _bite);
         _head.localRotation = _headBaseRotation * Quaternion.Euler(headPitch, headYaw, 0f);
 
-        float jaw = Mathf.Max(_growlJaw * _crouch, Mathf.Max(_jawOpen * _bite, _jawOpen * howl));
+        float growlJaw = _growlJaw * 0.6f * growl * (0.7f + 0.3f * Mathf.Sin(_idleTime * 23f));
+        float jaw = Mathf.Max(Mathf.Max(_growlJaw * _crouch, growlJaw), Mathf.Max(_jawOpen * _bite, _jawOpen * howl));
         Quaternion jawTurn = Quaternion.Euler(jaw, 0f, 0f);
         _jaw.localPosition = _jawHinge + jawTurn * (_jawBasePosition - _jawHinge);
         _jaw.localRotation = jawTurn * _jawBaseRotation;
-        Quaternion earTurn = Quaternion.Euler(-_earPinBack * Mathf.Max(1f - howl, _crouch), 0f, 0f);
+        Quaternion earTurn = Quaternion.Euler(-_earPinBack * Mathf.Max(Mathf.Max(1f - howl, _crouch), growl)
+            + 15f * scan * Mathf.Sin(_idleTime * 0.6f + 1f), 0f, 0f);
         for (int i = 0; i < _ears.Length; i++)
             _ears[i].localRotation = earTurn * _earBaseRotations[i];
 
         // 꼬리는 평소 낮게 두고 전조 중 채찍처럼 떨며, 질주·도약하면 뒤로 쭉 편다.
         float tailYaw = Mathf.Sin(cycle) * _tailSway * stride
             + Mathf.Sin(_idleTime * 1.4f) * _tailSway * 0.4f * idle
-            + Mathf.Sin(_idleTime * 14f) * _tailSway * 0.5f * _crouch;
+            + Mathf.Sin(_idleTime * 14f) * _tailSway * 0.5f * Mathf.Max(_crouch, growl);
         float tailPitch = _tailRaise * Mathf.Max(run, _leap) - _stanceTailDrop * (1f - run) - 6f * _crouch;
         _tail.localRotation = _tailBaseRotation * Quaternion.Euler(tailPitch, tailYaw, 0f);
 
         float air = Mathf.Max(_leap, burrow);
         float duty = Mathf.Lerp(_walkDuty, _gallopDuty, gallop);
-        float lift = Mathf.Lerp(_walkLift, _gallopLift, gallop) * stride;
+        // 멈춰 있어도 제자리에서 발을 바꿔 디디며, 무게를 옮길 때는 조금 더 들어 올린다.
+        float lift = Mathf.Lerp(_walkLift, _gallopLift, gallop) * stride
+            + _idleStepLift * idle * (1f - air) * (1f + shift);
         // 발이 땅을 딛는 동안 몸이 나아간 만큼만 발이 뒤로 가야 미끄러지지 않는다.
         float reach = duty * GetStride() * stride;
         for (int i = 0; i < LEG_COUNT; i++)
@@ -345,6 +477,12 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
             _ankles[i].localRotation = Quaternion.Euler(ankle, 0f, 0f);
             NotifyPawContact(i, legPhase, stride * (1f - air), paw);
         }
+    }
+
+    /// <summary>0~1 비중 weight를 양 끝이 완만한 곡선으로 바꿔 반환한다. 동작이 직선적으로 켜지고 꺼지지 않게 한다.</summary>
+    private static float Smooth(float weight)
+    {
+        return Mathf.SmoothStep(0f, 1f, weight);
     }
 
     /// <summary>위상 from과 to를 0~1 원 위의 가까운 쪽으로 t만큼 보간해 반환한다.</summary>
@@ -449,19 +587,23 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
                 break;
         }
         transform.localPosition = _rootBasePosition + new Vector3(0f, height, drift);
-        transform.localRotation = _rootBaseRotation * Quaternion.Euler(pitch, 0f, 0f);
+        // 짐승 방향이 바뀌어도 몸은 스프링 지연만큼 늦게 따라 돌아 갑자기 꺾이지 않는다.
+        transform.localRotation = _rootBaseRotation * Quaternion.Euler(0f, _bodyTurnLag, 0f) * Quaternion.Euler(pitch, 0f, 0f);
         return _beast.IsBurrowed || _beast.BurrowMotion != BeastBurrowMotion.None ? 1f : 0f;
     }
 
     /// <summary>
-    /// leg 다리의 이번 위상 legPhase가 한 바퀴 돌아 0(발이 닿는 순간)을 지났고 걸음 비중 stride가 충분하면
-    /// 늑대 루트 기준 발바닥 위치 paw를 지면 높이로 내려 PawPlanted로 알린다. 지난 위상은 _previousLegPhases에 저장한다.
+    /// leg 다리의 이번 위상 legPhase가 한 바퀴 돌아 0(발이 닿는 순간)을 지나면 걸음 비중 stride만큼 몸을 눌러 스프링 반발을 일으킨다.
+    /// stride가 충분하면 늑대 루트 기준 발바닥 위치 paw를 지면 높이로 내려 PawPlanted로도 알린다. 지난 위상은 _previousLegPhases에 저장한다.
     /// </summary>
     private void NotifyPawContact(int leg, float legPhase, float stride, Vector3 paw)
     {
         float previous = _previousLegPhases[leg];
         _previousLegPhases[leg] = legPhase;
-        if (stride < 0.2f || previous - legPhase < 0.5f) return;
+        if (previous - legPhase < 0.5f) return;
+        // 제자리 발 바꿈도 약하게 눌러 숨 쉬듯 출렁이게 한다.
+        _springVelocity -= _contactImpulse * Mathf.Max(stride, 0.15f);
+        if (stride < 0.2f) return;
         Vector3 ground = transform.TransformPoint(paw);
         ground.y = _beast.transform.position.y;
         PawPlanted?.Invoke(ground);

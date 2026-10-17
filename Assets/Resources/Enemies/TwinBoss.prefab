@@ -4552,6 +4552,23 @@ MonoBehaviour:
   _walkLift: 0.25
   _gallopLift: 0.6
   _swingPawCurl: 35
+  _moveLowering: 0.25
+  _contactImpulse: 0.8
+  _springStiffness: 140
+  _springDampingRatio: 0.45
+  _decelerationSmoothing: 2.5
+  _idleStepLift: 0.12
+  _idleStepCadence: 0.4
+  _idleActionMin: 1.8
+  _idleActionMax: 3.5
+  _idleActionBlend: 1.5
+  _sniffPitch: 26
+  _shiftRoll: 6
+  _shiftSway: 0.12
+  _bodyTurnStiffness: 90
+  _headTurnStiffness: 35
+  _maxBodyTurnLag: 60
+  _maxHeadTurnLag: 70
   _stanceDrop: 0.16
   _stancePitch: 6
   _stanceHeadPitch: 16
