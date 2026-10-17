@@ -11045,7 +11045,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _sizeScale
-      value: 3
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _lengthScale

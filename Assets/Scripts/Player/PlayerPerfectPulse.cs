@@ -199,8 +199,17 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     /// </summary>
     public void BeginAt(Vector3 point, Vector3 normal, Color ringColor, Color revealTint)
     {
-        StartPulse(point, normal, _radius, _expandDuration, _fadeDuration, ringColor, true);
-        if (_mask != null) _mask.SetPulseTint(revealTint, 1f);
+        BeginAt(point, normal, ringColor, revealTint, _radius, 1f);
+    }
+
+    /// <summary>
+    /// point 지면에서 normal을 위로 하여 radius(미터) 반경의 퍼펙트 파동을 처음부터 시작한다. 쌍둥이 거합 차징처럼 점점 넓고 진해지는 보스 파동에 쓴다.
+    /// 확산·페이드는 퍼펙트 패링과 같고 바닥 링은 ringColor, 파동이 밝힌 윤곽선은 revealTint 색으로 tintAmount(0~1)만큼 물들인다.
+    /// </summary>
+    public void BeginAt(Vector3 point, Vector3 normal, Color ringColor, Color revealTint, float radius, float tintAmount)
+    {
+        StartPulse(point, normal, radius, _expandDuration, _fadeDuration, ringColor, true);
+        if (_mask != null) _mask.SetPulseTint(revealTint, tintAmount);
     }
 
     /// <summary>
