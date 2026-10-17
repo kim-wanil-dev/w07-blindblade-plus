@@ -56,6 +56,11 @@ public sealed class EmpowerOverlay : MonoBehaviour
     private float _cutFadeAge = -1f;
     private float _cutFadeDuration;
     private Color _cutLineColor = Color.white;
+    private Image _crossLine;
+    private float _crossExtend;
+    private float _crossAge = -1f;
+    private float _crossFadeAge = -1f;
+    private float _crossFadeDuration;
 
     public Color AccentColor => _accentColor;
     public Vector2 Size => _canvasRect.rect.size;
@@ -92,6 +97,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
         UpdateFlash(dt);
         UpdateGlint(dt);
         UpdateCutLine(dt);
+        UpdateCrossLine(dt);
         UpdateParticles(dt);
     }
 
@@ -229,13 +235,42 @@ public sealed class EmpowerOverlay : MonoBehaviour
     }
 
     /// <summary>
-    /// 갈라진 선을 count개의 먹 조각으로 흩뜨린다. 조각은 줄을 따라 흩어져 위로 떠오르며 lifetime 동안 사라지고,
+    /// 갈라진 선과 겹쳐 X자를 이루는 두 번째 강조색 한 줄을 화면 중심을 지나 angle도로 thickness 두께로 extendDuration 동안 양 끝까지 뻗게 한다.
+    /// 보스 거합 받아치기에서 반대 사선과 기본 사선을 함께 그을 때 쓰며 ScatterCutLine이 함께 흩뜨린다.
+    /// </summary>
+    public void ShowCrossLine(float angle, float thickness, float extendDuration)
+    {
+        RectTransform rect = _crossLine.rectTransform;
+        rect.localRotation = Quaternion.Euler(0f, 0f, angle);
+        rect.sizeDelta = new Vector2(0f, thickness);
+        _crossExtend = Mathf.Max(0.01f, extendDuration);
+        _crossAge = 0f;
+        _crossFadeAge = -1f;
+        _crossLine.color = _accentColor;
+        _crossLine.gameObject.SetActive(true);
+    }
+
+    /// <summary>
+    /// 갈라진 선(보이면 X자 두 번째 선도)을 줄마다 count개의 먹 조각으로 흩뜨린다. 조각은 줄을 따라 흩어져 위로 떠오르며 lifetime 동안 사라지고,
     /// 줄 자체는 lifetime의 앞 15% 동안 빠르게 사라진다.
     /// </summary>
     public void ScatterCutLine(int count, float lifetime)
     {
+        if (_crossLine.gameObject.activeSelf)
+        {
+            ScatterLine(_crossLine.rectTransform, _accentColor, count, lifetime);
+            _crossFadeDuration = Mathf.Max(0.01f, lifetime * 0.15f);
+            _crossFadeAge = 0f;
+        }
         if (!_cutLine.gameObject.activeSelf) return;
-        RectTransform rect = _cutLine.rectTransform;
+        ScatterLine(_cutLine.rectTransform, _cutLineColor, count, lifetime);
+        _cutFadeDuration = Mathf.Max(0.01f, lifetime * 0.15f);
+        _cutFadeAge = 0f;
+    }
+
+    /// <summary>rect 줄을 따라 color 색 먹 조각 count개를 흩어 위로 떠오르며 lifetime 동안 사라지게 한다.</summary>
+    private void ScatterLine(RectTransform rect, Color color, int count, float lifetime)
+    {
         float angle = rect.localEulerAngles.z * Mathf.Deg2Rad;
         Vector2 along = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
         Vector2 normal = new Vector2(-along.y, along.x);
@@ -245,11 +280,9 @@ public sealed class EmpowerOverlay : MonoBehaviour
             Vector2 position = along * Random.Range(-halfLength, halfLength) + normal * Random.Range(-6f, 6f);
             Vector2 velocity = normal * Random.Range(-60f, 60f) + Vector2.up * Random.Range(20f, 90f);
             float size = Random.Range(8f, 24f);
-            SpawnParticle(EmpowerInkTextures.Splat, _cutLineColor, position, new Vector2(size, size),
+            SpawnParticle(EmpowerInkTextures.Splat, color, position, new Vector2(size, size),
                 Random.Range(0f, 360f), velocity, lifetime * Random.Range(0.6f, 1f), 0.02f, 0.4f);
         }
-        _cutFadeDuration = Mathf.Max(0.01f, lifetime * 0.15f);
-        _cutFadeAge = 0f;
     }
 
     /// <summary>모든 연출을 즉시 지우고 비네트 목표도 0으로 돌린다. 씬 종료로 캔버스가 먼저 사라졌으면 아무것도 하지 않는다.</summary>
@@ -270,6 +303,9 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _cutAge = -1f;
         _cutFadeAge = -1f;
         _cutLine.gameObject.SetActive(false);
+        _crossAge = -1f;
+        _crossFadeAge = -1f;
+        _crossLine.gameObject.SetActive(false);
         SetVoid(0f);
         foreach (Particle particle in _particles) particle.Image.gameObject.SetActive(false);
     }
@@ -362,6 +398,26 @@ public sealed class EmpowerOverlay : MonoBehaviour
         SetAlpha(_cutLine, _cutLineColor.a * (1f - t));
     }
 
+    /// <summary>X자 두 번째 줄을 뻗는 동안 길이를 늘리고, 흩어지는 중이면 투명하게 만든 뒤 숨긴다.</summary>
+    private void UpdateCrossLine(float dt)
+    {
+        if (_crossAge < 0f) return;
+        _crossAge += dt;
+        RectTransform rect = _crossLine.rectTransform;
+        float extend = 1f - Mathf.Pow(1f - Mathf.Clamp01(_crossAge / _crossExtend), 3f);
+        rect.sizeDelta = new Vector2(Size.magnitude * 1.1f * extend, rect.sizeDelta.y);
+        if (_crossFadeAge < 0f) return;
+        _crossFadeAge += dt;
+        float t = _crossFadeAge / _crossFadeDuration;
+        if (t >= 1f)
+        {
+            _crossAge = -1f;
+            _crossLine.gameObject.SetActive(false);
+            return;
+        }
+        SetAlpha(_crossLine, _accentColor.a * (1f - t));
+    }
+
     /// <summary>보이는 입자를 dt만큼 움직이고 나이에 맞춰 크기·투명도를 바꾸며 수명이 끝나면 숨긴다.</summary>
     private void UpdateParticles(float dt)
     {
@@ -429,6 +485,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
         _effectRoot = (RectTransform)effectRoot.transform;
         Stretch(_effectRoot);
         _cutLine = CreateCentered("CutLine", _accentColor, EmpowerInkTextures.Line);
+        _crossLine = CreateCentered("CrossLine", _accentColor, EmpowerInkTextures.Line);
         _glint = CreateCentered("Glint", _accentColor, EmpowerInkTextures.Line);
         _flash = CreateImage("Flash", Color.white, null, _canvasRect);
         Stretch(_flash.rectTransform);

@@ -541,21 +541,25 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 edge *= 1.0 - TransparentCoverage(uv);
                 float3 transparentEdge = max(TransparentEdgeBetween(firstUv, secondUv),
                     TransparentEdgeBetween(thirdUv, fourthUv));
-                float warningCenter = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, uv).r;
-                float warningFirst = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, firstUv).r;
-                float warningSecond = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, secondUv).r;
-                float warningThird = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, thirdUv).r;
-                float warningFourth = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, fourthUv).r;
+                float2 warningCenterMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, uv).rg;
+                float2 warningFirstMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, firstUv).rg;
+                float2 warningSecondMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, secondUv).rg;
+                float2 warningThirdMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, thirdUv).rg;
+                float2 warningFourthMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, fourthUv).rg;
 
                 float warningAmount = saturate(max(
-                    warningCenter,
-                    max(max(warningFirst, warningSecond),
-                        max(warningThird, warningFourth))));
+                    warningCenterMask.r,
+                    max(max(warningFirstMask.r, warningSecondMask.r),
+                        max(warningThirdMask.r, warningFourthMask.r))));
+                // G 채널 대상(쌍둥이 늑대 덮치기)은 파동과 상관없이 모양의 경계를 붉은 테두리로 그린다.
+                float alwaysWarningEdge = saturate(max(
+                    abs(warningFirstMask.g - warningSecondMask.g),
+                    abs(warningThirdMask.g - warningFourthMask.g)) * 1.5);
 
                 float transparentBrightness = max(transparentEdge.r, max(transparentEdge.g, transparentEdge.b));
 
@@ -571,6 +575,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 edge = max(edge, foregroundEdge * _LineColor.rgb * _LineColor.a);
                 edge = max(edge, GroundMarkColor(uv));
                 edge = max(edge, GroundGuideColor(uv, firstUv, secondUv, thirdUv, fourthUv));
+                edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a, alwaysWarningEdge);
                 // 위협 실루엣은 경계를 선명하게, 내부는 반투명하게 다른 모든 선 위에 덮는다.
                 float threatFirst = ThreatCoverage(firstUv);
                 float threatSecond = ThreatCoverage(secondUv);

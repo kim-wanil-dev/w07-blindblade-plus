@@ -51,7 +51,7 @@ MonoBehaviour:
   _beast: {fileID: 307}
   _player: {fileID: 0}
   _cooperationWeight: 2
-  _iaiChargeWeight: 1.5
+  _iaiChargeWeight: 20
   _alternatingMeleeWeight: 2
   _humanRangedWeight: 1
   _beastZigzagWeight: 1
@@ -65,12 +65,26 @@ MonoBehaviour:
   _harassFirstDelay: 1.5
   _harassInterval: 1.8
   _alternatingRounds: 2
-  _humanSlashesPerRound: 4
+  _humanSlashesPerRound: 3
   _humanSlashInterval: 2
   _alternatingLead: 1.2
+  _hitInvulnerableDelay: 0.08
   _hitInvulnerabilityDuration: 2
-  _deflectPushDistance: 3
-  _deflectPushDuration: 0.16
+  _counterSlowDuration: 1.5
+  _counterSlowFadeIn: 0.2
+  _counterSlowFadeOut: 0.3
+  _counterWarningAt: 0.33333334
+  _counterDashAt: 0.6666667
+  _counterBackstepDistance: 18
+  _counterDamage: 25
+  _counterPulseColor: {r: 1, g: 0.1, b: 0.06, a: 1}
+  _counterViewAssistAngle: 20
+  _counterViewAssistSpeed: 120
+  _counterCameraKickPitch: 4
+  _counterCameraShake: 0.05
+  _counterCameraShakeDuration: 0.3
+  _counterStaggerDistance: 1.5
+  _counterStaggerDuration: 0.3
   _evadeRadius: 6
   _evadeSpeed: 10
   _evadeMinimumDistance: 3
@@ -119,7 +133,8 @@ GameObject:
   - component: {fileID: 230}
   - component: {fileID: 231}
   - component: {fileID: 232}
-  - component: {fileID: 1245688655514279910}
+  - component: {fileID: 233}
+  - component: {fileID: 2696249524069594325}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -289,9 +304,19 @@ MonoBehaviour:
   _dashStartDistance: 12
   _dashArc: 40
   _dashTelegraph: 0.6
-  _dashSpeed: 48
-  _dashMaxDistance: 30
-  _repositionSpeed: 30
+  _dashSpeed: 36
+  _dashOvershoot: 2
+  _zigzagTurns: 1
+  _zigzagWidth: 2.5
+  _turnRipple:
+    _radius: 7
+    _expandDuration: 0.5
+    _ringCount: 1
+    _ringInterval: 0.1
+    _afterimage: 0.8
+    _ringColor: {r: 1, g: 0.1, b: 0.06, a: 0.95}
+    _spherical: 1
+  _repositionSpeed: 48
   _repositionTimeout: 0.6
   _slashContactRadius: 0.8
   _slashDamage: 12
@@ -299,6 +324,13 @@ MonoBehaviour:
   _dashPushDuration: 0.16
   _slashTelegraphSound: 39
   _slashSound: 9
+  _parryRecoilDistance: 10
+  _parryRecoilDuration: 0.45
+  _recoilShake: 0.25
+  _recoilShakeFrequency: 18
+  _backstepDistance: 30
+  _backstepDuration: 0.6
+  _maxCharges: 3
 --- !u!114 &208
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -365,6 +397,10 @@ MonoBehaviour:
   _bodyRenderers:
   - {fileID: 213}
   _rangedRevealRadius: 5
+  _guardWeaponPrefab: {fileID: 4775461175289693859, guid: 6faf8eeeaec28cd4f97ea16dd7ea601a, type: 3}
+  _guardWeaponController: {fileID: 9100000, guid: 1eb1cf08b0ba4cd3b001f3714f5f04d7, type: 2}
+  _guardWeaponOffset: {x: 0, y: 1.6, z: 0.6}
+  _guardWeaponScale: 1.5
 --- !u!114 &231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -411,6 +447,8 @@ MonoBehaviour:
   _firstPulseStrength: 0.4
   _lastPulseStrength: 1
   _damage: 60
+  _dashPulseRadius: 30
+  _dashPulseExpand: 0.25
   _dashDuration: 0.18
   _exitDistance: 4
   _blackoutDuration: 0.8
@@ -435,7 +473,76 @@ MonoBehaviour:
   _cutViewFov: 70
   _cutViewDistance: 80
   _bambooViewMargin: 0.1
---- !u!114 &1245688655514279910
+  _parryReach: 1
+  _parryRecoilDistance: 15
+  _parryRecoilDuration: 0.6
+  _counterPulseRadiusScale: 2
+  _counterPulseExtraAfterimage: 2
+  _parryFrontArc: 120
+  _counterFocusDuration: 0
+--- !u!114 &233
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93c625a4576e4f10ab04c27aab1b20a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TwinHumanBeads
+  _anchorOffset: {x: 0.3, y: 0.95, z: 0.05}
+  _material: {fileID: 2100000, guid: 7e6de1d019e74d4983bc3529e25ada03, type: 2}
+  _beadRadius: 0.07
+  _sphereRadiusRatio: 0.8
+  _shellTint: {r: 1, g: 1, b: 1, a: 1}
+  _crackCount: 3
+  _crackWidth: 0.0035
+  _crackColor: {r: 0.86, g: 0.87, b: 0.9, a: 0.55}
+  _crackSeed: 11
+  _firstCordLength: 0.22
+  _cordLength: 0.12
+  _cordSubdivisions: 3
+  _cordWidth: 0.012
+  _cordColor: {r: 1, g: 1, b: 1, a: 1}
+  _gravity: 9.81
+  _damping: 0.95
+  _iterations: 16
+  _maxStretch: 1.02
+  _movementInertia: 0.12
+  _maxInertiaStep: 0.03
+  _beadInverseMass: 0.4
+  _sphereStyle:
+    _sphereScale: 1
+    _axisRoll: 20
+    _axisPitch: 25
+    _inclination: 65
+    _twist: 0.3
+    _precessionSpeed: 0.4
+    _counterAzimuth: 90
+    _segments: 64
+    _mainWidth: 2.2
+    _branchWidthRatio: 0.2
+    _strokeLength: 0.85
+    _thicknessVariation: 0.35
+    _branchSpread: 0.75
+    _backOpacity: 0.3
+    _feather: 0.08
+    _color: {r: 1, g: 0.1, b: 0.06, a: 1}
+    _orbitSpeed: 0.32
+    _counterSpeedRatio: 0.8
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
+    _fadeDuration: 0.25
+  _fullSpeedMultiplier: 2.5
+  _fullGlowStrength: 1
+  _fullGlowRadius: 1.7
+  _fullGlowPulseDepth: 0.35
+  _fullGlowPulseSpeed: 1.2
+  _fullTransitionDuration: 0.3
+--- !u!114 &2696249524069594325
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -591,7 +698,7 @@ GameObject:
   - component: {fileID: 309}
   - component: {fileID: 329}
   - component: {fileID: 331}
-  - component: {fileID: 7691288376787478426}
+  - component: {fileID: 7811027564024216826}
   m_Layer: 0
   m_Name: Beast
   m_TagString: Untagged
@@ -775,14 +882,23 @@ MonoBehaviour:
   _emergeArc: 140
   _edgeMargin: 0.5
   _biteTelegraph: 2
-  _biteDuration: 1
+  _biteDuration: 0.35
   _pounceBarkLeadTime: 0.9
-  _pounceHeight: 0.8
   _pounceOvershoot: 3
-  _chargeSound: 43
+  _parryRecoilDistance: 15
+  _parryRecoilDuration: 0.15
+  _chargeSound: 0
   _chargeSoundPitch: 0.6
   _chargeSoundVolume: 1.4
   _biteDamage: 15
+  _chargeRipple:
+    _radius: 10
+    _expandDuration: 0.6
+    _ringCount: 2
+    _ringInterval: 0.15
+    _afterimage: 1
+    _ringColor: {r: 1, g: 0.1, b: 0.06, a: 0.95}
+    _spherical: 1
   _burrowRipple:
     _radius: 16
     _expandDuration: 1
@@ -796,10 +912,10 @@ MonoBehaviour:
   _diveMinSpeed: 7
   _diveMaxSpeed: 14
   _emergeLeapSpeed: 7
-  _prowlRadius: 9
-  _prowlKeepAway: 6
+  _prowlRadius: 18
+  _prowlKeepAway: 12
   _prowlBackHysteresis: 1.5
-  _prowlSpeed: 9
+  _prowlSpeed: 14
   _prowlAcceleration: 14
   _prowlLookAhead: 0.8
   _prowlSwitchMin: 2.5
@@ -872,7 +988,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TwinBossWarningVisual
   _smokeRoot: {fileID: 401}
   _whiteReturnDuration: 0.15
---- !u!114 &7691288376787478426
+--- !u!114 &7811027564024216826
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}

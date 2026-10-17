@@ -771,6 +771,7 @@ MonoBehaviour:
   _cutSlashSize: 2400
   _seamThickness: 4
   _cutFlash: 0.55
+  _counterLayerDelay: 0.15
   _fovPunch: 10
   _fovPunchDuration: 0.35
   _pushInFov: 6

@@ -54,6 +54,10 @@ public sealed class TwinHumanIai : MonoBehaviour
 
     [Header("거합")]
     [SerializeField, Min(0f)] private float _damage = 60f;
+    [SerializeField, Min(1f), Tooltip("거합 돌진을 시작할 때 인간 발밑에서 퍼지는 붉은 파동 반경(미터)")]
+    private float _dashPulseRadius = 30f;
+    [SerializeField, Min(0.01f), Tooltip("거합 돌진 붉은 파동이 반경까지 퍼지는 시간(초). 차징 파동(1초)보다 빠르다.")]
+    private float _dashPulseExpand = 0.25f;
     [SerializeField, Min(0.01f), Tooltip("플레이어를 베고 지나가는 돌진의 실제 시간(초)")]
     private float _dashDuration = 0.18f;
     [SerializeField, Min(0f), Tooltip("플레이어를 지나 멈추는 거리(미터)")]
@@ -101,6 +105,22 @@ public sealed class TwinHumanIai : MonoBehaviour
     [SerializeField, Min(1f)] private float _cutViewDistance = 80f;
     [SerializeField, Range(0f, 0.5f)] private float _bambooViewMargin = 0.1f;
 
+    [Header("퍼펙트 패링 반격")]
+    [SerializeField, Min(0f), Tooltip("돌진하는 인간 몸 앞쪽이 플레이어에게 이만큼(미터) 다가온 순간 퍼펙트 패링을 확인한다.")]
+    private float _parryReach = 1f;
+    [SerializeField, Range(1f, 180f), Tooltip("플레이어 시점 정면 기준 거합을 받아칠 수 있는 각도(도). 플레이어 칼 정면 방어 각도와 같다.")]
+    private float _parryFrontArc = 120f;
+    [SerializeField, Min(0f), Tooltip("받아친 뒤 반대 사선 강화 공격을 내기 전 좌클릭을 꾹 누르던 궁극기 모으기 연출을 보이는 실제 시간(초). 0이면 플레이어 궁극기 차징 시간을 쓴다.")]
+    private float _counterFocusDuration = 0f;
+    [SerializeField, Min(0f), Tooltip("거합이 퍼펙트 패링에 막혔을 때 인간이 떨며 뒤로 밀려나는 거리(미터)")]
+    private float _parryRecoilDistance = 15f;
+    [SerializeField, Min(0.01f), Tooltip("밀려나는 실제 시간(초)")]
+    private float _parryRecoilDuration = 0.6f;
+    [SerializeField, Min(0f), Tooltip("받아치기 순간 플레이어 발밑에서 퍼지는 퍼펙트 패링 파동의 반경 배율(평소 퍼펙트 패링 대비)")]
+    private float _counterPulseRadiusScale = 2f;
+    [SerializeField, Min(0f), Tooltip("받아치기 퍼펙트 패링 파동이 다 퍼진 뒤 평소보다 더 남아 있는 잔상 시간(초)")]
+    private float _counterPulseExtraAfterimage = 2f;
+
     private HumanBossAttack _attack;
     private NavMeshAgent _agent;
     private TwinBossWarningVisual _warning;
@@ -111,11 +131,13 @@ public sealed class TwinHumanIai : MonoBehaviour
     private PlayerPerfectPulse _playerPerfectPulse;
     private EmpowerOverlay _overlay;
     private PlayerUltimateGroundMark _groundMark;
+    private KatanaCombatCoordinator _playerCombat;
     private bool _releasing;
     private bool _blackout;
 
     public bool IsCharging { get; private set; }
     public bool IsReleasing => _releasing;
+    public event System.Action CounterStarted;
     public float ChargeProgress { get; private set; }
 
     void Awake()
@@ -175,11 +197,17 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// 차징·거합 연출을 멈추고 암전·감속을 걷어낸다. 이미 퍼진 붉은 파동은 퍼펙트 파동 규칙대로 사라진다.
+    /// 차징·거합 연출을 멈추고 암전·감속을 걷어낸다. 차징 중이었으면 울리고 있는 파동 소리를 끊는다. 이미 퍼진 붉은 파동은 퍼펙트 파동 규칙대로 사라진다.
     /// 제어자가 패턴을 취소하거나 이 오브젝트가 꺼질 때 호출한다.
     /// </summary>
     public void Cancel()
     {
+        // 낮춰 늘어진 파동 소리가 취소 뒤에도 울려 거합이 이어지는 것처럼 들리지 않게 끊는다.
+        if (IsCharging && Managers.IsInitialized)
+        {
+            if (_pulseSound != SoundId.None) Managers.Sound.StopFor(gameObject, _pulseSound, true, true);
+            if (_finalPulseSound != SoundId.None) Managers.Sound.StopFor(gameObject, _finalPulseSound, true, true);
+        }
         IsCharging = false;
         ChargeProgress = 0f;
         _warning.EndWarning();
@@ -189,6 +217,9 @@ public sealed class TwinHumanIai : MonoBehaviour
             _overlay.SetVoid(0f);
             _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
         }
+        // 받아치기 집중은 감속을 직접 걸었으므로 페이드를 기다리지 않고 바로 푼다.
+        if (_releasing) StopSlowNow();
+        if (_playerEmpower != null) _playerEmpower.SetChargePresentation(0f, 0f);
         _releasing = false;
         _slowTarget = 0f;
     }
@@ -203,16 +234,41 @@ public sealed class TwinHumanIai : MonoBehaviour
         _playerPerfectPulse = player.GetComponent<PlayerPerfectPulse>();
         _overlay = player.GetComponent<EmpowerOverlay>();
         _groundMark = player.GetComponent<PlayerUltimateGroundMark>();
+        _playerCombat = player.GetComponent<KatanaCombatCoordinator>();
     }
 
     /// <summary>
-    /// 세계를 늦추고 플레이어를 지나 _exitDistance까지 실제 시간 _dashDuration 동안 돌진한 뒤 화면을 붉은 사선으로 가르며 암전한다.
-    /// _blackoutDuration 뒤 납도하며 화면을 되돌리고 피해·카메라 흔들림·땅 흔적·대나무 베기·빗방울 폭발을 낸 뒤 감속을 푼다.
+    /// 허리춤 기운을 모두 쓰고 보스의 불릿 타임으로 세계를 늦춘 채 화면을 붉은 사선으로 가르며 _blackoutDuration 동안 암전한다.
+    /// 암전이 끝나면 감속을 바로 풀어 플레이어가 제 속도로 패링할 수 있게 한 뒤, 발밑에서 강하고 빠른 붉은 파동(_dashPulseRadius, _dashPulseExpand초)을 일으키며 그 순간 플레이어 쪽으로 _exitDistance 너머까지 실제 시간 _dashDuration 동안 돌진한다.
+    /// 돌진하는 몸이 플레이어에게 _parryReach만큼 다가온 순간 퍼펙트 패링에 막히면 Countered로 넘어가고,
+    /// 막히지 않으면 그 자리에서 납도음과 함께 큰 피해·카메라 흔들림·땅 흔적·대나무 베기·빗방울 폭발을 낸다.
     /// </summary>
     private IEnumerator Release()
     {
         _releasing = true;
+        _attack.ConsumeCharges();
+
+        // 서걱: 보스의 불릿 타임 속에서 화면이 어두워지고 붉은 사선이 화면을 가른다.
         _slowTarget = 1f;
+        _blackout = true;
+        _overlay.SetVoid(1f);
+        SlashAcross();
+        _overlay.ShowCutLine(_screenCutAngle, _seamThickness, 0.08f, _cutColor);
+        _overlay.Flash(_cutFlash, 0.2f);
+        PlaySound(_slashSound, _player.transform.position);
+        yield return WaitReal(_blackoutDuration);
+
+        // 암전이 걷히면 감속을 바로 풀고 사선이 흩어지는 사이 돌진한다.
+        _blackout = false;
+        _overlay.SetVoid(0f);
+        _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
+        StopSlowNow();
+        if (!CanStrike())
+        {
+            _releasing = false;
+            yield break;
+        }
+
         Vector3 start = transform.position;
         Vector3 eye = start + Vector3.up * _eyeHeight;
         Vector3 toPlayer = _playerMotor.ViewOrigin - eye;
@@ -222,8 +278,10 @@ public sealed class TwinHumanIai : MonoBehaviour
         Vector3 cutNormal = GetCutNormal(cutDirection);
         Matrix4x4 cutView = GetCutViewProjection(eye, cutDirection);
         Vector3 exit = GetExitPosition(forward);
-
-        // 늦어진 세계 속에서 실제 시간으로 플레이어를 스치고 지나간다.
+        float contactAlong = Vector3.Dot(_player.transform.position - start, forward) - _parryReach;
+        // 돌진을 알리는 강하고 빠른 붉은 파동을 일으키며 출발한다.
+        _playerPerfectPulse.BeginAt(start, Vector3.up, _pulseColor, _pulseColor, _dashPulseRadius, 1f, true, _dashPulseExpand);
+        bool contacted = false;
         float elapsed = 0f;
         while (elapsed < _dashDuration)
         {
@@ -231,35 +289,115 @@ public sealed class TwinHumanIai : MonoBehaviour
             Vector3 next = Vector3.Lerp(start, exit, Mathf.Clamp01(elapsed / _dashDuration));
             _agent.Move(next - transform.position);
             transform.rotation = Quaternion.LookRotation(forward);
+            if (!contacted && Vector3.Dot(transform.position - start, forward) >= contactAlong)
+            {
+                contacted = true;
+                if (TryPerfectParry(forward))
+                {
+                    yield return Countered(forward);
+                    yield break;
+                }
+                StrikePlayer(forward, start, eye, cutDirection, cutNormal, cutView);
+            }
             yield return null;
         }
         _agent.Warp(exit);
         transform.rotation = Quaternion.LookRotation(forward);
+        if (!contacted) StrikePlayer(forward, start, eye, cutDirection, cutNormal, cutView);
+        yield return WaitReal(_sheathePause);
+        _releasing = false;
+    }
 
-        // 서걱: 화면이 어두워지고 붉은 사선이 화면을 가른다.
-        _blackout = true;
-        _overlay.SetVoid(1f);
-        SlashAcross();
-        _overlay.ShowCutLine(_screenCutAngle, _seamThickness, 0.08f, _cutColor);
-        _overlay.Flash(_cutFlash, 0.2f);
-        PlaySound(_slashSound, _player.transform.position);
-        yield return WaitReal(_blackoutDuration);
-
-        // 납도: 화면이 돌아오며 큰 피해와 함께 베인 흔적이 남는다.
-        _blackout = false;
-        _overlay.SetVoid(0f);
+    /// <summary>
+    /// 돌진이 플레이어를 지나는 순간 납도음과 함께 forward 방향 _damage 피해(퍼펙트 패링 외 방어 불가)를 주고 섬광·카메라 흔들림을 낸다.
+    /// 돌진 시작 위치 start, 인간 눈 eye에서 플레이어를 향한 cutDirection과 베는 평면 cutNormal·인간 시야 cutView로 땅 흔적·대나무 베기·빗방울 폭발을 낸다.
+    /// </summary>
+    private void StrikePlayer(Vector3 forward, Vector3 start, Vector3 eye, Vector3 cutDirection, Vector3 cutNormal, Matrix4x4 cutView)
+    {
         PlaySound(_sheatheSound, _player.transform.position);
         if (_player.IsAlive)
             _player.TakeDamage(new DamageContext(_damage, gameObject, _playerMotor.ViewOrigin, forward, "TwinHumanIai"));
-        _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
         _overlay.Flash(_sheatheFlash, 0.2f);
         _playerMotor.AddCameraKick(_cameraKickPitch, _cameraShake, _cameraShakeDuration);
         _groundMark.Show(eye, cutNormal, cutView);
         BambooGrove.CutInView(cutView, _bambooViewMargin, start, eye, cutNormal);
         RainStageWeather.RecordCutPlaneBurst(eye, cutNormal, cutDirection);
-        yield return WaitReal(_sheathePause);
+    }
+
+    /// <summary>
+    /// 받아친 뒤 플레이어가 좌클릭을 꾹 눌러 궁극기를 모으던 연출을 실제 시간으로 재생한다. 기간은 _counterFocusDuration(0이면 플레이어 궁극기 차징 시간)이다.
+    /// 세계는 플레이어 차징처럼 ChargeSlowDuration에 걸쳐 ChargeWorldTimeScale까지 느려지고 불릿 타임 소리가 걸리며,
+    /// 차징 비네트·토큰 HUD는 PlayerEmpower.SetChargePresentation으로 같은 진행도를 보인다. 끝나면 연출 진행도만 비우고 감속은 X자 암전 동안 유지한다.
+    /// </summary>
+    private IEnumerator Focus()
+    {
+        float duration = _counterFocusDuration > 0f ? _counterFocusDuration : _playerEmpower.UltimateChargeDuration;
+        float slowDuration = Mathf.Max(0.01f, _playerEmpower.ChargeSlowDuration);
         _slowTarget = 0f;
+        _slowWeight = 0f;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += EmpowerOverlay.RealDeltaTime();
+            float slow = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / slowDuration));
+            _playerEmpower.SetChargePresentation(elapsed / duration, slow);
+            // 플레이어 궁극기처럼 효과음·BGM만 먹먹하게 하고 암전음이 나가는 연출음 버스는 그대로 둔다.
+            _playerBulletTimeAudio.SetExternalWarp(slow, 0f);
+            float scale = Mathf.Lerp(1f, _playerEmpower.ChargeWorldTimeScale, slow);
+            if (Mathf.Abs(scale - _appliedTimeScale) >= 0.001f)
+            {
+                ChangeTime(scale);
+                _appliedTimeScale = scale;
+            }
+            yield return null;
+        }
+        _playerEmpower.SetChargePresentation(0f, 0f);
+    }
+
+    /// <summary>보스의 불릿 타임 감속과 불릿 타임 소리를 페이드 없이 바로 풀고 등록한 시간 요청을 해제한다.</summary>
+    private void StopSlowNow()
+    {
+        _slowTarget = 0f;
+        _slowWeight = 0f;
+        if (_playerBulletTimeAudio != null) _playerBulletTimeAudio.SetExternalWarp(0f, 0f);
+        ReleaseTime();
+    }
+
+    /// <summary>
+    /// 플레이어가 지금 퍼펙트 패링 구간이고 forward로 들어오는 거합이 시점 정면 _parryFrontArc 안이면 플레이어 칼의 막기 판정에 넘겨 막혔는지 반환한다.
+    /// 가드만 열려 있으면 판정을 넘기지 않아 거합은 기존처럼 막을 수 없다. 막기 동작·소리만 나고 실제 퍼펙트 패링 불릿 타임·토큰·파동은 시작하지 않는다.
+    /// </summary>
+    private bool TryPerfectParry(Vector3 forward)
+    {
+        if (_playerCombat == null || _playerCombat.GuardContactOutcome != DefenseOutcome.PerfectParry) return false;
+        Vector3 incoming = Vector3.ProjectOnPlane(-forward, Vector3.up);
+        bool front = incoming.sqrMagnitude > 0.0001f && Vector3.Angle(_playerMotor.ViewForward, incoming) <= _parryFrontArc * 0.5f;
+        DamageContext context = new DamageContext(_damage, gameObject, _playerMotor.ViewOrigin, forward, "TwinHumanIai");
+        // 막기 동작·소리만 내고 퍼펙트 패링 불릿 타임·토큰은 시작하지 않도록 방어 판정 보고를 거치지 않는다.
+        return _playerCombat.TryDefendIncoming(context, front, false);
+    }
+
+    /// <summary>
+    /// 퍼펙트 패링에 막힌 거합을 멈추고 플레이어 발밑에서 평소보다 _counterPulseRadiusScale배 넓고 _counterPulseExtraAfterimage초 더 남는 퍼펙트 패링 파동을 먼저 낸 뒤,
+    /// 인간이 forward 반대쪽으로 _parryRecoilDistance만큼 떨며 밀려나는 동안 좌클릭을 꾹 눌러 궁극기를 모으던 연출(Focus)로 시간이 느려진다.
+    /// 연출이 끝나면 감속을 풀고 거합의 붉은 사선(_cutColor) 위에 플레이어 대칭 사선을 덮고 기본 사선을 더한 X자 강화 공격을 한 번 발동한다
+    /// (PlayerEmpower.BeginCounterStrike). 판정과 피해는 평소 강화 공격과 같이 한 번이다.
+    /// </summary>
+    private IEnumerator Countered(Vector3 forward)
+    {
+        // 받아치기가 발동하면 제어자가 인간의 피격 무적을 초기화한다.
+        CounterStarted?.Invoke();
+        _warning.EndWarning();
+        _overlay.Flash(_cutFlash, 0.15f);
+        // 퍼펙트 패링에 성공한 순간 플레이어 발밑에서 퍼펙트 패링 파동이 먼저 퍼진다.
+        _playerPerfectPulse.Begin(_counterPulseRadiusScale, _counterPulseExtraAfterimage);
+        // 인간이 떨며 밀려나는 동안 좌클릭을 꾹 눌러 궁극기를 모으던 연출로 시간이 느려진다.
+        StartCoroutine(_attack.Recoil(-forward, _parryRecoilDistance, _parryRecoilDuration, true));
+        yield return Focus();
+        StopSlowNow();
         _releasing = false;
+        // 거합의 붉은 사선 위에 플레이어 대칭 사선을 덮고 기본 사선을 더한 강화 공격을 한 번 발동한다.
+        _playerEmpower.BeginCounterStrike(_cutColor);
     }
 
     /// <summary>
@@ -347,7 +485,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// _slowTarget 쪽으로 감속 비중을 실제 시간 페이드로 옮기고, 비중만큼 세계를 플레이어 불릿 타임 배율로 늦추며 불릿 타임 소리를 건다.
+    /// _slowTarget 쪽으로 감속 비중을 실제 시간 페이드로 옮기고, 비중만큼 세계를 플레이어 불릿 타임 배율로 늦추며 효과음·BGM에만 불릿 타임 소리를 건다(연출음 버스 제외).
     /// 일시정지 중에는 진행하지 않으며 배율이 바뀔 때만 시간 요청을 다시 등록한다.
     /// </summary>
     private void UpdateSlow()
@@ -357,7 +495,8 @@ public sealed class TwinHumanIai : MonoBehaviour
         float fade = _slowTarget > _slowWeight ? _slowFadeIn : _slowFadeOut;
         _slowWeight = fade > 0f
             ? Mathf.MoveTowards(_slowWeight, _slowTarget, Time.unscaledDeltaTime / fade) : _slowTarget;
-        _playerBulletTimeAudio.SetExternalWarp(_slowWeight, _slowWeight);
+        // 연출음 버스까지 먹먹하게 하면 암전음(발도음)이 거의 들리지 않으므로 효과음·BGM에만 건다.
+        _playerBulletTimeAudio.SetExternalWarp(_slowWeight, 0f);
         float scale = Mathf.Lerp(1f, _playerEmpower.WorldTimeScale, _slowWeight);
         if (_slowWeight <= 0f)
         {

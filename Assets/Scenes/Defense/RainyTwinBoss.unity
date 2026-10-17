@@ -10995,10 +10995,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: RainyTwinBoss
       objectReference: {fileID: 0}
-    - target: {fileID: 100, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
     - target: {fileID: 101, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -11039,78 +11035,18 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _dashArc
-      value: 40
-      objectReference: {fileID: 0}
-    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _dashSpeed
-      value: 48
-      objectReference: {fileID: 0}
-    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _dashMaxDistance
-      value: 30
-      objectReference: {fileID: 0}
-    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _repositionSpeed
-      value: 30
-      objectReference: {fileID: 0}
-    - target: {fileID: 207, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _dashStartDistance
-      value: 12
-      objectReference: {fileID: 0}
-    - target: {fileID: 307, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _jumpDuration
-      value: 0.55
-      objectReference: {fileID: 0}
-    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _riseForce
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _sizeScale
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _lengthScale
-      value: 0.3
-      objectReference: {fileID: 0}
-    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _densityScale
-      value: 150
-      objectReference: {fileID: 0}
-    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _lifetimeScale
+    - target: {fileID: 232, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _dashDuration
       value: 0.5
-      objectReference: {fileID: 0}
-    - target: {fileID: 403, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      propertyPath: _flowSpeedScale
-      value: 0.03
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 200, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 350192295}
-    - targetCorrespondingSourceObject: {fileID: 300, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 350192296}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
 --- !u!1 &350192290 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 100, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-  m_PrefabInstance: {fileID: 350192289}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &350192291 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 200, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
-  m_PrefabInstance: {fileID: 350192289}
-  m_PrefabAsset: {fileID: 0}
---- !u!1 &350192292 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 300, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
   m_PrefabInstance: {fileID: 350192289}
   m_PrefabAsset: {fileID: 0}
 --- !u!114 &350192293 stripped
@@ -11118,7 +11054,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 204, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
   m_PrefabInstance: {fileID: 350192289}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 350192291}
+  m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
@@ -11129,44 +11065,12 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 304, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
   m_PrefabInstance: {fileID: 350192289}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 350192292}
+  m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
---- !u!114 &350192295
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 350192291}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6bf433078aee4c0780b6c08863813ba4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BossHealthBar
-  _size: {x: 420, y: 16}
-  _topOffset: 72
-  _followDuration: 0.8
-  _followColor: {r: 1, g: 0, b: 0, a: 1}
---- !u!114 &350192296
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 350192292}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6bf433078aee4c0780b6c08863813ba4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BossHealthBar
-  _size: {x: 420, y: 16}
-  _topOffset: 96
-  _followDuration: 0.8
-  _followColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &352143756
 GameObject:
   m_ObjectHideFlags: 0

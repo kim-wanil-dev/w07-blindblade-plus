@@ -5,6 +5,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
         _BaseMap ("Base Map", 2D) = "white" {}
         _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
         _MeleeWarningIntensity ("Melee Warning Intensity", Range(0, 1)) = 0
+        _MeleeWarningAlwaysVisible ("Melee Warning Always Visible", Range(0, 1)) = 0
         _TransparentThreshold ("Transparent Threshold", Float) = 0.015
 
     }
@@ -21,7 +22,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
             Cull Off
             Blend One One
             BlendOp Max
-            ColorMask R
+            ColorMask RG
 
             HLSLPROGRAM
             #pragma target 3.5
@@ -37,6 +38,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
             CBUFFER_START(UnityPerMaterial)
                 half4 _BaseColor;
                 float _MeleeWarningIntensity;
+                float _MeleeWarningAlwaysVisible;
                 float _TransparentThreshold;
             CBUFFER_END
 
@@ -78,7 +80,9 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 half brightness = max(visibleRgb.r, max(visibleRgb.g, visibleRgb.b));
                 half shape = smoothstep(0.0, max(_TransparentThreshold, 0.0001), brightness);
 
-                return half4(shape * saturate(_MeleeWarningIntensity), 0, 0, 1);
+                // R은 파동으로 드러난 테두리를 붉게 물들일 세기, G는 파동 없이도 붉은 테두리를 그릴 세기다.
+                half warning = shape * saturate(_MeleeWarningIntensity);
+                return half4(warning, warning * saturate(_MeleeWarningAlwaysVisible), 0, 1);
             }
             ENDHLSL
         }

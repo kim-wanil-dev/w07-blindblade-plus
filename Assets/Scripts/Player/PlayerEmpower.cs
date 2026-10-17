@@ -56,6 +56,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _chargeElapsed;
     private float _appliedChargeScale;
     private bool _useChargeOwnerB;
+    private float _presentationProgress;
+    private float _presentationSlowProgress;
 
     [Header("퍼펙트 패링 토큰")]
     private int _tokens;
@@ -87,8 +89,11 @@ public sealed class PlayerEmpower : MonoBehaviour
     public int MaxTokens => MAX_TOKENS;
     public bool IsCharging => IsReady && _charging;
     public bool IsUltimateChargeComplete => IsCharging && _chargeElapsed >= _ultimateChargeDuration;
-    public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : 0f;
-    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : 0f;
+    public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : _presentationProgress;
+    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : _presentationSlowProgress;
+    public float UltimateChargeDuration => _ultimateChargeDuration;
+    public float ChargeSlowDuration => _chargeSlowDuration;
+    public float ChargeWorldTimeScale => _chargeWorldTimeScale;
 
     /// <summary>거합 게이지가 가득 찬 상태에서 퍼펙트 패링이 성공했을 때 알린다.</summary>
     public event Action UltimateReadyParry;
@@ -246,6 +251,17 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
+    /// 보스 거합을 받아쳐 X자로 되받아 칠 때처럼, 준비·토큰·입력 없이 좌클릭을 꾹 눌러 궁극기를 모으던 화면·소리 연출만 보이게 한다.
+    /// progress(0~1)는 차징 비네트·토큰 HUD가 읽는 ChargeProgress로, slowProgress(0~1)는 불릿 타임 소리가 읽는 ChargeSlowProgress로 그대로 쓴다.
+    /// 세계 감속은 호출자가 맡으며, 0·0을 넘기면 연출을 끝낸다. 실제 차징 중에는 실제 진행도가 우선한다.
+    /// </summary>
+    public void SetChargePresentation(float progress, float slowProgress)
+    {
+        _presentationProgress = Mathf.Clamp01(progress);
+        _presentationSlowProgress = Mathf.Clamp01(slowProgress);
+    }
+
+    /// <summary>
     /// 궁극기 차징을 발동 없이 멈추고 세계 배율을 준비 배율로 되돌린다. 차징 중이 아니면 아무것도 바꾸지 않는다.
     /// 준비와 토큰은 그대로 두며 _charging을 거짓으로 바꾼다.
     /// </summary>
@@ -289,6 +305,33 @@ public sealed class PlayerEmpower : MonoBehaviour
         _player.CancelActionForEmpowerStrike();
         Publish(PlayerEmpowerStage.Started, PlayerEmpowerEndReason.None);
         _strike.Play(HandleStrikeFinished);
+        return true;
+    }
+
+    /// <summary>
+    /// 보스 거합을 받아쳐 플레이어 강화 공격을 받아치기 연출(적의 enemyCutColor 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자)로 한 번 발동하고 true를 반환한다.
+    /// 토큰과 차징 없이 시작하며 토큰은 쓰지 않는다. 판정·피해·불릿 타임·무적은 평소 강화 공격과 같고 Started를 발행한다.
+    /// 이미 강화 공격 중이거나 사망·일시정지이면 false다. 진행 중이던 준비가 있으면 강화 공격으로 이어받는다.
+    /// </summary>
+    public bool BeginCounterStrike(Color enemyCutColor)
+    {
+        if (IsStriking || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
+
+        if (!_active)
+        {
+            _active = true;
+            _empowerId++;
+            _sourceAttackId = 0;
+        }
+        _onboardingReadyHeld = false;
+        _charging = false;
+        _stage = PlayerEmpowerStage.Started;
+        _hitStopRemaining = 0f;
+        ChangeTimeRequest(STRIKE_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _worldTimeScale);
+        _combat.CancelForEmpowerStrike();
+        _player.CancelActionForEmpowerStrike();
+        Publish(PlayerEmpowerStage.Started, PlayerEmpowerEndReason.None);
+        _strike.PlayCounter(HandleStrikeFinished, enemyCutColor);
         return true;
     }
 

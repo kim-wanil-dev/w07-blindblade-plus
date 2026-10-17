@@ -45,6 +45,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     private readonly RaycastHit[] _hits = new RaycastHit[32];
     private readonly Collider[] _contacts = new Collider[32];
     private bool _attackResolved;
+    private bool _lastAttackParried;
 
     [Header("근접 공격 박동 전조")]
     [SerializeField] private bool _useHeartbeatTelegraph = true;
@@ -101,21 +102,26 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _emergeArc = 140f;
     [SerializeField, Min(0f), Tooltip("가장자리 출현·도착 지점을 원 안쪽으로 당기는 거리(미터)")]
     private float _edgeMargin = 0.5f;
-    [SerializeField, Min(0.05f), Tooltip("가장자리에 나온 뒤 붉게 물들며 돌진 직전까지 기다리는 시간(초)")]
+    [SerializeField, Min(0.05f), Tooltip("가장자리에 나온 뒤 점점 붉게 물드는 시간(초). 완전히 붉어지는 순간 돌진한다.")]
     private float _biteTelegraph = 2f;
-    [SerializeField, Min(0.05f), Tooltip("플레이어를 지나 반대편 가장자리까지 뛰어 덮치는 비행 시간(초)")]
-    private float _biteDuration = 1f;
+    [SerializeField, Min(0.05f), Tooltip("플레이어를 지나 반대편 가장자리까지 땅을 스치듯 직선으로 돌진하는 시간(초)")]
+    private float _biteDuration = 0.35f;
     [SerializeField, Min(0f), Tooltip("덮치기 도약 몇 초 전에 짖음을 재생할지 정한다. 0이면 도약 순간에 재생한다.")]
     private float _pounceBarkLeadTime = 1f;
-    [SerializeField, Min(0f), Tooltip("덮치며 날아갈 때 포물선의 가장 높은 높이(미터). 낮을수록 플레이어 몸을 그대로 꿰뚫고 지나간다.")]
-    private float _pounceHeight = 0.8f;
     [SerializeField, Min(0f), Tooltip("덮치기가 플레이어 위치를 지나 최소한 더 나아가는 거리(미터)")]
     private float _pounceOvershoot = 3f;
+    [SerializeField, Min(0f), Tooltip("돌진이 퍼펙트 패링에 막혔을 때 뒤로 튕겨 물러나는 거리(미터)")]
+    private float _parryRecoilDistance = 5f;
+    [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링에 막혀 물러나는 시간(초)")]
+    private float _parryRecoilDuration = 0.3f;
     [SerializeField, Tooltip("가장자리에서 붉게 물들기 시작할 때 짐승에게서 울리는 소리. 퍼펙트 패링음을 낮춰 쓴다.")]
     private SoundId _chargeSound = SoundId.TwinBossChargePulse;
     [SerializeField, Range(0.1f, 3f)] private float _chargeSoundPitch = 0.6f;
     [SerializeField, Min(0f)] private float _chargeSoundVolume = 1.4f;
     [SerializeField, Min(0f)] private float _biteDamage = 15f;
+    [SerializeField, Tooltip("덮치기 전조를 시작할 때 짐승 자리에서 퍼지는 붉은 파동")]
+    private RevealRippleSettings _chargeRipple = new RevealRippleSettings(10f, 0.6f, 2, 0.15f, 1f,
+        new Color(1f, 0.1f, 0.06f, 0.95f), true);
     [SerializeField, Tooltip("뛰어들고 튀어나오는 자리에 크게 퍼지는 물 파동")]
     private RevealRippleSettings _burrowRipple = new RevealRippleSettings(16f, 1f, 3, 0.15f, 1.5f,
         new Color(1f, 1f, 1f, 0.9f), true);
@@ -429,8 +435,9 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// 잠수한 채 strikeAt(게임 시간) 덮치기에 맞춰 튀어나오고, 붉게 물들며 웅크린 뒤 플레이어를 지나 반대편 가장자리까지 덮친다.
     /// 이전 덮치기로 내려앉은 자리가 있으면 그 자리에서 다시 나오고, 없으면 center·radius 원형 공터의 플레이어 정면 쪽 가장자리로 옮겨 나온다.
     /// 땅 위에 있으면 먼저 뛰어든다. player나 자신이 쓰러지면 남은 단계를 건너뛰고 땅 위에서 끝낸다.
+    /// chargeRipple이 거짓이면 덮치기 전조의 붉은 파동을 내지 않는다(인간 거합 차징 중 방해처럼 다른 붉은 파동과 겹칠 때).
     /// </summary>
-    public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius)
+    public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius, bool chargeRipple = true)
     {
         if (!_burrowed) yield return Dive();
         float emergeAt = strikeAt - _biteTelegraph - _emergeDuration;
@@ -439,7 +446,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         Vector3 start = _hasLandingSpot || !TryGetEmergePosition(player, center, radius, out Vector3 position)
             ? transform.position : position;
         yield return Emerge(start, player);
-        if (CanAttack(player)) yield return Bite(player, center, radius);
+        if (CanAttack(player)) yield return Bite(player, center, radius, chargeRipple);
     }
 
     /// <summary>잠수 중이면 지금 자리에서 울음소리·물 파동과 함께 튀어나와 땅 위로 돌아온다. 땅 위면 아무것도 하지 않는다.</summary>
@@ -477,22 +484,22 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 붉게 물들인 뒤, 그 순간 플레이어 쪽으로 방향을 고정해
-    /// 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지 _biteDuration 동안 낮은 포물선으로 덮친다.
-    /// 정해진 직선 경로를 장애물과 상관없이 끝까지 날아가며, 바닥에 투영한 경로로 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 피해를 준다.
-    /// 내려앉은 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
+    /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 점점 붉게 물들이고, 완전히 붉어지는 순간 Pounce로 _biteDamage 직선 덮치기를 한다.
+    /// chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다.
     /// </summary>
-    private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float radius)
+    private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float radius, bool chargeRipple)
     {
         _motor.Stop();
         AttackPreparing?.Invoke();
+        if (chargeRipple) EmitChargeRipple();
         if (_chargeSound != SoundId.None)
             Managers.Sound.Play(_chargeSound, transform.position, _chargeSoundVolume, gameObject, true, _chargeSoundPitch);
         _warning.BeginWarning(_biteTelegraph);
         _preparing = true;
         float until = Time.time + _biteTelegraph;
         bool barkPlayed = false;
-        while (Time.time < until && CanAttack(player))
+        // 연기가 완전히 붉어진 다음에야 돌진한다.
+        while ((Time.time < until || _warning.Intensity < 1f) && CanAttack(player))
         {
             if (!barkPlayed && _pounceBarkLeadTime > 0f
                 && until - Time.time <= _pounceBarkLeadTime)
@@ -506,9 +513,21 @@ public sealed class BeastBossAttack : MonoBehaviour
         _preparing = false;
         if (!CanAttack(player))
         {
+            StopChargeSound();
             _warning.EndWarning();
             yield break;
         }
+        if (!barkPlayed) PounceApproaching?.Invoke();
+        yield return Pounce(player, center, radius, _biteDamage, "TwinBeastBite");
+    }
+
+    /// <summary>
+    /// 그 순간 플레이어 쪽으로 방향을 고정해 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지
+    /// _biteDuration 동안 땅 높이 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
+    /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
+    /// </summary>
+    private IEnumerator Pounce(KatanaDamageReceiver player, Vector3 center, float radius, float damage, string pattern)
+    {
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
         // 플레이어를 반드시 지나 원을 빠져나가는 반대편 가장자리에 내려앉도록 정해진 직선으로 뛴다.
@@ -524,35 +543,61 @@ public sealed class BeastBossAttack : MonoBehaviour
         _jumping = true;
         _attackResolved = false;
         _biting = true;
+        // 덮치기를 시작할 때부터 내려앉을 때까지 완전히 붉은 채 파동 없이도 붉은 테두리가 보이게 한다.
+        _warning.BeginWarning(0f);
+        _warning.SetAlwaysVisible(true);
         AttackStarted?.Invoke();
-        if (!barkPlayed) PounceApproaching?.Invoke();
         PounceStarted?.Invoke();
         Quaternion facing = Quaternion.LookRotation(direction);
-        Vector3 groundPrevious = start;
+        Vector3 previous = start;
         float elapsed = 0f;
+        _lastAttackParried = false;
         while (elapsed < _biteDuration && CanAttack(player))
         {
             elapsed += Time.deltaTime;
-            float progress = Mathf.Clamp01(elapsed / _biteDuration);
-            Vector3 ground = Vector3.Lerp(start, landing, progress);
-            Vector3 next = ground + Vector3.up * (4f * _pounceHeight * progress * (1f - progress));
+            Vector3 next = Vector3.Lerp(start, landing, Mathf.Clamp01(elapsed / _biteDuration));
             transform.SetPositionAndRotation(next, facing);
-            // 덮치는 몸이 플레이어 위를 지나도 맞도록 비행 경로를 바닥 높이로 내려 접촉을 검사한다.
-            Vector3 groundStep = ground - groundPrevious;
-            if (!_attackResolved && groundStep.sqrMagnitude > 0.000001f)
-                CheckChargeContact(player, groundPrevious, groundStep.normalized, groundStep.magnitude,
-                    _biteDamage, "TwinBeastBite");
-            groundPrevious = ground;
+            Vector3 step = next - previous;
+            if (!_attackResolved && step.sqrMagnitude > 0.000001f)
+                CheckChargeContact(player, previous, step.normalized, step.magnitude, damage, pattern);
+            previous = next;
+            if (_lastAttackParried) break;
             yield return null;
         }
+        if (_lastAttackParried && _health.IsAlive) yield return ParryRecoil(-direction);
         if (_health.IsAlive) Landed?.Invoke();
         RestoreNavigation();
         _hasLandingSpot = true;
-        // 착지한 기세를 남겨 바로 이어지는 뛰어들기가 덮치던 방향으로 미끄러지듯 이어지게 한다.
-        _momentum = direction * Mathf.Min(length / _biteDuration, _diveMaxSpeed);
+        // 멈춘 기세를 남겨 바로 이어지는 뛰어들기가 돌진하던 방향으로 미끄러지듯 이어지게 한다. 튕겨 났으면 기세가 없다.
+        _momentum = _lastAttackParried ? Vector3.zero : direction * Mathf.Min(length / _biteDuration, _diveMaxSpeed);
         _biting = false;
         _motor.Stop();
         _warning.EndWarning();
+    }
+
+    /// <summary>
+    /// 퍼펙트 패링에 막힌 돌진을 멈추고 direction(돌진 반대쪽)으로 _parryRecoilDistance만큼 _parryRecoilDuration 동안 감속하며 튕겨 물러난다.
+    /// 돌진과 같이 NavMesh 갱신을 끈 상태에서 몸 방향은 그대로 두고, 걸을 수 있는 지면 끝에 닿으면 그 앞에서 멈춘다.
+    /// </summary>
+    private IEnumerator ParryRecoil(Vector3 direction)
+    {
+        Vector3 start = transform.position;
+        Vector3 end = start + direction * _parryRecoilDistance;
+        NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = _agent.agentTypeID, areaMask = _agent.areaMask };
+        Vector3 ground = start;
+        ground.y = _navigationPosition.y;
+        if (NavMesh.SamplePosition(ground, out NavMeshHit from, 5f, filter)
+            && NavMesh.Raycast(from.position, from.position + direction * _parryRecoilDistance, out NavMeshHit edge, filter))
+            end = start + direction * Mathf.Max(0f, Vector3.Distance(from.position, edge.position) - 0.1f);
+        float elapsed = 0f;
+        while (elapsed < _parryRecoilDuration && _health.IsAlive)
+        {
+            elapsed += Time.deltaTime;
+            float progress = Mathf.Clamp01(elapsed / _parryRecoilDuration);
+            // 막힌 순간 가장 빠르게 튕기고 점점 느려진다.
+            transform.position = Vector3.Lerp(start, end, 1f - (1f - progress) * (1f - progress));
+            yield return null;
+        }
     }
 
     /// <summary>
@@ -561,6 +606,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// </summary>
     public void InterruptAmbush()
     {
+        if (_preparing) StopChargeSound();
         _preparing = false;
         _biting = false;
         // 덮치며 날던 중이면 지금 자리 아래 지면으로 내려 NavMesh 위치를 되돌린다.
@@ -903,12 +949,17 @@ public sealed class BeastBossAttack : MonoBehaviour
         }
     }
 
-    /// <summary>player의 damage·direction·point·pattern 피해를 전방 가드·패링으로 확인하고 실패 시 체력을 차감한다.</summary>
+    /// <summary>
+    /// player의 damage·direction·point·pattern 피해를 전방 가드·패링으로 확인하고 실패 시 체력을 차감한다.
+    /// 퍼펙트 패링에 막혔는지를 _lastAttackParried에 기록한다.
+    /// </summary>
     private void ApplyAttack(KatanaDamageReceiver player, float damage, Vector3 direction, Vector3 point, string pattern)
     {
         _attackResolved = true;
         DamageContext context = new DamageContext(damage, gameObject, point, direction, pattern);
-        if (!player.TryDefendProjectile(context, out bool parried)) player.TakeDamage(context);
+        bool defended = player.TryDefendProjectile(context, out bool parried);
+        _lastAttackParried = defended && parried;
+        if (!defended) player.TakeDamage(context);
         else if (parried && _parrySound != SoundId.None)
         {
             Managers.Sound.StopFor(gameObject, SoundId.EnemyGetParryed, forceStop: true);
@@ -936,6 +987,21 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (_agent.isActiveAndEnabled) _agent.Warp(destination);
     }
 
+    /// <summary>덮치기 전조를 시작하는 지금 자리에 붉은 파동 _chargeRipple을 시야 맵에 등록한다.</summary>
+    private void EmitChargeRipple()
+    {
+        if (_revealMap == null && Game.IsInitialized && Game.Instance.SensoryManager != null)
+            _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
+        if (_revealMap != null) _revealMap.EmitRipple(transform.position, _chargeRipple);
+    }
+
+    /// <summary>덮치기 전조에 울린 낮춘 퍼펙트 패링음을 끊어, 전조가 끊긴 뒤에도 돌진이 이어지는 것처럼 들리지 않게 한다.</summary>
+    private void StopChargeSound()
+    {
+        if (_chargeSound != SoundId.None && Managers.IsInitialized)
+            Managers.Sound.StopFor(gameObject, _chargeSound, true, true);
+    }
+
     /// <summary>
     /// 배회·원형 이동·가장자리 질주·점프·잠수 기습을 중단하고 기존 NavMesh 설정과 이동 정지 상태를 복원한다.
     /// 잠수 중이었으면 지금 자리에서 바로 땅 위로 돌려 피격 판정을 켠다.
@@ -943,6 +1009,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     public void CancelAttack()
     {
         _preparationSucceeded = false;
+        if (_preparing) StopChargeSound();
         // 패턴 코루틴이 외부에서 멈추면 준비 종료 처리가 실행되지 않으므로 여기서 함께 끈다.
         _preparing = false;
         _biting = false;
