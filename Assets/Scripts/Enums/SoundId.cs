@@ -46,4 +46,6 @@ public enum SoundId
     EnemyMeleeWarning = 39,
     EmpowerSwordWaveLaunch = 40,
     EmpowerUltimateReady = 41,
+    TwinBossChargePulse = 42,
+    TwinBossChargeFinalPulse = 43,
 }

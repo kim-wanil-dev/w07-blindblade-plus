@@ -817,6 +817,21 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 }
             }
 
+            // 공격을 준비하는 쌍둥이 보스의 연기 몸체도 붉어지는 정도만큼 같은 마스크에 그린다.
+            foreach (TwinBossWarningVisual twin in TwinBossWarningVisual.ActiveInstances)
+            {
+                if (twin == null || !twin.isActiveAndEnabled || twin.Intensity <= 0f)
+                    continue;
+
+                foreach (Renderer renderer in twin.WarningRenderers)
+                {
+                    if (renderer != null &&
+                        renderer.enabled &&
+                        renderer.gameObject.activeInHierarchy)
+                        collected.Add(renderer);
+                }
+            }
+
             var result = new Renderer[collected.Count];
             collected.CopyTo(result);
             return result;

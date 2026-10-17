@@ -66,6 +66,8 @@ public sealed class RainyTwinBossController : MonoBehaviour
         // 이 씬은 보스전만 진행하므로 방어 웨이브와 처치 기록을 처음부터 끈다.
         _director.StopWave();
         _director.HideRecord();
+        // 탑승 가장자리 질주와 거합 차징 위치가 이 원형 공터를 기준으로 움직이게 한다.
+        _twinBoss.GetComponent<TwinBossController>().ConfigureArena(_arena, _edgeInset);
     }
 
     void OnEnable()

@@ -55,6 +55,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
     private float _cutAge = -1f;
     private float _cutFadeAge = -1f;
     private float _cutFadeDuration;
+    private Color _cutLineColor = Color.white;
 
     public Color AccentColor => _accentColor;
     public Vector2 Size => _canvasRect.rect.size;
@@ -207,13 +208,23 @@ public sealed class EmpowerOverlay : MonoBehaviour
     /// <summary>화면 중심을 지나 angle도로 기운 강조색 한 줄을 thickness 두께로 extendDuration 동안 가운데에서 양 끝까지 뻗게 한다.</summary>
     public void ShowCutLine(float angle, float thickness, float extendDuration)
     {
+        ShowCutLine(angle, thickness, extendDuration, _accentColor);
+    }
+
+    /// <summary>
+    /// 화면 중심을 지나 angle도로 기운 color 색 한 줄을 thickness 두께로 extendDuration 동안 가운데에서 양 끝까지 뻗게 한다.
+    /// 보스 거합처럼 강조색이 아닌 줄에 쓰며 ScatterCutLine의 먹 조각도 같은 색을 쓴다.
+    /// </summary>
+    public void ShowCutLine(float angle, float thickness, float extendDuration, Color color)
+    {
         RectTransform rect = _cutLine.rectTransform;
         rect.localRotation = Quaternion.Euler(0f, 0f, angle);
         rect.sizeDelta = new Vector2(0f, thickness);
         _cutExtend = Mathf.Max(0.01f, extendDuration);
         _cutAge = 0f;
         _cutFadeAge = -1f;
-        SetAlpha(_cutLine, _accentColor.a);
+        _cutLineColor = color;
+        _cutLine.color = color;
         _cutLine.gameObject.SetActive(true);
     }
 
@@ -234,7 +245,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
             Vector2 position = along * Random.Range(-halfLength, halfLength) + normal * Random.Range(-6f, 6f);
             Vector2 velocity = normal * Random.Range(-60f, 60f) + Vector2.up * Random.Range(20f, 90f);
             float size = Random.Range(8f, 24f);
-            SpawnParticle(EmpowerInkTextures.Splat, _accentColor, position, new Vector2(size, size),
+            SpawnParticle(EmpowerInkTextures.Splat, _cutLineColor, position, new Vector2(size, size),
                 Random.Range(0f, 360f), velocity, lifetime * Random.Range(0.6f, 1f), 0.02f, 0.4f);
         }
         _cutFadeDuration = Mathf.Max(0.01f, lifetime * 0.15f);
@@ -348,7 +359,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
             _cutLine.gameObject.SetActive(false);
             return;
         }
-        SetAlpha(_cutLine, _accentColor.a * (1f - t));
+        SetAlpha(_cutLine, _cutLineColor.a * (1f - t));
     }
 
     /// <summary>보이는 입자를 dt만큼 움직이고 나이에 맞춰 크기·투명도를 바꾸며 수명이 끝나면 숨긴다.</summary>

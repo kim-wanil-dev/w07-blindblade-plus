@@ -605,6 +605,42 @@ MonoBehaviour:
     _combatCue: 0
     _spatialize2D: 0
     _finishNaturally: 0
+  - _id: 42
+    _type: 1
+    _event:
+      Guid:
+        Data1: 2140897875
+        Data2: 1311468524
+        Data3: 499171228
+        Data4: 1009756335
+      Path: event:/Empower/PerfectParry_Clash
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 1
+    _spatialMinDistance: 4
+    _spatialMaxDistance: 60
+    _finishNaturally: 0
+  - _id: 43
+    _type: 1
+    _event:
+      Guid:
+        Data1: 1484210255
+        Data2: 1073875415
+        Data3: 1629140642
+        Data4: 1015330658
+      Path: event:/Empower/UltimateReady
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 0
+    _spatialize2D: 1
+    _spatialMinDistance: 4
+    _spatialMaxDistance: 60
+    _finishNaturally: 0
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _cinematicBusPath: bus:/Cinematic_Bus
