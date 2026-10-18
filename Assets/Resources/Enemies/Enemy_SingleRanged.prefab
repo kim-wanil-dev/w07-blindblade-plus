@@ -129,6 +129,7 @@ GameObject:
   - component: {fileID: 1925365551691218873}
   - component: {fileID: 1096873540639086612}
   - component: {fileID: 5368321131972277671}
+  - component: {fileID: 9018101800000001}
   m_Layer: 0
   m_Name: Enemy_SingleRanged
   m_TagString: Untagged
@@ -443,3 +444,22 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 4934395196125393724, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
   m_PrefabInstance: {fileID: 1358863564784786800}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &9018101800000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4881386061489125236}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37becb1a49869b446a804dfe774638c6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _damageSound: 4
+  _volume: 0.8
+  _pitch: 1
+  _deathSound: 50
+  _minimumDeathPitchSemitones: -4
+  _maximumDeathPitchSemitones: -1
+  _originalDeathPitchChance: 0.3
