@@ -118,7 +118,7 @@ public class SoundManager
             {
                 if (CanPlayDuringMovement(_effects[i].Id, _effects[i].Owner, _effects[i].PlayDuringMovement))
                     continue;
-                _effects[i].ReleaseRainFilter();
+                _effects[i].ReleaseFilters();
                 if (RuntimeManager.IsInitialized)
                     StopEffect(_effects[i].Instance, false);
                 _effects.RemoveAt(i);
@@ -597,7 +597,7 @@ public class SoundManager
         {
             foreach (ActiveEffect effect in _effects)
             {
-                effect.ReleaseRainFilter();
+                effect.ReleaseFilters();
                 StopEffect(effect.Instance, false);
             }
         }
@@ -737,7 +737,7 @@ public class SoundManager
                 StopEffect(effect.Instance, false);
             if (!RuntimeManager.IsInitialized || !effect.Instance.isValid())
             {
-                effect.ReleaseRainFilter();
+                effect.ReleaseFilters();
                 _effects.RemoveAt(i);
                 continue;
             }
@@ -856,6 +856,7 @@ public class SoundManager
     {
         _library.GetPlaybackSettings(soundId, out bool enabled, out float volumeMultiplier, out float pitchMultiplier, out bool useCallerLabel);
         if (!enabled) return false;
+        float lowpassCutoff = _library.GetLowpassCutoff(soundId);
         volume *= volumeMultiplier;
         pitch *= pitchMultiplier;
         if (!useCallerLabel && cueName == null) parameterName = null;
@@ -925,7 +926,7 @@ public class SoundManager
                 _combatFocusUntil = Time.unscaledTime + _library.CombatFocusDuration;
             var effect = new ActiveEffect(instance, source, soundId, playDuringMovement, position, attach,
                 volume, spatialize2D && !is3D, minimumDistance, maximumDistance,
-                enemySound);
+                enemySound, lowpassCutoff);
             _effects.Add(effect);
 #if UNITY_EDITOR
             _recentPlayback.Add($"{Time.time:F2}s | {cueName ?? soundId.ToString()} | {eventReference.Path} | {source?.name ?? "world"} | {label} | volume={volume:F2}");
@@ -973,6 +974,7 @@ public class SoundManager
         }
         effect.Instance.setVolume(volume);
         effect.ApplyRainFilter(_enemyRainMuffleEnabled, _enemyRainLowpassCutoff);
+        effect.ApplyConfiguredLowpassFilter();
     }
 
     /// <summary>
@@ -1210,7 +1212,9 @@ public class SoundManager
         private readonly float _minimumDistance;
         private readonly float _maximumDistance;
         private readonly bool _muffleInRain;
+        private readonly float _lowpassCutoff;
         private FMOD.DSP _rainFilter;
+        private FMOD.DSP _configuredLowpassFilter;
 
         internal FMOD.Studio.EventInstance Instance => _instance;
         internal GameObject Owner => _owner;
@@ -1227,11 +1231,11 @@ public class SoundManager
 
         /// <summary>
         /// instance·owner·soundId·playDuringMovement와 위치·부착·음량·거리 입력을 보관한다.
-        /// 공간 보정과 비 속 필터 대상 여부를 기록하여 재생 수명 및 매 프레임 믹싱에 사용한다.
+        /// 공간 보정, 비 속 필터 대상 여부와 고정 저역 통과 주파수를 기록해 매 프레임 믹싱에 사용한다.
         /// </summary>
         internal ActiveEffect(FMOD.Studio.EventInstance instance, GameObject owner, SoundId soundId, bool playDuringMovement,
             Vector3 position, bool attach, float volume, bool spatialize2D, float minimumDistance, float maximumDistance,
-            bool muffleInRain)
+            bool muffleInRain, float lowpassCutoff)
         {
             _instance = instance;
             _owner = owner;
@@ -1245,6 +1249,7 @@ public class SoundManager
             _minimumDistance = minimumDistance;
             _maximumDistance = maximumDistance;
             _muffleInRain = muffleInRain;
+            _lowpassCutoff = lowpassCutoff;
         }
 
         /// <summary>
@@ -1291,6 +1296,61 @@ public class SoundManager
                 _rainFilter.release();
             }
             _rainFilter.clearHandle();
+        }
+
+        /// <summary>
+        /// SoundLibrary에서 받은 _lowpassCutoff를 이벤트 채널에 저역 통과 필터로 적용한다.
+        /// 주파수가 0이면 필터를 해제하고 채널이 아직 없으면 다음 갱신 때 다시 시도한다.
+        /// </summary>
+        internal void ApplyConfiguredLowpassFilter()
+        {
+            if (_lowpassCutoff <= 0f)
+            {
+                ReleaseConfiguredLowpassFilter();
+                return;
+            }
+            if (!_configuredLowpassFilter.hasHandle())
+            {
+                if (Instance.getChannelGroup(out FMOD.ChannelGroup group) != FMOD.RESULT.OK
+                    || RuntimeManager.CoreSystem.createDSPByType(FMOD.DSP_TYPE.MULTIBAND_EQ, out FMOD.DSP filter) != FMOD.RESULT.OK)
+                    return;
+                filter.setParameterInt((int)FMOD.DSP_MULTIBAND_EQ.A_FILTER,
+                    (int)FMOD.DSP_MULTIBAND_EQ_FILTER_TYPE.LOWPASS_12DB);
+                filter.setParameterFloat((int)FMOD.DSP_MULTIBAND_EQ.A_FREQUENCY, _lowpassCutoff);
+                if (group.addDSP(FMOD.CHANNELCONTROL_DSP_INDEX.HEAD, filter) != FMOD.RESULT.OK)
+                {
+                    filter.release();
+                    return;
+                }
+                _configuredLowpassFilter = filter;
+            }
+            _configuredLowpassFilter.setParameterFloat((int)FMOD.DSP_MULTIBAND_EQ.A_FREQUENCY, _lowpassCutoff);
+        }
+
+        /// <summary>
+        /// SoundLibrary에서 설정한 저역 통과 필터를 채널 그룹에서 떼고 FMOD 자원을 반환한다.
+        /// 이후 재생 갱신에서 필요하면 다시 생성할 수 있도록 필터 핸들을 비운다.
+        /// </summary>
+        internal void ReleaseConfiguredLowpassFilter()
+        {
+            if (!_configuredLowpassFilter.hasHandle()) return;
+            if (RuntimeManager.IsInitialized)
+            {
+                if (Instance.isValid() && Instance.getChannelGroup(out FMOD.ChannelGroup group) == FMOD.RESULT.OK)
+                    group.removeDSP(_configuredLowpassFilter);
+                _configuredLowpassFilter.release();
+            }
+            _configuredLowpassFilter.clearHandle();
+        }
+
+        /// <summary>
+        /// 비 속 필터와 SoundLibrary 고정 필터를 모두 해제한다.
+        /// 재생이 종료되거나 전체 효과음을 정리할 때 두 DSP 자원을 반환한다.
+        /// </summary>
+        internal void ReleaseFilters()
+        {
+            ReleaseRainFilter();
+            ReleaseConfiguredLowpassFilter();
         }
     }
 

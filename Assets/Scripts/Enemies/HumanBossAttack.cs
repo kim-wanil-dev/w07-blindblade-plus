@@ -143,6 +143,10 @@ public sealed class HumanBossAttack : MonoBehaviour
     public bool HasProjectiles => _projectiles.Count > 0;
     public bool IsReady => _motor.IsReady;
     public bool IsMounted => _mounted;
+    /// <summary>
+    /// 인간 보스가 돌진 베기 시퀀스를 진행 중인지 반환한다.
+    /// 전조부터 돌진 후퇴 또는 패링 반동이 끝날 때까지 참을 유지해 발소리 억제에 사용한다.
+    /// </summary>
     public bool IsSlashing => _slashing;
     public int Charges => _charges;
     public int MaxCharges => _maxCharges;
@@ -234,6 +238,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     /// 스테이지1 보스 돌진처럼 플레이어 정면 쪽 _dashStartDistance 지점에서 strikeAt(게임 시간)에 돌진해 베고 다시 물러난다.
     /// 그 거리에서 벗어나 있으면 전조 전에 _repositionSpeed로 시작 지점까지 달려가고, _dashTelegraph 동안 플레이어를 노려보며 붉게 물든 뒤 유선형 곡선으로 돌진한다.
     /// 플레이어에 닿으면 그 자리에서 멈춰 한 번만 막기·쳐내기를 확인해 피해를 주고, 끝나면 플레이어를 바라본 채 정면 쪽 같은 거리로 유선형 곡선을 따라 물러난다.
+    /// _slashing은 전조부터 이 후퇴 또는 패링 반동이 끝날 때까지 참으로 유지한다.
     /// </summary>
     public IEnumerator DashStrike(KatanaDamageReceiver player, float strikeAt)
     {
@@ -258,22 +263,19 @@ public sealed class HumanBossAttack : MonoBehaviour
             yield return null;
         }
         if (CanSlash()) yield return Dash(_slashDamage);
-        _slashing = false;
         _warning.EndWarning();
-        // 퍼펙트 패링에 막혔으면 곡선 후퇴 대신 떨며 뒤로 밀려난다.
         if (_dashParried && CanSlash())
-        {
             yield return RecoilFromPlayer();
-            yield break;
-        }
-        if (CanSlash() && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 retreat))
+        else if (CanSlash() && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 retreat))
             yield return Retreat(retreat);
+        _slashing = false;
     }
 
     /// <summary>
     /// 피격 무적 중 플레이어에게 다시 베이면 쓰는 받아치기 돌진. 스테이지1 보스 관통 베기처럼 플레이어를 뚫고 베어 지나가며,
     /// 인간에서 target(밀려난 플레이어가 내려앉을 곳)까지 bulgeSide 쪽으로 휜 원호를 그리고 그 너머로 빠져나간다(ArcSlash). 맞으면 damage 피해를 주고,
-    /// 퍼펙트 패링에 막히면 그 자리에서 멈춰 돌진 베기와 같이 떨며 밀려난다. 전조·감속·밀어내기와 출발 시각은 제어자가 맡는다.
+    /// 퍼펙트 패링에 막히면 그 자리에서 멈춰 돌진 베기와 같이 떨며 밀려난다. 전조·감속·밀어내기와 출발 시각은 제어자가 맡고,
+    /// _slashing은 원호 베기와 패링 반동이 끝날 때까지 참으로 유지한다.
     /// </summary>
     public IEnumerator CounterDash(KatanaDamageReceiver player, float damage, Vector3 target, Vector3 bulgeSide)
     {
@@ -282,8 +284,8 @@ public sealed class HumanBossAttack : MonoBehaviour
         if (!CanSlash()) yield break;
         _slashing = true;
         yield return ArcSlash(damage, target, bulgeSide);
-        _slashing = false;
         if (_dashParried && CanSlash()) yield return RecoilFromPlayer();
+        _slashing = false;
     }
 
     /// <summary>

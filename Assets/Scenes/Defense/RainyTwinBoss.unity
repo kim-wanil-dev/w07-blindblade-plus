@@ -55276,6 +55276,7 @@ MonoBehaviour:
   _warning: {fileID: 132706044}
   _weather: {fileID: 2200000003}
   _rainAudio: {fileID: 2200000100}
+  _startBossImmediately: 0
   _requiredKills: 30
   _bossDropletCount: 2662
   _warningDuration: 2

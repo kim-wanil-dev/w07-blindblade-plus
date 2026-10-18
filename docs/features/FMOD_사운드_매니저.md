@@ -1,12 +1,14 @@
 ### FMOD 사운드 매니저
 
-#### Rainy Stage 적 전용 물 발소리 (2026-10-18)
+#### Rainy Stage 적 물 발소리의 플레이어 이벤트 공유 (2026-10-18)
 
-- `FMODProject/week06-blindblade/Assets/Footsteps_Water_Enemy/Footsteps_Water_Enemy.mp3`를 적 전용 3D 이벤트 `event:/Footsteps/Footsteps_Water_Enemy`로 등록하고 `SoundId.EnemyWaterFootstep=49`, SoundLibrary 음량 배율 1.4로 연결했다. Unity 측 이벤트 GUID는 `{2b67be83-e0b1-4499-b821-7f3b6bb78f0b}`다.
-- 활성 `RainyStageAudio.UseWaterFootsteps`가 참이면 일반 `EnemyFootsteps`, `TwinBossFootsteps`, `BeastBossAudio`, `BossPresentation`이 이 이벤트를 재생한다. 거짓이면 각자 기존 적 발소리를 사용한다. 플레이어는 기존 `RainFootstep=42`와 `event:/Footsteps/Footsteps_Water_Light`를 유지한다.
+- 활성 `RainyStageAudio.UseWaterFootsteps`가 참이면 일반 `EnemyFootsteps`, `TwinBossFootsteps`, `BeastBossAudio`, `BossPresentation`은 `EnemyWaterFootstep=49`를 재생한다. 이 ID는 플레이어 `RainFootstep=42`와 동일한 `event:/Footsteps/Footsteps_Water_Light` 이벤트 GUID와 0.65 음량 배율을 사용한다. 적 ID의 청각 거리 분류는 유지한다.
+- 플레이어 이벤트와 다른 음색이 되지 않도록 적 전용 1,800Hz 저역 통과 필터를 제거했다. 적 발소리 호출부가 지정하는 개별 음량 배율은 유지한다. 기존 `Footsteps_Water_Enemy` 이벤트와 MP3 파일은 FMOD 프로젝트에 남아 있지만 SoundLibrary에서는 더 이상 참조하지 않는다.
+- 거짓이면 각 적 발소리 스크립트가 기존 적 발소리를 사용하며, 플레이어는 기존 물 발소리 선택을 유지한다.
 - 새 ID는 `SoundManager.IsEnemyOrProjectileSound`에서 적 전용 사운드로 분류되어 일반 웨이브의 청각 거리 제한과 비 먹먹함을 적용받는다.
-- 인간형 사망음 ID 충돌을 해결하면서 `EnemyWaterFootstep=49`와 `HumanEnemyDie=50`을 서로 다른 SoundLibrary 항목으로 복구했다. FMOD Desktop SFX 뱅크 빌드와 프로젝트 진단이 성공했고 `SFX.bank`·`Master.strings.bank`를 Unity StreamingAssets에 반영했다. Unity Play 청취와 컴파일 성공은 미확인이다.
+- 인간형 사망음 ID 충돌을 해결하면서 `EnemyWaterFootstep=49`와 `HumanEnemyDie=50`을 서로 다른 SoundLibrary 항목으로 복구했다. FMOD Desktop SFX 뱅크 빌드와 프로젝트 진단이 성공했고 `SFX.bank`·`Master.strings.bank`를 Unity StreamingAssets에 반영했다. 해당 시점의 Unity Play 청취는 미확인이다.
 - FMOD Studio 2.03.15 CLI로 Desktop의 SFX와 Master 뱅크를 빌드했다. `SFX.bank`와 `Master.strings.bank`를 Unity StreamingAssets에 반영했으며 두 복사본의 SHA-256이 빌드 원본과 일치한다. 프로젝트 진단과 뱅크 빌드는 성공했고 Unity Play의 실제 발소리 청취는 아직 확인하지 않았다.
+- 적 물 발소리는 이미 빌드된 플레이어 이벤트 GUID를 공유하므로 FMOD 뱅크 재빌드가 필요하지 않다. 이번 변경은 SoundLibrary 연결과 관련 문서만 바꿨고, Unity Play 청감은 미확인이다.
 
 #### 일반 스테이지 소리 인지 거리 (2026-10-18)
 

@@ -50,6 +50,18 @@ public class SoundLibrary : ScriptableObject
     }
 
     /// <summary>
+    /// soundId 항목에 설정된 저역 통과 주파수를 반환한다.
+    /// 0이면 필터를 적용하지 않고 등록되지 않은 ID도 0을 반환한다.
+    /// </summary>
+    internal float GetLowpassCutoff(SoundId soundId)
+    {
+        soundId = ResolveId(soundId);
+        foreach (SoundEntry entry in _sounds)
+            if (entry.Id == soundId) return entry.LowpassCutoff;
+        return 0f;
+    }
+
+    /// <summary>
     /// soundId가 이전 플레이어 피격 ID이면 공통 피격 ID를 반환한다.
     /// 기존 호출부와 enum 값은 보존하고 다른 ID는 입력값 그대로 반환한다.
     /// </summary>
@@ -154,6 +166,8 @@ public class SoundLibrary : ScriptableObject
         [SerializeField] private EventReference _event;
         [SerializeField] private bool _enabled = true;
         [SerializeField, Min(0f)] private float _volumeMultiplier = 1f;
+        [SerializeField, Range(0f, 22000f), Tooltip("0이면 필터를 적용하지 않는다. 지정한 주파수 위의 고음을 줄인다.")]
+        private float _lowpassCutoff;
         [SerializeField, Range(0.25f, 4f)] private float _pitchMultiplier = 1f;
         [SerializeField, Tooltip("끄면 기존 호출부의 A/B/C Label을 전달하지 않고 FMOD 이벤트 자체의 랜덤 재생을 사용한다.")]
         private bool _useCallerLabel = true;
@@ -177,6 +191,7 @@ public class SoundLibrary : ScriptableObject
         internal bool FinishNaturally => _finishNaturally;
         internal bool Enabled => _enabled;
         internal float VolumeMultiplier => Mathf.Max(0f, _volumeMultiplier);
+        internal float LowpassCutoff => Mathf.Clamp(_lowpassCutoff, 0f, 22000f);
         internal float PitchMultiplier => Mathf.Clamp(_pitchMultiplier, 0.25f, 4f);
         internal bool UseCallerLabel => _useCallerLabel;
     }

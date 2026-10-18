@@ -1,8 +1,15 @@
 # DefenseBeast 일반 적 구현 명세
 
 - 작성일: 2026-10-17
-- 상태: **2026-10-18 짐승 보스와 같은 관절 기반 애니메이션·원 그리기·물기 돌진·월드 공간 연기·몸체 숨김·물리 충돌 제외 적용. 스크립트 빌드 확인, 실제 전투 Play 확인 대기**
-- 최신 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
+- 상태: **2026-10-18 관절 기반 애니메이션·원 그리기·물기 돌진·월드 공간 연기·몸체 숨김·눈 줄기·발 디딤 소리 연결. C# 빌드 확인, 실제 전투 Play 확인 대기**
+- 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
+
+## 2026-10-18 TwinBoss 눈 줄기·발 디딤 소리
+
+- `DefenseBeastEyes`의 붉은 눈 줄기를 `TwinBoss.prefab`의 Beast `Wolf`에도 적용했다. TwinBoss의 기존 머리 로컬 눈 위치를 유지하고 같은 발광 재질, 꼬리 길이, 휘날림, 연기 바람 연결을 사용한다. `TwinBeastEyes`는 덮치기 전 순간 섬광에 계속 사용한다.
+- 일반 DefenseBeast는 `DefenseBeastWolfVisual.PawPlanted`가 실제 발 접촉 위치를 알리고 `EnemyFootsteps`가 그 위치에서 발소리를 재생한다. 같은 적의 이전 발소리를 새 소리 전에 강제 정지하고 재생 간격을 최소 0.18초로 제한한다. `DefenseBeast.prefab`에서는 `_useAnimationEvents`를 켰으며, `FootstepEmitter`와 발소리 C# 이벤트는 감각 전달을 위해 유지한다.
+- 관련 코드·프리팹: `Assets/Scripts/Enemies/DefenseBeastEyes.cs`, `DefenseBeastWolfVisual.cs`, `EnemyFootsteps.cs`; `Assets/Resources/Defense/DefenseBeast.prefab`; `Assets/Resources/Enemies/TwinBoss.prefab`.
+- 확인: `dotnet build Assembly-CSharp.csproj --no-restore` 성공. Unity Play에서 눈 위치·줄기와 실제 발소리 타이밍은 미확인이다.
 
 ## 2026-10-18 관절 애니메이션·원 그리기·물기 돌진 (사용자 요청, 최신 규칙)
 

@@ -1046,7 +1046,7 @@ MonoBehaviour:
   _idleSound: 32
   _chargeBarkSound: 45
   _waterFootstepVolume: 1.9
-  _waterFootstepInterval: 0.12
+  _waterFootstepInterval: 0.18
   _swordHitVolume: 1.1
   _swordHitPitch: 1.15
 --- !u!114 &309
@@ -1076,7 +1076,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 300}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9fded09b31d54cd887339df9f805d97e, type: 3}
   m_Name: 
@@ -1205,6 +1205,7 @@ GameObject:
   - component: {fileID: 402}
   - component: {fileID: 403}
   - component: {fileID: 690}
+  - component: {fileID: 990012345678901234}
   m_Layer: 0
   m_Name: Wolf
   m_TagString: Untagged
@@ -1430,6 +1431,40 @@ MonoBehaviour:
   _swayFrequency: 1
   _swayDamping: 0.5
   _teleportThreshold: 3
+--- !u!114 &990012345678901234
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 400}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a0418549cbd4b99aa9cbd5b77f12915, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::DefenseBeastEyes
+  _warningVisual: {fileID: 331}
+  _head: {fileID: 429}
+  _material: {fileID: 2100000, guid: 9ddc37f496b1406a89bfafd86246f0e8, type: 2}
+  _eyeOffsets:
+  - {x: -0.17, y: 0.52, z: 0.76}
+  - {x: 0.17, y: 0.52, z: 0.76}
+  _eyeSize: 0
+  _width: 0.06
+  _lifetime: 0.45
+  _maxLength: 1.5
+  _emitInterval: 0.02
+  _driftSpeed: 0.8
+  _spreadSpeed: 0.35
+  _riseSpeed: 0.05
+  _flutterAmplitude: 0.06
+  _flutterFrequency: 3
+  _bodySmoke: {fileID: 403}
+  _pushScale: 1
+  _maxPush: 8
+  _teleportThreshold: 3
+  _warningIntensity: 2.2
+  _warningWidthScale: 1.5
 --- !u!114 &690
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -220,7 +220,7 @@ public sealed class BossPresentation : MonoBehaviour
         {
             _nextStepSoundTime = Time.time + _minimumStepSoundInterval;
             SoundId footstepSound = GetFootstepSound();
-            Managers.Sound.StopFor(gameObject, footstepSound);
+            Managers.Sound.StopFor(gameObject, footstepSound, forceStop: true);
             Managers.Sound.Play(footstepSound, transform.position, owner: gameObject, playDuringMovement: true);
         }
         if (!Game.IsInitialized) return;
