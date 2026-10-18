@@ -56,12 +56,19 @@ public sealed class HumanBossAttack : MonoBehaviour
 
     [Header("탑승 상태")]
     [SerializeField, Min(0.5f)] private float _dismountDistance = 2f;
+    [SerializeField, Range(0f, 90f), Tooltip("탑승 중 연기 몸체가 늑대 목 쪽으로 앞으로 눕는 각도(도). 몸체 아래 끝(안장)을 축으로 기운다.")]
+    private float _mountedLean = 60f;
+    [SerializeField, Tooltip("탑승 중 누운 몸체를 옮기는 인간 로컬 거리(미터). 늑대 목을 감싸도록 뒤아래로 당긴다.")]
+    private Vector3 _mountedBodyOffset = new Vector3(0f, -0.8f, -0.5f);
+    [SerializeField, Min(0.01f), Tooltip("타고 내릴 때 몸체가 눕고 일어서는 시간(초)")]
+    private float _mountedLeanDuration = 0.25f;
     private readonly Collider[] _dismountContacts = new Collider[16];
     private Transform _seat;
     private bool _mounted;
     private Vector3 _navigationPosition;
     private bool _previousUpdatePosition;
     private bool _previousUpdateRotation;
+    private float _mountedPose;
 
     [Header("탑승 난사")]
     [SerializeField, Min(1), Tooltip("한 번에 부채꼴로 던지는 수리검 수")]
@@ -145,6 +152,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     public int MaxCharges => _maxCharges;
     public bool IsChargeFull => _charges >= _maxCharges;
     public float SinkOffset => _sinkDepth * _sinkDistance;
+    public Quaternion BodyLean => Quaternion.Euler(_mountedLean * _mountedPose, 0f, 0f);
     public bool IsConfigured => _projectilePrefab != null && _muzzle != null && _hitCollider != null;
     public event Action ShotPreparing;
     public event Action ShotFired;
@@ -164,7 +172,19 @@ public sealed class HumanBossAttack : MonoBehaviour
     {
         if (_seat != null && _health.IsAlive)
             transform.SetPositionAndRotation(_seat.position, _seat.rotation);
-        _sinkBody.localPosition = _sinkBodyPosition + Vector3.down * SinkOffset;
+        _mountedPose = Mathf.MoveTowards(_mountedPose, _mounted ? 1f : 0f, Time.deltaTime / _mountedLeanDuration);
+        _sinkBody.localRotation = BodyLean;
+        _sinkBody.localPosition = GetBodyPoint(_sinkBodyPosition);
+    }
+
+    /// <summary>
+    /// 서 있는 몸체 기준 인간 로컬 지점 standingPoint를 지금 탑승 자세(_mountedPose만큼 _mountedLean으로 앞으로 눕고 _mountedBodyOffset만큼 옮김)와
+    /// 물속에 잠긴 깊이(SinkOffset)를 반영한 인간 로컬 지점으로 바꿔 반환한다.
+    /// </summary>
+    public Vector3 GetBodyPoint(Vector3 standingPoint)
+    {
+        return BodyLean * standingPoint
+            + _mountedBodyOffset * _mountedPose + Vector3.down * SinkOffset;
     }
 
     /// <summary>player에게 continuous 연사 또는 설정 횟수 사격을 시작하며 teleportBetweenShots로 발사 사이 순간이동을 제어한다.</summary>
@@ -955,7 +975,9 @@ public sealed class HumanBossAttack : MonoBehaviour
     {
         // 꺼지면 물속 이동 코루틴도 멈추므로 잠긴 몸체와 꺼 둔 피격 판정을 되돌린다.
         CancelWaterTransition();
+        _mountedPose = 0f;
         _sinkBody.localPosition = _sinkBodyPosition;
+        _sinkBody.localRotation = Quaternion.identity;
         StopShooting();
         ReleaseProjectiles();
         Dismount();

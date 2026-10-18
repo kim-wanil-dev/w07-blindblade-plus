@@ -198,7 +198,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// 차징·거합 연출을 멈추고 암전·감속을 걷어낸다. 차징 중이었으면 울리고 있는 파동 소리를 끊는다. 이미 퍼진 붉은 파동은 퍼펙트 파동 규칙대로 사라진다.
+    /// 차징·거합 연출을 멈추고 암전·감속과 받아치기 무적을 걷어낸다. 차징 중이었으면 울리고 있는 파동 소리를 끊는다. 이미 퍼진 붉은 파동은 퍼펙트 파동 규칙대로 사라진다.
     /// 제어자가 패턴을 취소하거나 이 오브젝트가 꺼질 때 호출한다.
     /// </summary>
     public void Cancel()
@@ -220,7 +220,11 @@ public sealed class TwinHumanIai : MonoBehaviour
         }
         // 받아치기 집중은 감속을 직접 걸었으므로 페이드를 기다리지 않고 바로 푼다.
         if (_releasing) StopSlowNow();
-        if (_playerEmpower != null) _playerEmpower.SetChargePresentation(0f, 0f);
+        if (_playerEmpower != null)
+        {
+            _playerEmpower.SetChargePresentation(0f, 0f);
+            _playerEmpower.SetCounterFocusInvulnerable(false);
+        }
         _releasing = false;
         _slowTarget = 0f;
     }
@@ -384,12 +388,14 @@ public sealed class TwinHumanIai : MonoBehaviour
     /// 퍼펙트 패링에 막힌 거합을 멈추고 플레이어 발밑에서 평소보다 _counterPulseRadiusScale배 넓고 _counterPulseExtraAfterimage초 더 남는 퍼펙트 패링 파동을 먼저 낸 뒤,
     /// 인간이 forward 반대쪽으로 _parryRecoilDistance만큼 떨며 밀려나는 동안 좌클릭을 꾹 눌러 궁극기를 모으던 연출(Focus)로 시간이 느려진다.
     /// 연출이 끝나면 감속을 풀고 거합의 붉은 사선(_cutColor) 위에 플레이어 대칭 사선을 덮고 기본 사선을 더한 X자 강화 공격을 한 번 발동한다
-    /// (PlayerEmpower.BeginCounterStrike). 판정과 피해는 평소 강화 공격과 같이 한 번이다.
+    /// (PlayerEmpower.BeginCounterStrike). 판정과 피해는 평소 강화 공격과 같이 한 번이다. 받아친 순간부터 강화 공격이 시작될 때까지 플레이어는 무적이다.
     /// </summary>
     private IEnumerator Countered(Vector3 forward)
     {
         // 받아치기가 발동하면 제어자가 인간의 피격 무적을 초기화한다.
         CounterStarted?.Invoke();
+        // 받아친 순간부터 X자 강화 공격이 나갈 때까지 플레이어는 어떤 공격도 받지 않는다.
+        _playerEmpower.SetCounterFocusInvulnerable(true);
         _warning.EndWarning();
         _overlay.Flash(_cutFlash, 0.15f);
         // 퍼펙트 패링에 성공한 순간 플레이어 발밑에서 퍼펙트 패링 파동이 먼저 퍼진다.
@@ -401,6 +407,8 @@ public sealed class TwinHumanIai : MonoBehaviour
         _releasing = false;
         // 거합의 붉은 사선 위에 플레이어 대칭 사선을 덮고 기본 사선을 더한 강화 공격을 한 번 발동한다.
         _playerEmpower.BeginCounterStrike(_cutColor);
+        // 강화 공격이 시작되면 강화 공격 무적이 이어받는다.
+        _playerEmpower.SetCounterFocusInvulnerable(false);
     }
 
     /// <summary>
