@@ -2,7 +2,7 @@
 
 #### Rainy Stage 적 전용 물 발소리 (2026-10-18)
 
-- `FMODProject/week06-blindblade/Assets/Footsteps_Water_Enemy/Footsteps_Water_Enemy.mp3`를 적 전용 3D 이벤트 `event:/Footsteps/Footsteps_Water_Enemy`로 등록하고 `SoundId.EnemyWaterFootstep=47`, SoundLibrary 음량 배율 1.4로 연결했다. Unity 측 이벤트 GUID는 `{2b67be83-e0b1-4499-b821-7f3b6bb78f0b}`다.
+- `FMODProject/week06-blindblade/Assets/Footsteps_Water_Enemy/Footsteps_Water_Enemy.mp3`를 적 전용 3D 이벤트 `event:/Footsteps/Footsteps_Water_Enemy`로 등록하고 `SoundId.EnemyWaterFootstep=49`, SoundLibrary 음량 배율 1.4로 연결했다. Unity 측 이벤트 GUID는 `{2b67be83-e0b1-4499-b821-7f3b6bb78f0b}`다.
 - 활성 `RainyStageAudio.UseWaterFootsteps`가 참이면 일반 `EnemyFootsteps`, `TwinBossFootsteps`, `BeastBossAudio`, `BossPresentation`이 이 이벤트를 재생한다. 거짓이면 각자 기존 적 발소리를 사용한다. 플레이어는 기존 `RainFootstep=42`와 `event:/Footsteps/Footsteps_Water_Light`를 유지한다.
 - 새 ID는 `SoundManager.IsEnemyOrProjectileSound`에서 적 전용 사운드로 분류되어 일반 웨이브의 청각 거리 제한과 비 먹먹함을 적용받는다.
 - FMOD Studio/CLI 실행 파일이 이 환경에서 발견되지 않아 SFX.bank와 Unity StreamingAssets 뱅크는 아직 재빌드하지 않았다. 현재 뱅크에는 새 이벤트가 없으므로 실제 재생은 SFX 뱅크 재빌드·복사 뒤 가능하다. `dotnet build Assembly-CSharp.csproj --no-restore --nologo --verbosity quiet`는 오류 0개·기존 경고 2개이며 Unity Play 청취는 미확인이다.
@@ -18,7 +18,7 @@
 #### 씬별 비 속 적·투사체 사운드 (2026-10-17)
 
 - `RainyStageAudio`의 인스펙터 옵션이 `SoundManager.SetEnemyRainMuffle`에 켜짐 여부, 저역 통과 주파수와 음량 배율을 전달한다. 적·보스·투사체 소유 오브젝트 또는 적 전용 `SoundId`의 효과음에만 개별 FMOD `MULTIBAND_EQ` 저역 통과 필터를 연결한다. 재생 중인 대상에도 옵션 변경을 반영하고 종료·비활성화 때 필터를 해제한다.
-- `RainyStage_JH` 기본값은 6,500Hz와 음량 0.85다. 비·Ambient BGM과 플레이어 공격음은 필터 대상이 아니다. 플레이어 물 발소리는 필터되지 않지만 적 전용 `EnemyWaterFootstep=47`은 적 사운드로 분류되어 필터를 받는다. 다른 씬은 활성 `RainyStageAudio` 컴포넌트를 추가해 독립적으로 사용한다. Unity Play의 실제 청감은 미확인이다.
+- `RainyStage_JH` 기본값은 6,500Hz와 음량 0.85다. 비·Ambient BGM과 플레이어 공격음은 필터 대상이 아니다. 플레이어 물 발소리는 필터되지 않지만 적 전용 `EnemyWaterFootstep=49`는 적 사운드로 분류되어 필터를 받는다. 다른 씬은 활성 `RainyStageAudio` 컴포넌트를 추가해 독립적으로 사용한다. Unity Play의 실제 청감은 미확인이다.
 
 #### 수리검 비행음 도플러 (2026-10-17)
 

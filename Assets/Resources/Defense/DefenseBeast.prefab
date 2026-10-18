@@ -4640,7 +4640,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   _heartbeatSound: 26
-  _leapSound: 29
+  _leapSound: 48
 --- !u!114 &6611284687678998539
 MonoBehaviour:
   m_ObjectHideFlags: 0
