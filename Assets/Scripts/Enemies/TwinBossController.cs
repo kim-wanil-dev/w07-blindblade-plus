@@ -348,12 +348,13 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 인간을 태운 짐승이 공터 가장자리를 플레이어 반대편 호로 빠르게 달리고 인간은 수리검을 하나씩 연달아 던진다.
-    /// 가장자리에서 _cooperationArc만큼 달려 반원을 다 돌면 난사와 질주를 끝내고 내리며, 길이 막혀도 _cooperationDuration이 지나면 끝낸다.
+    /// 인간이 물속으로 가라앉았다가 짐승 등 위로 떠올라 타면, 짐승이 공터 가장자리를 플레이어 반대편 호로 빠르게 달리고 인간은 수리검을 하나씩 연달아 던진다.
+    /// 가장자리에서 _cooperationArc만큼 달려 반원을 다 돌면 난사와 질주를 끝내고, 인간은 짐승 등에서 가라앉았다가 옆 지면으로 떠올라 내린다.
+    /// 길이 막혀도 _cooperationDuration이 지나면 끝낸다.
     /// </summary>
     private IEnumerator Cooperate()
     {
-        _human.Mount(_beast.RiderSeat);
+        yield return _human.MountThroughWater(_beast.RiderSeat);
         GetArenaCircle(out Vector3 center, out float radius);
         _beast.BeginEdgeRun(center, radius);
         _human.StartBarrage(_player);
@@ -365,7 +366,7 @@ public sealed class TwinBossController : MonoBehaviour
         }
         _human.StopShooting();
         _beast.EndEdgeRun();
-        _human.Dismount();
+        yield return _human.DismountThroughWater();
     }
 
     /// <summary>
@@ -963,7 +964,7 @@ public sealed class TwinBossController : MonoBehaviour
         if (_pattern != TwinBossPattern.Evading && _pattern != TwinBossPattern.Countering) CancelPattern();
     }
 
-    /// <summary>패턴 코루틴·인간과 짐승의 보조 코루틴·탄환·탑승·베기·거합·점프·잠수를 취소하고 빠른 이동 설정을 복원한다.</summary>
+    /// <summary>패턴 코루틴·인간과 짐승의 보조 코루틴·탄환·물속 이동·탑승·베기·거합·점프·잠수를 취소하고 빠른 이동 설정을 복원한다.</summary>
     private void CancelPattern()
     {
         if (_patternRoutine != null) StopCoroutine(_patternRoutine);
@@ -973,6 +974,8 @@ public sealed class TwinBossController : MonoBehaviour
         {
             _human.StopShooting();
             _human.CancelMelee();
+            // 물속으로 가라앉던 중이면 늦게 올라타지 않도록 먼저 멈추고 내린다.
+            _human.CancelWaterTransition();
             _human.Dismount();
         }
         if (_iai != null) _iai.Cancel();

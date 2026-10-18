@@ -163,14 +163,15 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// arenaCenter·arenaRadius 공터에서 player와 가장 먼 빈 지면으로 옮겨 _chargeDuration 동안 거합을 차징한다.
+    /// arenaCenter·arenaRadius 공터에서 player와 가장 먼 빈 지면으로 물속을 지나 순간이동(HumanBossAttack.TeleportThroughWater)해 _chargeDuration 동안 거합을 차징한다.
     /// 차징 시작부터 _pulseInterval마다 점점 넓고 진한 붉은 파동을 내고 연기를 점차 붉게 물들이며, 끝나면 거합을 낸다.
     /// </summary>
     public IEnumerator Charge(KatanaDamageReceiver player, Vector3 arenaCenter, float arenaRadius)
     {
         CachePlayer(player);
         _attack.StopShooting();
-        if (TryGetChargePosition(arenaCenter, arenaRadius, out Vector3 position)) _agent.Warp(position);
+        if (TryGetChargePosition(arenaCenter, arenaRadius, out Vector3 position))
+            yield return _attack.TeleportThroughWater(position);
         FacePlayer();
         IsCharging = true;
         ChargeProgress = 0f;
@@ -240,6 +241,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     /// <summary>
     /// 허리춤 기운을 모두 쓰고 보스의 불릿 타임으로 세계를 늦춘 채 화면을 붉은 사선으로 가르며 _blackoutDuration 동안 암전한다.
     /// 암전이 끝나면 감속을 바로 풀어 플레이어가 제 속도로 패링할 수 있게 한 뒤, 발밑에서 강하고 빠른 붉은 파동(_dashPulseRadius, _dashPulseExpand초)을 일으키며 그 순간 플레이어 쪽으로 _exitDistance 너머까지 실제 시간 _dashDuration 동안 돌진한다.
+    /// 돌진하는 동안은 파동으로 드러나지 않아도 붉은 테두리가 계속 보이며, 차징을 끝내는 EndWarning이 함께 끈다.
     /// 돌진하는 몸이 플레이어에게 _parryReach만큼 다가온 순간 퍼펙트 패링에 막히면 Countered로 넘어가고,
     /// 막히지 않으면 그 자리에서 납도음과 함께 큰 피해·카메라 흔들림·땅 흔적·대나무 베기·빗방울 폭발을 낸다.
     /// </summary>
@@ -279,8 +281,9 @@ public sealed class TwinHumanIai : MonoBehaviour
         Matrix4x4 cutView = GetCutViewProjection(eye, cutDirection);
         Vector3 exit = GetExitPosition(forward);
         float contactAlong = Vector3.Dot(_player.transform.position - start, forward) - _parryReach;
-        // 돌진을 알리는 강하고 빠른 붉은 파동을 일으키며 출발한다.
+        // 돌진을 알리는 강하고 빠른 붉은 파동을 일으키며 출발하고, 돌진 동안 파동 없이도 붉은 테두리가 보이게 한다.
         _playerPerfectPulse.BeginAt(start, Vector3.up, _pulseColor, _pulseColor, _dashPulseRadius, 1f, true, _dashPulseExpand);
+        _warning.SetAlwaysVisible(true);
         bool contacted = false;
         float elapsed = 0f;
         while (elapsed < _dashDuration)

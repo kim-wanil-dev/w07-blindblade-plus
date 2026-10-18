@@ -135,6 +135,8 @@ GameObject:
   - component: {fileID: 232}
   - component: {fileID: 233}
   - component: {fileID: 2696249524069594325}
+  - component: {fileID: 234}
+  - component: {fileID: 235}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -296,6 +298,18 @@ MonoBehaviour:
   _teleportObstacleMask:
     serializedVersion: 2
     m_Bits: 51
+  _sinkBody: {fileID: 211}
+  _sinkDistance: 2.5
+  _sinkDuration: 0.3
+  _riseDuration: 0.3
+  _waterRipple:
+    _radius: 14.4
+    _expandDuration: 1.2
+    _ringCount: 3
+    _ringInterval: 0.15
+    _afterimage: 1.2
+    _ringColor: {r: 1, g: 1, b: 1, a: 1}
+    _spherical: 0
   _dismountDistance: 2
   _barrageShots: 1
   _barrageSpreadAngle: 16
@@ -529,6 +543,80 @@ MonoBehaviour:
     _branchSpread: 0.75
     _backOpacity: 0.3
     _feather: 0.08
+    _color: {r: 1, g: 0.1, b: 0.06, a: 1}
+    _orbitSpeed: 0.32
+    _counterSpeedRatio: 0.8
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
+    _fadeDuration: 0.25
+  _fullSpeedMultiplier: 2.5
+  _fullGlowStrength: 1
+  _fullGlowRadius: 1.7
+  _fullGlowPulseDepth: 0.35
+  _fullGlowPulseSpeed: 1.2
+  _fullTransitionDuration: 0.3
+--- !u!114 &234
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae02fcf09f02402eb7d528db62426e13, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TwinHumanChargeStreak
+  _beast: {fileID: 307}
+  _material: {fileID: 2100000, guid: 9e56680fd30a4ec0b80ad2e97d836f7f, type: 2}
+  _segments: 24
+  _length: 2.2
+  _mainWidth: 0.0192
+  _branchWidthRatio: 0.2
+  _branchSpread: 1.2
+  _branchWaveSpeed: 14
+  _color: {r: 1, g: 0.1, b: 0.06, a: 1}
+  _headGlow: 1.2
+  _speed: 16
+  _minimumTravelTime: 0.5
+  _maximumTravelTime: 1.2
+  _acceleration: 3
+  _curve: 0.2
+--- !u!114 &235
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18e6402ba266474b98fdda32e0bc10bc, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TwinHumanBeadHud
+  _topOffset: 120
+  _leftEdge: -210
+  _slotSize: 28
+  _slotSpacing: 32
+  _emptySprite: {fileID: 21300000, guid: b0e2c553ae8f42d590c880c15d2e6ce7, type: 3}
+  _emptyColor: {r: 0.62, g: 0.62, b: 0.64, a: 0.85}
+  _orbitStyle:
+    _sphereScale: 1
+    _axisRoll: 20
+    _axisPitch: 25
+    _inclination: 65
+    _twist: 0.3
+    _precessionSpeed: 0.4
+    _counterAzimuth: 90
+    _segments: 64
+    _mainWidth: 1.2
+    _branchWidthRatio: 0.2
+    _strokeLength: 0.75
+    _thicknessVariation: 0.35
+    _branchSpread: 0.75
+    _backOpacity: 0.3
+    _feather: 0.8
     _color: {r: 1, g: 0.1, b: 0.06, a: 1}
     _orbitSpeed: 0.32
     _counterSpeedRatio: 0.8
@@ -5065,7 +5153,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: VelocityModule.y.scalar
-      value: 0.9
+      value: -1.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.gravityModifier.scalar
+      value: 0.35
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: ShapeModule.placementMode
@@ -5085,11 +5177,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startSize.scalar
-      value: 0.69
+      value: 0.46
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startSize.minScalar
-      value: 0.4025
+      value: 0.27
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: EmissionModule.rateOverTime.scalar
@@ -5097,11 +5189,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startLifetime.scalar
-      value: 0.7
+      value: 0.9
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startLifetime.minScalar
-      value: 0.4
+      value: 0.55
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].value
@@ -5133,11 +5225,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LengthScale
-      value: 1.8
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_VelocityScale
-      value: 0.2
+      value: 0.35
       objectReference: {fileID: 0}
     - target: {fileID: 4934395196125393724, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LocalPosition.x
@@ -5197,7 +5289,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: VelocityModule.y.scalar
-      value: 1.2
+      value: -1.8
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.gravityModifier.scalar
+      value: 0.4
       objectReference: {fileID: 0}
     - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: ShapeModule.placementMode
@@ -5237,11 +5333,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LengthScale
-      value: 1.6
+      value: 2.8
       objectReference: {fileID: 0}
     - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_VelocityScale
-      value: 0.25
+      value: 0.4
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

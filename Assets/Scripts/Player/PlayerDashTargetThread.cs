@@ -251,6 +251,16 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// 칼집과 손잡이 위 X자 실 교차점의 마지막 월드 위치를 junction에 저장해 반환한다.
+    /// 실이 숨겨져 교차점을 갱신하지 않는 동안에는 false를 반환한다.
+    /// </summary>
+    public bool TryGetSwordJunction(out Vector3 junction)
+    {
+        junction = _junction;
+        return _visibility > 0f;
+    }
+
     private readonly struct LocalFrame
     {
         public readonly Vector3 Center;
