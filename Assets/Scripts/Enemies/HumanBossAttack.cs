@@ -50,6 +50,11 @@ public sealed class HumanBossAttack : MonoBehaviour
     private float _riseDuration = 0.3f;
     [SerializeField, Tooltip("가라앉고 떠오르는 자리에 퍼지는 흰 물 파동. 플레이어 발걸음 파동과 같은 크기다.")]
     private RevealRippleSettings _waterRipple = new RevealRippleSettings(14.4f, 1.2f, 3, 0.15f, 1.2f, Color.white);
+    [SerializeField, Tooltip("가라앉고 떠오를 때 입체로 울리는 물방울 소리")]
+    private SoundId _waterDropSound = SoundId.TwinBossWaterDrop;
+    [SerializeField, Range(0.25f, 4f), Tooltip("물방울 소리 피치 배율. 늑대(0.5)보다 덜 낮춘다.")]
+    private float _waterDropPitch = 0.7f;
+    [SerializeField, Min(0f)] private float _waterDropVolume = 1f;
     private Vector3 _sinkBodyPosition;
     private float _sinkDepth;
     private Coroutine _teleport;
@@ -876,9 +881,16 @@ public sealed class HumanBossAttack : MonoBehaviour
         _sinkDepth = target;
     }
 
-    /// <summary>지금 자리 지면에 흰 물 파동 _waterRipple을 시야 맵에 등록한다. 늑대 잠수 파동처럼 자기 몸은 밝히지 않는다.</summary>
+    /// <summary>
+    /// 지금 자리 지면에 흰 물 파동 _waterRipple을 시야 맵에 등록하고 물방울 소리 _waterDropSound를 _waterDropPitch·_waterDropVolume으로 입체 재생한다.
+    /// 늑대 잠수 파동처럼 자기 몸은 밝히지 않는다. 늑대 등 위(_mounted)에서 떠오르거나 가라앉을 때는 소리만 내고 파동은 내지 않는다.
+    /// </summary>
     private void EmitWaterRipple()
     {
+        if (_waterDropSound != SoundId.None)
+            Managers.Sound.Play(_waterDropSound, transform.position, _waterDropVolume, gameObject, true, _waterDropPitch);
+        // 늑대 등 위는 지면이 아니라 공중에서 파동이 퍼지므로 내지 않는다.
+        if (_mounted) return;
         if (_revealMap == null && Game.IsInitialized && Game.Instance.SensoryManager != null)
             _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
         if (_revealMap != null) _revealMap.EmitRipple(transform.position, _waterRipple, transform);

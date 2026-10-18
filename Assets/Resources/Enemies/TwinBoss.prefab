@@ -135,6 +135,7 @@ GameObject:
   - component: {fileID: 2696249524069594325}
   - component: {fileID: 234}
   - component: {fileID: 235}
+  - component: {fileID: 236}
   m_Layer: 0
   m_Name: Human
   m_TagString: Untagged
@@ -308,6 +309,9 @@ MonoBehaviour:
     _afterimage: 1.2
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
     _spherical: 0
+  _waterDropSound: 46
+  _waterDropPitch: 0.7
+  _waterDropVolume: 1
   _dismountDistance: 2
   _mountedLean: 60
   _mountedBodyOffset: {x: 0, y: -0.8, z: -0.5}
@@ -382,6 +386,7 @@ MonoBehaviour:
   _stepDistance: 0.7
   _footOffset: 0.15
   _teleportDistance: 5
+  _leaveFootprints: 0
   _groundLayers:
     serializedVersion: 2
     m_Bits: 1
@@ -397,9 +402,31 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9fded09b31d54cd887339df9f805d97e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   _volume: 1.7782794
+  _waterVolume: 1.2
+--- !u!114 &236
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40de629554af347458460838fed1f5b9, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::FootstepRipple
+  _ripple:
+    _radius: 5
+    _expandDuration: 0.6
+    _ringCount: 3
+    _ringInterval: 0.1
+    _afterimage: 1.2
+    _ringColor: {r: 1, g: 1, b: 1, a: 1}
+    _spherical: 0
+  _stepsPerRipple: 2
 --- !u!114 &230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -977,7 +1004,7 @@ MonoBehaviour:
   _edgeRunAcceleration: 40
   _edgeRunAvoidAngle: 95
   _edgeRunLookAhead: 0.6
-  _diveDuration: 0.35
+  _diveDuration: 0.5
   _emergeDuration: 0.25
   _emergeDistance: 8
   _emergeArc: 140
@@ -985,6 +1012,7 @@ MonoBehaviour:
   _biteTelegraph: 2
   _biteDuration: 0.35
   _pounceBarkLeadTime: 0.9
+  _pounceGlintLeadTime: 0.3
   _pounceOvershoot: 3
   _pounceLift: 0.5
   _parryRecoilDistance: 15
@@ -1011,6 +1039,9 @@ MonoBehaviour:
     _spherical: 1
   _burrowCry: 32
   _burrowCryVolume: 2
+  _waterDropSound: 46
+  _waterDropPitch: 0.5
+  _waterDropVolume: 1.2
   _diveMinSpeed: 7
   _diveMaxSpeed: 14
   _emergeLeapSpeed: 7
@@ -1177,14 +1208,18 @@ MonoBehaviour:
   _rate: 8
   _minLifetime: 1
   _maxLifetime: 1.4
-  _trailSpeed: 0.8
-  _spreadSpeed: 0.2
+  _trailSpeed: 0.6
+  _spreadSpeed: 0.6
   _riseSpeed: 0.05
-  _trailWidth: 0.04
+  _trailWidth: 0.015
   _trailLifetime: 1
-  _maxTrailLength: 1.5
+  _maxTrailLength: 0.6
   _minVertexDistance: 0.03
-  _flutterScale: 0.3
+  _flutterScale: 0.6
+  _glintColor: {r: 1, g: 0.08, b: 0.05, a: 1}
+  _glintSize: 0.45
+  _glintWidthScale: 2
+  _glintDuration: 0.15
 --- !u!4 &321
 Transform:
   m_ObjectHideFlags: 0
@@ -1402,7 +1437,9 @@ MonoBehaviour:
   _burrowSinkDepth: 3.2
   _diveNosePitch: 55
   _diveForwardDrift: 0
-  _diveHop: 0.5
+  _diveCrouchDepth: 0.6
+  _diveFrontKneeBend: 70
+  _diveStrideFade: 0.6
   _emergeNosePitch: 45
   _emergeHop: 0.6
   _flinchPitch: 10
@@ -1419,16 +1456,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 808b93b5e01542ccbca1099878c8abf6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TwinBeastSmokeTuning
-  _densityScale: 150
-  _sizeScale: 1
+  _densityScale: 3
+  _sizeScale: 7.5
   _lengthScale: 0.3
-  _lifetimeScale: 0.5
-  _flowSpeedScale: 0.03
-  _riseForce: 3
+  _lifetimeScale: 1.3
+  _flowSpeedScale: 0.3
+  _riseForce: 1
   _surfacePushScale: 0
-  _flutterStrength: 0.6
-  _flutterFrequency: 1.5
+  _flutterStrength: 0.35
+  _flutterFrequency: 1
   _flutterScrollSpeed: 1.2
+  _worldSpace: 1
+  _swayScale: 2.25
+  _maxSway: 6
+  _swayFrequency: 1
+  _swayDamping: 0.5
+  _teleportThreshold: 3
 --- !u!114 &690
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5511,18 +5554,6 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4934395196125393724, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -5615,18 +5646,6 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 1.4
-      objectReference: {fileID: 0}
-    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.25
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -5695,7 +5714,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: EmissionModule.rateOverTime.scalar
-      value: 35
+      value: 70
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startLifetime.scalar
@@ -5724,18 +5743,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -5853,7 +5860,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: EmissionModule.rateOverTime.scalar
-      value: 35
+      value: 70
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startLifetime.scalar
@@ -5882,18 +5889,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -6041,18 +6036,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -6198,18 +6181,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -6357,18 +6328,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -6514,18 +6473,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -6673,18 +6620,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -6830,18 +6765,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -6989,18 +6912,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -7146,18 +7057,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -7305,18 +7204,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -7462,18 +7349,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -7621,18 +7496,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -7778,18 +7641,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -7937,18 +7788,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -8094,18 +7933,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -8253,18 +8080,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -8410,18 +8225,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -8569,18 +8372,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -8726,18 +8517,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -8885,18 +8664,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -9042,18 +8809,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -9201,18 +8956,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -9358,18 +9101,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -9517,18 +9248,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -9674,18 +9393,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -9833,18 +9540,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -9990,18 +9685,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -10149,18 +9832,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -10306,18 +9977,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -10465,18 +10124,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -10622,18 +10269,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
@@ -10781,18 +10416,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -10939,18 +10562,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: EnemySmokeVisual
       objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -11096,18 +10707,6 @@ PrefabInstance:
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
       value: EnemySmokeVisual
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4244366496964436798, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_IsActive

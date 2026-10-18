@@ -7,11 +7,12 @@ using UnityEngine.AI;
 
 using BlindBlade.Combat.Contracts;
 
-public enum TwinBossPattern { Idle, Cooperation, HumanRanged, BeastZigzag, BeastJump, Finished, Evading = 7, IaiCharge = 8, AlternatingMelee = 9, Countering = 10 }
+public enum TwinBossPattern { Idle, Cooperation, HumanRanged, BeastZigzag, BeastJump, Finished, Evading = 7, IaiCharge = 8, AlternatingMelee = 9, Countering = 10, BeastAmbush = 11 }
 
 /// <summary>
 /// 생존 조건별 협력·단독 패턴과 피격된 보스의 회피 및 종료 수명을 관리한다.
 /// 둘 다 살아 있으면 탑승 가장자리 질주 난사(Cooperation)·거합 차징과 짐승 방해(IaiCharge)·교대 근접(AlternatingMelee) 중 하나를 고른다.
+/// 짐승만 남으면 거합 차징 방해 때 쓰던 가장자리 잠수 기습(BeastAmbush)을 끝없이 반복한다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TwinBossController : MonoBehaviour
@@ -344,6 +345,7 @@ public sealed class TwinBossController : MonoBehaviour
                 break;
             case TwinBossPattern.BeastZigzag: yield return _beast.Zigzag(_player); break;
             case TwinBossPattern.BeastJump: yield return _beast.Jump(_player); break;
+            case TwinBossPattern.BeastAmbush: yield return RepeatBeastAmbush(); break;
         }
         _patternFinished = true;
         _patternRoutine = null;
@@ -398,6 +400,23 @@ public sealed class TwinBossController : MonoBehaviour
             yield return null;
         }
         _beastRoutine = null;
+    }
+
+    /// <summary>
+    /// 짐승만 남았을 때 거합 차징 방해와 같은 가장자리 잠수 기습을 _harassFirstDelay 뒤 시작해 _harassInterval 간격으로 끝없이 반복한다.
+    /// 맞아서 무적 잠수(IsEscaping)로 피하는 동안은 기다렸다가 이어가며, 짐승이나 플레이어가 쓰러지면 끝낸다.
+    /// </summary>
+    private IEnumerator RepeatBeastAmbush()
+    {
+        float strikeAt = Time.time + _harassFirstDelay;
+        while (_beast.Health.IsAlive && _player.IsAlive)
+        {
+            while (_beast.IsEscaping) yield return null;
+            GetArenaCircle(out Vector3 center, out float radius);
+            yield return _beast.Ambush(_player, strikeAt, center, radius);
+            strikeAt = Time.time + _harassInterval;
+            yield return null;
+        }
     }
 
     /// <summary>
@@ -697,13 +716,15 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 둘 다 살아 있으면 SelectPairPattern의 협력 패턴을, 한쪽만 살아 있으면 생존자의 개별 패턴을 가중치로 선택해 반환한다.
+    /// 둘 다 살아 있으면 SelectPairPattern의 협력 패턴을, 짐승만 살아 있으면 반복 잠수 기습(BeastAmbush)을, 인간만 살아 있으면 인간 개별 패턴을 선택해 반환한다.
     /// </summary>
     private TwinBossPattern SelectPattern()
     {
         bool humanAlive = _human.Health.IsAlive;
         bool beastAlive = _beast.Health.IsAlive;
         if (humanAlive && beastAlive) return SelectPairPattern();
+        // 짐승만 남으면 거합 차징 방해 때의 잠수 기습만 끝없이 반복한다.
+        if (beastAlive) return TwinBossPattern.BeastAmbush;
         float cooperation = 0f;
         float human = humanAlive ? _humanRangedWeight : 0f;
         float zigzag = beastAlive ? _beastZigzagWeight : 0f;
@@ -810,6 +831,14 @@ public sealed class TwinBossController : MonoBehaviour
             if (_beastRoutine != null) StopCoroutine(_beastRoutine);
             _beast.InterruptAmbush();
             _beastRoutine = health.IsAlive && _iai.IsCharging ? StartCoroutine(EscapeThenHarass()) : null;
+            return;
+        }
+        // 혼자 남은 짐승의 반복 기습도 끊지 않고, 잠수해 피한 뒤 처음부터 다시 이어간다.
+        if (_pattern == TwinBossPattern.BeastAmbush && health == _beast.Health && health.IsAlive)
+        {
+            if (_patternRoutine != null) StopCoroutine(_patternRoutine);
+            _beast.InterruptAmbush();
+            _patternRoutine = StartCoroutine(RunPattern());
             return;
         }
         _hitRequested = true;

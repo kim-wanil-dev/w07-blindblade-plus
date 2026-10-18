@@ -108,6 +108,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _biteDuration = 0.35f;
     [SerializeField, Min(0f), Tooltip("덮치기 도약 몇 초 전에 짖음을 재생할지 정한다. 0이면 도약 순간에 재생한다.")]
     private float _pounceBarkLeadTime = 1f;
+    [SerializeField, Min(0f), Tooltip("덮치기 도약 몇 초 전에 늑대 눈이 번쩍이는지 정한다(PounceGlint).")]
+    private float _pounceGlintLeadTime = 0.3f;
     [SerializeField, Min(0f), Tooltip("덮치기가 플레이어 위치를 지나 최소한 더 나아가는 거리(미터)")]
     private float _pounceOvershoot = 3f;
     [SerializeField, Min(0f), Tooltip("덮치기 돌진 가운데에서 몸이 뜨는 최대 높이(미터). 시작과 끝은 땅 높이다.")]
@@ -130,6 +132,11 @@ public sealed class BeastBossAttack : MonoBehaviour
     [SerializeField, Tooltip("뛰어들고 튀어나올 때 크게 울리는 울음소리")]
     private SoundId _burrowCry = SoundId.BeastBossIdle;
     [SerializeField, Min(0f)] private float _burrowCryVolume = 2f;
+    [SerializeField, Tooltip("뛰어들고 튀어나올 때 입체로 울리는 물방울 소리")]
+    private SoundId _waterDropSound = SoundId.TwinBossWaterDrop;
+    [SerializeField, Range(0.25f, 4f), Tooltip("물방울 소리 피치 배율. 인간(0.7)보다 더 낮춘다.")]
+    private float _waterDropPitch = 0.5f;
+    [SerializeField, Min(0f)] private float _waterDropVolume = 1.2f;
     [SerializeField, Min(0f), Tooltip("멈춰 있다가 뛰어들 때도 앞으로 뛰어드는 최소 속도(미터/초). 달리던 중이면 그 기세를 이어받는다.")]
     private float _diveMinSpeed = 7f;
     [SerializeField, Min(0f), Tooltip("뛰어들며 이어받는 기세의 최대 속도(미터/초)")]
@@ -192,6 +199,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     public event Action AttackStarted;
     public event Action PounceApproaching;
     public event Action PounceStarted;
+    public event Action PounceGlint;
     public event Action Landed;
 
     void Awake()
@@ -520,7 +528,7 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 점점 붉게 물들이고, 완전히 붉어지는 순간 Pounce로 _biteDamage 직선 덮치기를 한다.
-    /// chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다.
+    /// chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다. 돌진 _pounceGlintLeadTime 전에 눈이 번쩍이도록 PounceGlint를 한 번 알린다.
     /// </summary>
     private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float radius, bool chargeRipple)
     {
@@ -533,6 +541,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         _preparing = true;
         float until = Time.time + _biteTelegraph;
         bool barkPlayed = false;
+        bool glinted = false;
         // 연기가 완전히 붉어진 다음에야 돌진한다.
         while ((Time.time < until || _warning.Intensity < 1f) && CanAttack(player))
         {
@@ -541,6 +550,11 @@ public sealed class BeastBossAttack : MonoBehaviour
             {
                 PounceApproaching?.Invoke();
                 barkPlayed = true;
+            }
+            if (!glinted && until - Time.time <= _pounceGlintLeadTime)
+            {
+                PounceGlint?.Invoke();
+                glinted = true;
             }
             FaceTowards(player.transform.position);
             yield return null;
@@ -553,6 +567,7 @@ public sealed class BeastBossAttack : MonoBehaviour
             yield break;
         }
         if (!barkPlayed) PounceApproaching?.Invoke();
+        if (!glinted) PounceGlint?.Invoke();
         yield return Pounce(player, center, radius, _biteDamage, "TwinBeastBite");
     }
 
@@ -740,11 +755,16 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (burrowed) BurrowDepth = 1f;
     }
 
-    /// <summary>position 지면에 큰 물 파동을 시야 맵에 등록하고 울음소리를 _burrowCryVolume으로 크게 재생한다.</summary>
+    /// <summary>
+    /// position 지면에 큰 물 파동을 시야 맵에 등록하고 울음소리를 _burrowCryVolume으로 크게 재생하며,
+    /// 물방울 소리 _waterDropSound를 _waterDropPitch로 낮춰 입체 재생한다.
+    /// </summary>
     private void EmitBurrowSignal(Vector3 position)
     {
         if (_burrowCry != SoundId.None)
             Managers.Sound.Play(_burrowCry, position, _burrowCryVolume, gameObject, true);
+        if (_waterDropSound != SoundId.None)
+            Managers.Sound.Play(_waterDropSound, position, _waterDropVolume, gameObject, true, _waterDropPitch);
         if (_revealMap == null && Game.IsInitialized && Game.Instance.SensoryManager != null)
             _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
         if (_revealMap != null) _revealMap.EmitRipple(position, _burrowRipple, transform);

@@ -6,6 +6,7 @@ using UnityEngine;
 /// 연기와 같은 재질로 그린다. 트레일은 연기 렌더러에 속하므로 연기처럼 파동에 드러날 때만 보인다.
 /// Awake에서 늑대 몸체 밖(이 오브젝트 아래)에 복제해 털 연기 조정(TwinBeastSmokeTuning)이 건드리지 않게 하고, Start에서 늑대 머리(_head) 자식으로 옮기며
 /// 짐승 TwinBossWarningVisual에 렌더러를 더해 윤곽선 색이 몸통과 함께 바뀌게 한다. 잠수 중에는 방출을 멈춘다.
+/// 덮치기 직전(BeastBossAttack.PounceGlint)에는 두 눈에서 파동과 상관없이 보이는 붉은 빛이 좌우로 길게 짧게 번쩍인다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TwinBeastEyes : MonoBehaviour
@@ -13,6 +14,8 @@ public sealed class TwinBeastEyes : MonoBehaviour
     private const string BODY_SMOKE_NAME = "BodySmoke";
     private const string TRAILING_WISPS_NAME = "TrailingWisps";
     private const float HIDDEN_PARTICLE_SIZE = 0.001f;
+    private const int GLINT_TEXTURE_SIZE = 64;
+    private const float GLINT_SORTING_FUDGE = 100f;
 
     [Header("연결")]
     [SerializeField] private BeastBossAttack _beast;
@@ -52,6 +55,17 @@ public sealed class TwinBeastEyes : MonoBehaviour
     private float _flutterScale = 0.3f;
     private Vector3 _previousHeadPosition;
 
+    [Header("돌진 전 번쩍임")]
+    [SerializeField, Tooltip("번쩍임 색")]
+    private Color _glintColor = new Color(1f, 0.08f, 0.05f, 1f);
+    [SerializeField, Min(0.01f), Tooltip("번쩍임이 가장 커졌을 때 크기(미터)")]
+    private float _glintSize = 0.45f;
+    [SerializeField, Min(0.1f), Tooltip("번쩍임 좌우 길이를 세로 크기의 몇 배로 늘일지 정한다")]
+    private float _glintWidthScale = 2f;
+    [SerializeField, Min(0.01f), Tooltip("번쩍임이 커졌다 사라지는 시간(초)")]
+    private float _glintDuration = 0.15f;
+    private ParticleSystem[] _glints;
+
     void Awake()
     {
         _eyes = new Transform[_eyeOffsets.Length];
@@ -79,6 +93,13 @@ public sealed class TwinBeastEyes : MonoBehaviour
             _beast.GetComponent<TwinBossWarningVisual>().AddRenderers(_eyes[i]);
         }
         _previousHeadPosition = _head.position;
+        CreateGlints();
+        _beast.PounceGlint += HandlePounceGlint;
+    }
+
+    void OnDestroy()
+    {
+        _beast.PounceGlint -= HandlePounceGlint;
     }
 
     void LateUpdate()
@@ -91,6 +112,100 @@ public sealed class TwinBeastEyes : MonoBehaviour
             else if (!hidden && !smoke.isEmitting) smoke.Play(false);
             ParticleSystem.TrailModule trails = smoke.trails;
             trails.lifetimeMultiplier = lifetime;
+        }
+    }
+
+    /// <summary>
+    /// 눈마다 머리(_head) 아래 같은 위치에 한 번만 별빛 하나를 터뜨리는 파티클을 만든다. 눈 연기 재질·_glintColor·_glintSize(가로는 _glintWidthScale배)로
+    /// _glintDuration 동안 커졌다 사라지며, 짐승 TwinBossWarningVisual의 붉은 번쩍임 대상으로 더해 파동에 드러나지 않아도 붉은 테두리로 보이게 한다. 만든 파티클을 _glints에 저장한다.
+    /// </summary>
+    private void CreateGlints()
+    {
+        _glints = new ParticleSystem[_eyeOffsets.Length];
+        Texture2D glintShape = CreateGlintShape();
+        for (int i = 0; i < _eyeOffsets.Length; i++)
+        {
+            GameObject glint = new GameObject("WolfEyeGlint_" + i);
+            glint.SetActive(false);
+            glint.transform.SetParent(_head, false);
+            glint.transform.localPosition = _eyeOffsets[i];
+            ParticleSystem particles = glint.AddComponent<ParticleSystem>();
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = particles.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.duration = _glintDuration;
+            main.startLifetime = _glintDuration;
+            main.startSpeed = 0f;
+            // 좌우로 길게 늘인 번쩍임이라 가로만 _glintWidthScale배로 키운다.
+            main.startSize3D = true;
+            main.startSizeX = _glintSize * _glintWidthScale;
+            main.startSizeY = _glintSize;
+            main.startSizeZ = _glintSize;
+            main.startColor = _glintColor;
+            main.startRotation = 0f;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.maxParticles = 1;
+            ParticleSystem.EmissionModule emission = particles.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.enabled = false;
+            // 짧게 확 커졌다가 바로 사라지는 삐칭 하는 번쩍임이다.
+            ParticleSystem.SizeOverLifetimeModule size = particles.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
+                new Keyframe(0f, 0f), new Keyframe(0.25f, 1f), new Keyframe(1f, 0f)));
+            ParticleSystemRenderer renderer = glint.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            // 털 연기보다 늘 앞에 그려 연기에 덮여 흐려지지 않게 한다.
+            renderer.sortingFudge = -GLINT_SORTING_FUDGE;
+            // 눈 연기와 같은 재질로 그려 몸통처럼 파동에 드러날 때만 보이고, 붉은 번쩍임 테두리는 경고 마스크가 늘 그린다.
+            renderer.sharedMaterial = _smokes[i].GetComponent<ParticleSystemRenderer>().sharedMaterial;
+            glint.AddComponent<OutlineVFX>();
+            glint.SetActive(true);
+            _beast.GetComponent<TwinBossWarningVisual>().AddRedFlashRenderers(glint.transform, glintShape);
+            _glints[i] = particles;
+        }
+    }
+
+    /// <summary>
+    /// 가장자리가 또렷한 네 갈래 별 모양 흰 텍스처를 GLINT_TEXTURE_SIZE 크기로 만들어 반환한다.
+    /// |x|^0.5 + |y|^0.5 ≤ 1 안쪽만 채우고 경계는 한 픽셀만 부드럽게 해 연기처럼 번지지 않는다.
+    /// </summary>
+    private static Texture2D CreateGlintShape()
+    {
+        Texture2D texture = new Texture2D(GLINT_TEXTURE_SIZE, GLINT_TEXTURE_SIZE, TextureFormat.RGBA32, false)
+        {
+            name = "WolfEyeGlintShape",
+            wrapMode = TextureWrapMode.Clamp,
+            filterMode = FilterMode.Bilinear
+        };
+        Color32[] pixels = new Color32[GLINT_TEXTURE_SIZE * GLINT_TEXTURE_SIZE];
+        float pixel = 2f / GLINT_TEXTURE_SIZE;
+        for (int y = 0; y < GLINT_TEXTURE_SIZE; y++)
+        {
+            for (int x = 0; x < GLINT_TEXTURE_SIZE; x++)
+            {
+                float u = Mathf.Abs((x + 0.5f) * pixel - 1f);
+                float v = Mathf.Abs((y + 0.5f) * pixel - 1f);
+                float star = Mathf.Sqrt(u) + Mathf.Sqrt(v);
+                byte alpha = (byte)(Mathf.Clamp01((1f - star) / pixel + 0.5f) * 255f);
+                pixels[y * GLINT_TEXTURE_SIZE + x] = new Color32(255, 255, 255, alpha);
+            }
+        }
+        texture.SetPixels32(pixels);
+        texture.Apply(false, true);
+        return texture;
+    }
+
+    /// <summary>덮치기 직전 알림(BeastBossAttack.PounceGlint)마다 두 눈의 별빛 _glints를 처음부터 다시 터뜨린다.</summary>
+    private void HandlePounceGlint()
+    {
+        foreach (ParticleSystem glint in _glints)
+        {
+            glint.Clear(false);
+            glint.Play(false);
         }
     }
 
