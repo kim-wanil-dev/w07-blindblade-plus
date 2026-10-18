@@ -9,6 +9,7 @@ using UnityEngine.AI;
 public sealed class EnemyFootsteps : MonoBehaviour
 {
     private const float FOOTSTEP_VOLUME = 1.7782794f; // +5 dB = 10^(5/20).
+    private const float MIN_FOOTSTEP_SOUND_INTERVAL = 0.18f;
 
     [Header("발걸음 설정")]
     [SerializeField] private bool _useAnimationEvents;
@@ -20,8 +21,10 @@ public sealed class EnemyFootsteps : MonoBehaviour
     private EnemySensor _sensor;
     private RainyStageAudio _rainAudio;
     private EnemyAttackBehaviour[] _attacks;
+    private DefenseBeastWolfVisual _beastVisual;
     private Vector3 _previousPosition;
     private float _distanceSinceStep;
+    private float _nextFootstepSoundTime;
 
     public event Action<Vector3> Footstep;
 
@@ -32,6 +35,7 @@ public sealed class EnemyFootsteps : MonoBehaviour
         _sensor = GetComponent<EnemySensor>();
         _rainAudio = FindFirstObjectByType<RainyStageAudio>();
         _attacks = GetComponents<EnemyAttackBehaviour>();
+        _beastVisual = GetComponentInChildren<DefenseBeastWolfVisual>(true);
     }
 
     void Start()
@@ -43,20 +47,21 @@ public sealed class EnemyFootsteps : MonoBehaviour
 
     void OnEnable()
     {
-    _agent = GetComponent<NavMeshAgent>();
-    _emitter = GetComponent<FootstepEmitter>();
-    _sensor = GetComponent<EnemySensor>();
-    _attacks = GetComponents<EnemyAttackBehaviour>();
         _previousPosition = transform.position;
         _distanceSinceStep = 0f;
+        _nextFootstepSoundTime = float.NegativeInfinity;
         if (_emitter != null)
             _emitter.OnFootstepEmitted += HandleGroundContact;
+        if (_useAnimationEvents && _beastVisual != null)
+            _beastVisual.PawPlanted += HandleAnimationFootstep;
     }
 
     void OnDisable()
     {
         if (_emitter != null)
             _emitter.OnFootstepEmitted -= HandleGroundContact;
+        if (_useAnimationEvents && _beastVisual != null)
+            _beastVisual.PawPlanted -= HandleAnimationFootstep;
     }
 
     void LateUpdate()
@@ -91,10 +96,17 @@ public sealed class EnemyFootsteps : MonoBehaviour
     /// </summary>
     public void NotifyFootstep()
     {
-        if (_emitter != null && _emitter.isActiveAndEnabled)
-            return;
         if (_useAnimationEvents && IsWalking())
             EmitFootstep(transform.position);
+    }
+
+    /// <summary>
+    /// animation mode에서 전달된 발 접촉 위치 position에 발소리를 재생하고 Footstep 이벤트를 발생시킨다.
+    /// </summary>
+    public void NotifyFootstep(Vector3 position)
+    {
+        if (_useAnimationEvents)
+            EmitFootstep(position);
     }
 
     /// <summary>
@@ -102,6 +114,15 @@ public sealed class EnemyFootsteps : MonoBehaviour
     /// 별도 효과를 생성하지 않아 발자국 생성과 접촉 알림이 한 경로에서 처리된다.
     /// </summary>
     private void HandleGroundContact(Transform character, Vector3 position)
+    {
+        if (!_useAnimationEvents)
+            EmitFootstep(position);
+    }
+
+    /// <summary>
+    /// DefenseBeastWolfVisual이 알린 실제 발 접촉 위치에서 발소리를 재생하고 Footstep 이벤트를 발생시킨다.
+    /// </summary>
+    private void HandleAnimationFootstep(Vector3 position)
     {
         EmitFootstep(position);
     }
@@ -117,8 +138,8 @@ public sealed class EnemyFootsteps : MonoBehaviour
     }
 
     /// <summary>
-    /// position에서 공통 발걸음 소리를 5dB 증폭하여 한 번 요청하고 C# 이벤트에 위치를 전달한다.
-    /// 공격 이동 중에는 플레이어 이동 음소거를 우회하고 None 설정이면 사운드 요청을 생략한다.
+    /// position에서 공통 발걸음 소리를 5dB 증폭하여 최소 간격으로 재생하고 C# 이벤트에 위치를 전달한다.
+    /// 같은 적의 이전 발소리는 즉시 정지하며, None 설정이어도 위치 이벤트는 전달한다.
     /// </summary>
     private void EmitFootstep(Vector3 position)
     {
@@ -134,9 +155,13 @@ public sealed class EnemyFootsteps : MonoBehaviour
                 break;
             }
         }
-        if (soundId != SoundId.None)
+        if (soundId != SoundId.None && Time.time >= _nextFootstepSoundTime)
+        {
+            _nextFootstepSoundTime = Time.time + MIN_FOOTSTEP_SOUND_INTERVAL;
+            Managers.Sound.StopFor(gameObject, soundId, forceStop: true);
             Managers.Sound.Play(soundId, position, volume: FOOTSTEP_VOLUME, owner: gameObject,
                 playDuringMovement: attackMovement);
+        }
         Footstep?.Invoke(position);
     }
 }

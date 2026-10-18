@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using UnityEngine;
@@ -224,6 +225,7 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     internal static IReadOnlyCollection<DefenseBeastWolfVisual> ActiveInstances => _active;
     public IReadOnlyList<Renderer> BodyRenderers => _bodyRenderers;
     public float WarningIntensity => _warningVisual.Intensity;
+    public event Action<Vector3> PawPlanted;
 
     void Awake()
     {
@@ -351,8 +353,8 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     {
         if (Time.time >= _nextIdleActionAt)
         {
-            _idleAction = (_idleAction + Random.Range(1, IDLE_ACTION_COUNT)) % IDLE_ACTION_COUNT;
-            _nextIdleActionAt = Time.time + Random.Range(_idleActionMin, Mathf.Max(_idleActionMin, _idleActionMax));
+            _idleAction = (_idleAction + UnityEngine.Random.Range(1, IDLE_ACTION_COUNT)) % IDLE_ACTION_COUNT;
+            _nextIdleActionAt = Time.time + UnityEngine.Random.Range(_idleActionMin, Mathf.Max(_idleActionMin, _idleActionMax));
         }
         for (int i = 0; i < IDLE_ACTION_COUNT; i++)
             _idleWeights[i] = Mathf.MoveTowards(_idleWeights[i], i == _idleAction ? 1f : 0f, _idleActionBlend * deltaTime);
@@ -521,7 +523,7 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
             _hips[i].localRotation = Quaternion.Euler(hip, 0f, 0f);
             _knees[i].localRotation = Quaternion.Euler(knee, 0f, 0f);
             _ankles[i].localRotation = Quaternion.Euler(ankle, 0f, 0f);
-            NotifyPawContact(i, legPhase, duty, stride * (1f - _leap));
+            NotifyPawContact(i, legPhase, duty, stride * (1f - _leap), paw);
         }
     }
 
@@ -605,9 +607,9 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
     /// <summary>
     /// leg 다리의 이번 위상 legPhase가 발이 닿는 순간을 지나면 걸음 비중 stride만큼 몸을 눌러 스프링 반발을 일으킨다.
     /// 앞으로 걸을 때는 위상이 한 바퀴 돌아 0을, 뒷걸음질할 때는 거꾸로 돌며 디딤 비율 duty를 지나는 순간이 발이 닿는 때다.
-    /// 지난 위상은 _previousLegPhases에 저장한다.
+    /// 실제 발 접촉 시 paw의 지면 위치를 알리고 지난 위상은 _previousLegPhases에 저장한다.
     /// </summary>
-    private void NotifyPawContact(int leg, float legPhase, float duty, float stride)
+    private void NotifyPawContact(int leg, float legPhase, float duty, float stride, Vector3 paw)
     {
         float previous = _previousLegPhases[leg];
         _previousLegPhases[leg] = legPhase;
@@ -617,6 +619,10 @@ public sealed class DefenseBeastWolfVisual : MonoBehaviour
         if (!planted) return;
         // 제자리 발 바꿈도 약하게 눌러 숨 쉬듯 출렁이게 한다.
         _springVelocity -= _contactImpulse * Mathf.Max(stride, 0.15f);
+        if (stride < 0.2f) return;
+        Vector3 ground = transform.TransformPoint(paw);
+        ground.y = _beastRoot.position.y;
+        PawPlanted?.Invoke(ground);
     }
 
     /// <summary>

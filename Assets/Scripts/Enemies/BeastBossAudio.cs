@@ -15,7 +15,7 @@ public sealed class BeastBossAudio : MonoBehaviour
     [Header("물 발소리")]
     [SerializeField, Min(0f), Tooltip("플레이어 일반 보행의 물 발소리 배율 0.6 대비 약 10dB 큰 짐승 발소리 배율")]
     private float _waterFootstepVolume = 1.9f;
-    [SerializeField, Min(0.01f)] private float _waterFootstepInterval = 0.12f;
+    [SerializeField, Min(0.18f)] private float _waterFootstepInterval = 0.18f;
 
     [Header("칼 적중음")]
     [SerializeField, Min(0f)] private float _swordHitVolume = 1.1f;
@@ -38,10 +38,9 @@ public sealed class BeastBossAudio : MonoBehaviour
 
     void OnEnable()
     {
+        _nextWaterFootstepTime = float.NegativeInfinity;
         _attack.AttackPreparing += HandleAttack;
-        _attack.AttackStarted += HandleAttackStarted;
         _attack.PounceApproaching += HandlePounceApproaching;
-        _attack.Landed += HandleLanding;
         _wolfVisual.PawPlanted += HandlePawPlanted;
         _health.Damaged += HandleDamage;
         _health.Died += HandleDeath;
@@ -55,12 +54,6 @@ public sealed class BeastBossAudio : MonoBehaviour
         Managers.Sound.Play(_attackSound, transform.position, owner: gameObject, playDuringMovement: true);
     }
 
-    /// <summary>짐승이 돌진 또는 점프를 시작하면 같은 물 발소리로 출발 충격을 재생한다.</summary>
-    private void HandleAttackStarted()
-    {
-        PlayWaterFootstep(transform.position, true);
-    }
-
     /// <summary>짐승의 덮치기 도약 전 정해진 시각에 낮춘 짖음 이벤트를 한 번 재생한다.</summary>
     private void HandlePounceApproaching()
     {
@@ -68,25 +61,20 @@ public sealed class BeastBossAudio : MonoBehaviour
             playDuringMovement: true);
     }
 
-    /// <summary>짐승이 돌진 또는 점프 착지에 성공하면 같은 물 발소리로 착지 충격을 재생한다.</summary>
-    private void HandleLanding()
-    {
-        PlayWaterFootstep(transform.position, true);
-    }
-
-    /// <summary>짐승의 네 발 중 하나가 position에 닿으면 짧은 간격을 두고 물 발소리를 재생한다.</summary>
+    /// <summary>짐승의 네 발 중 하나가 실제 지면에 닿으면 짧은 간격을 두고 물 발소리를 재생한다.</summary>
     private void HandlePawPlanted(Vector3 position)
     {
-        PlayWaterFootstep(position, false);
+        PlayWaterFootstep(position);
     }
 
-    /// <summary>씬의 물 발소리 옵션이 켜졌을 때 position에 소리를 재생한다. force가 거짓이면 연속 발디딤을 제한하고 다음 허용 시각을 갱신한다.</summary>
-    private void PlayWaterFootstep(Vector3 position, bool force)
+    /// <summary>씬의 물 발소리 옵션이 켜졌을 때 position에 물 발소리를 재생하고 다음 허용 시각을 갱신한다.</summary>
+    private void PlayWaterFootstep(Vector3 position)
     {
         if (_rainAudio == null || !_rainAudio.isActiveAndEnabled || !_rainAudio.UseWaterFootsteps)
             return;
-        if (!force && Time.time < _nextWaterFootstepTime) return;
+        if (Time.time < _nextWaterFootstepTime) return;
         _nextWaterFootstepTime = Time.time + _waterFootstepInterval;
+        Managers.Sound.StopFor(gameObject, SoundId.EnemyWaterFootstep, forceStop: true);
         Managers.Sound.Play(SoundId.EnemyWaterFootstep, position, volume: _waterFootstepVolume,
             owner: gameObject, playDuringMovement: true);
     }
@@ -121,9 +109,7 @@ public sealed class BeastBossAudio : MonoBehaviour
     void OnDisable()
     {
         _attack.AttackPreparing -= HandleAttack;
-        _attack.AttackStarted -= HandleAttackStarted;
         _attack.PounceApproaching -= HandlePounceApproaching;
-        _attack.Landed -= HandleLanding;
         _wolfVisual.PawPlanted -= HandlePawPlanted;
         _health.Damaged -= HandleDamage;
         _health.Died -= HandleDeath;

@@ -4352,6 +4352,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 6157129979308615409, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _useAnimationEvents
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2677635689661560472, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _moveSpeed
       value: 7.2

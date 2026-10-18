@@ -20,6 +20,10 @@ public sealed class BambooStage1Controller : MonoBehaviour
     [SerializeField] private CanvasGroup _warning;
 
     [Header("보스 등장 조건과 위치")]
+    [SerializeField]
+    [InspectorName("시작 시 즉시 보스전")]
+    [Tooltip("켜면 일반 적 웨이브와 보스 경고를 건너뛰고 보스전으로 시작합니다. 보스 체크포인트가 저장되므로 일반 웨이브로 돌아가려면 스테이지 진행 정보를 초기화해야 합니다.")]
+    private bool _startBossImmediately;
     [SerializeField, Min(1)] private int _requiredKills = 5;
     [SerializeField, Min(0f)] private float _warningDuration = 2f;
     [SerializeField, Min(0f)] private float _edgeInset = 2f;
@@ -69,9 +73,10 @@ public sealed class BambooStage1Controller : MonoBehaviour
     void Start()
     {
         BambooStage1Progress.MarkStage1Started();
-        if (!BambooStage1Progress.BossCheckpointReached) return;
+        if (!_startBossImmediately && !BambooStage1Progress.BossCheckpointReached) return;
 
-        Debug.Log("BambooStage1 저장 데이터에 보스 체크포인트가 있어 일반 적 웨이브를 건너뛰고 보스전을 시작합니다.", this);
+        string startReason = _startBossImmediately ? "Inspector 설정" : "저장된 보스 체크포인트";
+        Debug.Log($"BambooStage1 {startReason}으로 일반 적 웨이브를 건너뛰고 보스전을 시작합니다.", this);
 
         PlayerController player = Game.Player;
         Vector3 forward = Vector3.ProjectOnPlane(player.GetComponent<PlayerMotor>().ViewForward, Vector3.up);

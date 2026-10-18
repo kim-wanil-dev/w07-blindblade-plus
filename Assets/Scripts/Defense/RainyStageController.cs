@@ -24,6 +24,10 @@ public sealed class RainyStageController : MonoBehaviour
     [SerializeField] private RainyStageAudio _rainAudio;
 
     [Header("보스 등장 조건")]
+    [SerializeField]
+    [InspectorName("시작 시 즉시 보스전")]
+    [Tooltip("켜면 일반 적 웨이브와 보스 경고를 건너뛰고 쌍둥이 보스전으로 시작합니다. 보스 체크포인트가 저장되므로 일반 웨이브로 돌아가려면 스테이지 진행 정보를 초기화해야 합니다.")]
+    private bool _startBossImmediately;
     [SerializeField, Min(1), Tooltip("이 수만큼 일반 적을 처치하면 보스 등장 경고가 시작됩니다.")]
     private int _requiredKills = 50;
     [SerializeField, Range(256, 8192), Tooltip("보스가 등장할 때 적용할 가까운 빗방울 수입니다.")]
@@ -78,8 +82,10 @@ public sealed class RainyStageController : MonoBehaviour
     {
         _twinBoss.GetComponent<TwinBossController>().ConfigureArena(_arena, _edgeInset);
         BambooStage1Progress.MarkRainyStageReached();
-        if (BambooStage1Progress.RainyBossCheckpointReached)
+        if (_startBossImmediately || BambooStage1Progress.RainyBossCheckpointReached)
         {
+            string startReason = _startBossImmediately ? "Inspector 설정" : "저장된 보스 체크포인트";
+            Debug.Log($"RainyStage {startReason}으로 일반 적 웨이브를 건너뛰고 보스전을 시작합니다.", this);
             PlayerController player = Game.Player;
             if (!TryFindBossPosition(out Vector3 retryPosition))
             {
