@@ -31,18 +31,23 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     [SerializeField, Min(0f)] private float _throwerMaximumHeight = 5.5f;
     [SerializeField, Min(0f), Tooltip("투척수끼리 유지하는 최소 거리(미터)")]
     private float _throwerSeparation = 3f;
+    [SerializeField, Min(0f), Tooltip("준비가 끝난 뒤 첫 투척수가 나타나기까지 기다리는 시간"), InspectorName("준비 종료 후 투척수 등장 지연 (초)")]
+    private float _throwerStartTime = 0f;
     [SerializeField, Min(0), InspectorName("투척수 시작 수 (명)")] private int _initialThrowers = 3;
-    [SerializeField, Min(0f), Tooltip("분당 늘어나는 목표 투척수"), InspectorName("분당 목표 투척수 증가 (명/분)")]
+    [SerializeField, Min(0f), Tooltip("등장 시작 후 동시 생존 목표 수를 1분마다 늘리는 양"), InspectorName("동시 투척수 목표 증가 (명/분)")]
     private float _throwersPerMinute = 3f;
     [SerializeField, Min(1), Tooltip("성능 보호용 최대 투척수"), InspectorName("투척수 동시 생존 상한 (명)")]
     private int _maximumThrowers = 12;
-    [SerializeField, Min(0f), InspectorName("투척수 추가 간격 (초)")] private float _throwerSpawnInterval = 1.33f;
+    [SerializeField, Min(0f), Tooltip("목표 수를 채우거나 사망한 투척수를 보충할 때 다음 투척수까지 기다리는 최소 시간"), InspectorName("실제 추가 스폰 간격 (초)")]
+    private float _throwerSpawnInterval = 1.33f;
     private readonly List<BambooThrower> _activeThrowers = new List<BambooThrower>();
     private readonly Stack<BambooThrower> _idleThrowers = new Stack<BambooThrower>();
     private float _nextThrowerSpawnAt;
 
     [Header("근접 적")]
     [SerializeField] private GameObject _meleePrefab;
+    [SerializeField, InspectorName("근접 적 바닥 발자국 표시"), Tooltip("켜면 일반 근접 적과 Beast가 이동할 때 바닥에 남기는 발자국을 표시한다. 발소리와 걸음 파동은 유지한다.")]
+    private bool _showMeleeGroundFootprints = true;
     [SerializeField, Min(0f), Tooltip("근접 적이 나타나는 최소 반경. 숲 안쪽 가장자리 근처로 설정한다.")]
     private float _meleeSpawnMinimumRadius = 24f;
     [SerializeField, Min(0f), Tooltip("근접 적이 나타나는 최대 반경. 플레이어까지 경로가 있는 숲 안 위치만 사용한다.")]
@@ -133,7 +138,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         return false;
     }
 
-    /// <summary>now를 기준으로 준비 종료 후 첫 근접 스폰 시각을 설정한다.</summary>
+    /// <summary>now와 _meleeStartTime을 사용해 준비 종료 후 첫 근접 스폰 시각을 설정한다.</summary>
     internal void Begin(float now)
     {
         if (_waveStopped)
@@ -206,13 +211,17 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     }
 
     /// <summary>
-    /// 생존 시간에 비례하는 목표 투척수보다 적으면 스폰 간격마다 빈 위치에 투척수를 하나 배치한다.
-    /// 목표 수는 시작 수에 분당 증가량을 선형으로 더하고 성능 보호 상한으로 제한한다.
+    /// elapsed와 _throwerStartTime으로 목표 투척수와 생성 시작 시점을 계산한다.
+    /// 생성 간격에 따라 투척수를 _activeThrowers에 추가하고 다음 생성 시각을 갱신한다.
     /// </summary>
     private void UpdateThrowers(float elapsed)
     {
+        float elapsedSinceStart = elapsed - Mathf.Max(0f, _throwerStartTime);
+        if (elapsedSinceStart < 0f)
+            return;
+
         int target = Mathf.Min(_maximumThrowers,
-            _initialThrowers + Mathf.FloorToInt(elapsed / 60f * _throwersPerMinute));
+            _initialThrowers + Mathf.FloorToInt(elapsedSinceStart / 60f * _throwersPerMinute));
         if (_activeThrowers.Count >= target || Time.time < _nextThrowerSpawnAt)
             return;
         if (!TryFindThrowerPosition(null, out Vector3 position))
@@ -238,6 +247,9 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             UpdateTimedMelee(elapsed);
             return;
         }
+        if (elapsed < Mathf.Max(0f, _meleeStartTime))
+            return;
+
         float minutes = Mathf.Max(0f, elapsed - _meleeStartTime) / 60f;
         float spawnsPerMinute = _meleeSpawnsPerMinute + _meleeSpawnGrowthPerMinute * minutes;
         int tier = 0;
@@ -557,6 +569,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         GameObject prefab = isBeast ? _beastPrefab : _meleePrefab;
         GameObject root = Instantiate(prefab, transform.position, Quaternion.identity, _unitRoot);
         root.SetActive(false);
+        root.GetComponent<FootstepEmitter>().SetGroundFootprintsVisible(_showMeleeGroundFootprints);
         MeleeUnit unit = new MeleeUnit(root, isBeast);
         _meleeByHealth.Add(unit.Health, unit);
         unit.Health.Died += HandleMeleeDied;

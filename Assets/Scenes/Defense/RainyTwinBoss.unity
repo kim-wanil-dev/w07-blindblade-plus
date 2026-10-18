@@ -56604,6 +56604,7 @@ MonoBehaviour:
   _throwerMinimumHeight: 0.6
   _throwerMaximumHeight: 5.5
   _throwerSeparation: 3
+  _throwerStartTime: 5
   _initialThrowers: 1
   _throwersPerMinute: 2
   _maximumThrowers: 6
