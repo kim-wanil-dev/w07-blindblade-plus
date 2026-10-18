@@ -1,5 +1,9 @@
 # Feature Specifications
 
+## 계획 문서
+
+- [전투 텔레메트리 0.1.3 업데이트 계획](plans/전투_텔레메트리_0.1.3_업데이트_계획.md): 0.1.2 대비 2-1·2-2, 일반 Beast, Twin Boss 부모 패턴 및 개별 공격, Google Sheets와 분석 사이트 확장. S0–S7, Apps Script와 Sites v10 배포를 확인했다. Apps Script 범위 읽기 최적화 배포 후 Events 54,087건·Sessions 543건·OnboardingSteps 335건이 자동 연결됐고, 0.1.3 빌드와 2-1·2-2 세션 집계를 확인했다.
+
 ## 관리 규칙
 
 - 기능별 명세는 `docs/features/기능명.md`에 작성한다.

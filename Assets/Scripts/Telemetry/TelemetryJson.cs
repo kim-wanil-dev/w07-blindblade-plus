@@ -12,7 +12,7 @@ namespace BlindBlade.Telemetry
     /// <summary>Unity 객체 참조 없이 공통 계약 값을 저장용 JSON으로 변환한다.</summary>
     internal static class TelemetryJson
     {
-        internal const string SCHEMA_VERSION = "0.3.0";
+        internal const string SCHEMA_VERSION = "0.4.0";
         private const int KOREA_STANDARD_TIME_OFFSET_HOURS = 9;
 
         /// <summary>stamp의 세 공통 시계를 JSON 숫자로 복사하여 반환한다.</summary>

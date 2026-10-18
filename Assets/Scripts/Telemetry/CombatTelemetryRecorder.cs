@@ -20,7 +20,7 @@ namespace BlindBlade.Telemetry
 
         [Header("원본 저장")]
         [SerializeField] private bool _recordingEnabled = true;
-        [SerializeField] private string _configVersion = "stage1-analysis-v3";
+        [SerializeField] private string _configVersion = "combat-analysis-0.1.3";
         [SerializeField, Min(64)] private int _bufferLimit = 4096;
         [SerializeField, Min(0.2f)] private float _flushIntervalSeconds = 2f;
         [SerializeField, Min(1)] private int _maximumStorageMegabytes = 100;
@@ -42,12 +42,17 @@ namespace BlindBlade.Telemetry
         private readonly HashSet<int> _guardContacts = new HashSet<int>();
         private JObject _counts;
         private JObject _patterns;
+        private JObject _bossPatterns;
         private CombatSessionRuntime _runtime;
         private CombatTelemetryService _service;
+        private RainyStageController _rainyStage;
+        private BambooStage1Controller _stage1Controller;
         private KatanaCombatCoordinator _combat;
         private GameStateManager _state;
         private string _sessionId;
+        private string _runId;
         private string _stageId;
+        private string _entryMode;
         private string _stageStartedKst;
         private long _sequence;
         private double _stageRealtime;
@@ -71,6 +76,7 @@ namespace BlindBlade.Telemetry
             _runtime = CombatSessionRuntime.Active;
             if (_runtime == null || !_runtime.IsInitialized || _health == null || !Game.IsInitialized) return;
             _sessionId = _runtime.Session.SessionId;
+            _runId = CombatTelemetryRunContext.EnsureRunId();
             _combat = _health.GetComponent<KatanaCombatCoordinator>();
             _state = Game.Instance.GameStateManager;
             _service = CombatTelemetryService.GetOrCreate(_bufferLimit, _flushIntervalSeconds, _maximumStorageMegabytes,
@@ -80,13 +86,39 @@ namespace BlindBlade.Telemetry
             _combat.Events.InputResolved += HandleInput;
             _combat.Events.DodgeChanged += HandleDodge;
             _state.StateChanged += HandleState;
-            if (_spawner != null) _spawner.EnemyKilled += HandleKill;
+            if (_spawner != null)
+            {
+                _spawner.EnemyKilled += HandleKill;
+                _spawner.EnemySpawned += HandleEnemySpawned;
+                _spawner.EnemyDefeated += HandleEnemyDefeated;
+                _spawner.EnemyDespawned += HandleEnemyDespawned;
+            }
             CombatTelemetrySignals.Raised += HandleSignal;
             _bound = true;
-            BeginStage(gameObject.scene.name == "BambooStage1"
-                ? (BambooStage1Progress.BossCheckpointReached ? "1-2" : "1-1") : "unassigned");
+            _rainyStage = gameObject.scene.name == "RainyTwinBoss"
+                ? FindObjectOfType<RainyStageController>() : null;
+            _stage1Controller = gameObject.scene.name == "BambooStage1"
+                ? FindObjectOfType<BambooStage1Controller>() : null;
+            if (_rainyStage != null)
+            {
+                _entryMode = _rainyStage.CurrentTelemetryEntryMode;
+                BeginStage(_rainyStage.CurrentTelemetryStageId);
+            }
+            else if (gameObject.scene.name == "BambooStage1")
+            {
+                _entryMode = _stage1Controller != null ? _stage1Controller.CurrentTelemetryEntryMode
+                    : BambooStage1Progress.BossCheckpointReached ? "checkpoint_retry" : CombatTelemetryRunContext.EntryMode;
+                BeginStage(_stage1Controller != null ? _stage1Controller.CurrentTelemetryStageId
+                    : BambooStage1Progress.BossCheckpointReached ? "1-2" : "1-1");
+            }
+            else
+            {
+                _entryMode = CombatTelemetryRunContext.EntryMode;
+                BeginStage("unassigned");
+            }
             Record("session_started", new JObject {
                 ["scene"] = gameObject.scene.path, ["isEditor"] = Application.isEditor,
+                ["runId"] = _runId, ["entryMode"] = _entryMode,
                 ["startedKst"] = _stageStartedKst, ["movementIntervalSeconds"] = _movementSampleIntervalSeconds,
                 ["reactionClock"] = "frameRealtime",
                 ["positionSpace"] = "Unity world XZ, metres" });
@@ -134,7 +166,19 @@ namespace BlindBlade.Telemetry
             _stageActive = _activeSeconds;
             _lastMovementActive = _activeSeconds;
             _counts = new JObject();
+            if (_stageId.StartsWith("1-") || _stageId.StartsWith("2-"))
+            {
+                foreach (string key in new[]
+                {
+                    "enemySpawnCount", "enemyMeleeSpawnCount", "enemyBeastSpawnCount", "enemyThrowerSpawnCount",
+                    "enemyDefeatCount", "enemyMeleeDefeatCount", "enemyBeastDefeatCount", "enemyThrowerDefeatCount",
+                    "enemyDespawnCount", "enemyMeleeDespawnCount", "enemyBeastDespawnCount", "enemyThrowerDespawnCount",
+                    "beastExpectedSpawnCount"
+                })
+                    _counts[key] = 0;
+            }
             _patterns = new JObject();
+            _bossPatterns = new JObject();
             _attacks.Clear();
             _pendingEnds.Clear();
             _completePending = false;
@@ -145,6 +189,30 @@ namespace BlindBlade.Telemetry
             _reactionTotal = 0;
             _reactionCount = 0;
             Record("stage_started", Summary("started"));
+            RecordStageConfiguration();
+        }
+
+        /// <summary>현재 stage와 연결된 Inspector 값을 stage_config 사건으로 저장한다.</summary>
+        private void RecordStageConfiguration()
+        {
+            JObject payload = new JObject { ["stageId"] = _stageId, ["entryMode"] = _entryMode };
+            if (_spawner != null)
+                payload.Merge(_spawner.GetTelemetryConfiguration);
+            if (_rainyStage != null)
+            {
+                payload["requiredKills"] = _rainyStage.TelemetryRequiredKills;
+                payload["startBossImmediately"] = _rainyStage.TelemetryStartsBossImmediately;
+                payload["arenaCenter"] = TelemetryJson.Position(_rainyStage.TelemetryArenaCenter);
+                payload["arenaRadius"] = _rainyStage.TelemetryArenaRadius;
+            }
+            else if (_stage1Controller != null)
+            {
+                payload["requiredKills"] = _stage1Controller.TelemetryRequiredKills;
+                payload["startBossImmediately"] = _stage1Controller.TelemetryStartsBossImmediately;
+                payload["arenaCenter"] = TelemetryJson.Position(_stage1Controller.TelemetryArenaCenter);
+                payload["arenaRadius"] = _stage1Controller.TelemetryArenaRadius;
+            }
+            Record("stage_config", payload);
         }
 
         /// <summary>reason으로 현재 구간을 종료한다. 남은 공격은 Interrupted로 구분하고 최종 요약을 디스크에 요청한다.</summary>
@@ -181,9 +249,11 @@ namespace BlindBlade.Telemetry
             _service.Enqueue(new JObject { ["schemaVersion"] = TelemetryJson.SCHEMA_VERSION,
                 ["contractVersion"] = "0.2.0", ["configVersion"] = Application.isEditor ? _configVersion + "-editor" : _configVersion,
                 ["buildVersion"] = Application.version, ["sessionId"] = _sessionId,
+                ["runId"] = _runId,
                 ["anonymousPlayerId"] = _service.AnonymousPlayerId, ["sessionGeneration"] = _runtime.Session.Generation,
                 ["stageId"] = _stageId, ["stageAttemptId"] = _sessionId + ":" + _stageId,
-                ["eventSequence"] = sequence, ["sourceId"] = "stage1.telemetry", ["sourceSequence"] = sequence,
+                ["entryMode"] = _entryMode,
+                ["eventSequence"] = sequence, ["sourceId"] = "combat.telemetry", ["sourceSequence"] = sequence,
                 ["eventType"] = type, ["occurredAt"] = TelemetryJson.Timestamp(time), ["recordedAt"] = TelemetryJson.Timestamp(time),
                 ["occurredAtKst"] = kst, ["recordedAtKst"] = kst,
                 ["correlation"] = TelemetryJson.Correlation(new CombatCorrelationIds(inputId, actionId, attackId,
@@ -198,10 +268,69 @@ namespace BlindBlade.Telemetry
                 string next = (string)data["stageId"];
                 if (next == _stageId) return;
                 FinishStage("cleared");
+                _entryMode = "natural_transition";
                 BeginStage(next);
                 return;
             }
             if (type == "stage_complete") { _completePending = true; return; }
+            if (type == "stage_config" || type == "enemy_spawned" || type == "enemy_defeated"
+                || type == "enemy_despawned" || type.StartsWith("boss_"))
+            {
+                if (_stageClosed) return;
+                if (type == "enemy_spawned")
+                {
+                    string archetype = (string)data["enemyArchetype"] ?? "Unknown";
+                    Add(_counts, "enemySpawnCount");
+                    Add(_counts, "enemy" + archetype + "SpawnCount");
+                    if (archetype == "Melee" || archetype == "Beast")
+                        Add(_counts, "beastExpectedSpawnCount", (double?)data["beastProbability"] ?? 0d);
+                }
+                else if (type == "enemy_defeated")
+                {
+                    string archetype = (string)data["enemyArchetype"] ?? "Unknown";
+                    Add(_counts, "enemyDefeatCount");
+                    Add(_counts, "enemy" + archetype + "DefeatCount");
+                }
+                else if (type == "enemy_despawned")
+                {
+                    string archetype = (string)data["enemyArchetype"] ?? "Unknown";
+                    Add(_counts, "enemyDespawnCount");
+                    Add(_counts, "enemy" + archetype + "DespawnCount");
+                }
+                else if (type == "boss_pattern_started")
+                    Add(BossPattern((string)data["parentPatternId"]), "started");
+                else if (type == "boss_pattern_ended")
+                {
+                    JObject pattern = BossPattern((string)data["parentPatternId"]);
+                    string outcome = (string)data["patternOutcome"] ?? "Unknown";
+                    Add(pattern, "ended");
+                    Add(pattern, "durationTotalSeconds", (double?)data["durationSeconds"] ?? 0d);
+                    if (outcome == "Completed") Add(pattern, "completed");
+                    else if (outcome == "InterruptedByPlayerHit") Add(pattern, "interrupted");
+                    else Add(pattern, "cancelled");
+                    Add(pattern, outcome);
+                }
+                else if (type == "boss_damage_received")
+                {
+                    string actor = (string)data["bossActor"] ?? "Unknown";
+                    Add(_counts, "twinBoss" + actor + "Damage", (double?)data["appliedDamage"] ?? 0d);
+                }
+                else if (type == "boss_actor_defeated")
+                {
+                    string actor = (string)data["bossActor"] ?? "Unknown";
+                    Add(_counts, "twinBoss" + actor + "Defeated");
+                    _counts["twinBoss" + actor + "DefeatTime"] = data["timeSinceStageStart"]?.DeepClone();
+                }
+                else if (type == "boss_pair_defeated")
+                {
+                    _counts["twinBossPairDefeated"] = true;
+                    _counts["twinBossHumanDefeatTime"] = data["humanDefeatTime"]?.DeepClone();
+                    _counts["twinBossBeastDefeatTime"] = data["beastDefeatTime"]?.DeepClone();
+                    _counts["twinBossStageClearTime"] = data["stageClearTime"]?.DeepClone();
+                }
+                Record(type, data, id);
+                return;
+            }
             if (_stageClosed || id == 0) return;
             if (type == "enemy_attack_started")
             {
@@ -258,7 +387,8 @@ namespace BlindBlade.Telemetry
                 Add(Pattern(attack), "damage", damage);
                 if (damage > 0) { Add(_counts, "damageHitCount"); Add(Pattern(attack), "damageHits"); }
                 if (inputId == 0 && outcome == "Dodge") inputId = _dodgeInputId;
-                if (inputId == 0 && outcome == "Hit") inputId = _guardInputId;
+                if (inputId == 0 && (outcome == "Hit" || outcome == "Guard"
+                    || outcome == "NormalParry" || outcome == "PerfectParry")) inputId = _guardInputId;
                 if (inputId != 0 && _inputs.TryGetValue(inputId, out PlayerInputRecord input))
                 {
                     bool guard = input.Kind == PlayerInputKind.GuardPress;
@@ -330,14 +460,58 @@ namespace BlindBlade.Telemetry
             if (!_stageClosed) Add(_counts, "kills");
         }
 
+        /// <summary>적 종류와 스폰 확률, 순번, 위치를 구성해 enemy_spawned 사건으로 저장한다.</summary>
+        private void HandleEnemySpawned(string enemyId, string enemyArchetype, int spawnOrdinal,
+            Vector3 position, float meleeProbability, float beastProbability)
+        {
+            HandleSignal("enemy_spawned", 0, new JObject {
+                ["enemyId"] = enemyId, ["enemyArchetype"] = enemyArchetype, ["spawnOrdinal"] = spawnOrdinal,
+                ["position"] = TelemetryJson.Position(position), ["meleeProbability"] = meleeProbability,
+                ["beastProbability"] = beastProbability });
+        }
+
+        /// <summary>처치한 적 종류와 생존 시간, 위치를 구성해 enemy_defeated 사건으로 저장한다.</summary>
+        private void HandleEnemyDefeated(string enemyId, string enemyArchetype, double lifetimeSeconds,
+            Vector3 position)
+        {
+            HandleSignal("enemy_defeated", 0, new JObject {
+                ["enemyId"] = enemyId, ["enemyArchetype"] = enemyArchetype,
+                ["lifetimeSeconds"] = lifetimeSeconds, ["position"] = TelemetryJson.Position(position) });
+        }
+
+        /// <summary>사망 이외 사유로 비활성화된 적 종류와 생존 시간, 위치를 사건으로 저장한다.</summary>
+        private void HandleEnemyDespawned(string enemyId, string enemyArchetype, double lifetimeSeconds,
+            Vector3 position, string reason)
+        {
+            HandleSignal("enemy_despawned", 0, new JObject {
+                ["enemyId"] = enemyId, ["enemyArchetype"] = enemyArchetype,
+                ["lifetimeSeconds"] = lifetimeSeconds, ["position"] = TelemetryJson.Position(position),
+                ["reason"] = reason });
+        }
+
         /// <summary>attack의 종류·패턴별 집계 객체를 반환하며 없으면 만든다.</summary>
         private JObject Pattern(JObject attack)
         {
-            string key = (string)attack["kind"] + ":" + (string)attack["patternId"];
+            string key = (string)attack["kind"] + ":" + (string)attack["patternId"]
+                + ":" + ((string)attack["parentPatternId"] ?? string.Empty);
             if (!(_patterns[key] is JObject value))
             {
-                value = new JObject { ["kind"] = attack["kind"], ["patternId"] = attack["patternId"] };
+                value = new JObject { ["kind"] = attack["kind"], ["patternId"] = attack["patternId"],
+                    ["parentPatternId"] = attack["parentPatternId"]?.DeepClone(),
+                    ["attackerActor"] = attack["attackerActor"]?.DeepClone() };
                 _patterns[key] = value;
+            }
+            return value;
+        }
+
+        /// <summary>parentPatternId의 부모 패턴 집계를 반환하며 없으면 새 집계 객체를 만든다.</summary>
+        private JObject BossPattern(string parentPatternId)
+        {
+            string key = string.IsNullOrEmpty(parentPatternId) ? "Unknown" : parentPatternId;
+            if (!(_bossPatterns[key] is JObject value))
+            {
+                value = new JObject { ["parentPatternId"] = key };
+                _bossPatterns[key] = value;
             }
             return value;
         }
@@ -353,24 +527,41 @@ namespace BlindBlade.Telemetry
         {
             JObject summary = (JObject)_counts.DeepClone();
             summary["reason"] = reason;
+            summary["entryMode"] = _entryMode;
+            summary["runId"] = _runId;
             summary["startedKst"] = _stageStartedKst;
             summary["realtimeSeconds"] = Time.realtimeSinceStartupAsDouble - _stageRealtime;
             summary["gameplaySeconds"] = Time.time - _stageGameplay;
             summary["activePlaySeconds"] = _activeSeconds - _stageActive;
             summary["currentHealth"] = _health.CurrentHealth;
+            double meleeBeastSpawns = ((double?)_counts["enemyMeleeSpawnCount"] ?? 0)
+                + ((double?)_counts["enemyBeastSpawnCount"] ?? 0);
+            summary["beastSpawnShare"] = meleeBeastSpawns > 0
+                ? (JToken)(((double?)_counts["enemyBeastSpawnCount"] ?? 0) / meleeBeastSpawns)
+                : JValue.CreateNull();
+            summary["beastExpectedSpawnShare"] = meleeBeastSpawns > 0
+                ? (JToken)(((double?)_counts["beastExpectedSpawnCount"] ?? 0) / meleeBeastSpawns)
+                : JValue.CreateNull();
             summary["guardAttemptsWithContact"] = _guardContacts.Count;
             summary["guardAttemptsWithoutContact"] = Math.Max(0, ((double?)_counts["guardAttempts"] ?? 0) - _guardContacts.Count);
             summary["reactionCount"] = _reactionCount;
             summary["reactionMeanSeconds"] = _reactionCount > 0 ? (JToken)(_reactionTotal / _reactionCount) : JValue.CreateNull();
             double resolved = (double?)_counts["enemyResolvedCount"] ?? 0;
             summary["enemyHitRate"] = resolved > 0 ? (JToken)(((double?)_counts["enemyHitCount"] ?? 0) / resolved) : JValue.CreateNull();
-            string[] groups = { "ranged", "melee", "bossRanged", "bossEscapeBarrage", "bossCharge", "bossCounterSlash" };
+            string[] groups = { "ranged", "melee", "beastLeap", "bossRanged", "bossEscapeBarrage", "bossCharge",
+                "bossCounterSlash", "twinBossRanged", "twinHumanSlash", "twinHumanCounterSlash", "twinHumanIai", "twinBeastBite" };
             foreach (string group in groups)
             {
                 double damage = 0, hits = 0, attempts = 0, count = 0, dodges = 0, parries = 0, perfects = 0;
                 string bossPatternId = group == "bossRanged" ? "BossRanged"
                     : group == "bossCharge" ? "BossCharge"
-                    : group == "bossCounterSlash" ? "BossCounterSlash" : "BossEscapeBarrage";
+                    : group == "bossCounterSlash" ? "BossCounterSlash"
+                    : group == "twinBossRanged" ? "TwinBossRanged"
+                    : group == "twinHumanSlash" ? "TwinHumanSlash"
+                    : group == "twinHumanCounterSlash" ? "TwinHumanCounterSlash"
+                    : group == "twinHumanIai" ? "TwinHumanIai"
+                    : group == "twinBeastBite" ? "TwinBeastBite"
+                    : group == "beastLeap" ? "DefenseBeastLeap" : "BossEscapeBarrage";
                 foreach (JProperty property in _patterns.Properties())
                 {
                     JObject pattern = (JObject)property.Value;
@@ -399,9 +590,27 @@ namespace BlindBlade.Telemetry
                 summary[group + "DamageShare"] = totalDamage > 0 ? (JToken)(damage / totalDamage) : JValue.CreateNull();
             }
             summary["patterns"] = _patterns.DeepClone();
+            summary["bossPatterns"] = _bossPatterns.DeepClone();
+            summary["twinBossHumanDamage"] = _counts["twinBossHumanDamage"]?.DeepClone() ?? new JValue(0);
+            summary["twinBossBeastDamage"] = _counts["twinBossBeastDamage"]?.DeepClone() ?? new JValue(0);
+            summary["twinBossHumanDefeated"] = _counts["twinBossHumanDefeated"]?.DeepClone() ?? new JValue(0);
+            summary["twinBossBeastDefeated"] = _counts["twinBossBeastDefeated"]?.DeepClone() ?? new JValue(0);
+            summary["twinBossHumanDefeatTime"] = _counts["twinBossHumanDefeatTime"]?.DeepClone();
+            summary["twinBossBeastDefeatTime"] = _counts["twinBossBeastDefeatTime"]?.DeepClone();
+            summary["twinBossPairDefeated"] = _counts["twinBossPairDefeated"]?.DeepClone() ?? new JValue(false);
+            summary["twinBossStageClearTime"] = _counts["twinBossStageClearTime"]?.DeepClone();
+            foreach (string parent in new[] { "Cooperation", "IaiCharge", "AlternatingMelee", "Countering" })
+            {
+                JObject pattern = BossPattern(parent);
+                double ended = (double?)pattern["ended"] ?? 0d;
+                summary["bossPattern" + parent + "Started"] = pattern["started"]?.DeepClone() ?? new JValue(0);
+                summary["bossPattern" + parent + "Completed"] = pattern["completed"]?.DeepClone() ?? new JValue(0);
+                summary["bossPattern" + parent + "Interrupted"] = pattern["interrupted"]?.DeepClone() ?? new JValue(0);
+                summary["bossPattern" + parent + "Cancelled"] = pattern["cancelled"]?.DeepClone() ?? new JValue(0);
+                summary["bossPattern" + parent + "MeanDurationSeconds"] = ended > 0
+                    ? (JToken)(((double?)pattern["durationTotalSeconds"] ?? 0d) / ended) : JValue.CreateNull();
+            }
             summary["serviceDroppedEventsTotal"] = _service.DroppedEvents;
-            if (gameObject.scene.name == "BambooStage1" && !string.IsNullOrEmpty(OnboardingTelemetryRecorder.CompletedRunId))
-                summary["runId"] = OnboardingTelemetryRecorder.CompletedRunId;
             return summary;
         }
 
@@ -430,6 +639,12 @@ namespace BlindBlade.Telemetry
             _combat.Events.DodgeChanged -= HandleDodge;
             _state.StateChanged -= HandleState;
             if (_spawner != null) _spawner.EnemyKilled -= HandleKill;
+            if (_spawner != null)
+            {
+                _spawner.EnemySpawned -= HandleEnemySpawned;
+                _spawner.EnemyDefeated -= HandleEnemyDefeated;
+                _spawner.EnemyDespawned -= HandleEnemyDespawned;
+            }
             CombatTelemetrySignals.Raised -= HandleSignal;
             _bound = false;
         }

@@ -1,11 +1,44 @@
-﻿# 온보딩·BambooStage1 분석 로그 v0.3
+# 전투 텔레메트리 로그 v0.4
+
+## 게임 빌드 0.1.3 / 스키마 0.4.0
+
+- 0.1.3은 기존 1-1·1-2에 2-1 일반 전투와 2-2 쌍둥이 보스전을 추가한다. `run_id`로 실행을 연결하고 `entry_mode`로 새 게임, 이어 하기, 체크포인트 재도전, 에디터 직접 진입 및 자연 전환을 구분한다.
+- 0.4.0은 기존 0.3.0 로그를 보존하며 Apps Script에서 두 스키마를 함께 수신한다. Events·Sessions의 기존 열 순서는 유지하고 새 열은 오른쪽에 추가한다. 0.3.0 행에서 0.4.0 전용 값은 빈 칸이며 0으로 해석하지 않는다.
+- 적 생명주기 이벤트는 `enemy_spawned`, `enemy_defeated`, `enemy_despawned`다. Melee·Beast·Thrower 종류, 스폰 순번과 당시 근접/Beast 확률로 실제 Beast 출현 비율을 설정 기대 비율과 비교한다.
+- 일반 Beast 도약 공격은 `DefenseBeastLeap`으로 기록한다. 쌍둥이 보스 부모 패턴은 `Cooperation`, `IaiCharge`, `AlternatingMelee`, `Countering`; 개별 공격은 `TwinBossRanged`, `TwinHumanSlash`, `TwinHumanCounterSlash`, `TwinHumanIai`, `TwinBeastBite`다. 시작·확정·최종 판정은 AttackId 및 부모 패턴 ID로 연결한다.
+- `stage_config`는 스폰 설정과 전장 중심·반경을 도전당 한 번 기록한다. 전장 히트맵은 이 중심을 원점으로 정규화하고 2m 격자를 사용한다. 대나무 벽 근사는 1막에서만 표시하고 2막은 대나무 오버레이 없이 전장 범위를 표시한다.
+- CSV 내보내기는 Events, Sessions, OnboardingSteps, Patterns, Heatmaps, EnemyLifecycle, BossPatterns, Diagnostics를 만든다. Events와 Sessions 외 두 CSV는 원본 Events에서 파생한 로컬 분석 보조 자료이며 게임이 별도 전송하지 않는다.
+- 대시보드는 0.1.2와 0.1.3의 표본 수·평균 지표, run_id 스테이지 퍼널, 2-1 적 구성과 Beast 기대 비율, 2-2 부모/개별 공격 결과와 보스별 피해·처치 시각, 데이터 품질 경고를 제공한다. 자료가 없는 구간은 0 대신 `수집 안 됨`으로 표시한다.
+- 봉투 형식은 [0.4.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.4.schema.json), 이전 형식은 [0.3.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.3.schema.json)를 따른다.
+
+## 2026-10-19 업로드 지연 개선 (배포 대기)
+
+- `google_apps_script/Code.gs`에서 업로드마다 Events 전체 `event_key`를 읽던 코드를 제거했다. 숨김 시트 `_TelemetryUploadIndex`에 세션별로 실제 저장된 사건 순번 구간을 기록하고 마지막 색인 위치 뒤의 행만 추가로 확인한다. 정상 운영에서는 직전 배치의 최대 100행만 추가로 읽는다. 전체 Events 재조회 대신 세션당 한 행의 작은 인덱스를 읽는다.
+- 최대 순번만 저장하지 않고 `[1,100]`, `[151,156]` 같은 구간을 보존한다. 나중에 101~150이 도착해도 누락된 기록을 새로 저장하고 같은 사건의 재전송은 건너뛴다. 같은 배치 안의 중복도 제거한다.
+- 인덱스에는 이미 Events에 있는 키만 넣는다. 색인 구간 저장·flush 후 checkpoint를 변경하므로 중간 실패 시 checkpoint 뒤의 행을 다시 확인할 수 있다. 현재 요청에서 추가한 Events는 다음 요청에서 색인한다. checkpoint가 직전 배치만큼 뒤에 있는 것은 의도된 동작이다. 현재 배치의 ACK를 늦추는 대기열은 아니다.
+- 재전송에서도 Sessions·OnboardingSteps 처리는 다시 실행한다. 따라서 Events 저장 후 요약 갱신이 실패했던 배치도 복구할 수 있다. ACK는 최종 저장 확인 후에만 보낸다.
+- 스테이지 요약이 없는 배치는 Sessions 조회를 생략한다. 여러 요약 행이 변경되면 연속 행을 묶어 기록한다. `received_kst`는 요청 처리가 시작될 때 기록하고 잠금·색인 확인에 쓴 시간을 포함하지 않는다.
+- 웹 앱 오류는 `busy`, `header_mismatch`, `upload_index_invalid` 등을 구분해 반환하고 Apps Script 실행 로그에 실패 단계와 예외를 남긴다. 요청 본문과 토큰은 출력하지 않는다.
+- 로컬 구현과 JavaScript 구문 확인 완료. 운영 Apps Script 저장·인덱스 준비·새 버전 배포와 개선 후 전송 시간 확인은 아직 하지 않았다. 아래 **Apps Script 재배포** 절을 따른다. 기존 0.3.0·0.4.0 빌드를 그대로 사용할 수 있다.
+
+### 기존 배포 검증 기록 (업로드 인덱스 적용 전)
+
+- Apps Script 웹 앱 v11은 기존 전송/읽기 URL을 유지한다. 0.3.0·0.4.0 이벤트 수신과 시트 필드 호환을 유지하고, 대시보드 Snapshot은 분석에 필요한 열만 그룹 범위로 읽는다. Sessions는 기존 열 순서를 보존하면서 알려진 헤더 이름으로 값을 매핑한다.
+- Sites v10과 Apps Script 최신 배포본이 https://blindblade-combat-analysis.wan1k.chatgpt.site 에서 활성 상태다. Sites 접근 모드는 public이며 Google Spreadsheet 자체는 비공개다. Worker는 서버의 DASHBOARD_READ_TOKEN을 사용하고 브라우저에 토큰을 전달하지 않는다.
+- v10 배포 당시 자동 연결 화면에서 Events 51,405행, Sessions 533행, OnboardingSteps 335행을 확인했다. v11 이후 build `0.1.3`의 `2-1`, `1-1`, `1-2` Sessions 행이 추가됐다. 2-2 패턴 결과가 충분히 적재됐는지는 계속 수집한다.
+- 2026-10-19 추가 확인: 운영 대시보드의 자동 연결 API가 29~70초 뒤 502를 반환하는 경우가 있어 사이트가 533 Sessions 스냅샷을 유지했다. 실제 시트에는 row 535 `0.1.3 / 2-1 / application_quit / bamboo-2026-10-14-editor`, row 536 `0.1.3 / 1-1 / cleared`가 있다. Editor 로그 제외 필터가 기본 적용되므로 row 535는 체크 해제 전까지 분석에서 빠진다.
+- Apps Script의 연속 범위 읽기 최적화 배포 후 자동 연결에 성공했다. 확인 시 Events 54,087건, Sessions 543건, OnboardingSteps 335건이 표시됐고 0.1.3 선택 및 2-1 1행·2-2 5행 집계를 확인했다. 이전에는 Events 조회가 70~80초 뒤 502로 실패했다. 최적화는 지정 열 사이의 개별 Sheets 범위 호출을 단일 연속 범위 읽기로 합치며 기존 API URL을 유지한다.
+- `dotnet build Assembly-CSharp.csproj --no-restore` 성공(경고 0, 오류 0). Apps Script JavaScript 구문, 0.4.0 Schema JSON, CSV 전처리기 구문 확인도 통과했다.
+- Windows `StandaloneWindows64` Player 빌드가 성공했다. 실행 파일은 `C:\Users\JUNGLE\Desktop\Blindblade-0.1.3-Telemetry\w07-blindblade+.exe`이며 BuildReport 오류 0건·경고 27건이다. 포함된 `Assembly-CSharp.dll`에서 `combat-analysis-0.1.3`과 스키마 `0.4.0`을 확인했다. 경고에는 `Shader Graphs/Trail`의 `pow(f,e)` 관련 메시지가 포함된다.
+- Unity Editor 강제 재컴파일 뒤 로컬 JSONL에서 빌드 0.1.3·스키마 0.4.0·stage `2-1`·`stage_config`를 확인했다. 이 세션은 `bamboo-2026-10-14-editor` 설정이라 정식 플레이 표본과 분리한다. Windows Player에서 2-1·2-2를 실제 플레이한 로그와 Google Sheets ACK는 아직 확인하지 않았다.
+- 재컴파일 전에 생성된 스키마 0.3.0·`unassigned` 로컬 실행은 전송 확인 없이 남아 있다. 이 세션은 정식 0.1.3 자료로 사용하지 않는다.
 
 ## 바로 사용하기
 
 1. 새 빌드 또는 갱신된 Unity 프로젝트에서 BambooStage1을 플레이한다. Intro 시작 버튼은 Onboarding을 거쳐 이 씬을 연다.
 2. 로컬 경로: `%USERPROFILE%\AppData\LocalLow\DefaultCompany\w07-blindblade+\CombatTelemetry`.
 3. 빌드 실행 중 CSV 파일은 만들지 않는다. 원본은 세션별 JSONL이며, 아래 Export 명령으로 Events·Sessions·OnboardingSteps 등의 CSV를 만든다.
-4. `*.jsonl` 한 줄이 Events의 한 행이다. 현재 온보딩은 `stageId=0-1~0-5`, 일반 구간은 `1-1`, 보스 구간은 `1-2`다. 보스 재도전은 `1-2`만 기록한다. 수신 스키마에는 이전 7단계 기록을 위한 `0-6`·`0-7` 값도 호환용으로 남아 있다.
+4. `*.jsonl` 한 줄이 Events의 한 행이다. 온보딩은 `0-1~0-5`, 1막은 `1-1`·`1-2`, 2막은 `2-1`·`2-2`다. 이전 7단계 기록을 위한 `0-6`·`0-7` 값도 호환용으로 남아 있다.
 5. 기본 전송 설정은 Resources에 포함된다. 기존 URL·token은 유지했으므로 새 PC의 별도 CONFIG는 필요 없다. 로컬 `upload-config.json`이 있으면 그 설정이 우선한다.
 6. 일반 로그는 기본 20초마다 전송을 시작하고, 온보딩 목표 결과는 목표가 닫힐 때 즉시 업로드를 요청한다. 밀린 배치는 ACK 후 이어서 보낸다. 시트가 비어 있으면 최신 로컬 JSONL, ACK 커서, Player.log의 전송 오류를 확인한다.
 
@@ -17,11 +50,13 @@
 2. `Player.log`의 `CombatTelemetry upload acknowledged`가 있으면 서버가 최소 한 배치를 확인했다. `Google Sheets upload was not acknowledged`가 있으면 HTTP 상태, transport, server, client 값을 확인한다. 게임은 실패한 배치를 로컬에 남기고 다음 실행에서 다시 시도한다.
 3. `CombatTelemetry`의 `*.jsonl`은 원본이다. 같은 이름에 목적지 해시가 붙은 `*.cursor`의 숫자가 JSONL 바이트 길이와 같으면 그 파일의 모든 사건이 ACK된 것이다. 커서가 없거나 더 작으면 아직 미확인 사건이 남아 있다.
 4. 빌드에 포함된 주소와 토큰만 사용하므로 참가자 PC마다 CONFIG 파일이나 Google 계정 로그인은 필요 없다. 이 PC에서 검증한 빌드 폴더 전체를 전달한다. 앱은 Windows의 사용자별 `LocalLow`에 쓰므로 빌드 시 폴더 접근 권한 요청은 필요하지 않다. 진단 ZIP 생성은 사용자가 직접 동의해야 한다.
-5. 정상 종료 요청이 들어오면 마지막 세션 기록을 저장·전송할 수 있도록 최대 20초 대기한다. 전송이 실패하거나 시간이 지나도 원본은 남고, 다음 실행에서 재전송한다. 강제 종료나 전원 차단에는 이 대기 시간이 적용되지 않는다.
+5. 정상 종료에서는 마지막 사건을 로컬에 저장하고 네트워크 ACK를 기다리지 않는다. 진행 중인 요청은 취소하며 로컬 저장은 최대 1.5초 기다린다. 미확인 로그는 다음 게임 실행에서 재전송한다. 게임이 종료된 동안에는 업로더가 실행되지 않는다.
 
 ## Events와 Sessions
 
 - 전송 완료된 **종료 세션**은 서버 ACK 확인 후 JSONL·JSON·커서를 자동 삭제한다. 플레이 중인 세션이나 미전송 기록은 보존한다. 이전 실행의 완전 ACK 기록도 다음 업로드 점검 때 정리한다. 따라서 로컬 파일이 없다는 사실만으로 수집 실패로 판단하지 말고 시트와 Player.log를 함께 확인한다. 전송 완료 자료의 CSV·백업은 시트에서 내려받는다.
+- Events는 기록되는데 Sessions가 비어 있으면 `Player.log`에서 `Google Sheets upload was not acknowledged`를 확인한다. Apps Script는 Events를 먼저 저장한 뒤 Sessions를 갱신하므로 Sessions 단계의 오류가 나면 Events만 보일 수 있다. 기존 Sessions 헤더 순서가 달라도 헤더 이름으로 매핑하며, 현재 지원 필드의 누락 열은 오른쪽에 추가한다. 알 수 없는 헤더나 중복 헤더는 열 데이터 오배치를 막기 위해 거부한다. ACK되지 않은 JSONL은 보존되고 다음 게임 실행에서 재전송된다.
+- 2026-10-19 확인: Apps Script v11 배포 후 Player에서 업로드 ACK가 기록됐고 Sessions 행이 533개에서 536개로 늘었다. 추가된 build `0.1.3` 행의 stage는 `2-1`, `1-1`, `1-2`다.
 
 - **Events**: 사건별 원본. stage_id, stage_attempt_id, input_id, attack_id와 함께 종류·패턴·결과·피해량·좌표·반응 시간을 열로 제공한다. 기타 정보는 payload_json에 남긴다.
 - **Sessions**: 세션 전체가 아니라 **스테이지 도전당 1행**. 한 플레이에서 웨이브와 보스를 하면 2행, 보스 재도전은 1행이다. status=started/in_progress/cleared/death/application_quit/scene_unloaded.
@@ -80,13 +115,21 @@ Google Sheets에 Heatmaps.csv를 가져와 stage_id와 layer로 필터링하고 
 
 ## Apps Script 재배포
 
-1. 기존 시트의 확장 프로그램 → Apps Script에서 `google_apps_script/Code.gs`를 반영하고 저장한다.
+1. 기존 시트의 확장 프로그램 → Apps Script에서 이 프로젝트의 `google_apps_script/Code.gs` 전체를 반영하고 저장한다.
 2. Script Properties의 SPREADSHEET_ID와 UPLOAD_TOKEN은 기존 값을 유지한다. 코드나 로그에 token을 출력하지 않는다.
-3. 스프레드시트를 새로고침하면 상단 메뉴에 **전투 로그 → 현재 데이터 초기화…**가 나타난다. 메뉴를 선택하고 확인창에서 다시 승인하면 Events·Sessions·OnboardingSteps의 데이터 행을 삭제하고 헤더만 복원한다. 이 작업은 되돌릴 수 없으며 다른 탭, Script Properties, 로컬 JSONL은 건드리지 않는다. 미전송 로컬 로그가 남아 있으면 나중에 시트에 다시 올라올 수 있다.
-4. 메뉴/초기화 기능만 바꾼 경우 웹 앱 재배포는 필요 없다. `doPost` 등 웹 앱 요청 처리를 바꾼 경우에는 배포 → 배포 관리 → 기존 웹 앱 편집 → **새 버전** → 배포한다. 새 배포를 만들지 않으면 기존 URL이 유지된다.
-5. 이전 0.2 빌드는 새 수신기로 보낼 수 없다. 새 게임 빌드를 배포한다. 다른 PC에 남은 0.2 JSONL은 업로더가 건너뛴다.
+3. 상단 함수 목록에서 **`prepareTelemetryUploadIndex` → 실행**한다. 기존 Events를 한 번 읽어 숨김 인덱스를 만든다. 실행 로그의 **업로드 인덱스 준비 완료**, `complete:true`를 확인한다. `complete:false`면 같은 함수를 다시 실행해 이어 만든다. 한 번에 약 4분까지 처리하며 원본은 삭제하지 않는다. 준비 중 업로드가 잠금 때문에 재시도될 수 있다.
+4. **배포 → 배포 관리 → 기존 웹 앱의 연필 버튼 → 버전에서 새 버전 → 배포**한다. 새 배포를 별도로 만들지 않아야 기존 `/exec` URL을 유지할 수 있다. 함수 실행이나 저장만으로는 운영 웹 앱의 `doPost`가 바뀌지 않는다.
+5. 기존 게임 빌드를 실행해 밀린 기록을 재전송한다. 업로드 ACK와 Events·Sessions를 확인하고 Apps Script의 실행 내역에서 배포 전후 `doPost` 소요 시간을 비교한다. 이번 최적화는 0.3.0·0.4.0 전송 규약을 유지하므로 Unity 재빌드는 필요 없다. 0.2 빌드는 기존처럼 수신 대상이 아니다.
 
-Events/Sessions 헤더를 수동으로 바꾸면 header_mismatch로 저장을 거부한다. 전송 실패에서도 로컬 원본은 남고 재시도하며, ACK되지 않은 데이터를 성공으로 표시하지 않는다. 저장 한도 기본100MB와 Apps Script 처리량 때문에 장기 서비스 전체 수집에 대한 규모 검증은 별도 필요하다.
+인덱스를 준비하지 않고 배포해도 업로드 요청이 나눠서 준비하지만, 완료 전에는 `upload_index_rebuilding`으로 재시도를 요청한다. 기존 게임의 재시도 대기 때문에 오래 걸릴 수 있으므로 3번을 먼저 실행한다. `_TelemetryUploadIndex`는 분석용 시트가 아니며 CSV·대시보드로 보내지 않는다.
+
+스프레드시트를 새로고침하면 **전투 로그 → 업로드 인덱스 준비/이어 만들기**로 같은 작업을 할 수 있다. `upload_index_invalid`가 나오거나 Events를 수동으로 정렬·수정했다면 **업로드 인덱스 다시 만들기**를 실행한다. 이 기능은 파생 인덱스만 비우고 원본 Events에서 복구한다. 중단 뒤 이어갈 때는 다시 만들기 대신 준비/이어 만들기를 선택한다.
+
+`upload_index_invalid_event_key`는 기존 Events의 키 형식이 손상됐다는 뜻이다. Apps Script 실행 로그의 `Invalid event_key at Events!A행번호`로 위치를 확인하고 원본 JSONL·백업과 비교한다. 인덱스만 재생성해도 손상된 키 자체가 복원되지는 않는다. `busy`는 다른 업로드나 인덱스 준비가 잠금을 사용 중인 상태이므로 게임의 자동 재시도를 기다린다.
+
+로그 자체를 비울 때만 **전투 로그 → 현재 데이터 초기화…**를 사용한다. 확인 후 Events·Sessions·OnboardingSteps와 파생 인덱스가 함께 초기화된다. 이 데이터 삭제는 되돌릴 수 없으며 다른 사용자 시트, Script Properties, 로컬 JSONL은 건드리지 않는다. 미전송 로컬 로그는 이후 다시 올라올 수 있다. 이번 업로드 지연 개선에 데이터 초기화는 필요 없다.
+
+Events와 OnboardingSteps는 헤더 순서가 다르면 `header_mismatch`로 거부한다. Sessions는 기존 열 순서를 보존하고 알려진 헤더 이름으로 매핑하며, 알려지지 않은 헤더와 중복 헤더를 거부한다. 전송 실패에서도 로컬 원본은 남고 재시도하며, ACK되지 않은 데이터를 성공으로 표시하지 않는다. 저장 한도 기본100MB와 Apps Script 처리량 때문에 장기 서비스 전체 수집에 대한 규모 검증은 별도 필요하다.
 
 ## 이번 변경의 확인 범위
 
@@ -138,8 +181,8 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | 열 | 의미 |
 | --- | --- |
 | `event_key` | `session_id:event_sequence` 형식의 중복 방지 키 |
-| `received_kst` | Apps Script가 행을 받은 한국 시각 |
-| `schema_version` | JSON 로그 자료 구조 버전(현재 `0.3.0`) |
+| `received_kst` | Apps Script 요청 처리 시작 한국 시각. 잠금·인덱싱 전에 기록한다. 인덱스 개선 전 행은 기존 키 조회가 끝난 뒤의 시각이다. |
+| `schema_version` | JSON 로그 자료 구조 버전(현재 `0.4.0`; `0.3.0`도 호환) |
 | `build_version` | Unity `Application.version` |
 | `config_version` | 기록 설정 버전. Editor 기록은 끝에 `-editor`가 붙음 |
 | `session_id` | 씬 세션을 식별하는 임의 ID |
@@ -258,7 +301,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | 열 | 의미 |
 | --- | --- |
 | `step_key` | 중복 삽입 방지 키: `session_id:step_index:objective_index` |
-| `received_kst` | Apps Script가 목표 행을 받은 한국 시각 |
+| `received_kst` | 해당 업로드의 Apps Script 요청 처리 시작 한국 시각. 목표가 발생한 게임 시각과 다를 수 있다. |
 | `run_id` | 전체 온보딩 실행 ID |
 | `session_id` | 목표가 진행된 씬 세션 ID |
 | `stage_id` | 현재 단계 ID `0-1`~`0-5`; 과거 7단계 기록은 `0-6`·`0-7`을 포함할 수 있음 |
@@ -340,5 +383,5 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 - Stage1의 이동 표본 0.5→1초, 진행 요약 5→15초. 5분 동안 계속 이동했다면 정기 표본 약 600→300건, 요약 약 60→20건이다. 실제 건수는 플레이 행동에 따라 달라진다.
 - 반복된 전체 Inspector 설정 덤프, 위치 표본의 체력과 Y 좌표, 중복 반응 후보·회피 종료·상태 변경 사건은 새 로그에서 보내지 않는다. 반응 시간은 실제 적 공격 접촉 결과에서 확인한다.
 - Apps Script의 `setupSheets`는 기존 Events·Sessions 행을 보존하면서 새 열을 추가하고 OnboardingSteps를 생성한다. 웹 앱은 동일 URL의 **버전 7**, 대시보드는 소유자 전용 **Sites 버전 4**로 갱신됐다. `resetTelemetrySheets`는 세 탭 데이터를 비우므로 초기화가 필요할 때만 실행한다.
-- CSV 전처리는 Events.csv, Sessions.csv, OnboardingSteps.csv, Patterns.csv, Heatmaps.csv, Diagnostics.csv를 만든다. 기존 0.3.0 JSONL도 같은 변환기에 남겨 두었고 새 봉투 버전은 도입하지 않았다.
+- CSV 전처리는 Events.csv, Sessions.csv, OnboardingSteps.csv, Patterns.csv, Heatmaps.csv, EnemyLifecycle.csv, BossPatterns.csv, Diagnostics.csv를 만든다. 기존 0.3.0 JSONL도 같은 변환기가 수신하며 신규 빌드 봉투는 0.4.0이다.
 - 구간 ID가 Google Sheets에서 날짜로 바뀐 과거 Events·Sessions 행은 stage_attempt_id에서 복원했으며, 세 탭의 stage_id 열은 텍스트 형식이다. 

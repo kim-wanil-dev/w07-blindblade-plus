@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
+using Newtonsoft.Json.Linq;
+
 using Random = UnityEngine.Random;
 
 /// <summary>방어 적의 시간별 생성·배치·씬 단위 재사용을 담당하며 확정된 처치를 알린다.</summary>
@@ -105,8 +107,39 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     [Header("세션 연결")]
     private BambooDefenseDirector _director;
     private readonly List<BambooThrower> _allThrowers = new List<BambooThrower>();
+    private readonly Dictionary<BambooThrower, ThrowerSpawnRecord> _throwerSpawnRecords =
+        new Dictionary<BambooThrower, ThrowerSpawnRecord>();
+    private int _telemetrySpawnOrdinal;
     private bool _waveStopped;
     public event Action EnemyKilled;
+    public event Action<string, string, int, Vector3, float, float> EnemySpawned;
+    public event Action<string, string, double, Vector3> EnemyDefeated;
+    public event Action<string, string, double, Vector3, string> EnemyDespawned;
+
+    /// <summary>현재 스포너와 청각 제한 설정을 stage_config 사건에 넣을 JSON 객체로 반환한다.</summary>
+    public JObject GetTelemetryConfiguration => new JObject {
+        ["throwerStartTime"] = _throwerStartTime, ["initialThrowers"] = _initialThrowers,
+        ["throwersPerMinute"] = _throwersPerMinute, ["maximumThrowers"] = _maximumThrowers,
+        ["throwerSpawnInterval"] = _throwerSpawnInterval,
+        ["meleeStartTime"] = _meleeStartTime, ["meleeSpawnsPerMinute"] = _meleeSpawnsPerMinute,
+        ["meleeSpawnGrowthPerMinute"] = _meleeSpawnGrowthPerMinute,
+        ["firstMeleeKillThreshold"] = _firstMeleeKillThreshold,
+        ["firstMeleeSpawnsPerMinute"] = _firstMeleeSpawnsPerMinute,
+        ["secondMeleeKillThreshold"] = _secondMeleeKillThreshold,
+        ["secondMeleeSpawnsPerMinute"] = _secondMeleeSpawnsPerMinute,
+        ["maximumMelee"] = _maximumMelee, ["chargeTypeStartTime"] = _chargeTypeStartTime,
+        ["chargeTypeChance"] = _chargeTypeChance, ["timedWaveSpawnCount"] = _timedWaveSpawnCount,
+        ["timedWaveDuration"] = _timedWaveDuration, ["timedWaveInterval"] = _timedWaveInterval,
+        ["timedWavePreparationDelay"] = _timedWavePreparationDelay,
+        ["meleeSpawnLimit"] = _meleeSpawnLimit,
+        ["weightBlendStartSpawnCount"] = _weightBlendStartSpawnCount,
+        ["weightBlendEndSpawnCount"] = _weightBlendEndSpawnCount,
+        ["meleeWeightAtStart"] = _meleeWeightAtStart, ["beastWeightAtStart"] = _beastWeightAtStart,
+        ["meleeWeightAtEnd"] = _meleeWeightAtEnd, ["beastWeightAtEnd"] = _beastWeightAtEnd,
+        ["showMeleeGroundFootprints"] = _showMeleeGroundFootprints,
+        ["soundAwarenessEnabled"] = _director != null && _director.TelemetryLimitsSoundPerceptionDistance,
+        ["soundAwarenessDistance"] = _director != null ? _director.TelemetrySoundPerceptionDistance : 0f
+    };
 
     private sealed class MeleeUnit
     {
@@ -116,6 +149,11 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         public EnemyAttackSelector Selector { get; }
         public EnemyChargeAttack Charge { get; }
         public bool IsBeast { get; }
+        public string TelemetryId { get; set; }
+        public int TelemetrySpawnOrdinal { get; set; }
+        public double TelemetrySpawnedAt { get; set; }
+        public float TelemetryMeleeProbability { get; set; }
+        public float TelemetryBeastProbability { get; set; }
 
         /// <summary>root의 전투 컴포넌트와 isBeast 유형을 저장해 스폰 중 재사용한다.</summary>
         public MeleeUnit(GameObject root, bool isBeast)
@@ -126,6 +164,21 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             Selector = root.GetComponent<EnemyAttackSelector>();
             Charge = root.GetComponent<EnemyChargeAttack>();
             IsBeast = isBeast;
+        }
+    }
+
+    private sealed class ThrowerSpawnRecord
+    {
+        public string EnemyId { get; }
+        public int SpawnOrdinal { get; }
+        public double SpawnedAt { get; }
+
+        /// <summary>thrower 활성화 시점의 ID, 순번, 실제 시각을 저장한다.</summary>
+        public ThrowerSpawnRecord(string enemyId, int spawnOrdinal, double spawnedAt)
+        {
+            EnemyId = enemyId;
+            SpawnOrdinal = spawnOrdinal;
+            SpawnedAt = spawnedAt;
         }
     }
 
@@ -190,6 +243,10 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         {
             MeleeUnit unit = _activeMelee[i];
             _activeMelee.RemoveAt(i);
+            EnemyDespawned?.Invoke(unit.TelemetryId, unit.IsBeast ? "Beast" : "Melee",
+                Time.realtimeSinceStartupAsDouble - unit.TelemetrySpawnedAt,
+                unit.Root.transform.position, "wave_stopped");
+            unit.TelemetryId = null;
             unit.Root.SetActive(false);
             ReturnMeleeToPool(unit);
         }
@@ -231,7 +288,12 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
 
         BambooThrower thrower = _idleThrowers.Count > 0 ? _idleThrowers.Pop() : CreateThrower();
         _activeThrowers.Add(thrower);
+        string enemyId = Guid.NewGuid().ToString("N");
+        _telemetrySpawnOrdinal++;
+        _throwerSpawnRecords[thrower] = new ThrowerSpawnRecord(enemyId, _telemetrySpawnOrdinal,
+            Time.realtimeSinceStartupAsDouble);
         thrower.Activate(_director, position);
+        EnemySpawned?.Invoke(enemyId, "Thrower", _telemetrySpawnOrdinal, position, 0f, 0f);
         _nextThrowerSpawnAt = Time.time + _throwerSpawnInterval;
     }
 
@@ -312,7 +374,8 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         if (_activeMelee.Count >= _maximumMelee || !TryFindMeleePosition(out Vector3 position))
             return false;
 
-        MeleeUnit unit = GetOrCreateMelee(ShouldSpawnBeast());
+        bool spawnBeast = SelectSpawnType(out float meleeProbability, out float beastProbability);
+        MeleeUnit unit = GetOrCreateMelee(spawnBeast);
         bool chargeType = !unit.IsBeast && elapsed >= _chargeTypeStartTime && Random.value < _chargeTypeChance;
         Vector3 toCenter = Vector3.ProjectOnPlane(transform.position - position, Vector3.up);
         unit.Root.transform.SetPositionAndRotation(position,
@@ -323,6 +386,13 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         unit.Controller.SetTarget(Game.Player.transform);
         _activeMelee.Add(unit);
         _meleeSpawned++;
+        unit.TelemetryId = Guid.NewGuid().ToString("N");
+        unit.TelemetrySpawnOrdinal = ++_telemetrySpawnOrdinal;
+        unit.TelemetrySpawnedAt = Time.realtimeSinceStartupAsDouble;
+        unit.TelemetryMeleeProbability = meleeProbability;
+        unit.TelemetryBeastProbability = beastProbability;
+        EnemySpawned?.Invoke(unit.TelemetryId, unit.IsBeast ? "Beast" : "Melee", unit.TelemetrySpawnOrdinal,
+            position, unit.TelemetryMeleeProbability, unit.TelemetryBeastProbability);
         return true;
     }
 
@@ -537,15 +607,27 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         if (!_activeThrowers.Remove(thrower))
             return;
 
+        if (_throwerSpawnRecords.TryGetValue(thrower, out ThrowerSpawnRecord spawnRecord))
+        {
+            _throwerSpawnRecords.Remove(thrower);
+            string reason = _waveStopped ? "wave_stopped" : "throw_cycle_completed";
+            EnemyDespawned?.Invoke(spawnRecord.EnemyId, "Thrower",
+                Time.realtimeSinceStartupAsDouble - spawnRecord.SpawnedAt, thrower.transform.position, reason);
+        }
+
         _idleThrowers.Push(thrower);
         _nextThrowerSpawnAt = Mathf.Max(_nextThrowerSpawnAt, Time.time + _throwerSpawnInterval);
     }
 
-    /// <summary>_meleeSpawned와 Inspector 가중치를 보간해 다음 생성이 Beast인지 반환한다.</summary>
-    private bool ShouldSpawnBeast()
+    /// <summary>현재 스폰 순번의 근접/Beast 확률을 계산해 선택 종류와 두 확률을 반환한다.</summary>
+    private bool SelectSpawnType(out float meleeProbability, out float beastProbability)
     {
         if (_beastPrefab == null)
+        {
+            meleeProbability = 1f;
+            beastProbability = 0f;
             return false;
+        }
 
         int startCount = Mathf.Max(0, _weightBlendStartSpawnCount);
         int endCount = Mathf.Max(startCount + 1, _weightBlendEndSpawnCount);
@@ -553,6 +635,8 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         float meleeWeight = Mathf.Lerp(_meleeWeightAtStart, _meleeWeightAtEnd, blend);
         float beastWeight = Mathf.Lerp(_beastWeightAtStart, _beastWeightAtEnd, blend);
         float totalWeight = meleeWeight + beastWeight;
+        meleeProbability = totalWeight > 0f ? meleeWeight / totalWeight : 1f;
+        beastProbability = totalWeight > 0f ? beastWeight / totalWeight : 0f;
         if (beastWeight <= 0f || totalWeight <= 0f)
             return false;
         if (meleeWeight <= 0f)
@@ -590,11 +674,13 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         idlePool.Push(unit);
     }
 
-    /// <summary>health의 근접 적 사망을 처치 수에 더하고 다음 재사용을 위해 대기 목록으로 옮긴다.</summary>
+    /// <summary>health 사망의 종류와 생존 시간을 기록하고 처치 수를 올린 뒤 비활성 재사용 풀로 옮긴다.</summary>
     private void HandleMeleeDied(EnemyHealth health)
     {
         if (!_meleeByHealth.TryGetValue(health, out MeleeUnit unit) || !_activeMelee.Remove(unit))
             return;
+        EnemyDefeated?.Invoke(unit.TelemetryId, unit.IsBeast ? "Beast" : "Melee",
+            Time.realtimeSinceStartupAsDouble - unit.TelemetrySpawnedAt, health.transform.position);
         EnemyKilled?.Invoke();
         ReturnMeleeToPool(unit);
     }

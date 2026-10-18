@@ -5,7 +5,10 @@ using UnityEngine;
 
 using UnityEngine.AI;
 
+using Newtonsoft.Json.Linq;
+
 using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
 
 public enum TwinBossPattern { Idle, Cooperation, Finished = 5, Evading = 7, IaiCharge = 8, AlternatingMelee = 9, Countering = 10 }
 
@@ -145,6 +148,16 @@ public sealed class TwinBossController : MonoBehaviour
     private float _humanInvulnerableUntil;
     private float _beastInvulnerableUntil;
     private bool _beastEvadeMoving;
+    private string _telemetryPatternInstanceId;
+    private double _telemetryPatternStartedAt;
+    private double _telemetryBossFightStartedAt;
+    private double _telemetryHumanDefeatTime = -1d;
+    private double _telemetryBeastDefeatTime = -1d;
+    private float _telemetryHumanHealth;
+    private float _telemetryBeastHealth;
+    private readonly System.Collections.Generic.HashSet<EnemyHealth> _telemetryDefeatedActors =
+        new System.Collections.Generic.HashSet<EnemyHealth>();
+    private bool _telemetryPairDefeatedRecorded;
 
     public TwinBossPattern Pattern => _pattern;
     public bool IsHumanDefending => _human != null && _human.Health.IsAlive && _human.Health.IsInvulnerable;
@@ -267,6 +280,13 @@ public sealed class TwinBossController : MonoBehaviour
         _playerPerfectPulse = _player.GetComponent<PlayerPerfectPulse>();
         _humanWarning = _human.GetComponent<TwinBossWarningVisual>();
         _movePath = new NavMeshPath();
+        _telemetryBossFightStartedAt = Time.realtimeSinceStartupAsDouble;
+        _telemetryHumanHealth = _human.Health.CurrentHealth;
+        _telemetryBeastHealth = _beast.Health.CurrentHealth;
+        _telemetryHumanDefeatTime = -1d;
+        _telemetryBeastDefeatTime = -1d;
+        _telemetryDefeatedActors.Clear();
+        _telemetryPairDefeatedRecorded = false;
         _hitRequested = false;
         _hitBoss = null;
         _counterBoss = null;
@@ -750,6 +770,7 @@ public sealed class TwinBossController : MonoBehaviour
     /// </summary>
     private void HandleBossDamaged(EnemyHealth health, DamageContext context)
     {
+        RecordBossDamage(health, context);
         // 짐승은 피격 후 무적·방어 상태가 없다.
         bool noDefense = _playerEmpower.IsReady || _playerEmpower.IsStriking
             || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID || health == _beast.Health;
@@ -885,6 +906,7 @@ public sealed class TwinBossController : MonoBehaviour
     /// </summary>
     private void HandleBossDied(EnemyHealth health)
     {
+        RecordBossDefeat(health);
         _interrupted = true;
         if (_pattern != TwinBossPattern.Evading && _pattern != TwinBossPattern.Countering) CancelPattern();
     }
@@ -912,12 +934,100 @@ public sealed class TwinBossController : MonoBehaviour
     private void ChangePattern(TwinBossPattern pattern)
     {
         if (_pattern == pattern) return;
+        EndTelemetryPattern(GetTelemetryPatternOutcome());
         _pattern = pattern;
+        BeginTelemetryPattern(pattern);
         // 패턴이 시작되는 프레임에 바로 배회를 끝내 패턴 이동과 겹치지 않게 한다. 인간이 반격할 때는 짐승이 계속 배회한다.
         bool prowling = pattern == TwinBossPattern.Idle || pattern == TwinBossPattern.Evading
             || (pattern == TwinBossPattern.Countering && _counterBoss == _human.Health);
         if (!prowling && _beast != null) _beast.EndProwl();
         PatternChanged?.Invoke(pattern);
+    }
+
+    /// <summary>pattern의 분석 ID를 정하고 새 부모 패턴 인스턴스 시작 사건을 보낸다.</summary>
+    private void BeginTelemetryPattern(TwinBossPattern pattern)
+    {
+        string patternId = TelemetryPatternId(pattern);
+        if (string.IsNullOrEmpty(patternId)) return;
+        _telemetryPatternInstanceId = Guid.NewGuid().ToString("N");
+        _telemetryPatternStartedAt = Time.realtimeSinceStartupAsDouble;
+        _human.SetTelemetryParent(patternId, _telemetryPatternInstanceId);
+        _beast.SetTelemetryParent(patternId, _telemetryPatternInstanceId);
+        _iai.SetTelemetryParent(patternId, _telemetryPatternInstanceId);
+        CombatTelemetrySignals.Event("boss_pattern_started", new JObject {
+            ["patternInstanceId"] = _telemetryPatternInstanceId, ["parentPatternId"] = patternId,
+            ["humanHealthStart"] = _human.Health.CurrentHealth, ["beastHealthStart"] = _beast.Health.CurrentHealth });
+    }
+
+    /// <summary>열려 있는 부모 패턴의 종료 결과와 지속 시간, 종료 체력을 기록하고 인스턴스 참조를 비운다.</summary>
+    private void EndTelemetryPattern(string outcome)
+    {
+        if (string.IsNullOrEmpty(_telemetryPatternInstanceId)) return;
+        CombatTelemetrySignals.Event("boss_pattern_ended", new JObject {
+            ["patternInstanceId"] = _telemetryPatternInstanceId, ["parentPatternId"] = TelemetryPatternId(_pattern),
+            ["durationSeconds"] = Time.realtimeSinceStartupAsDouble - _telemetryPatternStartedAt,
+            ["patternOutcome"] = outcome, ["humanHealthEnd"] = _human.Health.CurrentHealth,
+            ["beastHealthEnd"] = _beast.Health.CurrentHealth });
+        _telemetryPatternInstanceId = null;
+    }
+
+    /// <summary>pattern에 대해 계획에서 정한 부모 패턴 ID를 반환하고 나머지 상태는 빈 문자열로 구분한다.</summary>
+    private static string TelemetryPatternId(TwinBossPattern pattern)
+    {
+        switch (pattern)
+        {
+            case TwinBossPattern.Cooperation: return "Cooperation";
+            case TwinBossPattern.IaiCharge: return "IaiCharge";
+            case TwinBossPattern.AlternatingMelee: return "AlternatingMelee";
+            case TwinBossPattern.Countering: return "Countering";
+            default: return string.Empty;
+        }
+    }
+
+    /// <summary>현재 패턴의 완료, 플레이어 피격 중단, 보스 사망 취소 중 하나를 반환한다.</summary>
+    private string GetTelemetryPatternOutcome()
+    {
+        if (_patternFinished) return "Completed";
+        if (!_human.Health.IsAlive || !_beast.Health.IsAlive) return "CancelledOnBossDeath";
+        if (_hitRequested || _counterBoss != null) return "InterruptedByPlayerHit";
+        if (!_player.IsAlive) return "CancelledOnPlayerDeath";
+        return "CancelledOnStageExit";
+    }
+
+    /// <summary>health에 적용된 실제 플레이어 피해와 공격 출처를 보스 개체별 사건으로 저장한다.</summary>
+    private void RecordBossDamage(EnemyHealth health, DamageContext context)
+    {
+        if (context.Instigator != _player.gameObject) return;
+        bool human = health == _human.Health;
+        float previous = human ? _telemetryHumanHealth : _telemetryBeastHealth;
+        float current = health.CurrentHealth;
+        float appliedDamage = Mathf.Max(0f, previous - current);
+        if (human) _telemetryHumanHealth = current;
+        else _telemetryBeastHealth = current;
+        if (appliedDamage <= 0f) return;
+        CombatTelemetrySignals.Event("boss_damage_received", new JObject {
+            ["bossActor"] = human ? "Human" : "Beast", ["playerAttackPattern"] = context.PatternId,
+            ["appliedDamage"] = appliedDamage, ["healthAfter"] = current,
+            ["parentPatternId"] = TelemetryPatternId(_pattern), ["patternInstanceId"] = _telemetryPatternInstanceId,
+            ["position"] = TelemetryJson.Position(health.transform.position) });
+    }
+
+    /// <summary>health가 처음 쓰러졌을 때 개체 처치와 쌍둥이 전체 처치 시각을 저장한다.</summary>
+    private void RecordBossDefeat(EnemyHealth health)
+    {
+        if (!_telemetryDefeatedActors.Add(health)) return;
+        double defeatTime = Time.realtimeSinceStartupAsDouble - _telemetryBossFightStartedAt;
+        bool human = health == _human.Health;
+        if (human) _telemetryHumanDefeatTime = defeatTime;
+        else _telemetryBeastDefeatTime = defeatTime;
+        CombatTelemetrySignals.Event("boss_actor_defeated", new JObject {
+            ["bossActor"] = human ? "Human" : "Beast", ["timeSinceStageStart"] = defeatTime,
+            ["position"] = TelemetryJson.Position(health.transform.position) });
+        if (_telemetryPairDefeatedRecorded || _human.Health.IsAlive || _beast.Health.IsAlive) return;
+        _telemetryPairDefeatedRecorded = true;
+        CombatTelemetrySignals.Event("boss_pair_defeated", new JObject {
+            ["humanDefeatTime"] = _telemetryHumanDefeatTime, ["beastDefeatTime"] = _telemetryBeastDefeatTime,
+            ["stageClearTime"] = defeatTime });
     }
 
     /// <summary>

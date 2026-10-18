@@ -2,6 +2,9 @@ using System;
 
 using UnityEngine;
 
+using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
+
 /// <summary>쌍둥이 사격의 전방 방어와 발사자를 추적하는 반사 탄환을 처리한다.</summary>
 [DisallowMultipleComponent]
 public sealed class TwinBossProjectile : MonoBehaviour
@@ -28,6 +31,9 @@ public sealed class TwinBossProjectile : MonoBehaviour
     private float _elapsed;
     private bool _reflected;
     private bool _flying;
+    private int _telemetryAttackId;
+    private string _telemetryParentPatternId;
+    private string _telemetryPatternInstanceId;
 
     public event Action<TwinBossProjectile> ReflectedHit;
     public event Action<TwinBossProjectile> Released;
@@ -37,14 +43,19 @@ public sealed class TwinBossProjectile : MonoBehaviour
     /// 유도에 쓸 플레이어 시점은 player의 PlayerMotor에서 읽는다.
     /// </summary>
     public void Initialize(EnemyHealth shooter, Collider shooterCollider,
-        KatanaDamageReceiver player, float damage, Vector3 direction)
+        KatanaDamageReceiver player, float damage, Vector3 direction, int attackId,
+        string parentPatternId, string patternInstanceId)
     {
         _shooter = shooter;
         _shooterCollider = shooterCollider;
         _player = player;
         _playerMotor = player.GetComponent<PlayerMotor>();
         _direction = direction.normalized;
-        _damage = new DamageContext(damage, shooter.gameObject, transform.position, _direction, "TwinBossRanged");
+        _telemetryAttackId = attackId;
+        _telemetryParentPatternId = parentPatternId;
+        _telemetryPatternInstanceId = patternInstanceId;
+        _damage = new DamageContext(damage, shooter.gameObject, transform.position, _direction,
+            "TwinBossRanged", attackId, 1, IncomingAttackKind.Projectile);
         _elapsed = 0f;
         _reflected = false;
         _flying = true;
@@ -59,7 +70,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
         if (_elapsed >= _lifetime || _player == null || !_player.IsAlive
             || (_reflected && (_shooter == null || !_shooter.IsAlive)))
         {
-            Release();
+            Release(_elapsed >= _lifetime ? "Miss" : "Cancelled");
             return;
         }
         if (_reflected)
@@ -126,7 +137,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
     private void ProcessHit(Collider collider, Vector3 point)
     {
         DamageContext context = new DamageContext(_damage.Amount, _damage.Instigator,
-            point, _direction, _damage.PatternId);
+            point, _direction, _damage.PatternId, _damage.AttackId, _damage.HitId, _damage.Kind);
         if (!_reflected && collider.GetComponentInParent<KatanaDamageReceiver>() == _player)
         {
             if (_player.TryDefendProjectile(context, out bool parried))
@@ -134,6 +145,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
                 if (parried && _shooter != null && _shooter.IsAlive)
                 {
                     _reflected = true;
+                    _telemetryAttackId = 0;
                     _elapsed = 0f;
                     StopFlightSound();
                     // 스테이지1 보스 수리검처럼 반사되면 붉은 위협 실루엣을 끄고 일반 흰 윤곽선으로 보인다.
@@ -142,6 +154,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
                         point, -_direction, "ReflectedProjectile");
                     return;
                 }
+                _telemetryAttackId = 0;
                 Release();
                 return;
             }
@@ -150,14 +163,21 @@ public sealed class TwinBossProjectile : MonoBehaviour
         if (receiver != null) receiver.TakeDamage(context);
         if (_reflected && collider.GetComponentInParent<EnemyHealth>() == _shooter)
             ReflectedHit?.Invoke(this);
-        Release();
+        if (!_reflected && collider.GetComponentInParent<PlayerHealth>() == _player)
+            _telemetryAttackId = 0;
+        Release("Miss");
     }
 
     /// <summary>비행을 종료하고 비행음을 멈춘 뒤 구독자에게 정리를 알리고 투사체를 파괴한다.</summary>
-    public void Release()
+    public void Release(string unresolvedOutcome = "Miss")
     {
         if (!_flying) return;
         _flying = false;
+        if (_telemetryAttackId != 0)
+        {
+            CombatTelemetrySignals.End(_telemetryAttackId, unresolvedOutcome, transform.position);
+            _telemetryAttackId = 0;
+        }
         StopFlightSound();
         Released?.Invoke(this);
         Destroy(gameObject);
@@ -174,6 +194,11 @@ public sealed class TwinBossProjectile : MonoBehaviour
     {
         if (!_flying) return;
         _flying = false;
+        if (_telemetryAttackId != 0)
+        {
+            CombatTelemetrySignals.End(_telemetryAttackId, "Cancelled", transform.position);
+            _telemetryAttackId = 0;
+        }
         StopFlightSound();
         Released?.Invoke(this);
     }
