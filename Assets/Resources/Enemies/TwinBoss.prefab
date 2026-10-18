@@ -53,9 +53,6 @@ MonoBehaviour:
   _cooperationWeight: 2
   _iaiChargeWeight: 20
   _alternatingMeleeWeight: 2
-  _humanRangedWeight: 1
-  _beastZigzagWeight: 1
-  _beastJumpWeight: 1
   _patternWaitMin: 0.25
   _patternWaitMax: 0.5
   _cooperationDuration: 15
@@ -212,11 +209,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 200
+  _maxHealth: 250
   _dieOnAnyHit: 0
   _hitCollider: {fileID: 205}
   _cancelAttackOnHit: 0
   _dashTargetable: 1
+  _sharedHealth: {fileID: 304}
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45
   _hitPushDistance: 0
@@ -287,13 +285,7 @@ MonoBehaviour:
   _muzzle: {fileID: 221}
   _hitCollider: {fileID: 205}
   _damage: 15
-  _preparation: 0.35
-  _shotInterval: 0.35
-  _continuousShotInterval: 0.5
-  _soloShots: 3
   _preparationSound: 28
-  _teleportRadius: 6
-  _teleportArc: 180
   _teleportObstacleMask:
     serializedVersion: 2
     m_Bits: 51
@@ -634,7 +626,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 18e6402ba266474b98fdda32e0bc10bc, type: 3}
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::TwinHumanBeadHud
-  _topOffset: 120
+  _topOffset: 94
   _leftEdge: -210
   _slotSize: 28
   _slotSpacing: 32
@@ -825,7 +817,6 @@ GameObject:
   - component: {fileID: 309}
   - component: {fileID: 329}
   - component: {fileID: 331}
-  - component: {fileID: 7811027564024216826}
   m_Layer: 0
   m_Name: Beast
   m_TagString: Untagged
@@ -902,11 +893,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 100
+  _maxHealth: 250
   _dieOnAnyHit: 0
   _hitCollider: {fileID: 305}
   _cancelAttackOnHit: 0
   _dashTargetable: 1
+  _sharedHealth: {fileID: 204}
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45
   _hitPushDistance: 0
@@ -977,29 +969,11 @@ MonoBehaviour:
   _orbitRadius: 6
   _orbitSpeed: 2.5
   _orbitDestinationInterval: 0.2
-  _chargePreparation: 0.5
-  _chargeSpeed: 16
-  _chargeDistance: 12
-  _zigzagWidth: 2
-  _zigzagSegments: 4
-  _chargeDamage: 25
   _contactRadius: 1.4
   _obstacleMask:
     serializedVersion: 2
     m_Bits: 51
-  _preparationSound: 0
   _parrySound: 33
-  _useHeartbeatTelegraph: 1
-  _heartbeatCount: 1
-  _firstHeartbeatDelay: 0.2
-  _minimumHeartbeatInterval: 1
-  _maximumHeartbeatInterval: 1.2
-  _postHeartbeatAttackDelay: 0.5
-  _jumpPreparation: 0.45
-  _jumpDuration: 0.55
-  _jumpHeight: 3
-  _landingRadius: 4
-  _jumpDamage: 25
   _edgeRunSpeed: 14
   _edgeRunAcceleration: 40
   _edgeRunAvoidAngle: 95
@@ -1122,22 +1096,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TwinBossWarningVisual
   _smokeRoot: {fileID: 401}
   _whiteReturnDuration: 0.15
---- !u!114 &7811027564024216826
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 300}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6bf433078aee4c0780b6c08863813ba4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BossHealthBar
-  _size: {x: 420, y: 16}
-  _topOffset: 96
-  _followDuration: 0.8
-  _followColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1 &320
 GameObject:
   m_ObjectHideFlags: 0

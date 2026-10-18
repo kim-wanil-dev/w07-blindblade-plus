@@ -13,8 +13,8 @@ using BlindBlade.UI.CombatHud;
 public sealed class TwinHumanBeadHud : MonoBehaviour
 {
     [Header("배치")]
-    [SerializeField, Min(0f), Tooltip("화면 위 끝에서 슬롯 위 끝까지 거리(1280×720 기준 픽셀). 짐승 체력바 아래에 둔다.")]
-    private float _topOffset = 120f;
+    [SerializeField, Min(0f), Tooltip("화면 위 끝에서 슬롯 위 끝까지 거리(1280×720 기준 픽셀). 위 72·높이 16인 공유 보스 체력바 바로 아래에 둔다.")]
+    private float _topOffset = 94f;
     [SerializeField, Tooltip("화면 가운데 기준 첫 슬롯 왼쪽 끝 x(1280×720 기준 픽셀). 폭 420 보스 체력바의 왼쪽 끝과 맞춘다.")]
     private float _leftEdge = -210f;
     [SerializeField, Min(1f), Tooltip("슬롯 한 변 길이(1280×720 기준 픽셀). 플레이어 토큰의 약 3/4 크기다.")]

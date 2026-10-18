@@ -17,7 +17,7 @@ public sealed class TwinBeastEyes : MonoBehaviour
     private const int GLINT_TEXTURE_SIZE = 256;
     private const float GLINT_SORTING_FUDGE = 100f;
     private const float GLINT_MAX_SCREEN_SIZE = 4f;
-    private const float GLINT_CURVE_POWER = 2.5f;
+    private const float GLINT_CURVE_POWER = 4f;
 
     [Header("연결")]
     [SerializeField] private BeastBossAttack _beast;

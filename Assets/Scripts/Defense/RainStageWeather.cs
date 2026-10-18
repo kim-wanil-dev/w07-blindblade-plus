@@ -286,7 +286,8 @@ public sealed class RainStageWeather : MonoBehaviour
         if (!paused)
         {
             _wiggleTime += Time.unscaledDeltaTime;
-            bool bulletTime = _empower.IsBulletTimeActive;
+            // 보스 거합을 받아친 집중 연출도 퍼펙트 패링 불릿 타임처럼 빗방울을 둥글게 굴리며 멈춘다.
+            bool bulletTime = _empower.IsBulletTimeActive || _empower.IsCounterFocusInvulnerable;
             _roundness = Mathf.MoveTowards(_roundness, bulletTime ? 1f : 0f,
                 Time.unscaledDeltaTime / _shapeTransitionTime);
             float rainDelta = bulletTime ? Time.unscaledDeltaTime * _bulletRainSpeed : Time.deltaTime;

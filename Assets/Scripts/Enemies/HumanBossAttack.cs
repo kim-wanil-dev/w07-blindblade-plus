@@ -6,7 +6,7 @@ using UnityEngine;
 
 using UnityEngine.AI;
 
-/// <summary>인간 보스의 단독·탑승 사격과 탄환 수명 및 반사 적중 알림을 관리한다.</summary>
+/// <summary>인간 보스의 탑승 사격과 탄환 수명 및 반사 적중 알림을 관리한다.</summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(EnemyHealth), typeof(EnemyMotor), typeof(NavMeshAgent))]
 public sealed class HumanBossAttack : MonoBehaviour
@@ -16,11 +16,6 @@ public sealed class HumanBossAttack : MonoBehaviour
     [SerializeField] private Transform _muzzle;
     [SerializeField] private Collider _hitCollider;
     [SerializeField, Min(0f)] private float _damage = 15f;
-    [SerializeField, Min(0.1f)] private float _preparation = 0.8f;
-    [SerializeField, Min(0.1f)] private float _shotInterval = 0.8f;
-    [SerializeField, Min(0.1f), Tooltip("탑승 연속 사격의 발사 후 간격(초)")]
-    private float _continuousShotInterval = 0.5f;
-    [SerializeField, Min(1)] private int _soloShots = 3;
     [SerializeField] private SoundId _preparationSound = SoundId.EnemyRangedAttackVoice;
     private readonly List<TwinBossProjectile> _projectiles = new List<TwinBossProjectile>();
     private EnemyHealth _health;
@@ -30,11 +25,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     private PlayerMotor _playerMotor;
     private Coroutine _shooting;
 
-    [Header("단독 사격 순간이동")]
-    [SerializeField, Min(1f), Tooltip("플레이어 주변 순간이동 반경(미터)")]
-    private float _teleportRadius = 6f;
-    [SerializeField, Range(1f, 180f), Tooltip("플레이어 수평 시점 기준 등장 각도(도)")]
-    private float _teleportArc = 180f;
+    [Header("순간이동 자리 찾기")]
     [SerializeField] private LayerMask _teleportObstacleMask = Physics.DefaultRaycastLayers;
     private readonly Collider[] _teleportContacts = new Collider[16];
     private NavMeshPath _teleportPath;
@@ -190,52 +181,6 @@ public sealed class HumanBossAttack : MonoBehaviour
     {
         return BodyLean * standingPoint
             + _mountedBodyOffset * _mountedPose + Vector3.down * SinkOffset;
-    }
-
-    /// <summary>player에게 continuous 연사 또는 설정 횟수 사격을 시작하며 teleportBetweenShots로 발사 사이 순간이동을 제어한다.</summary>
-    public void StartShooting(KatanaDamageReceiver player, bool continuous, bool teleportBetweenShots = true)
-    {
-        StopShooting();
-        _player = player;
-        _playerMotor = player.GetComponent<PlayerMotor>();
-        _motor.Stop();
-        _shooting = StartCoroutine(Shoot(continuous, teleportBetweenShots));
-    }
-
-    /// <summary>
-    /// continuous로 플레이어 시점보다 0.1m 아래를 향한 전조·직선 발사·휴식을 반복하고 teleportBetweenShots이면 사격 사이에
-    /// 물속으로 가라앉았다 플레이어 주변에서 떠오르는 순간이동을 하며 실행 참조를 정리한다.
-    /// </summary>
-    private IEnumerator Shoot(bool continuous, bool teleportBetweenShots)
-    {
-        yield return null;
-        int shots = 0;
-        while (_health.IsAlive && _player != null && _player.IsAlive && (continuous || shots < _soloShots))
-        {
-            ShotPreparing?.Invoke();
-            if (_preparationSound != SoundId.None)
-                Managers.Sound.Play(_preparationSound, transform.position, 1f, gameObject);
-            yield return new WaitForSeconds(_preparation);
-            if (!_health.IsAlive || _player == null || !_player.IsAlive) break;
-            Vector3 aimPosition = _playerMotor.ViewOrigin - Vector3.up * 0.1f;
-            Vector3 direction = (aimPosition - _muzzle.position).normalized;
-            if (direction.sqrMagnitude > 0.000001f)
-            {
-                Vector3 facing = Vector3.ProjectOnPlane(direction, Vector3.up);
-                if (!_mounted && facing.sqrMagnitude > 0.000001f)
-                    transform.rotation = Quaternion.LookRotation(facing);
-                direction = (aimPosition - _muzzle.position).normalized;
-                FireProjectile(direction);
-                ShotFired?.Invoke();
-            }
-            shots++;
-            yield return new WaitForSeconds(continuous ? _continuousShotInterval : _shotInterval);
-            if (teleportBetweenShots && !continuous && !_mounted && shots < _soloShots
-                && _health.IsAlive && _player != null && _player.IsAlive && _motor.IsReady
-                && TryFindSpotAroundPlayer(_teleportRadius, _teleportArc, out Vector3 spot))
-                yield return TeleportThroughWater(spot);
-        }
-        _shooting = null;
     }
 
     /// <summary>direction으로 발사구에서 수리검 하나를 만들어 탄환 목록에 넣고 반사·반환 사건을 구독한 뒤 비행을 시작한다.</summary>
