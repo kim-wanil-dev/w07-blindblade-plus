@@ -39,6 +39,21 @@ public sealed class HumanBossAttack : MonoBehaviour
     private readonly Collider[] _teleportContacts = new Collider[16];
     private NavMeshPath _teleportPath;
 
+    [Header("물속 순간이동")]
+    [SerializeField, Tooltip("물속으로 가라앉혔다 떠올리는 연기 몸체 도형. 연기가 이 도형 표면에서 나온다.")]
+    private Transform _sinkBody;
+    [SerializeField, Min(0f), Tooltip("완전히 잠겼을 때 몸체가 내려가는 깊이(미터)")]
+    private float _sinkDistance = 2.5f;
+    [SerializeField, Min(0.01f), Tooltip("물속으로 가라앉는 시간(초)")]
+    private float _sinkDuration = 0.3f;
+    [SerializeField, Min(0.01f), Tooltip("새 자리에서 떠오르는 시간(초)")]
+    private float _riseDuration = 0.3f;
+    [SerializeField, Tooltip("가라앉고 떠오르는 자리에 퍼지는 흰 물 파동. 플레이어 발걸음 파동과 같은 크기다.")]
+    private RevealRippleSettings _waterRipple = new RevealRippleSettings(14.4f, 1.2f, 3, 0.15f, 1.2f, Color.white);
+    private Vector3 _sinkBodyPosition;
+    private float _sinkDepth;
+    private Coroutine _teleport;
+
     [Header("탑승 상태")]
     [SerializeField, Min(0.5f)] private float _dismountDistance = 2f;
     private readonly Collider[] _dismountContacts = new Collider[16];
@@ -65,18 +80,18 @@ public sealed class HumanBossAttack : MonoBehaviour
     private float _dashArc = 140f;
     [SerializeField, Min(0.05f), Tooltip("돌진 전 플레이어를 노려보며 붉게 물드는 시간(초)")]
     private float _dashTelegraph = 0.6f;
-    [SerializeField, Min(0.1f), Tooltip("지그재그 돌진 속도(미터/초)")]
+    [SerializeField, Min(0.1f), Tooltip("유선형 곡선 돌진 속도(미터/초)")]
     private float _dashSpeed = 18f;
-    [SerializeField, Min(0f), Tooltip("마지막 꺾음 뒤 플레이어에 닿지 않으면 플레이어 위치를 지나 더 나아가는 거리(미터)")]
+    [SerializeField, Min(0f), Tooltip("마지막 꼭짓점 뒤 플레이어에 닿지 않으면 플레이어 위치를 지나 더 나아가는 거리(미터)")]
     private float _dashOvershoot = 2f;
-    [SerializeField, Min(0), Tooltip("돌진·후퇴 한 번에 방향을 꺾는 횟수")]
+    [SerializeField, Min(0), Tooltip("돌진·후퇴 곡선 한 번에 좌우로 휘는 꼭짓점 수")]
     private int _zigzagTurns = 2;
-    [SerializeField, Min(0f), Tooltip("지그재그로 꺾을 때 곧은 경로에서 옆으로 벗어나는 거리(미터)")]
+    [SerializeField, Min(0f), Tooltip("곡선 꼭짓점이 곧은 경로에서 옆으로 벗어나는 거리(미터)")]
     private float _zigzagWidth = 2.5f;
-    [SerializeField, Tooltip("방향을 꺾을 때마다 그 자리에서 퍼지는 붉은 파동")]
+    [SerializeField, Tooltip("곡선 꼭짓점을 지날 때마다 그 자리에서 퍼지는 붉은 파동")]
     private RevealRippleSettings _turnRipple = new RevealRippleSettings(7f, 0.5f, 1, 0.1f, 0.8f,
         new Color(1f, 0.1f, 0.06f, 0.95f), true);
-    [SerializeField, Min(0.1f), Tooltip("돌진 시작 위치로 다가가거나 베고 지그재그로 물러나는 빠른 이동 속도(미터/초). 스테이지1 보스 재배치와 같다.")]
+    [SerializeField, Min(0.1f), Tooltip("돌진 시작 위치로 다가가거나 베고 유선형 곡선으로 물러나는 빠른 이동 속도(미터/초). 스테이지1 보스 재배치와 같다.")]
     private float _repositionSpeed = 25f;
     [SerializeField, Min(0.05f), Tooltip("빠른 이동이 길이 막혀도 끝나는 최대 시간(초)")]
     private float _repositionTimeout = 0.6f;
@@ -104,12 +119,11 @@ public sealed class HumanBossAttack : MonoBehaviour
     private TwinBossWarningVisual _warning;
     private PerceptionRevealMap _revealMap;
     private bool _slashing;
-    private bool _dashHit;
     private bool _dashParried;
     private float _strikeDamage;
 
     [Header("기운 구슬")]
-    [SerializeField, Min(1), Tooltip("허리춤 구슬 개수이자 거합에 필요한 기운 수. 근접 공격이 플레이어에게 피해를 줄 때마다 하나씩 찬다.")]
+    [SerializeField, Min(1), Tooltip("허리춤 구슬 개수이자 거합에 필요한 기운 수. 인간·짐승 공격이 플레이어에게 피해를 줄 때마다 붉은 실이 구슬에 닿으며 하나씩 찬다.")]
     private int _maxCharges = 3;
     private int _charges;
 
@@ -122,6 +136,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     public int Charges => _charges;
     public int MaxCharges => _maxCharges;
     public bool IsChargeFull => _charges >= _maxCharges;
+    public float SinkOffset => _sinkDepth * _sinkDistance;
     public bool IsConfigured => _projectilePrefab != null && _muzzle != null && _hitCollider != null;
     public event Action ShotPreparing;
     public event Action ShotFired;
@@ -134,12 +149,14 @@ public sealed class HumanBossAttack : MonoBehaviour
         _agent = GetComponent<NavMeshAgent>();
         _warning = GetComponent<TwinBossWarningVisual>();
         _teleportPath = new NavMeshPath();
+        _sinkBodyPosition = _sinkBody.localPosition;
     }
 
     void LateUpdate()
     {
         if (_seat != null && _health.IsAlive)
             transform.SetPositionAndRotation(_seat.position, _seat.rotation);
+        _sinkBody.localPosition = _sinkBodyPosition + Vector3.down * SinkOffset;
     }
 
     /// <summary>player에게 continuous 연사 또는 설정 횟수 사격을 시작하며 teleportBetweenShots로 발사 사이 순간이동을 제어한다.</summary>
@@ -152,7 +169,10 @@ public sealed class HumanBossAttack : MonoBehaviour
         _shooting = StartCoroutine(Shoot(continuous, teleportBetweenShots));
     }
 
-    /// <summary>continuous로 플레이어 시점보다 0.1m 아래를 향한 전조·직선 발사·휴식을 반복하고 teleportBetweenShots이면 사격 사이에 순간이동하며 실행 참조를 정리한다.</summary>
+    /// <summary>
+    /// continuous로 플레이어 시점보다 0.1m 아래를 향한 전조·직선 발사·휴식을 반복하고 teleportBetweenShots이면 사격 사이에
+    /// 물속으로 가라앉았다 플레이어 주변에서 떠오르는 순간이동을 하며 실행 참조를 정리한다.
+    /// </summary>
     private IEnumerator Shoot(bool continuous, bool teleportBetweenShots)
     {
         yield return null;
@@ -178,8 +198,9 @@ public sealed class HumanBossAttack : MonoBehaviour
             shots++;
             yield return new WaitForSeconds(continuous ? _continuousShotInterval : _shotInterval);
             if (teleportBetweenShots && !continuous && !_mounted && shots < _soloShots
-                && _health.IsAlive && _player != null && _player.IsAlive && _motor.IsReady)
-                TryTeleportAroundPlayer(_teleportRadius, _teleportArc);
+                && _health.IsAlive && _player != null && _player.IsAlive && _motor.IsReady
+                && TryFindSpotAroundPlayer(_teleportRadius, _teleportArc, out Vector3 spot))
+                yield return TeleportThroughWater(spot);
         }
         _shooting = null;
     }
@@ -233,8 +254,8 @@ public sealed class HumanBossAttack : MonoBehaviour
 
     /// <summary>
     /// 스테이지1 보스 돌진처럼 플레이어 정면 쪽 _dashStartDistance 지점에서 strikeAt(게임 시간)에 돌진해 베고 다시 물러난다.
-    /// 그 거리에서 벗어나 있으면 전조 전에 _repositionSpeed로 시작 지점까지 달려가고, _dashTelegraph 동안 플레이어를 노려보며 붉게 물든 뒤 지그재그로 돌진한다.
-    /// 플레이어에 닿으면 그 자리에서 멈춰 한 번만 막기·쳐내기를 확인해 피해를 주고, 끝나면 플레이어를 바라본 채 정면 쪽 같은 거리로 지그재그로 물러난다.
+    /// 그 거리에서 벗어나 있으면 전조 전에 _repositionSpeed로 시작 지점까지 달려가고, _dashTelegraph 동안 플레이어를 노려보며 붉게 물든 뒤 유선형 곡선으로 돌진한다.
+    /// 플레이어에 닿으면 그 자리에서 멈춰 한 번만 막기·쳐내기를 확인해 피해를 주고, 끝나면 플레이어를 바라본 채 정면 쪽 같은 거리로 유선형 곡선을 따라 물러난다.
     /// </summary>
     public IEnumerator DashStrike(KatanaDamageReceiver player, float strikeAt)
     {
@@ -261,7 +282,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         if (CanSlash()) yield return Dash(_slashDamage);
         _slashing = false;
         _warning.EndWarning();
-        // 퍼펙트 패링에 막혔으면 지그재그 후퇴 대신 떨며 뒤로 밀려난다.
+        // 퍼펙트 패링에 막혔으면 곡선 후퇴 대신 떨며 뒤로 밀려난다.
         if (_dashParried && CanSlash())
         {
             yield return RecoilFromPlayer();
@@ -272,7 +293,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 피격 무적 중 플레이어에게 다시 베이면 쓰는 받아치기 돌진. 전조 없이 바로 지그재그로 돌진해 damage 피해를 주고,
+    /// 피격 무적 중 플레이어에게 다시 베이면 쓰는 받아치기 돌진. 전조 없이 바로 유선형 곡선으로 돌진해 damage 피해를 주고,
     /// 퍼펙트 패링에 막히면 돌진 베기와 같이 떨며 밀려난다. 전조·감속·후퇴는 제어자가 맡는다.
     /// </summary>
     public IEnumerator CounterDash(KatanaDamageReceiver player, float damage)
@@ -343,8 +364,11 @@ public sealed class HumanBossAttack : MonoBehaviour
         _motor.Stop();
     }
 
-    /// <summary>근접 공격이 플레이어에게 피해를 줬을 때 기운을 하나 채운다. _maxCharges를 넘지 않는다.</summary>
-    private void AddCharge()
+    /// <summary>
+    /// 기운을 하나 채운다. 쌍둥이 보스 공격의 피해로 뻗은 붉은 실(TwinHumanChargeStreak)이 구슬에 닿을 때 호출한다.
+    /// _charges를 늘리며 _maxCharges를 넘지 않는다.
+    /// </summary>
+    public void AddCharge()
     {
         _charges = Mathf.Min(_maxCharges, _charges + 1);
     }
@@ -356,9 +380,9 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 지금 위치에서 플레이어 쪽으로 _zigzagTurns번 좌우로 _zigzagWidth만큼 꺾으며 _dashSpeed로 돌진하고 베기 소리를 낸다.
-    /// 꺾을 때마다 붉은 파동을 내고, 마지막 구간은 그 순간 플레이어 위치를 겨눠 _dashOvershoot만큼 지나칠 때까지 달린다.
-    /// 어느 구간에서든 플레이어에 닿으면 그 앞에서 멈추며 damage 피해를 판정한다.
+    /// 지금 위치에서 플레이어 쪽으로 좌우 _zigzagWidth만큼 _zigzagTurns번 휘어지는 유선형 곡선을 따라 _dashSpeed로 돌진하고 베기 소리를 낸다.
+    /// 휘어진 꼭짓점을 지날 때마다 붉은 파동을 내고, 마지막 구간에 들어설 때 그 순간 플레이어 위치를 _dashOvershoot만큼 지나는 곳을 끝점으로 고정한다.
+    /// 곡선 어디에서든 플레이어에 닿으면 그 앞에서 멈추며 damage 피해를 판정한다.
     /// </summary>
     private IEnumerator Dash(float damage)
     {
@@ -366,76 +390,98 @@ public sealed class HumanBossAttack : MonoBehaviour
         Vector3 start = transform.position;
         Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
         Vector3 forward = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
-        Vector3 right = Vector3.Cross(Vector3.up, forward);
-        float span = toPlayer.magnitude;
-        float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
-        int legs = _zigzagTurns + 1;
-        _dashHit = false;
         _dashParried = false;
         if (_slashSound != SoundId.None)
             Managers.Sound.Play(_slashSound, transform.position, 1f, gameObject, true);
-        for (int leg = 0; leg < legs && CanSlash() && !_dashHit; leg++)
-        {
-            Vector3 target;
-            float extra = 0f;
-            if (leg == legs - 1)
-            {
-                target = _player.transform.position;
-                extra = _dashOvershoot;
-            }
-            else
-            {
-                target = start + forward * (span * (leg + 1) / legs) + right * (side * _zigzagWidth);
-                side = -side;
-            }
-            if (leg > 0) EmitTurnRipple();
-            Vector3 offset = Vector3.ProjectOnPlane(target - transform.position, Vector3.up);
-            if (offset.sqrMagnitude < 0.0001f) continue;
-            yield return MoveStraight(offset.normalized, offset.magnitude + extra, _dashSpeed, true);
-        }
+        Vector3[] points = BuildCurvePoints(start, forward * toPlayer.magnitude);
+        points[points.Length - 1] = GetOvershootPoint(points[points.Length - 2]);
+        yield return FollowCurve(points, _dashSpeed, true);
         _motor.Stop();
     }
 
     /// <summary>
-    /// destination까지 _zigzagTurns번 좌우로 _zigzagWidth만큼 꺾으며 _repositionSpeed로 플레이어를 바라본 채 물러난다.
-    /// 꺾을 때마다 붉은 파동을 낸다.
+    /// destination까지 좌우 _zigzagWidth만큼 _zigzagTurns번 휘어지는 유선형 곡선을 따라 _repositionSpeed로 플레이어를 바라본 채 물러난다.
+    /// 휘어진 꼭짓점을 지날 때마다 붉은 파동을 낸다.
     /// </summary>
     private IEnumerator Retreat(Vector3 destination)
     {
         Vector3 start = transform.position;
         Vector3 path = Vector3.ProjectOnPlane(destination - start, Vector3.up);
         if (path.sqrMagnitude < 0.0001f) yield break;
-        Vector3 right = Vector3.Cross(Vector3.up, path.normalized);
-        float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
-        int legs = _zigzagTurns + 1;
-        for (int leg = 0; leg < legs && CanSlash(); leg++)
-        {
-            Vector3 target = start + path * ((leg + 1f) / legs);
-            if (leg < legs - 1)
-            {
-                target += right * (side * _zigzagWidth);
-                side = -side;
-            }
-            if (leg > 0) EmitTurnRipple();
-            Vector3 offset = Vector3.ProjectOnPlane(target - transform.position, Vector3.up);
-            if (offset.sqrMagnitude < 0.0001f) continue;
-            yield return MoveStraight(offset.normalized, offset.magnitude, _repositionSpeed, false);
-        }
+        yield return FollowCurve(BuildCurvePoints(start, path), _repositionSpeed, false);
         _motor.Stop();
     }
 
     /// <summary>
-    /// direction으로 distance만큼 speed로 NavMesh 안에서 곧게 움직이며, 걸을 수 있는 지면 끝에 막히면 멈춘다.
-    /// strike면 이동 방향을 보며 몸 캡슐로 플레이어 접촉을 검사해 닿으면 그 앞에서 멈추고 _dashHit을 켜며 지나간 경로를 비 시스템에 전달한다.
+    /// start에서 path만큼 가는 곡선의 통과점 배열(시작점, 꼭짓점 _zigzagTurns개, 끝점)을 반환한다.
+    /// 꼭짓점은 path를 등분한 지점에서 무작위 쪽부터 좌우 번갈아 _zigzagWidth만큼 벗어난다.
+    /// </summary>
+    private Vector3[] BuildCurvePoints(Vector3 start, Vector3 path)
+    {
+        int legs = _zigzagTurns + 1;
+        Vector3[] points = new Vector3[legs + 1];
+        Vector3 right = Vector3.Cross(Vector3.up, path.normalized);
+        float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+        points[0] = start;
+        for (int leg = 1; leg < legs; leg++)
+        {
+            points[leg] = start + path * ((float)leg / legs) + right * (side * _zigzagWidth);
+            side = -side;
+        }
+        points[legs] = start + path;
+        return points;
+    }
+
+    /// <summary>from에서 지금 플레이어 위치를 겨눠 _dashOvershoot만큼 더 지나친 지점을 반환한다.</summary>
+    private Vector3 GetOvershootPoint(Vector3 from)
+    {
+        Vector3 target = _player.transform.position;
+        Vector3 direction = Vector3.ProjectOnPlane(target - from, Vector3.up);
+        return direction.sqrMagnitude > 0.0001f ? target + direction.normalized * _dashOvershoot : target;
+    }
+
+    /// <summary>
+    /// points를 모두 지나는 Catmull-Rom 곡선을 따라 speed로 NavMesh 안에서 매끈하게 움직이며, 걸을 수 있는 지면 끝에 막히면 멈춘다.
+    /// 중간 통과점(꼭짓점)을 지날 때마다 붉은 파동을 낸다. strike면 마지막 구간에 들어서기 전까지 끝점을 지금 플레이어 너머로 다시 맞추고,
+    /// 이동 방향을 보며 몸 캡슐로 플레이어 접촉을 검사해 닿으면 그 앞에서 멈추고 곡선을 끝내며 지나간 경로를 비 시스템에 전달한다.
     /// strike가 아니면 플레이어를 바라본다.
     /// </summary>
-    private IEnumerator MoveStraight(Vector3 direction, float distance, float speed, bool strike)
+    private IEnumerator FollowCurve(Vector3[] points, float speed, bool strike)
     {
-        float remaining = distance;
-        while (remaining > 0.01f && CanSlash())
+        int last = points.Length - 1;
+        int nextApex = 1;
+        float t = 0f;
+        while (t < last && CanSlash())
         {
+            float step = speed * Time.deltaTime;
+            if (step <= 0f)
+            {
+                yield return null;
+                continue;
+            }
+
+            // 마지막 구간에 들어서면 그 순간 겨눈 끝점으로 고정해 플레이어가 피할 틈을 남긴다.
+            if (strike && t < last - 1) points[last] = GetOvershootPoint(points[last - 1]);
+            GetCurveSegment(points, t, out Vector3 p0, out Vector3 p1, out Vector3 p2, out Vector3 p3, out float u);
+            float pace = Vector3.ProjectOnPlane(CurveTangent(p0, p1, p2, p3, u), Vector3.up).magnitude;
+            t = Mathf.Min(last, t + step / Mathf.Max(0.01f, pace));
+            if (nextApex < last && t >= nextApex)
+            {
+                EmitTurnRipple();
+                nextApex++;
+            }
+
+            GetCurveSegment(points, t, out p0, out p1, out p2, out p3, out u);
             Vector3 previous = transform.position;
-            Vector3 destination = previous + direction * Mathf.Min(speed * Time.deltaTime, remaining);
+            Vector3 offset = Vector3.ProjectOnPlane(CurvePoint(p0, p1, p2, p3, u) - previous, Vector3.up);
+            if (offset.sqrMagnitude < 0.000001f)
+            {
+                yield return null;
+                continue;
+            }
+
+            Vector3 direction = offset.normalized;
+            Vector3 destination = previous + offset;
             if (_agent.Raycast(destination, out NavMeshHit boundary))
                 destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
             float travel = Vector3.Distance(previous, destination);
@@ -446,20 +492,49 @@ public sealed class HumanBossAttack : MonoBehaviour
                 {
                     _agent.Move(direction * Mathf.Max(0f, contact - 0.05f));
                     RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
-                    _dashHit = true;
                     yield break;
                 }
             }
             _agent.Move(destination - previous);
             if (strike) RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
             else FacePlayer();
-            remaining -= travel;
-            if (travel < 0.001f && Time.deltaTime > 0f) yield break;
+            if (travel < 0.001f) yield break;
             yield return null;
         }
     }
 
-    /// <summary>지금 자리에서 방향을 꺾었음을 알리는 붉은 파동 _turnRipple을 시야 맵에 등록한다.</summary>
+    /// <summary>
+    /// points 곡선의 t(0~통과점 수-1) 위치가 속한 구간의 Catmull-Rom 제어점 p0~p3와 구간 안 비율 u를 출력한다.
+    /// 양 끝 구간은 끝 통과점을 한 번 더 써서 곡선이 시작점과 끝점을 지나게 한다.
+    /// </summary>
+    private static void GetCurveSegment(Vector3[] points, float t, out Vector3 p0, out Vector3 p1, out Vector3 p2,
+        out Vector3 p3, out float u)
+    {
+        int last = points.Length - 1;
+        int index = Mathf.Clamp(Mathf.FloorToInt(t), 0, last - 1);
+        u = Mathf.Clamp01(t - index);
+        p0 = points[Mathf.Max(0, index - 1)];
+        p1 = points[index];
+        p2 = points[index + 1];
+        p3 = points[Mathf.Min(last, index + 2)];
+    }
+
+    /// <summary>Catmull-Rom 제어점 p0~p3 구간의 u(0~1) 위치를 반환한다. u가 0이면 p1, 1이면 p2다.</summary>
+    private static Vector3 CurvePoint(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float u)
+    {
+        float u2 = u * u;
+        return 0.5f * (2f * p1 + (p2 - p0) * u + (2f * p0 - 5f * p1 + 4f * p2 - p3) * u2
+            + (3f * p1 - p0 - 3f * p2 + p3) * (u2 * u));
+    }
+
+    /// <summary>Catmull-Rom 제어점 p0~p3 구간의 u(0~1) 위치 접선 벡터(u에 대한 미분)를 반환한다.</summary>
+    private static Vector3 CurveTangent(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float u)
+    {
+        return 0.5f * ((p2 - p0) + (2f * p0 - 5f * p1 + 4f * p2 - p3) * (2f * u)
+            + (3f * p1 - p0 - 3f * p2 + p3) * (3f * u * u));
+    }
+
+    /// <summary>지금 자리에서 곡선이 휘어 방향이 바뀌었음을 알리는 붉은 파동 _turnRipple을 시야 맵에 등록한다.</summary>
     private void EmitTurnRipple()
     {
         if (_revealMap == null && Game.IsInitialized && Game.Instance.SensoryManager != null)
@@ -490,10 +565,7 @@ public sealed class HumanBossAttack : MonoBehaviour
                 _dashParried = parried;
                 return true;
             }
-            float healthBefore = _player.CurrentHealth;
             _player.TakeDamage(context);
-            // 회피·무적으로 피해가 없으면 공격 성공이 아니므로 기운을 채우지 않는다.
-            if (_player.CurrentHealth < healthBefore) AddCharge();
             if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
             return true;
         }
@@ -586,16 +658,88 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// TryFindSpotAroundPlayer로 플레이어 주변 arc 범위·distance 거리의 빈 지면을 찾아 순간이동하고 플레이어를 바라보며 성공 여부를 반환한다.
+    /// 늑대 잠수처럼 지금 자리에서 흰 물 파동을 내며 물속으로 가라앉았다가 position으로 옮겨 플레이어를 바라보고 다시 파동을 내며 떠오르며, 떠오를 때까지 기다린다.
     /// </summary>
-    private bool TryTeleportAroundPlayer(float distance, float arc)
+    public IEnumerator TeleportThroughWater(Vector3 position)
     {
-        if (!TryFindSpotAroundPlayer(distance, arc, out Vector3 position)) return false;
+        yield return MoveThroughWater(() =>
+        {
+            if (_agent.Warp(position) && _player != null) FacePlayer();
+        });
+    }
+
+    /// <summary>지금 자리에서 물속으로 가라앉았다가 seat(짐승 등 위 자리)에 올라탄 채 떠오르며, 떠오를 때까지 기다린다.</summary>
+    public IEnumerator MountThroughWater(Transform seat)
+    {
+        yield return MoveThroughWater(() => Mount(seat));
+    }
+
+    /// <summary>탑승한 자리에서 물속으로 가라앉았다가 짐승 옆 지면으로 내려 떠오르며, 떠오를 때까지 기다린다.</summary>
+    public IEnumerator DismountThroughWater()
+    {
+        yield return MoveThroughWater(Dismount);
+    }
+
+    /// <summary>
+    /// 가라앉은 바닥에서 arrive로 자리를 옮기는 물속 이동을 이 컴포넌트의 코루틴으로 따로 시작하고 끝날 때까지 기다린다.
+    /// 호출한 사격 코루틴이 멈춰도 끝까지 떠오르며, 패턴 취소는 CancelWaterTransition으로 멈춘다. 이미 진행 중이면 그 이동이 끝나기만 기다린다.
+    /// </summary>
+    private IEnumerator MoveThroughWater(Action arrive)
+    {
+        if (_teleport == null) _teleport = StartCoroutine(SinkAndRise(arrive));
+        while (_teleport != null) yield return null;
+    }
+
+    /// <summary>
+    /// 피격 판정 _hitCollider를 끄고 _sinkDuration 동안 몸체를 _sinkDistance만큼 가라앉힌 뒤 살아 있으면 arrive로 자리를 옮기고,
+    /// _riseDuration 동안 떠올라 판정을 다시 켠다. 가라앉기와 떠오르기를 시작할 때마다 _waterRipple을 내며 끝나면 _teleport를 비운다.
+    /// </summary>
+    private IEnumerator SinkAndRise(Action arrive)
+    {
         _motor.Stop();
-        if (!_agent.Warp(position)) return false;
-        Vector3 facing = Vector3.ProjectOnPlane(_player.transform.position - position, Vector3.up);
-        if (facing.sqrMagnitude > 0.000001f) transform.rotation = Quaternion.LookRotation(facing);
-        return true;
+        _hitCollider.enabled = false;
+        EmitWaterRipple();
+        yield return ChangeSinkDepth(1f, _sinkDuration);
+        if (_health.IsAlive) arrive();
+        EmitWaterRipple();
+        yield return ChangeSinkDepth(0f, _riseDuration);
+        _hitCollider.enabled = true;
+        _teleport = null;
+    }
+
+    /// <summary>
+    /// 진행 중인 물속 이동을 멈추고 몸체를 바로 땅 위로 되돌리며 꺼 둔 피격 판정을 켠다. 가라앉은 바닥에 닿기 전이면 자리를 옮기지 않는다.
+    /// 패턴을 취소하거나 이 컴포넌트가 꺼질 때 호출하며 _teleport, _sinkDepth를 비운다.
+    /// </summary>
+    public void CancelWaterTransition()
+    {
+        if (_teleport == null) return;
+        StopCoroutine(_teleport);
+        _teleport = null;
+        _sinkDepth = 0f;
+        _hitCollider.enabled = true;
+    }
+
+    /// <summary>잠긴 정도 _sinkDepth를 지금 값에서 target(0 땅 위~1 완전히 잠김)까지 duration(초, 게임 시간) 동안 부드럽게 바꾼다.</summary>
+    private IEnumerator ChangeSinkDepth(float target, float duration)
+    {
+        float from = _sinkDepth;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            _sinkDepth = Mathf.Lerp(from, target, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration)));
+            yield return null;
+        }
+        _sinkDepth = target;
+    }
+
+    /// <summary>지금 자리 지면에 흰 물 파동 _waterRipple을 시야 맵에 등록한다. 늑대 잠수 파동처럼 자기 몸은 밝히지 않는다.</summary>
+    private void EmitWaterRipple()
+    {
+        if (_revealMap == null && Game.IsInitialized && Game.Instance.SensoryManager != null)
+            _revealMap = Game.Instance.SensoryManager.GetComponent<PerceptionRevealMap>();
+        if (_revealMap != null) _revealMap.EmitRipple(transform.position, _waterRipple, transform);
     }
 
     /// <summary>seat를 탑승 위치로 저장하고 인간의 NavMesh 위치·회전 갱신을 잠시 중단한다.</summary>
@@ -687,6 +831,9 @@ public sealed class HumanBossAttack : MonoBehaviour
 
     void OnDisable()
     {
+        // 꺼지면 물속 이동 코루틴도 멈추므로 잠긴 몸체와 꺼 둔 피격 판정을 되돌린다.
+        CancelWaterTransition();
+        _sinkBody.localPosition = _sinkBodyPosition;
         StopShooting();
         ReleaseProjectiles();
         Dismount();

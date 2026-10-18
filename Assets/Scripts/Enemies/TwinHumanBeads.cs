@@ -162,14 +162,26 @@ public sealed class TwinHumanBeads : MonoBehaviour
         _viewPoint = transform.InverseTransformPoint(view.transform.position);
         _viewRight = transform.InverseTransformDirection(view.transform.right);
         _viewUp = transform.InverseTransformDirection(view.transform.up);
+        // 인간이 물속 순간이동으로 가라앉으면 허리춤 지점도 몸체와 함께 내려간다.
+        Vector3 anchor = _anchorOffset + Vector3.down * _attack.SinkOffset;
         if (_hanging)
-            Simulate(_anchorOffset, deltaTime);
+            Simulate(anchor, deltaTime);
         else
-            HangChain(_anchorOffset);
+            HangChain(anchor);
         _previousLocalToWorld = transform.localToWorldMatrix;
         UpdateBeadRotations();
         UpdateFills(deltaTime);
         BuildMesh();
+    }
+
+    /// <summary>
+    /// bead번째(0이 허리춤에 가장 가까운 위 구슬) 구슬 중심의 월드 위치를 반환한다. 범위를 벗어난 번호는 양 끝 구슬로 맞춘다.
+    /// 끈을 아직 늘어뜨리지 않았으면 허리춤 지점 _anchorOffset의 월드 위치를 반환한다.
+    /// </summary>
+    public Vector3 GetBeadPosition(int bead)
+    {
+        if (!_hanging) return transform.TransformPoint(_anchorOffset);
+        return transform.TransformPoint(_positions[_beadNodes[Mathf.Clamp(bead, 0, BEAD_COUNT - 1)]]);
     }
 
     /// <summary>
