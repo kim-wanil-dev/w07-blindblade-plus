@@ -42,7 +42,7 @@ DefenseBeast는 플레이어를 추적하고, 수평 거리 6m 이내에서 완�
 | 결과 이동 속도 / 제한 시간 / NavMesh 샘플 반경 | 7.2m/s / 2초 / 1m |
 | 장애물 마스크 / 착지 마스크 | 51 / 모든 레이어 |
 | 공통 전조 / 후딜 / 쿨타임 | 1초 / 0.75초 / 2초 |
-| 박동·도약 소리 | EnemyHeartbeat / BeastBossAttack |
+| 박동·도약 소리 | EnemyHeartbeat / DefenseBeastLeap (보스 공격음보다 +2반음) |
 | EnemyHealth 최대 체력 | 10 |
 
 도약 수치와 공통 전조·쿨타임 설정은 프리팹 Inspector에서 조정할 수 있다. FootstepRipple은 DefenseMelee의 리플 설정을 사용하고 DefenseBeast 프리팹의 걸음 간격 설정은 2다.
@@ -83,6 +83,30 @@ DefenseBeastLeapAttack은 EnemyAttackBehaviour를 상속하고 공격 로그 종
 - 도약 포물선의 최고 높이를 3m에서 1.5m로 낮췄다. `Assets/Resources/Prefabs/Player.prefab`의 CharacterController 높이 2m보다 낮게 설정했다.
 - Guard·NormalParry·PerfectParry 접촉 시 전진 도약을 즉시 멈추고, 플레이어의 `PlayerMotor.ViewForward` 방향 4m 지점으로 0.25초 동안 반동 이동한다. 목적지 NavMesh 샘플 또는 직선 경로 검사가 실패하면 도약 시작 위치로 복귀한다. Invulnerable과 DodgeAvoided는 기존 결과 동작을 유지한다.
 - 확인: 스크립트·프리팹·명세 변경을 반영했다. Unity 컴파일 및 실제 전투 Play 검증은 미확인이다.
+
+## 2026-10-18 RainyTwinBoss 일반 Beast 사망 으르렁거림
+
+- 기존 깨갱 세 파일을 `123090__stephensaldanha__monster_growl.wav`와 `416862__tbsounddesigns__beargrowl_05.wav`로 교체했다. 각 원본의 전체 2.117초·1.645초를 사용하고 양끝에 0.01초 페이드를 적용한 모노 24비트 WAV를 `FMODProject/week06-blindblade/Assets/DefenseBeast/Death/`에 저장했다.
+- 두 파일의 A 가중 평균 음량을 각각 -32dBFS로 맞췄다. 원본 대비 Monster는 -2.43dB, Bear는 +12.42dB이며 출력 피크는 각각 -2.63dBFS, -1.90dBFS로 클리핑하지 않는다. FMOD `event:/Enemy/DefenseBeastDie`의 Multi Instrument가 두 파일 중 하나를 셔플 재생한다.
+- 으르렁거림 원본이 이미 낮은 음역이므로 깨갱용 FMOD -6반음 피치를 해제해 0반음으로 돌렸다. 이벤트 길이는 2.2초이며, `SoundLibrary.asset`의 `SoundId.DefenseBeastDie=47` 음량 배율은 1이다. 이전 0.1990536 배율은 깨갱 원본에 맞춘 설정이므로 사용하지 않는다.
+- 사망음은 `EnemyDie`와 같은 FMOD 3D Spatializer 기본 최소·최대 거리 1~20m를 사용하며, 별도 2D 거리 보정은 꺼져 있다. SFX 버스·뱅크와 RainyTwinBoss의 비 속 적 소리 필터를 따른다.
+- `RainyTwinBoss`의 `DefenseEnemySpawner._beastDeathSound`만 47로 지정했다. 스폰 시 `EnemyDamageAudio.ConfigureDeathSound`가 해당 Beast에 전용 사망음을 설정한다. 다른 씬의 일반 적, 일반 Beast 및 TwinBoss의 사망음은 기존 연결을 사용한다.
+- FMOD Desktop 뱅크 빌드·프로젝트 진단과 이벤트 GUID·씬·Library 연결을 확인했다. Unity 배치 실행은 로컬 라이선스 서비스 연결 단계에서 종료되어 실제 전투의 재생 선택·음량·거리감은 미확인이다.
+
+| 파일 경로 | 클래스 / 메서드 | 역할 |
+| --- | --- | --- |
+| `Assets/Scripts/Defense/DefenseEnemySpawner.cs` | `DefenseEnemySpawner.CreateMelee` | 이 씬의 Beast 인스턴스에 사망음 ID를 설정 |
+| `Assets/Scripts/SoundSystem/EnemyDamageAudio.cs` | `ConfigureDeathSound`, `HandleDeath` | 전용 사망음 저장 및 사망 위치 재생 |
+| `Assets/Scripts/Managers/SoundManager.cs` | `IsEnemyOrProjectileSound` | 새 사망음을 비 속 적 사운드 필터 대상으로 분류 |
+| `Assets/Resources/Sound/SoundLibrary.asset` | `SoundId.DefenseBeastDie` | FMOD 이벤트·거리 감쇠 설정 |
+| `Assets/Scenes/Defense/RainyTwinBoss.unity` | `DefenseEnemySpawner` | 이 씬에만 ID 47 지정 |
+
+## 2026-10-18 일반 Beast 도약음 분리
+
+- 일반 Beast의 `DefenseBeastLeapAttack` 실행음은 기존 보스 `BeastBossAttack=29` 이벤트를 공유하되, 별도 `SoundId.DefenseBeastLeap=48`로 재생한다. `SoundLibrary.asset`에서 도약음의 피치 배율을 1.122462(+2반음)로 지정해 보스보다 조금 높인다. 보스의 29번 ID·피치·이벤트는 변경하지 않는다.
+- `DefenseBeast.prefab`의 `_leapSound`만 29에서 48로 바꿨다. 기존 `EnemyAttackBehaviour.CommitAttack`이 도약 실행 직전에 `EnemySoundStage.Action`을 재생하므로 공격 시점과 취소·자연 종료 처리는 그대로다. 이 프리팹을 사용하는 씬의 일반 Beast에 적용된다.
+- 48번의 보스 공격 이벤트 참조·피치 배율과 프리팹 연결을 확인했고 FMOD 프로젝트 진단이 통과했다. Unity 라이선스 서비스 연결 실패로 실제 전투에서의 도약음은 확인하지 못했다.
+- 관련 코드와 설정: `Assets/Scripts/Enemies/Attack/DefenseBeastLeapAttack.cs` / `ResolveActionSound`, `Assets/Scripts/Enemies/Attack/EnemyAttackBehaviour.cs` / `CommitAttack`, `Assets/Scripts/Enums/SoundId.cs`, `Assets/Resources/Sound/SoundLibrary.asset`, `Assets/Resources/Defense/DefenseBeast.prefab`.
 
 ## 구현 및 확인 상태
 

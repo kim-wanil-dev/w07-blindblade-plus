@@ -56627,6 +56627,7 @@ MonoBehaviour:
   _chargeTypeChance: 0.4
   _maximumMelee: 20
   _beastPrefab: {fileID: 338732699294267485, guid: a9a7067fcf07e7b419232bda780c8248, type: 3}
+  _beastDeathSound: 47
   _weightBlendStartSpawnCount: 0
   _weightBlendEndSpawnCount: 30
   _meleeWeightAtStart: 0.7
