@@ -241,7 +241,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 적대 비행 중인 모든 DefenseShuriken과 제거 가능 EnemyProjectile(보스 수리검)을 그 위치에서 가드 성공 소리를 내며 없앤다.
+    /// 현재 적대 비행 중인 DefenseShuriken, 제거 가능 EnemyProjectile, TwinBossProjectile을 그 위치에서 가드 성공 소리와 함께 없앤다.
     /// 반사된 수리검은 그대로 둔다.
     /// </summary>
     private static void ReleaseProjectiles()
@@ -252,6 +252,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             projectile.ReleaseBlocked();
         }
         EnemyProjectile.ReleaseAllClearable();
+        TwinBossProjectile.ReleaseAllHostile();
     }
 
     /// <summary>
@@ -287,15 +288,17 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// targets 중 아직 살아 있는 적에게 최대 체력만큼 피해를 준다.
-    /// 피해는 적 담당의 EnemyHealth.TakeDamage로 전달해 사망·처치 기록을 기존 경로로 처리한다.
+    /// targets 중 아직 살아 있는 적에게 _damage만큼 피해를 주되 공유 체력 묶음에는 한 번만 적용한다.
+    /// 무적인 적은 개별적으로 막고 같은 묶음의 다른 적은 계속 검사하며, 실제 피해는 EnemyHealth.TakeDamage에 전달한다.
     /// </summary>
     private void StrikeEnemies(List<EnemyHealth> targets)
     {
         Vector3 origin = transform.position;
+        HashSet<EnemyHealth> struck = new HashSet<EnemyHealth>();
         foreach (EnemyHealth enemy in targets)
         {
-            if (enemy == null || !enemy.IsAlive) continue;
+            if (enemy == null || !enemy.IsAlive || struck.Contains(enemy.SharedDamageKey)) continue;
+            if (!enemy.IsInvulnerable) struck.Add(enemy.SharedDamageKey);
             Vector3 toEnemy = Vector3.ProjectOnPlane(enemy.transform.position - origin, Vector3.up);
             Vector3 direction = toEnemy.sqrMagnitude > 0.0001f ? toEnemy.normalized : _motor.ViewForward;
             enemy.TakeDamage(new DamageContext(_damage, gameObject, enemy.transform.position + Vector3.up,

@@ -21,7 +21,6 @@ public sealed class TwinBossController : MonoBehaviour
 {
     private const string COUNTER_TIME_OWNER_A = "TwinBossController.CounterA";
     private const string COUNTER_TIME_OWNER_B = "TwinBossController.CounterB";
-    private const string REFLECTED_PROJECTILE_PATTERN_ID = "ReflectedProjectile";
 
     [Header("보스 연결")]
     [SerializeField] private HumanBossAttack _human;
@@ -186,6 +185,43 @@ public sealed class TwinBossController : MonoBehaviour
         if (_humanInvulnerableUntil > 0f && Time.time >= _humanInvulnerableUntil) ClearInvulnerability(_human.Health);
         if (_beastInvulnerableUntil > 0f && Time.time >= _beastInvulnerableUntil) ClearInvulnerability(_beast.Health);
         UpdateBeastProwl();
+    }
+
+    void LateUpdate()
+    {
+        if (!_subscribed || _arena == null) return;
+        ConstrainBossToArena(_beastAgent);
+        if (!_human.IsMounted) ConstrainBossToArena(_humanAgent);
+    }
+
+    /// <summary>
+    /// agent의 현재 수평 위치가 공터 반경과 몸 반지름을 넘으면 안쪽 NavMesh 지점으로 되돌린다.
+    /// 수동 도약 중에는 높이를 유지한 채 위치만 제한하고, 지상 이동 중에는 NavMeshAgent를 이동시킨다.
+    /// </summary>
+    private void ConstrainBossToArena(NavMeshAgent agent)
+    {
+        if (agent == null || !agent.isActiveAndEnabled) return;
+        Vector3 center = _arena.transform.position;
+        Vector3 offset = Vector3.ProjectOnPlane(agent.transform.position - center, Vector3.up);
+        float radius = Mathf.Max(1f, _arena.Radius - _arenaInset - agent.radius);
+        if (offset.sqrMagnitude <= radius * radius) return;
+        Vector3 direction = offset.normalized;
+        Vector3 desired = center + direction * (radius - 0.25f);
+        desired.y = agent.transform.position.y;
+        if (!agent.updatePosition)
+        {
+            agent.transform.position = desired;
+            return;
+        }
+        NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
+        for (int i = 0; i < 5; i++)
+        {
+            desired = center + direction * Mathf.Max(0f, radius - 0.25f - i * radius * 0.25f);
+            desired.y = agent.transform.position.y;
+            if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, 1f, filter)
+                || Vector3.ProjectOnPlane(hit.position - center, Vector3.up).sqrMagnitude > radius * radius) continue;
+            if (agent.Warp(hit.position)) return;
+        }
     }
 
     /// <summary>health의 무적 방어 예약을 비우고 무적을 켠 뒤 _hitInvulnerabilityDuration 뒤에 풀리도록 종료 시각을 기록한다.</summary>
@@ -389,22 +425,23 @@ public sealed class TwinBossController : MonoBehaviour
     private IEnumerator ChargeIai()
     {
         GetArenaCircle(out Vector3 center, out float radius);
-        _beastRoutine = StartCoroutine(HarassPlayer(Time.time + _harassFirstDelay));
+        _beastRoutine = StartCoroutine(HarassPlayer(_harassFirstDelay));
         yield return _iai.Charge(_player, center, radius);
         StopSideRoutines();
         _beast.InterruptAmbush();
         yield return _beast.Resurface();
     }
 
-    /// <summary>firstStrikeAt(게임 시간)부터 짐승이 공터 가장자리에서 반대편으로 가로지르는 잠수 기습을 하고 _harassInterval 뒤 다시 하는 것을 반복한다.</summary>
-    private IEnumerator HarassPlayer(float firstStrikeAt)
+    /// <summary>인간이 차징을 시작한 시각에 firstDelay를 더한 첫 공격 기준 시각부터 짐승이 그 주변에서 잠수 기습을 반복한다.</summary>
+    private IEnumerator HarassPlayer(float firstDelay)
     {
-        float strikeAt = firstStrikeAt;
+        while (!_iai.IsCharging && BothAlive() && _player.IsAlive) yield return null;
+        float strikeAt = Time.time + firstDelay;
         while (BothAlive() && _player.IsAlive)
         {
             GetArenaCircle(out Vector3 center, out float radius);
             // 거합 차징의 붉은 파동과 섞이지 않도록 방해 덮치기는 전조 파동을 내지 않는다.
-            yield return _beast.Ambush(_player, strikeAt, center, radius, false);
+            yield return _beast.Ambush(_player, strikeAt, center, radius, false, _human.transform);
             strikeAt = Time.time + _harassInterval;
             yield return null;
         }
@@ -418,7 +455,7 @@ public sealed class TwinBossController : MonoBehaviour
     private IEnumerator EscapeThenHarass()
     {
         while (_beast.IsEscaping) yield return null;
-        yield return HarassPlayer(Time.time + _harassInterval);
+        yield return HarassPlayer(_harassInterval);
     }
 
     /// <summary>
@@ -659,13 +696,29 @@ public sealed class TwinBossController : MonoBehaviour
         return false;
     }
 
-    /// <summary>agent의 빈 NavMesh 지면과 완전한 경로를 확인해 desired의 destination을 반환한다.</summary>
+    /// <summary>agent의 공터 안 빈 NavMesh 지면과 완전한 경로를 확인해 desired의 destination을 반환한다.</summary>
     private bool TryDestination(NavMeshAgent agent, Vector3 desired, out Vector3 destination)
     {
+        if (_arena != null)
+        {
+            Vector3 offset = Vector3.ProjectOnPlane(desired - _arena.transform.position, Vector3.up);
+            float arenaRadius = Mathf.Max(1f, _arena.Radius - _arenaInset - agent.radius);
+            if (offset.sqrMagnitude > arenaRadius * arenaRadius)
+            {
+                destination = desired;
+                return false;
+            }
+        }
         desired.y = agent.nextPosition.y;
         NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
         bool found = NavMesh.SamplePosition(desired, out NavMeshHit hit, 0.5f, filter);
         destination = hit.position;
+        if (found && _arena != null)
+        {
+            Vector3 offset = Vector3.ProjectOnPlane(destination - _arena.transform.position, Vector3.up);
+            float arenaRadius = Mathf.Max(1f, _arena.Radius - _arenaInset - agent.radius);
+            if (offset.sqrMagnitude > arenaRadius * arenaRadius) return false;
+        }
         if (!found || !agent.CalculatePath(destination, _movePath)
             || _movePath.status != NavMeshPathStatus.PathComplete) return false;
         float radius = agent.radius;
@@ -765,15 +818,16 @@ public sealed class TwinBossController : MonoBehaviour
 
     /// <summary>
     /// health를 최초 피격 회피 대상으로 기록하며 회피·회복 중 추가 피해는 대상을 바꾸지 않는다.
-    /// 스테이지1 보스처럼 _hitInvulnerableDelay 뒤 무적 방어 상태가 시작되도록 예약하되, 플레이어 불릿 타임(강화 준비·강화 공격) 중이거나
-    /// 반사된 수리검(context.PatternId)에 맞거나 맞은 쪽이 짐승이면 무적을 만들지 않는다. 거합 받아치기는 플레이어 강화 공격이라 불릿 타임 규칙으로 무적이 생기지 않는다. 반격 중 무적이 풀린 보스가 맞으면 반격을 멈추고 회피로 넘어간다.
+    /// 인간이 플레이어 일반 베기·발도에 맞았을 때만 _hitInvulnerableDelay 뒤 무적 방어 상태를 예약한다.
+    /// 플레이어 불릿 타임 중이거나 다른 공격에 맞거나 맞은 쪽이 짐승이면 무적을 만들지 않는다. 반격 중 무적이 풀린 보스가 맞으면 반격을 멈추고 회피로 넘어간다.
     /// </summary>
     private void HandleBossDamaged(EnemyHealth health, DamageContext context)
     {
         RecordBossDamage(health, context);
         // 짐승은 피격 후 무적·방어 상태가 없다.
         bool noDefense = _playerEmpower.IsReady || _playerEmpower.IsStriking
-            || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID || health == _beast.Health;
+            || health == _beast.Health || context.Instigator != _player.gameObject
+            || !IsPlayerMeleeAttack(context);
         if (!health.IsAlive || noDefense) ClearInvulnerability(health);
         else if ((health == _human.Health ? _humanDefendAt : _beastDefendAt) <= 0f)
         {
@@ -806,7 +860,7 @@ public sealed class TwinBossController : MonoBehaviour
         CancelPattern();
     }
 
-    /// <summary>인간에게 차단된 context를 전달해 무적 방어 중 근접 베기면 인간이 쳐내고 반격하게 한다.</summary>
+    /// <summary>인간에게 차단된 context를 전달해 무적 방어 중 일반 베기·발도면 인간이 쳐내고 반격하게 한다.</summary>
     private void HandleHumanDamageBlocked(DamageContext context)
     {
         HandleBossDamageBlocked(_human.Health, context);
@@ -819,7 +873,7 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 스테이지1 보스처럼 인간이 무적 방어 상태에서 플레이어의 근접 베기·발도 context를 막으면 검을 쳐내고 반격을 시작한다. 짐승은 무적이 없어 막히지 않는다.
+    /// 스테이지1 보스처럼 인간이 무적 방어 상태에서 플레이어의 일반 베기·발도를 막으면 검을 쳐내고 반격을 시작한다. 짐승은 무적이 없어 막히지 않는다.
     /// 진행 중인 패턴·회피를 멈추고 무적을 바로 끝내(방어 자세 칼도 사라짐, 밀려난 플레이어는 반격 중 공격할 수 없다) 감속을 먼저 시작해 퍼펙트 패링 소리가 먹먹하게 들리게 하고,
     /// 칼 튕김·불꽃·퍼펙트 패링 소리·보스 발밑 붉은 파동·카메라 흔들림을 내고 플레이어를 좌후방 또는 우후방으로 크게 밀어낸다(PushPlayerForCounter). 검기 타격은 피해 없이 막기만 한다.
     /// </summary>
@@ -865,7 +919,7 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
 
-    /// <summary>context의 PatternId가 플레이어 일반 근접 베기 또는 발도 베기인지 반환한다.</summary>
+    /// <summary>context의 PatternId가 플레이어 일반 베기 또는 발도인지 반환한다.</summary>
     private static bool IsPlayerMeleeAttack(DamageContext context)
     {
         return context.PatternId == PlayerAttackKind.Normal.ToString()

@@ -39,6 +39,40 @@ public sealed class TwinBossProjectile : MonoBehaviour
     public event Action<TwinBossProjectile> Released;
 
     /// <summary>
+    /// start에서 end까지 radius 반경으로 쓸고 지나간 공간에 닿은 적대 비행 수리검을 가드 소리와 함께 없앤다.
+    /// 반사된 수리검은 유지한다.
+    /// </summary>
+    public static void ReleaseInSweep(Vector3 start, Vector3 end, float radius)
+    {
+        Vector3 travel = end - start;
+        float travelLengthSquared = travel.sqrMagnitude;
+        foreach (TwinBossProjectile projectile in FindObjectsByType<TwinBossProjectile>(FindObjectsSortMode.None))
+        {
+            if (!projectile._flying || projectile._reflected) continue;
+            Vector3 position = projectile.transform.position;
+            float progress = travelLengthSquared > 0f
+                ? Mathf.Clamp01(Vector3.Dot(position - start, travel) / travelLengthSquared) : 0f;
+            float reach = radius + projectile._hitRadius;
+            if ((position - (start + travel * progress)).sqrMagnitude > reach * reach) continue;
+            projectile.ReleaseBlocked();
+        }
+    }
+
+    /// <summary>현재 적대 비행 중인 수리검을 모두 가드 소리와 함께 없애고 반사된 수리검은 유지한다.</summary>
+    public static void ReleaseAllHostile()
+    {
+        foreach (TwinBossProjectile projectile in FindObjectsByType<TwinBossProjectile>(FindObjectsSortMode.None))
+            if (projectile._flying && !projectile._reflected) projectile.ReleaseBlocked();
+    }
+
+    /// <summary>플레이어 공격에 막힌 수리검의 위치에서 가드 소리를 내고 비행을 종료한다.</summary>
+    private void ReleaseBlocked()
+    {
+        Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
+        Release();
+    }
+
+    /// <summary>
     /// shooter·player·damage·direction으로 발사자와 피해 및 초기 비행 방향을 설정하고 _flightSound가 있으면 비행음을 반복 재생한다.
     /// 유도에 쓸 플레이어 시점은 player의 PlayerMotor에서 읽는다.
     /// </summary>
