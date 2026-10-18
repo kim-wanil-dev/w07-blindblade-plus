@@ -102,6 +102,7 @@ public class IntroMenu : MonoBehaviour
             return;
         }
 
+        CombatTelemetryRunContext.ResumeRun();
         PlayerPrefs.Save();
         SceneTransitionOverlay.TransitionToScene(destinationScene, _transitionFadeDuration, null);
     }
@@ -165,6 +166,7 @@ public class IntroMenu : MonoBehaviour
         }
 
         _tutorialChoiceConfirmed = true;
+        CombatTelemetryRunContext.StartNewRun();
         BambooStage1Progress.Clear();
         PlayerPrefs.Save();
         _tutorialPromptRoot.SetActive(false);

@@ -50,6 +50,12 @@ public sealed class BambooStage1Controller : MonoBehaviour
     private StagePhase _phase;
 
     public bool BossDefeated => _phase == StagePhase.Complete;
+    public string CurrentTelemetryStageId => _phase == StagePhase.Boss || _phase == StagePhase.Complete ? "1-2" : "1-1";
+    public string CurrentTelemetryEntryMode { get; private set; } = "fresh";
+    public int TelemetryRequiredKills => _requiredKills;
+    public bool TelemetryStartsBossImmediately => _startBossImmediately;
+    public Vector3 TelemetryArenaCenter => _arena.transform.position;
+    public float TelemetryArenaRadius => _arena.Radius;
 
     private enum StagePhase
     {
@@ -73,6 +79,8 @@ public sealed class BambooStage1Controller : MonoBehaviour
     void Start()
     {
         BambooStage1Progress.MarkStage1Started();
+        CurrentTelemetryEntryMode = _startBossImmediately ? "editor_skip"
+            : BambooStage1Progress.BossCheckpointReached ? "checkpoint_retry" : CombatTelemetryRunContext.EntryMode;
         if (!_startBossImmediately && !BambooStage1Progress.BossCheckpointReached) return;
 
         string startReason = _startBossImmediately ? "Inspector 설정" : "저장된 보스 체크포인트";

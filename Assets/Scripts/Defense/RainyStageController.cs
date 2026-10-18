@@ -59,6 +59,12 @@ public sealed class RainyStageController : MonoBehaviour
     private StagePhase _phase;
 
     public bool BossDefeated => _phase == StagePhase.Complete;
+    public string CurrentTelemetryStageId => _phase == StagePhase.Boss || _phase == StagePhase.Complete ? "2-2" : "2-1";
+    public string CurrentTelemetryEntryMode { get; private set; } = "fresh";
+    public int TelemetryRequiredKills => _requiredKills;
+    public bool TelemetryStartsBossImmediately => _startBossImmediately;
+    public Vector3 TelemetryArenaCenter => _arena.transform.position;
+    public float TelemetryArenaRadius => _arena.Radius;
 
     private enum StagePhase
     {
@@ -82,6 +88,8 @@ public sealed class RainyStageController : MonoBehaviour
     {
         _twinBoss.GetComponent<TwinBossController>().ConfigureArena(_arena, _edgeInset);
         BambooStage1Progress.MarkRainyStageReached();
+        CurrentTelemetryEntryMode = _startBossImmediately ? "editor_skip"
+            : BambooStage1Progress.RainyBossCheckpointReached ? "checkpoint_retry" : CombatTelemetryRunContext.EntryMode;
         if (_startBossImmediately || BambooStage1Progress.RainyBossCheckpointReached)
         {
             string startReason = _startBossImmediately ? "Inspector 설정" : "저장된 보스 체크포인트";

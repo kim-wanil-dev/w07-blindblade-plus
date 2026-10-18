@@ -51,6 +51,8 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     public int Kills => _kills;
     public int KillGoal { get; private set; }
     public bool IsRecordHidden { get; private set; }
+    internal bool TelemetryLimitsSoundPerceptionDistance => _limitSoundPerceptionDistance;
+    internal float TelemetrySoundPerceptionDistance => _soundPerceptionDistance;
     public Vector3 PlayerVelocity => _playerVelocity;
     public event Action<Vector3, float> ThrowTelegraphed;
     public event Action<DefenseShuriken> ShurikenLaunched;

@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.AI;
 
 using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
 
 /// <summary>
 /// 인간 보스가 공터 먼 곳에서 거합을 차징하며 일정 간격으로 스테이지1 보스 쳐내기와 같은 붉은 파동을 점점 넓고 진하게 내고,
@@ -134,11 +135,24 @@ public sealed class TwinHumanIai : MonoBehaviour
     private KatanaCombatCoordinator _playerCombat;
     private bool _releasing;
     private bool _blackout;
+    private int _telemetryAttackId;
+    private string _telemetryParentPatternId;
+    private string _telemetryPatternInstanceId;
 
     public bool IsCharging { get; private set; }
     public bool IsReleasing => _releasing;
     public event System.Action CounterStarted;
     public float ChargeProgress { get; private set; }
+
+    /// <summary>
+    /// 부모 패턴 ID와 인스턴스 ID를 저장해 이후 거합 공격을 해당 패턴에 연결한다.
+    /// 두 식별자를 받아 텔레메트리 상관 상태를 변경한다.
+    /// </summary>
+    public void SetTelemetryParent(string parentPatternId, string patternInstanceId)
+    {
+        _telemetryParentPatternId = parentPatternId;
+        _telemetryPatternInstanceId = patternInstanceId;
+    }
 
     void Awake()
     {
@@ -203,6 +217,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     /// </summary>
     public void Cancel()
     {
+        EndTelemetryAttack("Cancelled");
         // 낮춰 늘어진 파동 소리가 취소 뒤에도 울려 거합이 이어지는 것처럼 들리지 않게 끊는다.
         if (IsCharging && Managers.IsInitialized)
         {
@@ -253,6 +268,9 @@ public sealed class TwinHumanIai : MonoBehaviour
     {
         _releasing = true;
         _attack.ConsumeCharges();
+        _telemetryAttackId = CombatTelemetrySignals.BeginBossAttack("TwinHumanIai", "Melee",
+            transform.position, _player.transform.position, _telemetryParentPatternId,
+            _telemetryPatternInstanceId, "Human");
 
         // 서걱: 보스의 불릿 타임 속에서 화면이 어두워지고 붉은 사선이 화면을 가른다.
         _slowTarget = 1f;
@@ -271,6 +289,7 @@ public sealed class TwinHumanIai : MonoBehaviour
         StopSlowNow();
         if (!CanStrike())
         {
+            EndTelemetryAttack("Cancelled");
             _releasing = false;
             yield break;
         }
@@ -284,6 +303,7 @@ public sealed class TwinHumanIai : MonoBehaviour
         Vector3 cutNormal = GetCutNormal(cutDirection);
         Matrix4x4 cutView = GetCutViewProjection(eye, cutDirection);
         Vector3 exit = GetExitPosition(forward, arenaCenter, arenaRadius);
+        CombatTelemetrySignals.Commit(_telemetryAttackId, start);
         float contactAlong = Vector3.Dot(_player.transform.position - start, forward) - _parryReach;
         // 돌진을 알리는 강하고 빠른 붉은 파동을 일으키며 출발하고, 돌진 동안 파동 없이도 붉은 테두리가 보이게 한다.
         _playerPerfectPulse.BeginAt(start, Vector3.up, _pulseColor, _pulseColor, _dashPulseRadius, 1f, true, _dashPulseExpand);
@@ -312,6 +332,7 @@ public sealed class TwinHumanIai : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(forward);
         if (!contacted) StrikePlayer(forward, start, eye, cutDirection, cutNormal, cutView);
         yield return WaitReal(_sheathePause);
+        EndTelemetryAttack("Miss");
         _releasing = false;
     }
 
@@ -323,7 +344,8 @@ public sealed class TwinHumanIai : MonoBehaviour
     {
         PlaySound(_sheatheSound, _player.transform.position);
         if (_player.IsAlive)
-            _player.TakeDamage(new DamageContext(_damage, gameObject, _playerMotor.ViewOrigin, forward, "TwinHumanIai"));
+            _player.TakeDamage(new DamageContext(_damage, gameObject, _playerMotor.ViewOrigin, forward,
+                "TwinHumanIai", _telemetryAttackId, 1, IncomingAttackKind.Charge));
         _overlay.Flash(_sheatheFlash, 0.2f);
         _playerMotor.AddCameraKick(_cameraKickPitch, _cameraShake, _cameraShakeDuration);
         _groundMark.Show(eye, cutNormal, cutView);
@@ -379,9 +401,18 @@ public sealed class TwinHumanIai : MonoBehaviour
         if (_playerCombat == null || _playerCombat.GuardContactOutcome != DefenseOutcome.PerfectParry) return false;
         Vector3 incoming = Vector3.ProjectOnPlane(-forward, Vector3.up);
         bool front = incoming.sqrMagnitude > 0.0001f && Vector3.Angle(_playerMotor.ViewForward, incoming) <= _parryFrontArc * 0.5f;
-        DamageContext context = new DamageContext(_damage, gameObject, _playerMotor.ViewOrigin, forward, "TwinHumanIai");
+        DamageContext context = new DamageContext(_damage, gameObject, _playerMotor.ViewOrigin, forward,
+            "TwinHumanIai", _telemetryAttackId, 1, IncomingAttackKind.Charge);
         // 막기 동작·소리만 내고 퍼펙트 패링 불릿 타임·토큰은 시작하지 않도록 방어 판정 보고를 거치지 않는다.
-        return _playerCombat.TryDefendIncoming(context, front, false);
+        bool defended = _playerCombat.TryDefendIncoming(context, front, false);
+        if (defended)
+        {
+            DefenseResolution resolution = new DefenseResolution(_playerCombat.GuardContactOutcome,
+                _telemetryAttackId, 1, 0, 0f, context.Point, Time.time, Time.realtimeSinceStartupAsDouble);
+            CombatTelemetrySignals.Contact(context, resolution, false);
+            _telemetryAttackId = 0;
+        }
+        return defended;
     }
 
     /// <summary>
@@ -596,5 +627,16 @@ public sealed class TwinHumanIai : MonoBehaviour
             elapsed += EmpowerOverlay.RealDeltaTime();
             yield return null;
         }
+    }
+
+    /// <summary>
+    /// 현재 거합 공격 ID를 outcome으로 한 번 종료하고 다음 공격을 위해 식별자를 비운다.
+    /// outcome을 받아 취소 또는 빗나감 결과를 이벤트로 전달한다.
+    /// </summary>
+    private void EndTelemetryAttack(string outcome)
+    {
+        if (_telemetryAttackId == 0) return;
+        CombatTelemetrySignals.End(_telemetryAttackId, outcome, transform.position);
+        _telemetryAttackId = 0;
     }
 }

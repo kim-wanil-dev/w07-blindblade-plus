@@ -5,6 +5,9 @@ using UnityEngine;
 
 using UnityEngine.AI;
 
+using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
+
 /// <summary>짐승이 땅에 뛰어들고 튀어나오는 동작의 진행 구간이다.</summary>
 public enum BeastBurrowMotion { None, Diving, Emerging }
 
@@ -41,6 +44,9 @@ public sealed class BeastBossAttack : MonoBehaviour
     private bool _attackResolved;
     private bool _lastAttackParried;
     private bool _preparing;
+    private int _telemetryAttackId;
+    private string _telemetryParentPatternId;
+    private string _telemetryPatternInstanceId;
 
     [Header("도약 복원")]
     private bool _jumping;
@@ -64,6 +70,16 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _lastEdgeAngle;
     private bool _edgeRunning;
     private bool _edgeReached;
+
+    /// <summary>
+    /// 부모 패턴 ID와 인스턴스 ID를 저장해 이후 Twin Beast 공격을 해당 패턴에 연결한다.
+    /// 두 식별자를 받아 텔레메트리 상관 상태를 변경한다.
+    /// </summary>
+    public void SetTelemetryParent(string parentPatternId, string patternInstanceId)
+    {
+        _telemetryParentPatternId = parentPatternId;
+        _telemetryPatternInstanceId = patternInstanceId;
+    }
 
     [Header("잠수 기습")]
     [SerializeField, Min(0.05f), Tooltip("땅에 뛰어들어 완전히 잠기기까지의 시간(초)")]
@@ -517,6 +533,9 @@ public sealed class BeastBossAttack : MonoBehaviour
     {
         _motor.Stop();
         AttackPreparing?.Invoke();
+        _telemetryAttackId = CombatTelemetrySignals.BeginBossAttack("TwinBeastBite", "Melee",
+            transform.position, player.transform.position, _telemetryParentPatternId,
+            _telemetryPatternInstanceId, "Beast");
         if (chargeRipple) EmitChargeRipple();
         if (_chargeSound != SoundId.None)
             Managers.Sound.Play(_chargeSound, transform.position, _chargeSoundVolume, gameObject, true, _chargeSoundPitch);
@@ -547,11 +566,12 @@ public sealed class BeastBossAttack : MonoBehaviour
         {
             StopChargeSound();
             _warning.EndWarning();
+            EndTelemetryAttack("Cancelled");
             yield break;
         }
         if (!barkPlayed) PounceApproaching?.Invoke();
         if (!glinted) PounceGlint?.Invoke();
-        yield return Pounce(player, center, radius, _biteDamage, "TwinBeastBite");
+        yield return Pounce(player, center, radius, _biteDamage, "TwinBeastBite", _telemetryAttackId);
     }
 
     /// <summary>
@@ -559,7 +579,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// _biteDuration 동안 가운데에서 _pounceLift만큼 살짝 뜨는 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
     /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
     /// </summary>
-    private IEnumerator Pounce(KatanaDamageReceiver player, Vector3 center, float radius, float damage, string pattern)
+    private IEnumerator Pounce(KatanaDamageReceiver player, Vector3 center, float radius, float damage,
+        string pattern, int telemetryAttackId = 0)
     {
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
@@ -583,6 +604,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         _warning.SetAlwaysVisible(true);
         AttackStarted?.Invoke();
         PounceStarted?.Invoke();
+        if (telemetryAttackId != 0) CombatTelemetrySignals.Commit(telemetryAttackId, transform.position);
         Quaternion facing = Quaternion.LookRotation(direction);
         Vector3 previous = start;
         float elapsed = 0f;
@@ -610,6 +632,8 @@ public sealed class BeastBossAttack : MonoBehaviour
         _biting = false;
         _motor.Stop();
         _warning.EndWarning();
+        if (telemetryAttackId != 0)
+            EndTelemetryAttack(_health.IsAlive && player.IsAlive ? "Miss" : "Cancelled");
     }
 
     /// <summary>
@@ -646,6 +670,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// </summary>
     public void InterruptAmbush()
     {
+        EndTelemetryAttack("Cancelled");
         if (_preparing) StopChargeSound();
         _preparing = false;
         _biting = false;
@@ -839,7 +864,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     private void ApplyAttack(KatanaDamageReceiver player, float damage, Vector3 direction, Vector3 point, string pattern)
     {
         _attackResolved = true;
-        DamageContext context = new DamageContext(damage, gameObject, point, direction, pattern);
+        DamageContext context = new DamageContext(damage, gameObject, point, direction, pattern,
+            _telemetryAttackId, 1, IncomingAttackKind.Charge);
         bool defended = player.TryDefendProjectile(context, out bool parried);
         _lastAttackParried = defended && parried;
         if (!defended) player.TakeDamage(context);
@@ -848,6 +874,7 @@ public sealed class BeastBossAttack : MonoBehaviour
             Managers.Sound.StopFor(gameObject, SoundId.EnemyGetParryed, forceStop: true);
             Managers.Sound.Play(_parrySound, transform.position, owner: gameObject, playDuringMovement: true);
         }
+        _telemetryAttackId = 0;
     }
 
     /// <summary>점프 종료·중단 시 유효한 지면으로 복귀하고 위치·회전 자동 갱신을 복원한다.</summary>
@@ -891,6 +918,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// </summary>
     public void CancelAttack()
     {
+        EndTelemetryAttack("Cancelled");
         if (_preparing) StopChargeSound();
         // 패턴 코루틴이 외부에서 멈추면 준비 종료 처리가 실행되지 않으므로 여기서 함께 끈다.
         _preparing = false;
@@ -918,5 +946,16 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (_escape != null) _health.SetInvulnerable(false);
         _escape = null;
         CancelAttack();
+    }
+
+    /// <summary>
+    /// 현재 보스 공격 ID를 outcome으로 한 번 종료하고 다음 공격을 위해 식별자를 비운다.
+    /// outcome을 받아 취소 또는 빗나감 결과를 이벤트로 전달한다.
+    /// </summary>
+    private void EndTelemetryAttack(string outcome)
+    {
+        if (_telemetryAttackId == 0) return;
+        CombatTelemetrySignals.End(_telemetryAttackId, outcome, transform.position);
+        _telemetryAttackId = 0;
     }
 }

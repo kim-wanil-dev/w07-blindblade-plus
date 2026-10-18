@@ -6,6 +6,9 @@ using UnityEngine;
 
 using UnityEngine.AI;
 
+using BlindBlade.Combat.Contracts;
+using BlindBlade.Telemetry;
+
 /// <summary>인간 보스의 탑승 사격과 탄환 수명 및 반사 적중 알림을 관리한다.</summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(EnemyHealth), typeof(EnemyMotor), typeof(NavMeshAgent))]
@@ -24,6 +27,10 @@ public sealed class HumanBossAttack : MonoBehaviour
     private KatanaDamageReceiver _player;
     private PlayerMotor _playerMotor;
     private Coroutine _shooting;
+    private readonly List<int> _pendingBarrageAttackIds = new List<int>();
+    private string _telemetryParentPatternId;
+    private string _telemetryPatternInstanceId;
+    private int _telemetryAttackId;
 
     [Header("순간이동 자리 찾기")]
     [SerializeField] private LayerMask _teleportObstacleMask = Physics.DefaultRaycastLayers;
@@ -158,6 +165,13 @@ public sealed class HumanBossAttack : MonoBehaviour
     public event Action ShotFired;
     public event Action ReflectedHit;
 
+    /// <summary>부모 패턴 ID와 인스턴스 ID를 저장해 이후 인간 공격 사건에 붙인다.</summary>
+    public void SetTelemetryParent(string parentPatternId, string patternInstanceId)
+    {
+        _telemetryParentPatternId = parentPatternId;
+        _telemetryPatternInstanceId = patternInstanceId;
+    }
+
     void Awake()
     {
         _health = GetComponent<EnemyHealth>();
@@ -188,14 +202,16 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>direction으로 발사구에서 수리검 하나를 만들어 탄환 목록에 넣고 반사·반환 사건을 구독한 뒤 비행을 시작한다.</summary>
-    private void FireProjectile(Vector3 direction)
+    private void FireProjectile(Vector3 direction, int attackId)
     {
         TwinBossProjectile projectile = Instantiate(_projectilePrefab, _muzzle.position,
             Quaternion.LookRotation(direction));
         projectile.ReflectedHit += HandleReflectedHit;
         projectile.Released += HandleProjectileReleased;
         _projectiles.Add(projectile);
-        projectile.Initialize(_health, _hitCollider, _player, _damage, direction);
+        CombatTelemetrySignals.Commit(attackId, _muzzle.position);
+        projectile.Initialize(_health, _hitCollider, _player, _damage, direction, attackId,
+            _telemetryParentPatternId, _telemetryPatternInstanceId);
     }
 
     /// <summary>player에게 탑승 부채꼴 난사를 시작한다. 진행 중인 사격은 먼저 멈추고 날아가는 탄환은 그대로 둔다.</summary>
@@ -219,19 +235,54 @@ public sealed class HumanBossAttack : MonoBehaviour
             ShotPreparing?.Invoke();
             if (_preparationSound != SoundId.None)
                 Managers.Sound.Play(_preparationSound, transform.position, 1f, gameObject);
+            List<int> attackIds = BeginBarrageAttacks();
             yield return new WaitForSeconds(_barragePreparation);
-            if (!_health.IsAlive || _player == null || !_player.IsAlive) break;
+            if (!_health.IsAlive || _player == null || !_player.IsAlive)
+            {
+                CancelBarrageAttacks(attackIds);
+                break;
+            }
             Vector3 center = (_playerMotor.ViewOrigin - Vector3.up * 0.1f - _muzzle.position).normalized;
             for (int i = 0; i < _barrageShots; i++)
             {
                 float angle = _barrageShots > 1
                     ? Mathf.Lerp(-_barrageSpreadAngle * 0.5f, _barrageSpreadAngle * 0.5f, i / (_barrageShots - 1f)) : 0f;
-                FireProjectile(Quaternion.AngleAxis(angle, Vector3.up) * center);
+                int attackId = i < attackIds.Count ? attackIds[i] : 0;
+                FireProjectile(Quaternion.AngleAxis(angle, Vector3.up) * center, attackId);
+                _pendingBarrageAttackIds.Remove(attackId);
             }
             ShotFired?.Invoke();
             yield return new WaitForSeconds(_barrageInterval);
         }
         _shooting = null;
+    }
+
+    /// <summary>현재 부채꼴 투척의 전조 시각에 각 수리검 ID를 만들고 보류 목록에 추가해 반환한다.</summary>
+    private List<int> BeginBarrageAttacks()
+    {
+        List<int> attackIds = new List<int>(_barrageShots);
+        Vector3 center = (_playerMotor.ViewOrigin - Vector3.up * 0.1f - _muzzle.position).normalized;
+        for (int i = 0; i < _barrageShots; i++)
+        {
+            float angle = _barrageShots > 1
+                ? Mathf.Lerp(-_barrageSpreadAngle * 0.5f, _barrageSpreadAngle * 0.5f, i / (_barrageShots - 1f)) : 0f;
+            int attackId = CombatTelemetrySignals.BeginBossAttack("TwinBossRanged", "Projectile", _muzzle.position,
+                Quaternion.AngleAxis(angle, Vector3.up) * center, _telemetryParentPatternId,
+                _telemetryPatternInstanceId, "Human");
+            attackIds.Add(attackId);
+            _pendingBarrageAttackIds.Add(attackId);
+        }
+        return attackIds;
+    }
+
+    /// <summary>시작했지만 발사하지 않은 attackIds를 취소로 닫고 전역 보류 목록에서 제거한다.</summary>
+    private void CancelBarrageAttacks(List<int> attackIds)
+    {
+        foreach (int attackId in attackIds)
+        {
+            if (attackId != 0) CombatTelemetrySignals.End(attackId, "Cancelled", transform.position);
+            _pendingBarrageAttackIds.Remove(attackId);
+        }
     }
 
     /// <summary>
@@ -253,6 +304,8 @@ public sealed class HumanBossAttack : MonoBehaviour
         if (!CanSlash()) yield break;
         // 달려가느라 늦었어도 전조를 절반은 보여준 뒤 돌진한다.
         float dashAt = Mathf.Max(strikeAt, Time.time + _dashTelegraph * 0.5f);
+        _telemetryAttackId = CombatTelemetrySignals.BeginBossAttack("TwinHumanSlash", "Melee", transform.position,
+            _player.transform.position, _telemetryParentPatternId, _telemetryPatternInstanceId, "Human");
         _slashing = true;
         _warning.BeginWarning(dashAt - Time.time);
         if (_slashTelegraphSound != SoundId.None)
@@ -262,12 +315,19 @@ public sealed class HumanBossAttack : MonoBehaviour
             FacePlayer();
             yield return null;
         }
-        if (CanSlash()) yield return Dash(_slashDamage);
+        if (CanSlash())
+        {
+            CombatTelemetrySignals.Commit(_telemetryAttackId, transform.position);
+            yield return Dash(_slashDamage);
+        }
+        else
+            EndTelemetryAttack("Cancelled");
         _warning.EndWarning();
         if (_dashParried && CanSlash())
             yield return RecoilFromPlayer();
         else if (CanSlash() && TryFindSpotAroundPlayer(_dashStartDistance, _dashArc, out Vector3 retreat))
             yield return Retreat(retreat);
+        if (_telemetryAttackId != 0) EndTelemetryAttack("Miss");
         _slashing = false;
     }
 
@@ -283,7 +343,11 @@ public sealed class HumanBossAttack : MonoBehaviour
         _playerMotor = player.GetComponent<PlayerMotor>();
         if (!CanSlash()) yield break;
         _slashing = true;
+        _telemetryAttackId = CombatTelemetrySignals.BeginBossAttack("TwinHumanCounterSlash", "Melee",
+            transform.position, target, _telemetryParentPatternId, _telemetryPatternInstanceId, "Human");
+        CombatTelemetrySignals.Commit(_telemetryAttackId, transform.position);
         yield return ArcSlash(damage, target, bulgeSide);
+        if (_telemetryAttackId != 0) EndTelemetryAttack("Miss");
         if (_dashParried && CanSlash()) yield return RecoilFromPlayer();
         _slashing = false;
     }
@@ -367,11 +431,13 @@ public sealed class HumanBossAttack : MonoBehaviour
             if (!contacted && TryCastPlayer(previous, direction, travel, out float contact, out Vector3 point))
             {
                 contacted = true;
-                DamageContext context = new DamageContext(damage, gameObject, point, direction, "TwinHumanCounterSlash");
+                DamageContext context = new DamageContext(damage, gameObject, point, direction,
+                    "TwinHumanCounterSlash", _telemetryAttackId, 1, IncomingAttackKind.Melee);
                 if (_player.TryDefendProjectile(context, out bool parried))
                 {
                     if (parried)
                     {
+                        _telemetryAttackId = 0;
                         _agent.Move(direction * Mathf.Max(0f, contact - 0.05f));
                         _dashParried = true;
                         yield break;
@@ -381,6 +447,7 @@ public sealed class HumanBossAttack : MonoBehaviour
                 {
                     _player.TakeDamage(context);
                 }
+                _telemetryAttackId = 0;
             }
             _agent.Move(destination - previous);
             RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
@@ -632,13 +699,16 @@ public sealed class HumanBossAttack : MonoBehaviour
     private bool TryHitSlash(Vector3 start, Vector3 direction, float travel, out float contact)
     {
         if (!TryCastPlayer(start, direction, travel, out contact, out Vector3 point)) return false;
-        DamageContext context = new DamageContext(_strikeDamage, gameObject, point, direction, "TwinHumanSlash");
+        DamageContext context = new DamageContext(_strikeDamage, gameObject, point, direction,
+            "TwinHumanSlash", _telemetryAttackId, 1, IncomingAttackKind.Melee);
         if (_player.TryDefendProjectile(context, out bool parried))
         {
             _dashParried = parried;
+            _telemetryAttackId = 0;
             return true;
         }
         _player.TakeDamage(context);
+        _telemetryAttackId = 0;
         if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
         return true;
     }
@@ -694,8 +764,17 @@ public sealed class HumanBossAttack : MonoBehaviour
     /// <summary>근접 베기 준비·돌진 상태와 붉은 전조를 정리한다. 패턴이 외부에서 멈출 때 호출한다.</summary>
     public void CancelMelee()
     {
+        if (_telemetryAttackId != 0) EndTelemetryAttack("Cancelled");
         _slashing = false;
         _warning.EndWarning();
+    }
+
+    /// <summary>활성화된 인간 공격 ID를 지정 결과로 종료하고 현재 공격 참조를 지운다.</summary>
+    private void EndTelemetryAttack(string outcome)
+    {
+        if (_telemetryAttackId == 0) return;
+        CombatTelemetrySignals.End(_telemetryAttackId, outcome, transform.position);
+        _telemetryAttackId = 0;
     }
 
     /// <summary>자신과 플레이어가 살아 있고 탑승하지 않았으며 지면 이동이 가능한지 반환한다.</summary>
@@ -900,6 +979,8 @@ public sealed class HumanBossAttack : MonoBehaviour
     {
         if (_shooting != null) StopCoroutine(_shooting);
         _shooting = null;
+        if (_pendingBarrageAttackIds.Count > 0)
+            CancelBarrageAttacks(new List<int>(_pendingBarrageAttackIds));
     }
 
     /// <summary>날아가는 모든 수리검을 즉시 거두고 이벤트 구독과 관리 목록을 비운다. 인간이 꺼질 때 쓴다.</summary>
