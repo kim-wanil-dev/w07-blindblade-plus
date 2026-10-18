@@ -2,10 +2,12 @@ using System;
 
 using UnityEngine;
 
-/// <summary>방어 세션의 준비·생존 시간·처치 기록을 소유하고 스폰과 투척 제한을 연결한다.</summary>
+/// <summary>방어 세션의 준비·생존 시간·처치 기록과 일반 웨이브 청각 거리를 소유하고 스폰과 투척 제한을 연결한다.</summary>
 [DisallowMultipleComponent]
 public sealed class BambooDefenseDirector : MonoBehaviour
 {
+    private static BambooDefenseDirector _hearingDirector;
+
     [Header("세션 연결")]
     [SerializeField] private DefenseEnemySpawner _spawner;
     private readonly DefenseThrowBudget _throwBudget = new DefenseThrowBudget();
@@ -18,6 +20,13 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private float _elapsed;
     private int _kills;
     private bool _waveStopped;
+
+    [Header("일반 스테이지 소리 인지")]
+    [SerializeField, InspectorName("소리 인지 거리 제한 사용"), Tooltip("일반 웨이브에서 적·수리검 소리와 방향 인디케이터를 같은 거리로 제한한다. 보스전과 온보딩에는 적용하지 않는다.")]
+    private bool _limitSoundPerceptionDistance;
+    [SerializeField, Min(0.1f), InspectorName("소리 인지 거리 (m)"), Tooltip("플레이어 루트에서 적·수리검까지의 XZ 수평 거리다. 범위 밖의 비행음은 음소거하고 범위에 들어오면 이어 들린다.")]
+    private float _soundPerceptionDistance = 20f;
+    private bool _isOnboardingScene;
 
     [Header("플레이어 이동 추적")]
     [SerializeField, Min(0.1f), Tooltip("수평 속도 평활 계수. 클수록 방향 전환에 빨리 반응합니다.")]
@@ -48,6 +57,8 @@ public sealed class BambooDefenseDirector : MonoBehaviour
 
     void Awake()
     {
+        OnboardingFlowController onboarding = FindFirstObjectByType<OnboardingFlowController>();
+        _isOnboardingScene = onboarding != null && onboarding.gameObject.scene == gameObject.scene;
         _countdown = _startDelay;
         if (_spawner == null || !_spawner.Initialize(this))
         {
@@ -56,6 +67,52 @@ public sealed class BambooDefenseDirector : MonoBehaviour
             return;
         }
         _spawner.EnemyKilled += HandleEnemyKilled;
+    }
+
+    void OnEnable()
+    {
+        if (!_isOnboardingScene)
+            _hearingDirector = this;
+    }
+
+    void OnDisable()
+    {
+        if (_hearingDirector == this)
+            _hearingDirector = null;
+    }
+
+    /// <summary>
+    /// 활성 일반 웨이브의 거리 제한 설정을 확인하고 distance에 미터 단위 인지 거리를 반환한다.
+    /// 옵션 해제·보스전·온보딩 또는 비활성 세션이면 false를 반환한다.
+    /// </summary>
+    internal static bool TryGetSoundPerceptionDistance(out float distance)
+    {
+        distance = 0f;
+        if (_hearingDirector == null || !_hearingDirector.isActiveAndEnabled
+            || !_hearingDirector._limitSoundPerceptionDistance || _hearingDirector._waveStopped)
+            return false;
+        distance = Mathf.Max(0.1f, _hearingDirector._soundPerceptionDistance);
+        return true;
+    }
+
+    /// <summary>
+    /// position과 플레이어 루트의 XZ 수평 거리를 일반 스테이지 소리 인지 거리와 비교한다.
+    /// 경계 안이면 true를 반환하며 거리 제한이 없거나 플레이어가 준비되지 않았어도 기존 재생을 허용한다.
+    /// </summary>
+    internal static bool IsWithinSoundPerceptionRange(Vector3 position)
+    {
+        if (!TryGetSoundPerceptionDistance(out float distance) || !Game.IsInitialized || Game.Player == null)
+            return true;
+        Vector3 offset = position - Game.Player.transform.position;
+        offset.y = 0f;
+        return offset.sqrMagnitude <= distance * distance;
+    }
+
+    /// <summary>플레이 시작 시 이전 세션의 소리 인지 담당자 참조를 비워 Domain Reload 해제 상태에서도 초기화한다.</summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetHearingDirector()
+    {
+        _hearingDirector = null;
     }
 
     void Update()

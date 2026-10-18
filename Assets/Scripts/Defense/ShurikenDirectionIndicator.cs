@@ -133,13 +133,19 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
         marker.StartedAt = Time.time;
         marker.Duration = duration;
         marker.Graphic.color = _telegraphColor;
-        marker.Graphic.enabled = true;
+        marker.Graphic.enabled = BambooDefenseDirector.IsWithinSoundPerceptionRange(position);
     }
 
-    /// <summary>snapshot의 세션·대상·revision을 확인해 C가 허용한 방향·색·크기·투명도를 적용한다.</summary>
+    /// <summary>snapshot의 세션·대상·revision과 일반 스테이지 청각 거리를 확인해 C가 허용한 방향·색·크기·투명도를 적용한다.</summary>
     private void HandleThreatChanged(ThreatPresentationSnapshot snapshot)
     {
         Marker marker = FindMarker(snapshot.Session, snapshot.Target);
+        if (!BambooDefenseDirector.IsWithinSoundPerceptionRange(snapshot.WorldPosition))
+        {
+            if (marker != null)
+                Hide(marker);
+            return;
+        }
         if (!snapshot.IsActive || !snapshot.IsEligible || !snapshot.UiVisible)
         {
             if (marker != null)
@@ -202,6 +208,7 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
     /// <summary>
     /// marker의 방향을 UI 회전으로 바꾸고 전조 깜빡임·C 투명도·페이드 수명을 갱신한다.
     /// 비행 마커의 근접도와 색은 스냅샷 값을 사용하며 전조만 플레이어 시점으로 계산한다.
+    /// 일반 스테이지 인지 범위 밖에서는 표시를 숨기고 전조 수명은 계속 진행한다.
     /// </summary>
     private void UpdateMarker(Marker marker)
     {
@@ -233,6 +240,12 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
                 break;
         }
 
+        marker.Graphic.enabled = BambooDefenseDirector.IsWithinSoundPerceptionRange(marker.Position);
+        if (!marker.Graphic.enabled)
+        {
+            marker.CurrentAlpha = 0f;
+            return;
+        }
         float angle = Mathf.Atan2(marker.Direction.x, marker.Direction.y) * Mathf.Rad2Deg;
         marker.Graphic.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -angle);
         float closeness = marker.Proximity;

@@ -95,7 +95,8 @@ namespace BlindBlade.UI.CombatHud
                 return;
             _revisions[emitter] = new FootstepVersion(sequence, presentation.Revision);
 
-            if (!presentation.IsActive || !presentation.IsEligible || !presentation.UiVisible)
+            if (!presentation.IsActive || !presentation.IsEligible || !presentation.UiVisible
+                || !BambooDefenseDirector.IsWithinSoundPerceptionRange(presentation.WorldPosition))
             {
                 ReleaseMarker(emitter);
                 return;

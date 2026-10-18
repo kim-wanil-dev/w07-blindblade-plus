@@ -162,7 +162,9 @@ namespace BlindBlade.Perception
             offset.y = 0f;
             float distance = offset.magnitude;
             ThreatPresentationSettings settings = _resolver.Settings;
-            bool eligible = settings.FootstepHearingRadius > 0f && distance <= settings.FootstepHearingRadius;
+            float hearingRadius = BambooDefenseDirector.TryGetSoundPerceptionDistance(out float stageDistance)
+                ? stageDistance : settings.FootstepHearingRadius;
+            bool eligible = hearingRadius > 0f && distance <= hearingRadius;
             bool inCamera = IsInCamera(candidate);
             bool worldVisible = eligible && IsWorldVisible(candidate, inCamera);
             float fade = candidate.FadeDuration > 0f

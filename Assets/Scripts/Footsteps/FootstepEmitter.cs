@@ -9,6 +9,7 @@ public sealed class FootstepEmitter : MonoBehaviour
     public event Action<Transform, Vector3> OnFootstepEmitted;
     private SensoryManager _sensoryManager;
     private EnemyAttackBehaviour[] _attacks;
+    private bool _showGroundFootprints = true;
 
     [Header("걸음")]
     [SerializeField, Min(0.01f), Tooltip("발자국 사이 이동 거리(미터)")]
@@ -109,6 +110,16 @@ public sealed class FootstepEmitter : MonoBehaviour
                 break;
             }
         }
-        _sensoryManager.EmitFootstep(new SensoryEvent(hit.point, hit.normal, direction), isLeft, attackMovement);
+        if (_showGroundFootprints)
+            _sensoryManager.EmitFootstep(new SensoryEvent(hit.point, hit.normal, direction), isLeft, attackMovement);
+    }
+
+    /// <summary>
+    /// 지면 발자국 표시 여부를 설정한다.
+    /// visible이 false여도 발걸음 이벤트 전달은 유지한다.
+    /// </summary>
+    public void SetGroundFootprintsVisible(bool visible)
+    {
+        _showGroundFootprints = visible;
     }
 }
