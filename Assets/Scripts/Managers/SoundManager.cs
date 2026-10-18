@@ -849,6 +849,7 @@ public class SoundManager
     /// attach로 위치 추적과 playDuringMovement로 이동 예외를 선택하고 parameterName과 label을 시작 전에 적용한다.
     /// eventOverride와 cueName으로 중앙 설정의 음원 및 기록을 적용하며 재생 성공 여부를 반환한다.
     /// allowLooping이 거짓이면 단발 이벤트만 재생한다.
+    /// 일반 스테이지 인지 범위 밖의 적 단발음은 생략하고 루프음은 범위 진입에 대비해 무음으로 시작한다.
     /// </summary>
     private bool PlayEffect(SoundId soundId, Vector3 position, GameObject source, bool attach, float volume, bool playDuringMovement = false, string parameterName = null, string label = null, float pitch = 1f,
         EventReference? eventOverride = null, string cueName = null, bool allowLooping = false)
@@ -870,6 +871,12 @@ public class SoundManager
             Debug.LogWarning("[SoundManager] The sound owner must be active.");
             return false;
         }
+        bool enemySound = IsEnemyOrProjectileSound(soundId, source);
+        Vector3 hearingPosition = source != null ? source.transform.position : position;
+        bool withinHearingRange = soundId == SoundId.EnemyRangedAttackVoice || !enemySound
+            || BambooDefenseDirector.IsWithinSoundPerceptionRange(hearingPosition);
+        if (!allowLooping && !withinHearingRange)
+            return false;
         Update();
         try
         {
@@ -899,7 +906,7 @@ public class SoundManager
             {
                 instance.set3DAttributes(RuntimeUtils.To3DAttributes(position));
             }
-            FMOD.RESULT result = instance.setVolume(Mathf.Max(0f, volume));
+            FMOD.RESULT result = instance.setVolume(withinHearingRange ? Mathf.Max(0f, volume) : 0f);
             if (result == FMOD.RESULT.OK)
                 result = instance.setPitch(Mathf.Clamp(pitch, 0.25f, 4f));
             if (result == FMOD.RESULT.OK && parameterName != null)
@@ -918,7 +925,7 @@ public class SoundManager
                 _combatFocusUntil = Time.unscaledTime + _library.CombatFocusDuration;
             var effect = new ActiveEffect(instance, source, soundId, playDuringMovement, position, attach,
                 volume, spatialize2D && !is3D, minimumDistance, maximumDistance,
-                IsEnemyOrProjectileSound(soundId, source));
+                enemySound);
             _effects.Add(effect);
 #if UNITY_EDITOR
             _recentPlayback.Add($"{Time.time:F2}s | {cueName ?? soundId.ToString()} | {eventReference.Path} | {source?.name ?? "world"} | {label} | volume={volume:F2}");
@@ -935,13 +942,17 @@ public class SoundManager
     }
 
     /// <summary>
-    /// effect의 원래 음량에 발소리 감쇠, 비 속 적 사운드 감쇠와 선택된 2D 공간 보정을 합성한다.
+    /// effect의 원래 음량에 일반 스테이지 청각 거리, 발소리 감쇠, 비 속 적 사운드 감쇠와 2D 공간 보정을 합성한다.
     /// FMOD 0번 Listener와 이동 소유자 및 씬 비 설정을 사용하고 채널 생성 전 DSP 연결은 다음 Update에서 재시도한다.
     /// </summary>
     private void UpdateEffectMix(ActiveEffect effect)
     {
         if (!effect.Instance.isValid()) return;
         float volume = Mathf.Max(0f, effect.Volume);
+        Vector3 hearingPosition = effect.Owner != null ? effect.Owner.transform.position : effect.Position;
+        if (effect.MuffleInRain && effect.Id != SoundId.EnemyRangedAttackVoice
+            && !BambooDefenseDirector.IsWithinSoundPerceptionRange(hearingPosition))
+            volume = 0f;
         if (Time.unscaledTime < _combatFocusUntil && (effect.Id == SoundId.Footstep || effect.Id == SoundId.RainFootstep
             || effect.Id == SoundId.EnemyFootstep))
             volume *= _library.CombatFootstepVolume;

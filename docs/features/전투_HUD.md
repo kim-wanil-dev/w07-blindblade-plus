@@ -1,5 +1,11 @@
 ### 전투 HUD
 
+#### 일반 스테이지 소리 인지 거리 연동 (2026-10-18)
+
+- 씬 `BambooDefenseDirector`에서 `소리 인지 거리 제한 사용`을 켜면 수리검 비행·투척 전조와 적 발소리 인디케이터는 같은 XZ 수평 반경 안에서만 표시한다. 기본 꺼짐이며 보스전·온보딩은 제한하지 않는다. 설정 위치와 검증은 [대숲 방어](대숲_방어.md)의 같은 절을 따른다.
+- `ShurikenDirectionIndicator.HandleThreatChanged`는 범위 밖 비행 마커를 즉시 반환하고, `UpdateMarker`는 전조·페이드 마커에도 거리 제한을 적용한다. 전조의 수명은 범위 밖에서도 계속 진행하며 아직 유효한 전조가 범위에 들어오면 다시 표시할 수 있다.
+- `CombatFootstepHud.HandleFootstep`는 현재 `Presentation.WorldPosition`으로 범위를 검사하여 범위 밖 적의 슬롯을 반환한다. C 후보 경로는 `EnemyFootstepCandidates`에서 스테이지 반경으로 자격도 판정한다. 적이 화면 안이면 발소리 마커를 숨기는 기존 규칙과 수리검의 반사·통과 제외 규칙은 함께 적용된다.
+
 - 기능 설명: BambooDefense의 HP·스태미너 게이지, 적 한 명당 하나의 발소리 방향 마커와 실제 피격 때만 나타나는 짧은 비네팅을 표시한다. 임시 Sprite는 프리팹의 Image Source Image에서 교체한다.
 - 동작 조건 및 처리 흐름: HP는 PlayerHealth의 초기 값과 HealthChanged를 읽는다. 스태미너는 IPlayerStaminaReadModel의 Current·Changed를 읽으며 공급자가 없으면 빈 게이지와 미연결 값을 표시한다. 발소리는 C의 FootstepPresentationSnapshot만 소비한다.
 - 구현 상태: 2026-10-14 HP·적별 방향 마커·실제 피격 펄스 구현/연결 완료. 스태미너 게이지와 읽기 계약 슬롯은 구현했으며 실제 공급자가 없어 빈 게이지·`-- / --`·불투명도 0.35로 표시한다.
