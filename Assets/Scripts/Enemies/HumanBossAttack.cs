@@ -122,6 +122,14 @@ public sealed class HumanBossAttack : MonoBehaviour
     private bool _dashParried;
     private float _strikeDamage;
 
+    [Header("반격 관통 베기")]
+    [SerializeField, Min(0.1f), Tooltip("받아치기 관통 베기 속도(미터/초). 스테이지1 보스 관통 베기(90)의 4배다.")]
+    private float _counterSlashSpeed = 360f;
+    [SerializeField, Min(0f), Tooltip("플레이어를 뚫고 지나간 뒤 더 나아가는 거리(미터). 스테이지1 보스 관통 베기와 같다.")]
+    private float _counterSlashExitDistance = 12f;
+    [SerializeField, Range(0.01f, 0.5f), Tooltip("인간과 플레이어를 잇는 직선 길이 대비 원호가 옆으로 부푼 정도. 클수록 크게 휘어 베고 지나간다.")]
+    private float _counterArcBulge = 0.25f;
+
     [Header("기운 구슬")]
     [SerializeField, Min(1), Tooltip("허리춤 구슬 개수이자 거합에 필요한 기운 수. 인간·짐승 공격이 플레이어에게 피해를 줄 때마다 붉은 실이 구슬에 닿으며 하나씩 찬다.")]
     private int _maxCharges = 3;
@@ -293,18 +301,121 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 피격 무적 중 플레이어에게 다시 베이면 쓰는 받아치기 돌진. 전조 없이 바로 유선형 곡선으로 돌진해 damage 피해를 주고,
-    /// 퍼펙트 패링에 막히면 돌진 베기와 같이 떨며 밀려난다. 전조·감속·후퇴는 제어자가 맡는다.
+    /// 피격 무적 중 플레이어에게 다시 베이면 쓰는 받아치기 돌진. 스테이지1 보스 관통 베기처럼 플레이어를 뚫고 베어 지나가며,
+    /// 인간에서 target(밀려난 플레이어가 내려앉을 곳)까지 bulgeSide 쪽으로 휜 원호를 그리고 그 너머로 빠져나간다(ArcSlash). 맞으면 damage 피해를 주고,
+    /// 퍼펙트 패링에 막히면 그 자리에서 멈춰 돌진 베기와 같이 떨며 밀려난다. 전조·감속·밀어내기와 출발 시각은 제어자가 맡는다.
     /// </summary>
-    public IEnumerator CounterDash(KatanaDamageReceiver player, float damage)
+    public IEnumerator CounterDash(KatanaDamageReceiver player, float damage, Vector3 target, Vector3 bulgeSide)
     {
         _player = player;
         _playerMotor = player.GetComponent<PlayerMotor>();
         if (!CanSlash()) yield break;
         _slashing = true;
-        yield return Dash(damage);
+        yield return ArcSlash(damage, target, bulgeSide);
         _slashing = false;
         if (_dashParried && CanSlash()) yield return RecoilFromPlayer();
+    }
+
+    /// <summary>
+    /// 지금 위치에서 target까지 관통 베기 원호를 _counterSlashSpeed로 따라가는 데 걸리는 게임 시간(초)을 반환한다.
+    /// 제어자가 밀려나는 플레이어가 내려앉는 순간에 맞춰 출발 시각을 정할 때 쓴다.
+    /// </summary>
+    public float GetCounterArcTime(Vector3 target)
+    {
+        float span = Vector3.ProjectOnPlane(target - transform.position, Vector3.up).magnitude;
+        if (span < 0.01f) return 0f;
+        float bulge = span * _counterArcBulge;
+        float radius = (span * span * 0.25f + bulge * bulge) / (2f * bulge);
+        return radius * 2f * Mathf.Asin(Mathf.Clamp01(span * 0.5f / radius)) / _counterSlashSpeed;
+    }
+
+    /// <summary>
+    /// 지금 위치에서 target까지 옆으로 직선 길이 × _counterArcBulge만큼 bulgeSide 쪽으로 부푼 원호를 따라 _counterSlashSpeed로 베고,
+    /// target의 원호 접선 방향으로 _counterSlashExitDistance만큼 곧게 빠져나간다. bulgeSide가 직선과 나란하면 휘는 쪽을 무작위로 고른다.
+    /// 플레이어에 처음 닿을 때 한 번만 전방 막기·쳐내기를 확인해 맞으면 damage 피해만 주고(밀어내지 않음) 막혀도 그대로 뚫고 지나가며,
+    /// 퍼펙트 패링이면 닿은 자리에서 멈추고 _dashParried를 켠다. 걸을 수 있는 지면 끝에 막히면 멈춘다.
+    /// </summary>
+    private IEnumerator ArcSlash(float damage, Vector3 target, Vector3 bulgeSide)
+    {
+        _dashParried = false;
+        Vector3 start = transform.position;
+        Vector3 chord = Vector3.ProjectOnPlane(target - start, Vector3.up);
+        float span = chord.magnitude;
+        if (span < 0.01f) yield break;
+        Vector3 forward = chord / span;
+        Vector3 right = Vector3.Cross(Vector3.up, forward);
+        float lean = Vector3.Dot(right, bulgeSide);
+        float side = Mathf.Abs(lean) > 0.01f ? Mathf.Sign(lean) : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
+        Vector3 outward = right * side;
+        float bulge = span * _counterArcBulge;
+        float radius = (span * span * 0.25f + bulge * bulge) / (2f * bulge);
+        // 원의 중심은 직선 가운데에서 부푼 쪽 반대로 놓여 원호가 시작점과 플레이어 위치를 함께 지난다.
+        Vector3 center = start + forward * (span * 0.5f) - outward * (radius - bulge);
+        Vector3 fromCenter = start - center;
+        float sweep = 2f * Mathf.Asin(Mathf.Clamp01(span * 0.5f / radius));
+        // 시작점에서 플레이어 쪽이면서 부푼 쪽으로 나가는 접선을 따라 돌도록 회전 방향을 정한다.
+        Vector3 startTangent = (forward * (radius - bulge) + outward * (span * 0.5f)).normalized;
+        float turn = Vector3.Dot(Vector3.Cross(Vector3.up, fromCenter), startTangent) >= 0f ? 1f : -1f;
+        float arcLength = radius * sweep;
+        Quaternion arcTurn = Quaternion.AngleAxis(turn * sweep * Mathf.Rad2Deg, Vector3.up);
+        Vector3 arcEnd = center + arcTurn * fromCenter;
+        Vector3 exitDirection = arcTurn * startTangent;
+        float total = arcLength + _counterSlashExitDistance;
+        float traveled = 0f;
+        bool contacted = false;
+        if (_slashSound != SoundId.None)
+            Managers.Sound.Play(_slashSound, transform.position, 1f, gameObject, true);
+        while (traveled < total && CanSlash())
+        {
+            // 일시정지 프레임은 이동 없이 넘겨 관통 베기가 중간에 끊기지 않게 한다.
+            if (Time.deltaTime <= 0f)
+            {
+                yield return null;
+                continue;
+            }
+
+            traveled = Mathf.Min(total, traveled + _counterSlashSpeed * Time.deltaTime);
+            Vector3 desired = traveled <= arcLength
+                ? center + Quaternion.AngleAxis(turn * (traveled / radius) * Mathf.Rad2Deg, Vector3.up) * fromCenter
+                : arcEnd + exitDirection * (traveled - arcLength);
+            Vector3 previous = transform.position;
+            Vector3 offset = Vector3.ProjectOnPlane(desired - previous, Vector3.up);
+            if (offset.sqrMagnitude < 0.000001f)
+            {
+                yield return null;
+                continue;
+            }
+
+            Vector3 direction = offset.normalized;
+            Vector3 destination = previous + offset;
+            if (_agent.Raycast(destination, out NavMeshHit boundary))
+                destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
+            float travel = Vector3.Distance(previous, destination);
+            transform.rotation = Quaternion.LookRotation(direction);
+            if (!contacted && TryCastPlayer(previous, direction, travel, out float contact, out Vector3 point))
+            {
+                contacted = true;
+                DamageContext context = new DamageContext(damage, gameObject, point, direction, "TwinHumanCounterSlash");
+                if (_player.TryDefendProjectile(context, out bool parried))
+                {
+                    if (parried)
+                    {
+                        _agent.Move(direction * Mathf.Max(0f, contact - 0.05f));
+                        _dashParried = true;
+                        yield break;
+                    }
+                }
+                else
+                {
+                    _player.TakeDamage(context);
+                }
+            }
+            _agent.Move(destination - previous);
+            RainStageWeather.RecordDashSweep(previous + Vector3.up, transform.position + Vector3.up);
+            if (travel < 0.001f) break;
+            yield return null;
+        }
+        _motor.Stop();
     }
 
     /// <summary>플레이어 반대쪽으로 _parryRecoilDistance만큼 _parryRecoilDuration 동안 떨며 밀려난다.</summary>
@@ -548,7 +659,26 @@ public sealed class HumanBossAttack : MonoBehaviour
     /// </summary>
     private bool TryHitSlash(Vector3 start, Vector3 direction, float travel, out float contact)
     {
+        if (!TryCastPlayer(start, direction, travel, out contact, out Vector3 point)) return false;
+        DamageContext context = new DamageContext(_strikeDamage, gameObject, point, direction, "TwinHumanSlash");
+        if (_player.TryDefendProjectile(context, out bool parried))
+        {
+            _dashParried = parried;
+            return true;
+        }
+        _player.TakeDamage(context);
+        if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
+        return true;
+    }
+
+    /// <summary>
+    /// start에서 direction으로 travel만큼 _slashContactRadius 몸 캡슐을 밀어 플레이어에 닿는지 검사한다.
+    /// 닿으면 닿은 거리를 contact, 닿은 지점(처음부터 겹쳤으면 플레이어 가슴 높이)을 point로 출력하고 true를 반환한다.
+    /// </summary>
+    private bool TryCastPlayer(Vector3 start, Vector3 direction, float travel, out float contact, out Vector3 point)
+    {
         contact = 0f;
+        point = default;
         float radius = _slashContactRadius;
         Vector3 bottom = start + Vector3.up * radius;
         Vector3 top = start + Vector3.up * Mathf.Max(radius, _agent.height - radius);
@@ -558,15 +688,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         {
             if (_slashHits[i].collider.GetComponentInParent<PlayerHealth>() != _player) continue;
             contact = _slashHits[i].distance;
-            Vector3 point = _slashHits[i].distance > 0f ? _slashHits[i].point : _player.transform.position + Vector3.up;
-            DamageContext context = new DamageContext(_strikeDamage, gameObject, point, direction, "TwinHumanSlash");
-            if (_player.TryDefendProjectile(context, out bool parried))
-            {
-                _dashParried = parried;
-                return true;
-            }
-            _player.TakeDamage(context);
-            if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
+            point = _slashHits[i].distance > 0f ? _slashHits[i].point : _player.transform.position + Vector3.up;
             return true;
         }
         return false;

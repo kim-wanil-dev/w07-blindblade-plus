@@ -86,8 +86,8 @@ public sealed class TwinHumanPresentation : MonoBehaviour
     }
 
     /// <summary>
-    /// 인간이 받아칠 수 있는 무적 방어 상태(TwinBossController.IsHumanDefending)이면 카타나 모형을 켜고 GuardHold 자세를 재생하며,
-    /// 방어가 끝나거나 쳐내 반격을 시작하면 바로 숨긴다. 켜져 있는 동안 매 프레임 플레이어를 향하도록 _guardWeaponOffset 위치와 회전을 갱신한다.
+    /// 인간이 무적인 동안(TwinBossController.IsHumanDefending, 무적은 곧 받아칠 수 있는 방어 상태다) 카타나 모형을 켜고 GuardHold 자세를 재생하며,
+    /// 무적이 끝나면(쳐내 반격을 시작하면 무적도 바로 끝난다) 바로 숨긴다. 켜져 있는 동안 매 프레임 플레이어를 향하도록 _guardWeaponOffset 위치와 회전을 갱신한다.
     /// </summary>
     private void UpdateGuardWeapon()
     {

@@ -11039,6 +11039,10 @@ PrefabInstance:
       propertyPath: _dashDuration
       value: 0.5
       objectReference: {fileID: 0}
+    - target: {fileID: 802, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _maxTrailLength
+      value: 1
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
