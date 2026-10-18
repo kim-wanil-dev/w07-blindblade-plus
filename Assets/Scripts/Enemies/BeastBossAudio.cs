@@ -87,7 +87,7 @@ public sealed class BeastBossAudio : MonoBehaviour
             return;
         if (!force && Time.time < _nextWaterFootstepTime) return;
         _nextWaterFootstepTime = Time.time + _waterFootstepInterval;
-        Managers.Sound.Play(SoundId.RainFootstep, position, volume: _waterFootstepVolume,
+        Managers.Sound.Play(SoundId.EnemyWaterFootstep, position, volume: _waterFootstepVolume,
             owner: gameObject, playDuringMovement: true);
     }
 
