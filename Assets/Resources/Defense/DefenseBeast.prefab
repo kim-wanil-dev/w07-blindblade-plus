@@ -4623,13 +4623,16 @@ MonoBehaviour:
   _actionVolume: 1
   _attackRange: 6
   _jumpDuration: 0.55
-  _jumpHeight: 2
+  _jumpHeight: 1.5
   _landingRadius: 2
+  _landingBeyondTargetDistance: 10
   _jumpDamage: 10
   _oppositeDistance: 6
   _repositionSpeed: 7.2
   _repositionTimeout: 2
   _navMeshSampleRadius: 1
+  _blockedBounceDuration: 0.25
+  _blockedBounceDistance: 4
   _obstacleMask:
     serializedVersion: 2
     m_Bits: 51

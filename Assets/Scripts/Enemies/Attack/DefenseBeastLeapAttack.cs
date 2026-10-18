@@ -15,6 +15,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     {
         None,
         Jumping,
+        BouncingBack,
         Repositioning,
         Finished
     }
@@ -22,7 +23,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     [Header("도약 설정")]
     [SerializeField, Min(0.1f)] private float _attackRange = 6f;
     [SerializeField, Min(0.1f)] private float _jumpDuration = 0.55f;
-    [SerializeField, Min(0.1f)] private float _jumpHeight = 2f;
+    [SerializeField, Min(0.1f)] private float _jumpHeight = 1.5f;
     [SerializeField, Min(0.1f)] private float _landingRadius = 2f;
     [SerializeField, Min(0f)] private float _landingBeyondTargetDistance = 10f;
     [SerializeField, Min(0f)] private float _jumpDamage = 10f;
@@ -32,6 +33,10 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     [SerializeField, Min(0.1f)] private float _repositionSpeed = 7.2f;
     [SerializeField, Min(0.1f)] private float _repositionTimeout = 2f;
     [SerializeField, Min(0.05f)] private float _navMeshSampleRadius = 1f;
+
+    [Header("방어 반동")]
+    [SerializeField, Min(0.05f)] private float _blockedBounceDuration = 0.25f;
+    [SerializeField, Min(0f)] private float _blockedBounceDistance = 4f;
 
     [Header("경로와 충돌")]
     [SerializeField] private LayerMask _obstacleMask = Physics.DefaultRaycastLayers;
@@ -56,8 +61,11 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private Vector3 _leapDirection;
     private Vector3 _incomingDirection;
     private Vector3 _repositionDestination;
+    private Vector3 _bounceStartPosition;
+    private Vector3 _bounceDestination;
     private float _jumpElapsed;
     private float _repositionStartedAt;
+    private float _bounceElapsed;
     private float _previousAgentSpeed;
     private float _previousStoppingDistance;
     private bool _previousUpdatePosition;
@@ -68,16 +76,18 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private bool _jumping;
     private bool _contactResolved;
     private bool _moveToOppositeSide;
+    private bool _bounceBackOnBlock;
     private bool _attackMotionComplete;
 
     public override float Range => _attackRange;
-    public override bool AllowsMovement => _state == LeapState.Jumping || _state == LeapState.Repositioning;
+    public override bool AllowsMovement => _state == LeapState.Jumping || _state == LeapState.BouncingBack
+        || _state == LeapState.Repositioning;
     public bool IsPreparing => _preparing;
     public bool IsJumping => _jumping;
     public Vector3 IncomingDirection => _incomingDirection;
     internal override string TelemetryKind => "Melee";
 
-    protected override float ActiveDuration => _jumpDuration + _repositionTimeout;
+    protected override float ActiveDuration => _jumpDuration + _repositionTimeout + _blockedBounceDuration;
     protected override bool HasFinishedActiveAttack => _attackMotionComplete;
     protected override EnemySoundAction SoundAction => EnemySoundAction.Melee;
 
@@ -99,6 +109,8 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _jumping = false;
         _contactResolved = false;
         _moveToOppositeSide = false;
+        _bounceBackOnBlock = false;
+        _bounceElapsed = 0f;
         _attackMotionComplete = false;
         _navigationCaptured = false;
     }
@@ -185,13 +197,15 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _jumping = true;
         _contactResolved = false;
         _moveToOppositeSide = false;
+        _bounceBackOnBlock = false;
+        _bounceElapsed = 0f;
         _attackMotionComplete = false;
         _state = LeapState.Jumping;
         transform.rotation = Quaternion.LookRotation(_leapDirection);
     }
 
     /// <summary>
-    /// context의 대상 생존과 도약 상태를 확인하고 비행 또는 결과 이동을 한 프레임 진행한다.
+    /// context의 대상 생존과 도약 상태를 확인하고 비행·방어 반동·결과 이동을 한 프레임 진행한다.
     /// 대상이 사라지거나 공격자가 죽으면 현재 공격을 취소하여 NavMesh 상태를 복원한다.
     /// </summary>
     protected override void UpdateActiveAttack(EnemyAttackContext context)
@@ -206,13 +220,15 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
         if (_state == LeapState.Jumping)
             UpdateLeap(context, targetHealth);
+        else if (_state == LeapState.BouncingBack)
+            UpdateBlockedBounceBack();
         else if (_state == LeapState.Repositioning)
             UpdateReposition();
     }
 
     /// <summary>
     /// context의 대상 뒤 10m를 고정한 수평 축으로 추적하며 비행 경로의 접촉을 한 번 판정한다.
-    /// NavMesh 착지점과 장애물 검사를 통과한 위치로 이동하고 끝에 도달하면 복귀 이동을 시작한다.
+    /// NavMesh 착지점과 장애물 검사를 통과한 위치로 이동하며 막기·쳐내기가 발생하면 시작점 반동을 시작한다.
     /// </summary>
     private void UpdateLeap(EnemyAttackContext context, PlayerHealth targetHealth)
     {
@@ -234,6 +250,12 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
         TryResolveLeapContact(previousPosition, nextPosition, context, targetHealth);
         transform.SetPositionAndRotation(nextPosition, Quaternion.LookRotation(_leapDirection));
+        if (_bounceBackOnBlock)
+        {
+            BeginBlockedBounceBack(targetHealth);
+            return;
+        }
+
         if (progress < 1f)
             return;
 
@@ -250,11 +272,17 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
     /// <summary>
     /// 비행 경로에서 놓친 접촉을 착지점에서 확인하고 판정 결과에 따라 반대편 또는 시작 위치를 목적지로 설정한다.
-    /// 피해·DodgeAvoided·빗나감은 도약축 뒤쪽으로, Guard·쳐내기·Invulnerable은 시작 위치로 이동한다.
+    /// 피해·DodgeAvoided·빗나감은 도약축 뒤쪽으로 이동하고 방어·쳐내기는 시작 위치로 반동 복귀한다.
     /// </summary>
     private void ResolveLanding(EnemyAttackContext context, PlayerHealth targetHealth)
     {
         TryResolveLeapContact(_landingPosition, _landingPosition, context, targetHealth);
+        if (_bounceBackOnBlock)
+        {
+            BeginBlockedBounceBack(targetHealth);
+            return;
+        }
+
         if (!_contactResolved)
         {
             _contactResolved = true;
@@ -325,7 +353,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
     /// <summary>
     /// 접촉 위치에서 DamageContext를 만들고 PlayerDefenseResolver의 결과를 도약 후 이동 상태에 반영한다.
-    /// 방어 성공은 시작 위치 복귀로, 피격·회피 성공은 반대편 이동으로 처리한다.
+    /// 막기·쳐내기는 반동 복귀 상태를 켜고, 피격·회피 성공은 반대편 이동으로 처리한다.
     /// </summary>
     private void ResolveTargetContact(EnemyAttackContext context, PlayerHealth targetHealth, Vector3 contactPoint)
     {
@@ -335,6 +363,9 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         if (targetHealth is IPlayerDefenseResolver resolver)
         {
             DefenseResolution resolution = resolver.ResolveIncomingAttack(damage);
+            _bounceBackOnBlock = resolution.Outcome == DefenseOutcome.Guard
+                || resolution.Outcome == DefenseOutcome.NormalParry
+                || resolution.Outcome == DefenseOutcome.PerfectParry;
             _moveToOppositeSide = resolution.Outcome == DefenseOutcome.DodgeAvoided
                 || resolution.Outcome == DefenseOutcome.Hit && resolution.AppliedDamage > 0f;
             return;
@@ -342,6 +373,64 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
         targetHealth.TakeDamage(damage);
         _moveToOppositeSide = true;
+    }
+
+    /// <summary>
+    /// 현재 비행 위치와 플레이어 시야 전방 _blockedBounceDistance의 목적지를 저장해 반동 이동을 시작한다.
+    /// 유효한 목적지가 없으면 도약 시작 위치로 복귀하고 경고 표시를 종료한다.
+    /// </summary>
+    private void BeginBlockedBounceBack(PlayerHealth targetHealth)
+    {
+        _warning.EndWarning();
+        _jumping = true;
+        _bounceStartPosition = transform.position;
+        _bounceDestination = GetBlockedBounceDestination(targetHealth);
+        _bounceElapsed = 0f;
+        _state = LeapState.BouncingBack;
+    }
+
+    /// <summary>
+    /// targetHealth의 PlayerMotor 시야 방향과 _blockedBounceDistance를 사용해 안전한 반동 목적지를 반환한다.
+    /// NavMesh 샘플 또는 장애물 검사가 실패하면 _startPosition을 반환한다.
+    /// </summary>
+    private Vector3 GetBlockedBounceDestination(PlayerHealth targetHealth)
+    {
+        PlayerMotor playerMotor = targetHealth.GetComponentInParent<PlayerMotor>();
+        Vector3 forward = playerMotor != null ? playerMotor.ViewForward : targetHealth.transform.forward;
+        forward = Vector3.ProjectOnPlane(forward, Vector3.up).normalized;
+        if (forward.sqrMagnitude < 0.0001f)
+            forward = -_leapDirection;
+
+        Vector3 desiredDestination = targetHealth.transform.position + forward * _blockedBounceDistance;
+        desiredDestination.y = _agent.nextPosition.y;
+        if (TrySampleNavMeshPosition(desiredDestination, out Vector3 sampledDestination)
+            && IsClearSegment(transform.position, sampledDestination, targetHealth.transform))
+            return sampledDestination;
+
+        return _startPosition;
+    }
+
+    /// <summary>
+    /// _bounceStartPosition에서 _bounceDestination까지 빠르게 감속하며 이동하고 NavMeshAgent를 목적지에 맞춘다.
+    /// 진행 시간은 _blockedBounceDuration이며 완료되면 공격 동작을 끝낸다.
+    /// </summary>
+    private void UpdateBlockedBounceBack()
+    {
+        _bounceElapsed += Time.deltaTime;
+        float progress = Mathf.Clamp01(_bounceElapsed / Mathf.Max(0.05f, _blockedBounceDuration));
+        float easedProgress = 1f - (1f - progress) * (1f - progress);
+        Vector3 nextPosition = Vector3.Lerp(_bounceStartPosition, _bounceDestination, easedProgress);
+        transform.SetPositionAndRotation(nextPosition, Quaternion.LookRotation(_leapDirection));
+        if (progress < 1f)
+            return;
+
+        if (!RestoreAgentAt(_bounceDestination, false))
+        {
+            CancelAttack();
+            return;
+        }
+
+        CompleteAttackMotion();
     }
 
     /// <summary>
