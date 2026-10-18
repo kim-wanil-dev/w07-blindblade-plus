@@ -162,8 +162,8 @@ public sealed class TwinHumanBeads : MonoBehaviour
         _viewPoint = transform.InverseTransformPoint(view.transform.position);
         _viewRight = transform.InverseTransformDirection(view.transform.right);
         _viewUp = transform.InverseTransformDirection(view.transform.up);
-        // 인간이 물속 순간이동으로 가라앉으면 허리춤 지점도 몸체와 함께 내려간다.
-        Vector3 anchor = _anchorOffset + Vector3.down * _attack.SinkOffset;
+        // 인간이 물속 순간이동으로 가라앉거나 늑대 위에 누우면 허리춤 지점도 몸체와 함께 움직인다.
+        Vector3 anchor = _attack.GetBodyPoint(_anchorOffset);
         if (_hanging)
             Simulate(anchor, deltaTime);
         else

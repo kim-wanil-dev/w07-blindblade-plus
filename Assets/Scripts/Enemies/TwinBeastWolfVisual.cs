@@ -181,6 +181,8 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private float _leapPitch = -14f;
     [SerializeField, Tooltip("도약 중 앞다리는 앞으로, 뒷다리는 뒤로 뻗는 각도")]
     private float _leapStretch = 55f;
+    [SerializeField, Tooltip("덮치기 돌진 중 앞다리 무릎(앞발)을 살짝 굽히는 각도")]
+    private float _pounceFrontKneeBend = 25f;
     [SerializeField, Tooltip("물기 돌진 중 머리를 앞으로 내미는 거리(m)")]
     private float _biteLunge = 0.4f;
     [SerializeField, Tooltip("물거나 울 때 아래턱을 벌리는 각도")]
@@ -201,8 +203,12 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private float _diveNosePitch = 55f;
     [SerializeField, Tooltip("뛰어들며 앞으로 미끄러지는 거리(m)")]
     private float _diveForwardDrift = 1.6f;
-    [SerializeField, Tooltip("뛰어들기 직전 몸을 솟구치는 높이(m)")]
-    private float _diveHop = 0.5f;
+    [SerializeField, Min(0f), Tooltip("뛰어들기 앞부분에 달리던 걸음 그대로 온몸을 먼저 낮추는 깊이(m). 이어서 코부터 물속으로 미끄러져 들어간다.")]
+    private float _diveCrouchDepth = 0.6f;
+    [SerializeField, Tooltip("뛰어들며 앞다리 무릎을 원래 굽는 쪽으로 더 굽히는 각도(도)")]
+    private float _diveFrontKneeBend = 70f;
+    [SerializeField, Range(0f, 1f), Tooltip("뛰어드는 동안 걸음 폭을 줄이는 비율. 0이면 달리던 걸음 그대로, 1이면 다 들어갈 때 걸음이 멈춘다.")]
+    private float _diveStrideFade = 0.6f;
     [SerializeField, Tooltip("튀어나올 때 코를 쳐드는 각도")]
     private float _emergeNosePitch = 45f;
     [SerializeField, Tooltip("튀어나오며 지면 위로 솟는 높이(m)")]
@@ -313,7 +319,8 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         UpdateSpeed(deltaTime);
         float blend = 1f - Mathf.Exp(-_poseBlendSpeed * deltaTime);
         float quickBlend = 1f - Mathf.Exp(-_poseBlendSpeed * 3f * deltaTime);
-        bool airborne = _beast.IsJumping || _beast.BurrowMotion != BeastBurrowMotion.None;
+        // 뛰어들기는 달리던 걸음을 이어가며 몸을 낮추므로 공중 자세로 보지 않는다.
+        bool airborne = _beast.IsJumping || _beast.BurrowMotion == BeastBurrowMotion.Emerging;
         _crouch = Mathf.Lerp(_crouch, _beast.IsPreparing ? 1f : 0f, blend);
         _leap = Mathf.Lerp(_leap, airborne ? 1f : 0f, blend);
         _bite = Mathf.Lerp(_bite, _beast.IsBiting ? 1f : 0f, quickBlend);
@@ -442,8 +449,8 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     /// </summary>
     private void ApplyPose()
     {
-        float burrow = ApplyRoot(out float howl);
-        float stride = Mathf.Clamp01(_speed / _fullStrideSpeed) * (1f - _leap) * (1f - burrow);
+        float burrow = ApplyRoot(out float howl, out float dive);
+        float stride = Mathf.Clamp01(_speed / _fullStrideSpeed) * (1f - _leap) * (1f - burrow) * (1f - _diveStrideFade * dive);
         float gallop = GetGallop();
         float run = gallop * stride;
         float cycle = _phase * Mathf.PI * 2f;
@@ -515,7 +522,11 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
             // 공중에서는 앞다리는 앞으로, 뒷다리는 뒤로 쭉 뻗어 덮치는 자세를 섞는다.
             bool front = i < 2;
             hip = Mathf.Lerp(hip, _restHipAngles[i] + (front ? -_leapStretch : _leapStretch), air);
-            knee = Mathf.Lerp(knee, _restKneeAngles[i], air);
+            // 덮치기 돌진 중에는 앞다리 무릎이 원래 굽는 쪽으로 살짝 굽어 앞발을 모은다.
+            float frontBend = front ? _kneeSigns[i] * _pounceFrontKneeBend * _bite : 0f;
+            knee = Mathf.Lerp(knee, _restKneeAngles[i] + frontBend, air);
+            // 뛰어들 때는 달리던 걸음 위에 앞다리를 점점 굽혀 몸을 낮추며 물속으로 밀고 들어간다.
+            if (front) knee += _kneeSigns[i] * _diveFrontKneeBend * dive;
             ankle = Mathf.Lerp(ankle, _restAnkleAngles[i], air);
             _hips[i].localRotation = Quaternion.Euler(hip, 0f, 0f);
             _knees[i].localRotation = Quaternion.Euler(knee, 0f, 0f);
@@ -589,33 +600,25 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
 
     /// <summary>
     /// 짐승의 BurrowMotion·BurrowDepth로 몸 루트를 땅 아래로 내리고 기울여 뛰어들기·잠수·튀어나오기를 표현한다.
-    /// 뛰어들기 앞부분과 튀어나오기 동안 머리를 쳐들고 입을 벌리는 울음 비중을 howl로 출력하며, 다리 걸음을 끌 잠수 비중(0~1)을 반환한다.
+    /// 튀어나오기 동안 머리를 쳐들고 입을 벌리는 울음 비중을 howl로, 뛰어들기 진행 비중(0~1)을 dive로 출력하며, 다리 걸음을 끌 잠수 비중(0~1)을 반환한다.
+    /// 뛰어들기는 걸음을 끄지 않고 dive로 앞다리 굽힘·걸음 폭을 조절한다.
     /// </summary>
-    private float ApplyRoot(out float howl)
+    private float ApplyRoot(out float howl, out float dive)
     {
         float depth = _beast.BurrowDepth;
         float height = 0f;
         float pitch = 0f;
         float drift = 0f;
         howl = 0f;
+        dive = 0f;
         switch (_beast.BurrowMotion)
         {
             case BeastBurrowMotion.Diving:
-                if (depth < DIVE_REAR_PORTION)
-                {
-                    // 먼저 몸을 솟구치며 울고, 이어서 코부터 땅에 박힌다.
-                    float rear = depth / DIVE_REAR_PORTION;
-                    height = _diveHop * Mathf.Sin(rear * Mathf.PI * 0.5f);
-                    pitch = -_emergeNosePitch * 0.3f * rear;
-                    howl = 1f - rear * 0.5f;
-                }
-                else
-                {
-                    float plunge = (depth - DIVE_REAR_PORTION) / (1f - DIVE_REAR_PORTION);
-                    height = Mathf.Lerp(_diveHop, -_burrowSinkDepth, plunge * plunge);
-                    pitch = Mathf.Lerp(-_emergeNosePitch * 0.3f, _diveNosePitch, Mathf.SmoothStep(0f, 1f, plunge));
-                    drift = _diveForwardDrift * plunge;
-                }
+                // 멈추거나 솟구치지 않고 달리던 기세로 온몸을 먼저 낮춘 뒤 코부터 물속으로 미끄러져 들어간다.
+                dive = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(depth / DIVE_REAR_PORTION));
+                height = -_diveCrouchDepth * dive - (_burrowSinkDepth - _diveCrouchDepth) * depth * depth;
+                pitch = _diveNosePitch * Mathf.SmoothStep(0f, 1f, depth);
+                drift = _diveForwardDrift * depth * depth;
                 break;
             case BeastBurrowMotion.Emerging:
                 float rise = 1f - depth;
@@ -634,7 +637,7 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
         transform.localPosition = _rootBasePosition + new Vector3(0f, height, drift);
         // 짐승 방향이 바뀌어도 몸은 스프링 지연만큼 늦게 따라 돌아 갑자기 꺾이지 않는다.
         transform.localRotation = _rootBaseRotation * Quaternion.Euler(0f, _bodyTurnLag, 0f) * Quaternion.Euler(pitch, 0f, 0f);
-        return _beast.IsBurrowed || _beast.BurrowMotion != BeastBurrowMotion.None ? 1f : 0f;
+        return _beast.IsBurrowed || _beast.BurrowMotion == BeastBurrowMotion.Emerging ? 1f : 0f;
     }
 
     /// <summary>

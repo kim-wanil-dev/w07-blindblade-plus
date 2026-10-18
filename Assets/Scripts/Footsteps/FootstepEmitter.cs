@@ -18,6 +18,8 @@ public sealed class FootstepEmitter : MonoBehaviour
     private float _footOffset = 0.15f;
     [SerializeField, Min(0.01f), Tooltip("프레임 이동이 이 거리 이상이면 순간이동으로 처리(미터)")]
     private float _teleportDistance = 5f;
+    [SerializeField, Tooltip("끄면 지면 접촉 사건만 알리고 감각 매니저에 발자국을 남기지 않는다.")]
+    private bool _leaveFootprints = true;
     private Vector3 _previousPosition;
     private float _accumulatedDistance;
     private bool _isLeft = true;
@@ -77,7 +79,7 @@ public sealed class FootstepEmitter : MonoBehaviour
     }
 
     /// <summary>
-    /// 이동 경로의 발 위치와 방향으로 지면을 검사하고 공통 사건과 캐릭터 접촉 이벤트를 전달한다.
+    /// 이동 경로의 발 위치와 방향으로 지면을 검사하고 공통 사건과 캐릭터 접촉 이벤트를 전달한다. _leaveFootprints가 거짓이면 접촉 이벤트만 전달한다.
     /// </summary>
     private void EmitFootstep(Vector3 position, Vector3 direction)
     {
@@ -92,6 +94,7 @@ public sealed class FootstepEmitter : MonoBehaviour
             return;
 
         OnFootstepEmitted?.Invoke(transform, hit.point);
+        if (!_leaveFootprints) return;
         if (_sensoryManager == null)
         {
             Debug.LogError("공통 감각 Emitter가 파괴되어 걸음 전달을 중단합니다.", this);

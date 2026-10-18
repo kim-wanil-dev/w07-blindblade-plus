@@ -20,6 +20,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     [SerializeField, Tooltip("붉은 테두리를 적용할 연기 파티클 렌더러를 찾는 루트")]
     private Transform _smokeRoot;
     private ParticleSystemRenderer[] _renderers;
+    private readonly List<Renderer> _warningRenderers = new List<Renderer>();
     private MaterialPropertyBlock _properties;
 
     [Header("흰색 복귀")]
@@ -34,13 +35,14 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     private bool _publishedAlwaysVisible;
 
     internal static IReadOnlyCollection<TwinBossWarningVisual> ActiveInstances => _active;
-    public IReadOnlyList<Renderer> WarningRenderers => _renderers;
+    public IReadOnlyList<Renderer> WarningRenderers => _warningRenderers;
     public float Intensity { get; private set; }
 
     void Awake()
     {
         _properties = new MaterialPropertyBlock();
         _renderers = _smokeRoot.GetComponentsInChildren<ParticleSystemRenderer>(true);
+        _warningRenderers.AddRange(_renderers);
     }
 
     void OnEnable()
@@ -93,6 +95,45 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     public void SetAlwaysVisible(bool visible)
     {
         _alwaysVisible = visible;
+    }
+
+    /// <summary>
+    /// root 아래 연기 파티클 렌더러를 붉은 테두리 대상(_renderers)에 더해 몸통 연기와 같은 경고 세기·항상 보임 여부를 받게 한다.
+    /// 몸체 밖에서 만든 뒤 붙인 늑대 눈 연기처럼 Awake 뒤에 생긴 연기에 쓴다. 다음 LateUpdate에 지금 값을 다시 넘긴다.
+    /// </summary>
+    public void AddRenderers(Transform root)
+    {
+        ParticleSystemRenderer[] added = root.GetComponentsInChildren<ParticleSystemRenderer>(true);
+        ParticleSystemRenderer[] merged = new ParticleSystemRenderer[_renderers.Length + added.Length];
+        _renderers.CopyTo(merged, 0);
+        added.CopyTo(merged, _renderers.Length);
+        _renderers = merged;
+        _warningRenderers.AddRange(added);
+        // 새 렌더러에도 값이 들어가도록 다음 Publish가 건너뛰지 않게 한다.
+        _publishedIntensity = -1f;
+    }
+
+    /// <summary>
+    /// root 아래 파티클 렌더러를 몸통 경고 세기와 상관없이 늘 가장 붉고 파동 없이도 보이는 테두리로 그리게 근접 경고 마스크 대상에 더한다.
+    /// 덮치기 직전 눈 번쩍임처럼 입자가 있는 동안만 붉게 빛나야 하는 짧은 효과에 쓴다. 속성 블록은 한 번만 넘기며 Publish가 덮어쓰지 않는다.
+    /// shape가 있으면 재질 텍스처 대신 그 모양으로 그리고 테두리를 따 실루엣이 또렷하게 한다.
+    /// </summary>
+    public void AddRedFlashRenderers(Transform root, Texture shape = null)
+    {
+        foreach (ParticleSystemRenderer renderer in root.GetComponentsInChildren<ParticleSystemRenderer>(true))
+        {
+            Material source = renderer.sharedMaterial;
+            renderer.GetPropertyBlock(_properties);
+            if (source != null && source.HasProperty(_baseMapId) && source.HasProperty(_baseColorId))
+            {
+                _properties.SetTexture(_baseMapId, shape != null ? shape : source.GetTexture(_baseMapId));
+                _properties.SetColor(_baseColorId, source.GetColor(_baseColorId));
+            }
+            _properties.SetFloat(_warningIntensityId, 1f);
+            _properties.SetFloat(_warningAlwaysVisibleId, 1f);
+            renderer.SetPropertyBlock(_properties);
+            _warningRenderers.Add(renderer);
+        }
     }
 
     /// <summary>붉은 유지 상태와 파동 없는 붉은 테두리를 끝내고 _whiteReturnDuration 동안 흰색으로 되돌린다.</summary>
