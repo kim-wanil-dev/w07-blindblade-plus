@@ -193,7 +193,7 @@ public sealed class TwinHumanIai : MonoBehaviour
             yield return null;
         }
         IsCharging = false;
-        if (CanStrike()) yield return Release();
+        if (CanStrike()) yield return Release(arenaCenter, arenaRadius);
         _warning.EndWarning();
     }
 
@@ -243,13 +243,13 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// 허리춤 기운을 모두 쓰고 보스의 불릿 타임으로 세계를 늦춘 채 화면을 붉은 사선으로 가르며 _blackoutDuration 동안 암전한다.
+    /// arenaCenter·arenaRadius 공터 안에서 허리춤 기운을 모두 쓰고 보스의 불릿 타임으로 세계를 늦춘 채 화면을 붉은 사선으로 가르며 _blackoutDuration 동안 암전한다.
     /// 암전이 끝나면 감속을 바로 풀어 플레이어가 제 속도로 패링할 수 있게 한 뒤, 발밑에서 강하고 빠른 붉은 파동(_dashPulseRadius, _dashPulseExpand초)을 일으키며 그 순간 플레이어 쪽으로 _exitDistance 너머까지 실제 시간 _dashDuration 동안 돌진한다.
     /// 돌진하는 동안은 파동으로 드러나지 않아도 붉은 테두리가 계속 보이며, 차징을 끝내는 EndWarning이 함께 끈다.
     /// 돌진하는 몸이 플레이어에게 _parryReach만큼 다가온 순간 퍼펙트 패링에 막히면 Countered로 넘어가고,
     /// 막히지 않으면 그 자리에서 납도음과 함께 큰 피해·카메라 흔들림·땅 흔적·대나무 베기·빗방울 폭발을 낸다.
     /// </summary>
-    private IEnumerator Release()
+    private IEnumerator Release(Vector3 arenaCenter, float arenaRadius)
     {
         _releasing = true;
         _attack.ConsumeCharges();
@@ -283,7 +283,7 @@ public sealed class TwinHumanIai : MonoBehaviour
         Vector3 cutDirection = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : forward;
         Vector3 cutNormal = GetCutNormal(cutDirection);
         Matrix4x4 cutView = GetCutViewProjection(eye, cutDirection);
-        Vector3 exit = GetExitPosition(forward);
+        Vector3 exit = GetExitPosition(forward, arenaCenter, arenaRadius);
         float contactAlong = Vector3.Dot(_player.transform.position - start, forward) - _parryReach;
         // 돌진을 알리는 강하고 빠른 붉은 파동을 일으키며 출발하고, 돌진 동안 파동 없이도 붉은 테두리가 보이게 한다.
         _playerPerfectPulse.BeginAt(start, Vector3.up, _pulseColor, _pulseColor, _dashPulseRadius, 1f, true, _dashPulseExpand);
@@ -431,13 +431,19 @@ public sealed class TwinHumanIai : MonoBehaviour
         return projection * view;
     }
 
-    /// <summary>플레이어 뒤로 forward 방향 _exitDistance 지점을 NavMesh 안으로 줄여 반환한다. 찾지 못하면 플레이어 발밑을 쓴다.</summary>
-    private Vector3 GetExitPosition(Vector3 forward)
+    /// <summary>플레이어 뒤 forward 방향 _exitDistance 지점을 arenaCenter·arenaRadius 공터 안의 NavMesh로 줄여 반환한다. 찾지 못하면 현재 위치를 쓴다.</summary>
+    private Vector3 GetExitPosition(Vector3 forward, Vector3 arenaCenter, float arenaRadius)
     {
         Vector3 desired = _player.transform.position + forward * _exitDistance;
+        float radius = Mathf.Max(1f, arenaRadius - _agent.radius);
+        Vector3 offset = Vector3.ProjectOnPlane(desired - arenaCenter, Vector3.up);
+        if (offset.sqrMagnitude > radius * radius)
+            desired = arenaCenter + offset.normalized * (radius - 0.25f);
         NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = _agent.agentTypeID, areaMask = _agent.areaMask };
-        if (NavMesh.SamplePosition(desired, out NavMeshHit hit, 2f, filter)) return hit.position;
-        return NavMesh.SamplePosition(_player.transform.position, out hit, 2f, filter) ? hit.position : transform.position;
+        if (NavMesh.SamplePosition(desired, out NavMeshHit hit, 2f, filter)
+            && Vector3.ProjectOnPlane(hit.position - arenaCenter, Vector3.up).sqrMagnitude <= radius * radius)
+            return hit.position;
+        return transform.position;
     }
 
     /// <summary>
@@ -448,13 +454,17 @@ public sealed class TwinHumanIai : MonoBehaviour
     {
         position = transform.position;
         NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = _agent.agentTypeID, areaMask = _agent.areaMask };
+        float safeRadius = Mathf.Max(1f, arenaRadius - _agent.radius);
         float best = -1f;
         for (int i = 0; i < CHARGE_POSITION_DIRECTIONS; i++)
         {
             float angle = i * Mathf.PI * 2f / CHARGE_POSITION_DIRECTIONS;
-            Vector3 desired = arenaCenter + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * (arenaRadius * _chargeRingRatio);
+            Vector3 desired = arenaCenter + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle))
+                * (safeRadius * _chargeRingRatio);
             desired.y = _agent.nextPosition.y;
-            if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, 1f, filter) || IsPlacementBlocked(hit.position)
+            if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, 1f, filter)
+                || Vector3.ProjectOnPlane(hit.position - arenaCenter, Vector3.up).sqrMagnitude > safeRadius * safeRadius
+                || IsPlacementBlocked(hit.position)
                 || !_agent.CalculatePath(hit.position, _path) || _path.status != NavMeshPathStatus.PathComplete) continue;
             float distance = Vector3.ProjectOnPlane(hit.position - _player.transform.position, Vector3.up).sqrMagnitude;
             if (distance <= best) continue;

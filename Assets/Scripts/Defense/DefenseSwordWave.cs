@@ -23,8 +23,10 @@ public sealed class DefenseSwordWave : MonoBehaviour
     private bool _unscaledTime;
     private readonly RaycastHit[] _hits = new RaycastHit[32];
     private readonly HashSet<EnemyHealth> _struck = new HashSet<EnemyHealth>();
+    private readonly HashSet<EnemyHealth> _blocked = new HashSet<EnemyHealth>();
     // 다른 공격과 맞은 적을 함께 셀 때는 넘겨받은 목록을 쓰고, 아니면 자기 목록을 쓴다.
     private HashSet<EnemyHealth> _struckTargets;
+    private HashSet<EnemyHealth> _blockedTargets;
     private GameObject _owner;
     private Vector3 _direction;
     private float _travelled;
@@ -82,16 +84,29 @@ public sealed class DefenseSwordWave : MonoBehaviour
     public void Launch(GameObject owner, Vector3 origin, Vector3 direction)
     {
         _struck.Clear();
-        Launch(owner, origin, direction, _struck);
+        _blocked.Clear();
+        Launch(owner, origin, direction, _struck, _blocked);
     }
 
     /// <summary>
     /// owner 소유의 검기를 origin에서 direction으로 발사하고 발사음을 재생한다.
-    /// sharedStruck에 이미 있는 적은 맞히지 않고, 새로 맞힌 적은 sharedStruck에 더해 다른 공격과 피해가 겹치지 않게 한다.
+    /// sharedStruck에 이미 있는 공유 체력 묶음은 맞히지 않고, 막힌 적은 이 검기 안에서 한 번만 처리한다.
     /// </summary>
     public void Launch(GameObject owner, Vector3 origin, Vector3 direction, HashSet<EnemyHealth> sharedStruck)
     {
+        _blocked.Clear();
+        Launch(owner, origin, direction, sharedStruck, _blocked);
+    }
+
+    /// <summary>
+    /// owner의 검기를 origin에서 direction으로 발사하고 sharedStruck와 sharedBlocked에 이미 처리한 적을 공유한다.
+    /// 피해를 받은 공유 체력 묶음과 피해를 막은 개별 적을 기록해 돌진과 검기가 같은 대상을 중복 처리하지 않게 한다.
+    /// </summary>
+    public void Launch(GameObject owner, Vector3 origin, Vector3 direction,
+        HashSet<EnemyHealth> sharedStruck, HashSet<EnemyHealth> sharedBlocked)
+    {
         _struckTargets = sharedStruck;
+        _blockedTargets = sharedBlocked;
         _owner = owner;
         _direction = direction.normalized;
         _travelled = 0f;
@@ -104,20 +119,24 @@ public sealed class DefenseSwordWave : MonoBehaviour
 
     /// <summary>
     /// 현재 위치에서 step만큼의 구간을 반경 검사하여 처음 닿은 생존 적마다 _damage만큼, 0이면 남은 체력 전체의 피해를 적용한다.
-    /// 같은 적은 한 번만 처리하고 적이 아닌 접촉은 무시하여 관통 이동을 유지한다. 같은 구간에 닿은 적대 수리검은 없앤다.
+    /// 공유 체력은 한 번만 피해를 주고 막힌 적은 개별 기록하며, 적이 아닌 접촉은 무시하여 관통 이동을 유지한다. 같은 구간의 적대 수리검은 없앤다.
     /// </summary>
     private void StrikeAlong(float step)
     {
         DefenseShuriken.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
         EnemyProjectile.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
+        TwinBossProjectile.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
 
         int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
             step, _hitMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)
         {
             EnemyHealth enemy = _hits[i].collider.GetComponentInParent<EnemyHealth>();
-            if (enemy == null || !enemy.IsAlive || !_struckTargets.Add(enemy))
+            if (enemy == null || !enemy.IsAlive || _blockedTargets.Contains(enemy)
+                || _struckTargets.Contains(enemy.SharedDamageKey))
                 continue;
+            if (enemy.IsInvulnerable) _blockedTargets.Add(enemy);
+            else _struckTargets.Add(enemy.SharedDamageKey);
             Vector3 point = _hits[i].distance > 0f ? _hits[i].point : _hits[i].collider.ClosestPoint(transform.position);
             float amount = _damage > 0f ? _damage : Mathf.Max(enemy.CurrentHealth, 1f);
             enemy.TakeDamage(new DamageContext(amount, _owner, point, _direction, PATTERN_ID));
