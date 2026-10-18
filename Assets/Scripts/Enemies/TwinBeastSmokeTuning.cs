@@ -56,6 +56,9 @@ public sealed class TwinBeastSmokeTuning : MonoBehaviour
     private Vector3 _sway;
     private Vector3 _swayVelocity;
 
+    // 월드 공간 연기에 이번 프레임 더한 바람 속도다. 같은 몸에 붙은 다른 연출이 몸 연기와 같이 밀리게 할 때 읽는다.
+    public Vector3 WorldDrift => _sway + Vector3.ClampMagnitude(_moveVelocity, _maxSway);
+
     private struct SmokeBase
     {
         public float Rate;

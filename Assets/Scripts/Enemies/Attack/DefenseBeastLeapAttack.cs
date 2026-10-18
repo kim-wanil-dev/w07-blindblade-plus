@@ -14,24 +14,39 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private enum LeapState
     {
         None,
-        Jumping,
+        Lunging,
+        Biting,
         BouncingBack,
         Repositioning,
         Finished
     }
 
-    [Header("도약 설정")]
-    [SerializeField, Min(0.1f)] private float _attackRange = 6f;
-    [SerializeField, Min(0.1f)] private float _jumpDuration = 0.55f;
-    [SerializeField, Min(0.1f)] private float _jumpHeight = 1.5f;
-    [SerializeField, Min(0.1f)] private float _landingRadius = 2f;
-    [SerializeField, Min(0f)] private float _landingBeyondTargetDistance = 10f;
-    [SerializeField, Min(0f)] private float _jumpDamage = 10f;
+    [Header("물기 돌진 설정")]
+    [SerializeField, Min(0.1f), Tooltip("이 수평 거리 안에서 교전하고 물기 돌진을 시작한다(m)")]
+    private float _attackRange = 9f;
+    [SerializeField, Min(0.1f), Tooltip("땅을 박차고 대상에게 뛰어드는 속도(m/s)")]
+    private float _lungeSpeed = 16f;
+    [SerializeField, Min(0f), Tooltip("뛰어드는 동안 몸이 뜨는 최고 높이(m)")]
+    private float _lungeHop = 0.35f;
+    [SerializeField, Min(0f), Tooltip("돌진을 멈추고 무는 대상 중심과의 거리(m)")]
+    private float _biteStopDistance = 1.1f;
+    [SerializeField, Min(0.1f), Tooltip("돌진 경로에서 대상과 닿았다고 보는 반지름(m). 멈추는 거리보다 커야 물기 위치에서 대상에 닿는다.")]
+    private float _biteRadius = 1.6f;
+    [SerializeField, Min(0f), Tooltip("돌진 중 대상이 돌진 축을 따라 물러나면 처음 물기 위치보다 더 따라가는 최대 거리(m). 옆으로 피하는 것은 따라가지 않는다.")]
+    private float _maxTrackDistance = 3f;
+    [SerializeField, Min(0.05f), Tooltip("물어뜯은 뒤 그 자리에 머무는 시간(초)")]
+    private float _biteDuration = 0.25f;
+    [SerializeField, Min(0f)] private float _biteDamage = 10f;
+    [SerializeField, Min(0f), Tooltip("전조 동안 대상 쪽으로 몸을 돌리는 각속도(도/초)")]
+    private float _telegraphTurnSpeed = 540f;
 
-    [Header("착지 후 이동")]
-    [SerializeField, Min(0f)] private float _oppositeDistance = 6f;
-    [SerializeField, Min(0.1f)] private float _repositionSpeed = 7.2f;
-    [SerializeField, Min(0.1f)] private float _repositionTimeout = 2f;
+    [Header("물고 난 뒤 이탈")]
+    [SerializeField, Min(0f), Tooltip("물고 난 뒤 빠져나가는 대상과의 거리(m)")]
+    private float _peelDistance = 6f;
+    [SerializeField, Range(0f, 90f), Tooltip("돌진 반대 방향에서 옆으로 비껴 빠져나가는 각도")]
+    private float _peelAngle = 50f;
+    [SerializeField, Min(0.1f)] private float _repositionSpeed = 9f;
+    [SerializeField, Min(0.1f)] private float _repositionTimeout = 1.5f;
     [SerializeField, Min(0.05f)] private float _navMeshSampleRadius = 1f;
 
     [Header("방어 반동")]
@@ -40,7 +55,8 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
     [Header("경로와 충돌")]
     [SerializeField] private LayerMask _obstacleMask = Physics.DefaultRaycastLayers;
-    [SerializeField] private LayerMask _landingMask = ~0;
+    [SerializeField, Tooltip("돌진 경로에서 대상 충돌체를 찾는 레이어")]
+    private LayerMask _landingMask = ~0;
 
     [Header("공격 소리")]
     [SerializeField] private SoundId _heartbeatSound = SoundId.None;
@@ -57,13 +73,17 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private LeapState _state;
     private Vector3 _startPosition;
     private Vector3 _navigationPosition;
-    private Vector3 _landingPosition;
+    private Vector3 _lungeDestination;
     private Vector3 _leapDirection;
     private Vector3 _incomingDirection;
     private Vector3 _repositionDestination;
     private Vector3 _bounceStartPosition;
     private Vector3 _bounceDestination;
-    private float _jumpElapsed;
+    private float _lungeElapsed;
+    private float _lungeDuration;
+    private float _initialLungeReach;
+    private float _lungeAir;
+    private float _biteEndsAt;
     private float _repositionStartedAt;
     private float _bounceElapsed;
     private float _previousAgentSpeed;
@@ -73,21 +93,23 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private bool _previousAgentStopped;
     private bool _navigationCaptured;
     private bool _preparing;
-    private bool _jumping;
     private bool _contactResolved;
-    private bool _moveToOppositeSide;
     private bool _bounceBackOnBlock;
     private bool _attackMotionComplete;
 
     public override float Range => _attackRange;
-    public override bool AllowsMovement => _state == LeapState.Jumping || _state == LeapState.BouncingBack
-        || _state == LeapState.Repositioning;
+    public override bool AllowsMovement => _state == LeapState.Lunging || _state == LeapState.Biting
+        || _state == LeapState.BouncingBack || _state == LeapState.Repositioning;
     public bool IsPreparing => _preparing;
-    public bool IsJumping => _jumping;
+    public bool IsLunging => _state == LeapState.Lunging;
+    public bool IsBiting => _state == LeapState.Biting;
+    public bool IsBouncingBack => _state == LeapState.BouncingBack;
+    public float LungeAir => _state == LeapState.Lunging ? _lungeAir : 0f;
     public Vector3 IncomingDirection => _incomingDirection;
     internal override string TelemetryKind => "Melee";
 
-    protected override float ActiveDuration => _jumpDuration + _repositionTimeout + _blockedBounceDuration;
+    protected override float ActiveDuration => _attackRange / Mathf.Max(0.1f, _lungeSpeed) + _biteDuration
+        + _repositionTimeout + _blockedBounceDuration;
     protected override bool HasFinishedActiveAttack => _attackMotionComplete;
     protected override EnemySoundAction SoundAction => EnemySoundAction.Melee;
 
@@ -106,18 +128,25 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         base.OnEnable();
         _state = LeapState.None;
         _preparing = false;
-        _jumping = false;
         _contactResolved = false;
-        _moveToOppositeSide = false;
         _bounceBackOnBlock = false;
         _bounceElapsed = 0f;
+        _lungeAir = 0f;
         _attackMotionComplete = false;
         _navigationCaptured = false;
     }
 
+    protected override void Update()
+    {
+        base.Update();
+        // 웅크린 전조 동안 대상을 향해 몸을 돌려 돌진 방향을 맞춘다.
+        if (_preparing && Context.Target != null)
+            FaceTarget(Context.Target.position, _telegraphTurnSpeed * Time.deltaTime);
+    }
+
     /// <summary>
-    /// target의 생존·수평 사거리·NavMesh 경로와 직선 도약 장애물을 확인하여 공격 가능 여부를 반환한다.
-    /// 유효한 도착 위치가 있을 때만 true를 반환한다.
+    /// target의 생존과 수평 사거리를 확인하여 교전 범위 안이면 true를 반환한다.
+    /// 다른 적에 경로가 잠깐 막혀도 추적으로 돌아가지 않도록 돌진 경로는 HasClearLunge와 돌진 시작 때 따로 확인한다.
     /// </summary>
     public override bool CanAttack(Transform target)
     {
@@ -126,50 +155,39 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
             return false;
 
         Vector3 horizontalOffset = Vector3.ProjectOnPlane(target.position - transform.position, Vector3.up);
-        if (horizontalOffset.sqrMagnitude > _attackRange * _attackRange)
-            return false;
-
-        Vector3 attackDirection = horizontalOffset.sqrMagnitude > 0.0001f
-            ? horizontalOffset.normalized
-            : Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
-        if (attackDirection.sqrMagnitude < 0.0001f)
-            attackDirection = Vector3.forward;
-        Vector3 landingAim = GetPositionOnLeapAxis(transform.position, attackDirection, target.position);
-        return TryFindLeapDestination(landingAim, target, out _);
+        return horizontalOffset.sqrMagnitude <= _attackRange * _attackRange;
     }
 
     /// <summary>
-    /// context의 도약 방향과 시작 위치를 고정하고 웅크림 전조 상태를 켠다.
-    /// 조준 위치 뒤 _landingBeyondTargetDistance만큼의 착지 후보를 저장하고 IncomingDirection으로 전방 방어를 유지한다.
+    /// target 앞 _biteStopDistance 지점까지 NavMesh와 직선 장애물 검사를 통과해 지금 뛰어들 수 있으면 true를 반환한다.
+    /// </summary>
+    public bool HasClearLunge(Transform target)
+    {
+        return target != null && TryFindLungeDestination(target, out _);
+    }
+
+    /// <summary>
+    /// context의 방향을 돌진 방향으로 저장하고 웅크림 전조와 붉은 경고를 켠다.
+    /// IncomingDirection은 전방 방어 판정에 쓰도록 돌진 반대 방향으로 갱신한다.
     /// </summary>
     protected override void PrepareTelegraph(EnemyAttackContext context)
     {
         _preparing = true;
         _warning.BeginWarning(context.TelegraphDuration);
         _startPosition = transform.position;
-        _leapDirection = Vector3.ProjectOnPlane(context.Direction, Vector3.up).normalized;
-        if (_leapDirection.sqrMagnitude < 0.0001f)
-            _leapDirection = Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
-        if (_leapDirection.sqrMagnitude < 0.0001f)
-            _leapDirection = Vector3.forward;
+        _leapDirection = GetHorizontalDirection(context.Direction);
         _incomingDirection = -_leapDirection;
-
-        Vector3 targetAim = GetPositionOnLeapAxis(_startPosition, _leapDirection, context.AimPosition);
-        _landingPosition = targetAim;
-        Vector3 landingAim = GetLeapLandingAim(_startPosition, _leapDirection, context.AimPosition);
-        if (TryFindLeapDestination(landingAim, context.Target, out Vector3 sampledLanding)
-            || TryFindLeapDestination(targetAim, context.Target, out sampledLanding))
-            _landingPosition = sampledLanding;
     }
 
     /// <summary>
-    /// 준비 중인 도약 축으로 현재 target 뒤 10m의 착지점을 찾고 유효한 후보가 없으면 준비 때 저장한 착지점을 사용한다.
-    /// NavMeshAgent의 이전 위치·회전·속도·정지 상태를 저장하고 포물선 도약을 시작한다.
+    /// 현재 대상 위치로 돌진 방향과 물기 위치를 정하고 NavMeshAgent의 이전 위치·회전·속도·정지 상태를 저장한 뒤 돌진을 시작한다.
+    /// 물기 위치가 유효하지 않으면 경고를 끄고 바로 후딜로 넘어간다.
     /// </summary>
     protected override void PerformAttack(EnemyAttackContext context)
     {
         _preparing = false;
-        if (!_health.IsAlive || !_motor.IsReady)
+        if (!_health.IsAlive || !_motor.IsReady
+            || !TryFindLungeDestination(context.Target, out _lungeDestination))
         {
             _warning.EndWarning();
             CompleteAttackMotion();
@@ -178,9 +196,8 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         }
 
         _startPosition = transform.position;
-        if (TryGetTrackedLandingPosition(context.Target.position, context.Target, out Vector3 trackedLanding))
-            _landingPosition = trackedLanding;
-
+        _leapDirection = GetHorizontalDirection(context.Target.position - _startPosition);
+        _incomingDirection = -_leapDirection;
         _navigationPosition = _agent.nextPosition;
         _previousUpdatePosition = _agent.updatePosition;
         _previousUpdateRotation = _agent.updateRotation;
@@ -192,20 +209,21 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _agent.updatePosition = false;
         _agent.updateRotation = false;
         _agent.isStopped = true;
-        _incomingDirection = -_leapDirection;
-        _jumpElapsed = 0f;
-        _jumping = true;
+        float distance = Vector3.ProjectOnPlane(_lungeDestination - _startPosition, Vector3.up).magnitude;
+        _initialLungeReach = distance;
+        _lungeDuration = Mathf.Max(0.12f, distance / Mathf.Max(0.1f, _lungeSpeed));
+        _lungeElapsed = 0f;
+        _lungeAir = 0f;
         _contactResolved = false;
-        _moveToOppositeSide = false;
         _bounceBackOnBlock = false;
         _bounceElapsed = 0f;
         _attackMotionComplete = false;
-        _state = LeapState.Jumping;
+        _state = LeapState.Lunging;
         transform.rotation = Quaternion.LookRotation(_leapDirection);
     }
 
     /// <summary>
-    /// context의 대상 생존과 도약 상태를 확인하고 비행·방어 반동·결과 이동을 한 프레임 진행한다.
+    /// context의 대상 생존과 돌진 상태를 확인하고 돌진·물기·방어 반동·이탈 이동을 한 프레임 진행한다.
     /// 대상이 사라지거나 공격자가 죽으면 현재 공격을 취소하여 NavMesh 상태를 복원한다.
     /// </summary>
     protected override void UpdateActiveAttack(EnemyAttackContext context)
@@ -218,8 +236,10 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
             return;
         }
 
-        if (_state == LeapState.Jumping)
-            UpdateLeap(context, targetHealth);
+        if (_state == LeapState.Lunging)
+            UpdateLunge(context, targetHealth);
+        else if (_state == LeapState.Biting)
+            UpdateBite(targetHealth);
         else if (_state == LeapState.BouncingBack)
             UpdateBlockedBounceBack();
         else if (_state == LeapState.Repositioning)
@@ -227,28 +247,26 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// context의 대상 뒤 10m를 고정한 수평 축으로 추적하며 비행 경로의 접촉을 한 번 판정한다.
-    /// NavMesh 착지점과 장애물 검사를 통과한 위치로 이동하며 막기·쳐내기가 발생하면 시작점 반동을 시작한다.
+    /// 시작 위치에서 _lungeDestination까지 감속하며 낮게 뛰어드는 위치를 한 프레임 진행하고 경로의 대상 접촉을 한 번 판정한다.
+    /// 막기·쳐내기면 반동을 시작하고, 대상에 닿거나 물기 위치에 도착하면 NavMesh 위로 돌아와 물기를 시작한다.
     /// </summary>
-    private void UpdateLeap(EnemyAttackContext context, PlayerHealth targetHealth)
+    private void UpdateLunge(EnemyAttackContext context, PlayerHealth targetHealth)
     {
-        if (TryGetTrackedLandingPosition(context.Target.position, context.Target, out Vector3 trackedLanding))
-            _landingPosition = trackedLanding;
-
-        _jumpElapsed += Time.deltaTime;
-        float progress = Mathf.Clamp01(_jumpElapsed / Mathf.Max(0.1f, _jumpDuration));
-        Vector3 nextPosition = Vector3.Lerp(_startPosition, _landingPosition, progress)
-            + Vector3.up * (4f * _jumpHeight * progress * (1f - progress));
+        TrackLungeDestination(context.Target);
+        _lungeElapsed += Time.deltaTime;
+        float progress = Mathf.Clamp01(_lungeElapsed / _lungeDuration);
+        float eased = 1f - (1f - progress) * (1f - progress);
+        _lungeAir = 4f * progress * (1f - progress);
+        Vector3 nextPosition = Vector3.Lerp(_startPosition, _lungeDestination, eased) + Vector3.up * (_lungeHop * _lungeAir);
         Vector3 previousPosition = transform.position;
-        Vector3 movement = nextPosition - previousPosition;
-        if (movement.sqrMagnitude > 0.000001f
+        if ((nextPosition - previousPosition).sqrMagnitude > 0.000001f
             && !IsClearSegment(previousPosition, nextPosition, context.Target))
         {
             CancelAttack();
             return;
         }
 
-        TryResolveLeapContact(previousPosition, nextPosition, context, targetHealth);
+        TryResolveBiteContact(previousPosition, nextPosition, context, targetHealth);
         transform.SetPositionAndRotation(nextPosition, Quaternion.LookRotation(_leapDirection));
         if (_bounceBackOnBlock)
         {
@@ -256,76 +274,73 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
             return;
         }
 
-        if (progress < 1f)
+        if (progress < 1f && !_contactResolved)
             return;
 
-        transform.position = _landingPosition;
-        if (!RestoreAgentAt(_landingPosition, false))
+        if (!RestoreAgentAt(progress < 1f ? nextPosition : _lungeDestination, true))
         {
             CancelAttack();
             return;
         }
 
-        _jumping = false;
-        ResolveLanding(context, targetHealth);
-    }
-
-    /// <summary>
-    /// 비행 경로에서 놓친 접촉을 착지점에서 확인하고 판정 결과에 따라 반대편 또는 시작 위치를 목적지로 설정한다.
-    /// 피해·DodgeAvoided·빗나감은 도약축 뒤쪽으로 이동하고 방어·쳐내기는 시작 위치로 반동 복귀한다.
-    /// </summary>
-    private void ResolveLanding(EnemyAttackContext context, PlayerHealth targetHealth)
-    {
-        TryResolveLeapContact(_landingPosition, _landingPosition, context, targetHealth);
+        TryResolveBiteContact(transform.position, transform.position, context, targetHealth);
         if (_bounceBackOnBlock)
         {
             BeginBlockedBounceBack(targetHealth);
             return;
         }
 
-        if (!_contactResolved)
-        {
-            _contactResolved = true;
-            _moveToOppositeSide = true;
-        }
+        _lungeAir = 0f;
+        _biteEndsAt = Time.time + _biteDuration;
+        _state = LeapState.Biting;
+    }
 
-        Vector3 desiredDestination = _moveToOppositeSide
-            ? GetPostLeapDestination(targetHealth.transform.position)
-            : _startPosition;
+    /// <summary>
+    /// target 위치를 고정한 돌진 축에 투영해 그 앞 _biteStopDistance 지점으로 _lungeDestination을 갱신한다.
+    /// 이미 지나온 거리보다 짧아지거나 처음 거리보다 _maxTrackDistance 넘게 길어지지 않게 하며, NavMesh와 장애물 검사를 통과할 때만 바꾼다.
+    /// </summary>
+    private void TrackLungeDestination(Transform target)
+    {
+        float targetReach = Vector3.Dot(Vector3.ProjectOnPlane(target.position - _startPosition, Vector3.up), _leapDirection)
+            - _biteStopDistance;
+        float travelled = Vector3.Dot(Vector3.ProjectOnPlane(transform.position - _startPosition, Vector3.up), _leapDirection);
+        float reach = Mathf.Clamp(targetReach, Mathf.Max(0f, travelled), _initialLungeReach + _maxTrackDistance);
+        Vector3 desired = _startPosition + _leapDirection * reach;
+        desired.y = _navigationPosition.y;
+        if (TrySampleNavMeshPosition(desired, out Vector3 sampled) && IsClearSegment(transform.position, sampled, target))
+            _lungeDestination = sampled;
+    }
+
+    /// <summary>
+    /// _biteEndsAt까지 물기 자세로 머문 뒤 경고를 끄고 targetHealth에서 옆으로 비껴 물러나는 이탈 이동을 시작한다.
+    /// </summary>
+    private void UpdateBite(PlayerHealth targetHealth)
+    {
+        if (Time.time < _biteEndsAt)
+            return;
+
+        _contactResolved = true;
         _warning.EndWarning();
-        BeginReposition(desiredDestination, targetHealth.transform);
+        BeginReposition(GetPeelDestination(targetHealth.transform.position), targetHealth.transform);
     }
 
     /// <summary>
-    /// targetPosition 반대편의 _oppositeDistance 목적지를 만들어 반환한다.
-    /// 도약 시작 위치에서 targetPosition으로 향한 수평 방향을 사용한다.
+    /// targetPosition에서 현재 위치 쪽 방향을 무작위 좌우로 _peelAngle만큼 돌린 _peelDistance 지점을 반환한다.
+    /// 물고 난 뒤 같은 길로 되돌아가지 않고 비스듬히 빠져나가게 한다.
     /// </summary>
-    private Vector3 GetOppositeDestination(Vector3 targetPosition)
+    private Vector3 GetPeelDestination(Vector3 targetPosition)
     {
-        Vector3 direction = Vector3.ProjectOnPlane(targetPosition - _startPosition, Vector3.up).normalized;
-        if (direction.sqrMagnitude < 0.0001f)
-            direction = _leapDirection;
-        return targetPosition + direction * _oppositeDistance;
-    }
-
-    /// <summary>
-    /// target 뒤쪽 목적지와 현재 착지점의 도약축 거리를 비교해 이미 충분히 추월했다면 착지점을 반환한다.
-    /// 아직 _oppositeDistance만큼 지나지 못했으면 기존 반대편 목적지를 반환한다.
-    /// </summary>
-    private Vector3 GetPostLeapDestination(Vector3 targetPosition)
-    {
-        float passedTargetDistance = Vector3.Dot(
-            Vector3.ProjectOnPlane(_landingPosition - targetPosition, Vector3.up), _leapDirection);
-        return passedTargetDistance >= _oppositeDistance
-            ? _landingPosition
-            : GetOppositeDestination(targetPosition);
+        Vector3 away = Vector3.ProjectOnPlane(transform.position - targetPosition, Vector3.up);
+        away = away.sqrMagnitude > 0.0001f ? away.normalized : -_leapDirection;
+        float side = Random.value < 0.5f ? -1f : 1f;
+        return targetPosition + Quaternion.AngleAxis(side * _peelAngle, Vector3.up) * away * _peelDistance;
     }
 
     /// <summary>
     /// from과 to 사이에 targetHealth의 충돌체가 있으면 공격 방어 계약을 한 번 호출한다.
-    /// _landingRadius, _landingMask, context의 공격 식별값을 사용하고 판정 결과를 런타임 상태에 저장한다.
+    /// _biteRadius, _landingMask, context의 공격 식별값을 사용하고 판정 결과를 런타임 상태에 저장한다.
     /// </summary>
-    private void TryResolveLeapContact(
+    private void TryResolveBiteContact(
         Vector3 from,
         Vector3 to,
         EnemyAttackContext context,
@@ -338,7 +353,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         float verticalOffset = Mathf.Max(0.1f, _agent.height * 0.5f);
         Vector3 start = from + Vector3.up * verticalOffset;
         Vector3 end = to + Vector3.up * verticalOffset;
-        int contactCount = Physics.OverlapCapsuleNonAlloc(start, end, _landingRadius, _landingContacts,
+        int contactCount = Physics.OverlapCapsuleNonAlloc(start, end, _biteRadius, _landingContacts,
             _landingMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < contactCount; i++)
         {
@@ -352,13 +367,13 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// 접촉 위치에서 DamageContext를 만들고 PlayerDefenseResolver의 결과를 도약 후 이동 상태에 반영한다.
-    /// 막기·쳐내기는 반동 복귀 상태를 켜고, 피격·회피 성공은 반대편 이동으로 처리한다.
+    /// 접촉 위치에서 DamageContext를 만들고 PlayerDefenseResolver의 결과를 저장한다.
+    /// 막기·쳐내기는 반동 복귀 상태를 켜고, 피격·회피·무적은 물기 뒤 이탈로 처리한다.
     /// </summary>
     private void ResolveTargetContact(EnemyAttackContext context, PlayerHealth targetHealth, Vector3 contactPoint)
     {
         _contactResolved = true;
-        DamageContext damage = new DamageContext(_jumpDamage, gameObject, contactPoint, _leapDirection,
+        DamageContext damage = new DamageContext(_biteDamage, gameObject, contactPoint, _leapDirection,
             PatternId, context.AttackId, 1, IncomingAttackKind.Melee);
         if (targetHealth is IPlayerDefenseResolver resolver)
         {
@@ -366,23 +381,20 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
             _bounceBackOnBlock = resolution.Outcome == DefenseOutcome.Guard
                 || resolution.Outcome == DefenseOutcome.NormalParry
                 || resolution.Outcome == DefenseOutcome.PerfectParry;
-            _moveToOppositeSide = resolution.Outcome == DefenseOutcome.DodgeAvoided
-                || resolution.Outcome == DefenseOutcome.Hit && resolution.AppliedDamage > 0f;
             return;
         }
 
         targetHealth.TakeDamage(damage);
-        _moveToOppositeSide = true;
     }
 
     /// <summary>
-    /// 현재 비행 위치와 플레이어 시야 전방 _blockedBounceDistance의 목적지를 저장해 반동 이동을 시작한다.
-    /// 유효한 목적지가 없으면 도약 시작 위치로 복귀하고 경고 표시를 종료한다.
+    /// 현재 돌진 위치와 플레이어 시야 전방 _blockedBounceDistance의 목적지를 저장해 반동 이동을 시작한다.
+    /// 유효한 목적지가 없으면 돌진 시작 위치로 복귀하고 경고 표시를 종료한다.
     /// </summary>
     private void BeginBlockedBounceBack(PlayerHealth targetHealth)
     {
         _warning.EndWarning();
-        _jumping = true;
+        _lungeAir = 0f;
         _bounceStartPosition = transform.position;
         _bounceDestination = GetBlockedBounceDestination(targetHealth);
         _bounceElapsed = 0f;
@@ -434,13 +446,14 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// desiredDestination 주변의 완전한 NavMesh 경로와 장애물 없는 경로 구간을 확인해 결과 이동을 시작한다.
+    /// desiredDestination 주변의 완전한 NavMesh 경로와 장애물 없는 경로 구간을 확인해 이탈 이동을 시작한다.
     /// 목적지가 무효하거나 이동 요청이 거부되면 현재 안전 위치에서 공격을 마친다.
     /// </summary>
     private void BeginReposition(Vector3 desiredDestination, Transform ignoredTarget)
     {
         _state = LeapState.Repositioning;
         _agent.speed = _repositionSpeed;
+        _agent.updateRotation = _previousUpdateRotation;
         if (!TryFindRepositionDestination(desiredDestination, ignoredTarget, out _repositionDestination)
             || !_motor.MoveTo(_repositionDestination, 0.1f))
         {
@@ -455,7 +468,6 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
     /// <summary>
     /// EnemyMotor의 NavMesh 도착 상태와 _repositionStartedAt을 사용하여 이동 완료 또는 제한 시간 초과를 처리한다.
-    /// 완료 시 경로를 정지해 EnemyController가 후딜 중 이동을 덮어쓰지 않게 한다.
     /// </summary>
     private void UpdateReposition()
     {
@@ -464,60 +476,57 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// context의 전조·비행·이동이 끝났음을 표시하고 EnemyMotor 경로를 중지한다.
+    /// 전조·돌진·물기·이동이 끝났음을 표시한다. 다음 교전 이동이 바로 이어지도록 경로는 멈추지 않는다.
     /// 기본 EnemyAttackBehaviour가 다음 Update에서 후딜로 전환할 수 있게 한다.
     /// </summary>
     private void CompleteAttackMotion()
     {
         _preparing = false;
-        _jumping = false;
+        _lungeAir = 0f;
         _state = LeapState.Finished;
         _attackMotionComplete = true;
-        if (_motor != null && _motor.IsReady)
-            _motor.Stop();
     }
 
     /// <summary>
-    /// cancelled 여부와 _navigationCaptured를 사용하여 이동 경로·속도·회전 갱신·NavMesh 위치를 복원한다.
-    /// 접촉 전 취소는 도약 시작 위치로 Warp하고 접촉 후 취소는 마지막 비행 위치를 유지한다.
+    /// cancelled 여부와 _navigationCaptured를 사용하여 이동 속도·회전 갱신·NavMesh 위치를 복원한다.
+    /// 현재 위치를 NavMesh에 맞추고, 맞출 수 없으면 돌진 시작 때 저장한 NavMesh 위치로 Warp한다.
     /// </summary>
     protected override void OnAttackEnded(EnemyAttackContext context, bool cancelled)
     {
         _warning.EndWarning();
         _preparing = false;
-        bool wasJumping = _jumping;
-        _jumping = false;
+        _lungeAir = 0f;
+        bool moving = _state == LeapState.Repositioning || _state == LeapState.Finished;
         _state = LeapState.None;
         _attackMotionComplete = false;
         if (!_navigationCaptured)
             return;
 
-        Vector3 restorePosition = cancelled && wasJumping && !_contactResolved ? _startPosition : transform.position;
         if (_agent.isActiveAndEnabled && _agent.isOnNavMesh)
         {
-            _motor.Stop();
-            _agent.updatePosition = true;
-            _agent.updateRotation = _previousUpdateRotation;
-            if (!TrySampleNavMeshPosition(restorePosition, out Vector3 sampledPosition))
-                sampledPosition = _navigationPosition;
-            _agent.Warp(sampledPosition);
-        }
-        else
-        {
-            transform.position = restorePosition;
+            // 이탈 이동을 마친 뒤에는 이미 NavMesh 위에 있으므로 경로를 끊거나 Warp하지 않는다.
+            if (cancelled || !moving)
+            {
+                _motor.Stop();
+                _agent.updatePosition = true;
+                if (!TrySampleNavMeshPosition(transform.position, out Vector3 sampledPosition))
+                    sampledPosition = _navigationPosition;
+                _agent.Warp(sampledPosition);
+            }
         }
 
         _agent.updatePosition = _previousUpdatePosition;
         _agent.updateRotation = _previousUpdateRotation;
         _agent.speed = _previousAgentSpeed;
         _agent.stoppingDistance = _previousStoppingDistance;
-        _agent.isStopped = _previousAgentStopped;
+        if (cancelled || !moving)
+            _agent.isStopped = _previousAgentStopped;
         _navigationCaptured = false;
     }
 
     /// <summary>
-    /// desiredPosition을 같은 NavMesh에 투영하고 agent를 착지 위치로 Warp한다.
-    /// fallbackToNavigationPosition이 true이면 착지점 샘플 실패 시 저장한 시작 NavMesh 위치를 사용하고, 성공 여부를 반환한다.
+    /// desiredPosition을 같은 NavMesh에 투영하고 agent를 그 위치로 Warp한다.
+    /// fallbackToNavigationPosition이 true이면 샘플 실패 시 저장한 시작 NavMesh 위치를 사용하고, 성공 여부를 반환한다.
     /// </summary>
     private bool RestoreAgentAt(Vector3 desiredPosition, bool fallbackToNavigationPosition)
     {
@@ -533,7 +542,6 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         }
 
         _agent.updatePosition = true;
-        _agent.updateRotation = _previousUpdateRotation;
         if (!_agent.Warp(sampledPosition))
             return false;
 
@@ -556,63 +564,39 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// desired 위치를 agent 유형과 area mask로 샘플링하고 완전한 경로와 직선 도약 구간이 유효하면 destination을 반환한다.
-    /// ignoredTarget의 충돌체는 도약 경로 장애물에서 제외한다.
+    /// target 앞 _biteStopDistance 지점을 NavMesh에 투영하고 현재 위치에서 그곳까지 직선 장애물이 없으면 destination을 반환한다.
+    /// 이미 그 거리 안에 있으면 현재 위치를 물기 위치로 사용한다.
     /// </summary>
-    private bool TryFindLeapDestination(Vector3 desired, Transform ignoredTarget, out Vector3 destination)
+    private bool TryFindLungeDestination(Transform target, out Vector3 destination)
     {
-        destination = Vector3.zero;
+        Vector3 offset = Vector3.ProjectOnPlane(target.position - transform.position, Vector3.up);
+        float reach = Mathf.Max(0f, offset.magnitude - _biteStopDistance);
+        Vector3 desired = transform.position + GetHorizontalDirection(offset) * reach;
         desired.y = _agent.nextPosition.y;
-        if (!TrySampleNavMeshPosition(desired, out destination)
-            || !_agent.CalculatePath(destination, _path)
-            || _path.status != NavMeshPathStatus.PathComplete)
-            return false;
+        return TrySampleNavMeshPosition(desired, out destination)
+            && IsClearSegment(transform.position, destination, target);
+    }
 
-        return IsClearSegment(transform.position, destination, ignoredTarget);
+    /// <summary>direction의 수평 단위 방향을 반환한다. 길이가 없으면 현재 몸 정면, 그것도 없으면 월드 정면을 반환한다.</summary>
+    private Vector3 GetHorizontalDirection(Vector3 direction)
+    {
+        Vector3 horizontal = Vector3.ProjectOnPlane(direction, Vector3.up);
+        if (horizontal.sqrMagnitude < 0.0001f)
+            horizontal = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        return horizontal.sqrMagnitude < 0.0001f ? Vector3.forward : horizontal.normalized;
     }
 
     /// <summary>
-    /// origin과 direction을 기준으로 targetPosition을 도약 축에 투영한다.
-    /// 뒤로 이동한 거리도 반영하고 옆 방향 위치는 도약 목표에 포함하지 않는다.
+    /// position의 수평 방향으로 최대 maxDegrees만큼 몸을 돌리고 돌진 방향과 IncomingDirection을 그 방향으로 갱신한다.
     /// </summary>
-    private Vector3 GetPositionOnLeapAxis(Vector3 origin, Vector3 direction, Vector3 targetPosition)
+    private void FaceTarget(Vector3 position, float maxDegrees)
     {
-        Vector3 horizontalDirection = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
-        if (horizontalDirection.sqrMagnitude < 0.0001f)
-            return origin;
-
-        Vector3 horizontalOffset = Vector3.ProjectOnPlane(targetPosition - origin, Vector3.up);
-        float distance = Mathf.Max(0f, Vector3.Dot(horizontalOffset, horizontalDirection));
-        return origin + horizontalDirection * distance;
-    }
-
-    /// <summary>
-    /// targetPosition의 도약축 투영점에서 _landingBeyondTargetDistance만큼 더 나아간 착지 조준점을 반환한다.
-    /// 옆 방향 추적을 막기 위해 수평 도약 방향만 사용한다.
-    /// </summary>
-    private Vector3 GetLeapLandingAim(Vector3 origin, Vector3 direction, Vector3 targetPosition)
-    {
-        Vector3 horizontalDirection = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
-        return GetPositionOnLeapAxis(origin, horizontalDirection, targetPosition)
-            + horizontalDirection * _landingBeyondTargetDistance;
-    }
-
-    /// <summary>
-    /// targetPosition 뒤 _landingBeyondTargetDistance를 우선 목표로 삼고 유효하지 않으면 target 위치를 후보로 사용한다.
-    /// NavMesh와 장애물 검사를 통과한 축 방향 착지 후보를 destination으로 반환한다.
-    /// </summary>
-    private bool TryGetTrackedLandingPosition(Vector3 targetPosition, Transform ignoredTarget, out Vector3 destination)
-    {
-        Vector3 beyondTarget = GetLeapLandingAim(_startPosition, _leapDirection, targetPosition);
-        beyondTarget.y = _agent.nextPosition.y;
-        if (TrySampleNavMeshPosition(beyondTarget, out destination)
-            && IsClearSegment(transform.position, destination, ignoredTarget))
-            return true;
-
-        Vector3 targetAim = GetPositionOnLeapAxis(_startPosition, _leapDirection, targetPosition);
-        targetAim.y = _agent.nextPosition.y;
-        return TrySampleNavMeshPosition(targetAim, out destination)
-            && IsClearSegment(transform.position, destination, ignoredTarget);
+        Vector3 direction = Vector3.ProjectOnPlane(position - transform.position, Vector3.up);
+        if (direction.sqrMagnitude < 0.0001f)
+            return;
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(direction), maxDegrees);
+        _leapDirection = direction.normalized;
+        _incomingDirection = -_leapDirection;
     }
 
     /// <summary>

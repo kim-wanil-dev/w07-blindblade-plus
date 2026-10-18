@@ -28,6 +28,7 @@ public class EnemyController : MonoBehaviour
     private EnemyAttackSelector _attackSelector;
     private EnemyPatrol _patrol;
     private EnemyMeleeWarningVisual _meleeWarningVisual;
+    private IEnemyEngagementMovement _engagement;
     private bool _hasVisibleTarget;
     private EnemyState _state;
     private Vector3 _lastKnownPosition;
@@ -56,6 +57,7 @@ public class EnemyController : MonoBehaviour
         _attackSelector = GetComponent<EnemyAttackSelector>();
         _patrol = GetComponent<EnemyPatrol>();
         _meleeWarningVisual = GetComponent<EnemyMeleeWarningVisual>();
+        _engagement = GetComponent<IEnemyEngagementMovement>();
     }
 
     protected virtual void OnEnable()
@@ -138,8 +140,14 @@ public class EnemyController : MonoBehaviour
         {
             if (_attackSelector.MeleeOnly)
                 UpdateMeleeAttackPursuit();
+            else if (_engagement != null)
+                _engagement.UpdateEngagement(_sensor.Target);
             else
                 _motor.Stop();
+
+            // 교전 이동이 있는 적은 그 이동을 마친 뒤에만 다음 공격을 시작한다.
+            if (_engagement != null && !_engagement.IsReadyToAttack)
+                return;
 
             // 첫 추격 후 즉시 베기 제외함
             // if (_attackSelector.TryAttack(_sensor.Target, _openingAttackPending)
@@ -186,6 +194,12 @@ public class EnemyController : MonoBehaviour
         }
         if (_state == EnemyState.Attacking)
         {
+            // 교전 이동이 있는 적은 후딜 중에도 멈추지 않고 대상 주변을 움직인다.
+            if (_engagement != null)
+            {
+                _engagement.UpdateEngagement(_sensor.Target);
+                return;
+            }
             _motor.Stop();
             _motor.FaceTarget(_lastKnownPosition);
             return;
