@@ -5,7 +5,7 @@
 - `FMODProject/week06-blindblade/Assets/Footsteps_Water_Enemy/Footsteps_Water_Enemy.mp3`를 적 전용 3D 이벤트 `event:/Footsteps/Footsteps_Water_Enemy`로 등록하고 `SoundId.EnemyWaterFootstep=49`, SoundLibrary 음량 배율 1.4로 연결했다. Unity 측 이벤트 GUID는 `{2b67be83-e0b1-4499-b821-7f3b6bb78f0b}`다.
 - 활성 `RainyStageAudio.UseWaterFootsteps`가 참이면 일반 `EnemyFootsteps`, `TwinBossFootsteps`, `BeastBossAudio`, `BossPresentation`이 이 이벤트를 재생한다. 거짓이면 각자 기존 적 발소리를 사용한다. 플레이어는 기존 `RainFootstep=42`와 `event:/Footsteps/Footsteps_Water_Light`를 유지한다.
 - 새 ID는 `SoundManager.IsEnemyOrProjectileSound`에서 적 전용 사운드로 분류되어 일반 웨이브의 청각 거리 제한과 비 먹먹함을 적용받는다.
-- FMOD Studio/CLI 실행 파일이 이 환경에서 발견되지 않아 SFX.bank와 Unity StreamingAssets 뱅크는 아직 재빌드하지 않았다. 현재 뱅크에는 새 이벤트가 없으므로 실제 재생은 SFX 뱅크 재빌드·복사 뒤 가능하다. `dotnet build Assembly-CSharp.csproj --no-restore --nologo --verbosity quiet`는 오류 0개·기존 경고 2개이며 Unity Play 청취는 미확인이다.
+- FMOD Studio 2.03.15 CLI로 Desktop의 SFX와 Master 뱅크를 빌드했다. `SFX.bank`와 `Master.strings.bank`를 Unity StreamingAssets에 반영했으며 두 복사본의 SHA-256이 빌드 원본과 일치한다. 프로젝트 진단과 뱅크 빌드는 성공했고 Unity Play의 실제 발소리 청취는 아직 확인하지 않았다.
 
 #### 일반 스테이지 소리 인지 거리 (2026-10-18)
 
