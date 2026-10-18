@@ -110,6 +110,8 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _pounceBarkLeadTime = 1f;
     [SerializeField, Min(0f), Tooltip("덮치기가 플레이어 위치를 지나 최소한 더 나아가는 거리(미터)")]
     private float _pounceOvershoot = 3f;
+    [SerializeField, Min(0f), Tooltip("덮치기 돌진 가운데에서 몸이 뜨는 최대 높이(미터). 시작과 끝은 땅 높이다.")]
+    private float _pounceLift = 0.5f;
     [SerializeField, Min(0f), Tooltip("돌진이 퍼펙트 패링에 막혔을 때 뒤로 튕겨 물러나는 거리(미터)")]
     private float _parryRecoilDistance = 5f;
     [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링에 막혀 물러나는 시간(초)")]
@@ -120,7 +122,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     [SerializeField, Min(0f)] private float _chargeSoundVolume = 1.4f;
     [SerializeField, Min(0f)] private float _biteDamage = 15f;
     [SerializeField, Tooltip("덮치기 전조를 시작할 때 짐승 자리에서 퍼지는 붉은 파동")]
-    private RevealRippleSettings _chargeRipple = new RevealRippleSettings(10f, 0.6f, 2, 0.15f, 1f,
+    private RevealRippleSettings _chargeRipple = new RevealRippleSettings(10f, 0.6f, 2, 0.15f, 4f,
         new Color(1f, 0.1f, 0.06f, 0.95f), true);
     [SerializeField, Tooltip("뛰어들고 튀어나오는 자리에 크게 퍼지는 물 파동")]
     private RevealRippleSettings _burrowRipple = new RevealRippleSettings(16f, 1f, 3, 0.15f, 1.5f,
@@ -134,7 +136,10 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _diveMaxSpeed = 14f;
     [SerializeField, Min(0f), Tooltip("땅에서 튀어나오며 앞으로 뛰쳐나가는 속도(미터/초)")]
     private float _emergeLeapSpeed = 7f;
+    [SerializeField, Min(0f), Tooltip("맞고 뛰어들어 피한 뒤 다른 곳에서 튀어나오기 전까지 땅속에 숨어 있는 시간(초)")]
+    private float _escapeHideDuration = 0.5f;
     private Vector3 _momentum;
+    private Coroutine _escape;
     private Collider _hitCollider;
     private TwinBossWarningVisual _warning;
     private PerceptionRevealMap _revealMap;
@@ -175,6 +180,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     public bool IsPreparing => _preparing;
     public bool IsJumping => _jumping;
     public bool IsBurrowed => _burrowed;
+    public bool IsEscaping => _escape != null;
     public float EdgeRunTraveledAngle { get; private set; }
     public bool IsBiting => _biting;
     public BeastBurrowMotion BurrowMotion { get; private set; }
@@ -449,11 +455,40 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (CanAttack(player)) yield return Bite(player, center, radius, chargeRipple);
     }
 
-    /// <summary>잠수 중이면 지금 자리에서 울음소리·물 파동과 함께 튀어나와 땅 위로 돌아온다. 땅 위면 아무것도 하지 않는다.</summary>
+    /// <summary>
+    /// 잠수 중이면 지금 자리에서 울음소리·물 파동과 함께 튀어나와 땅 위로 돌아온다. 땅 위면 아무것도 하지 않는다.
+    /// 맞고 피하는 중(IsEscaping)이면 그 이동이 다른 곳에서 튀어나올 때까지 기다린다.
+    /// </summary>
     public IEnumerator Resurface()
     {
+        while (_escape != null) yield return null;
         if (!_burrowed) yield break;
         yield return Emerge(transform.position, null);
+    }
+
+    /// <summary>
+    /// 맞은 짐승이 바로 무적이 되어 지금 자리에서 울음소리·큰 물 파동과 함께 뛰어들고, _escapeHideDuration 동안 숨었다가
+    /// center·radius 공터 가장자리 중 player와 떨어진 빈 지면(TryGetEmergePosition)에서 다시 파동을 내며 튀어나온 뒤 무적을 푼다.
+    /// 패턴 취소와 상관없이 끝나도록 이 컴포넌트의 코루틴으로 진행하며, 이미 피하는 중이거나 쓰러졌으면 아무것도 하지 않는다.
+    /// </summary>
+    public void BeginEscapeDive(KatanaDamageReceiver player, Vector3 center, float radius)
+    {
+        if (_escape != null || !_health.IsAlive) return;
+        _health.SetInvulnerable(true);
+        _escape = StartCoroutine(EscapeDive(player, center, radius));
+    }
+
+    /// <summary>BeginEscapeDive의 뛰어들기·숨기·다른 곳 출현을 차례로 진행하고 끝나면 무적을 풀며 _escape를 비운다.</summary>
+    private IEnumerator EscapeDive(KatanaDamageReceiver player, Vector3 center, float radius)
+    {
+        InterruptAmbush();
+        yield return Dive();
+        float until = Time.time + _escapeHideDuration;
+        while (Time.time < until && _health.IsAlive) yield return null;
+        if (!TryGetEmergePosition(player, center, radius, out Vector3 position)) position = transform.position;
+        yield return Emerge(position, player);
+        _health.SetInvulnerable(false);
+        _escape = null;
     }
 
     /// <summary>
@@ -523,7 +558,7 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 그 순간 플레이어 쪽으로 방향을 고정해 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지
-    /// _biteDuration 동안 땅 높이 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
+    /// _biteDuration 동안 가운데에서 _pounceLift만큼 살짝 뜨는 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
     /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
     /// </summary>
     private IEnumerator Pounce(KatanaDamageReceiver player, Vector3 center, float radius, float damage, string pattern)
@@ -555,7 +590,9 @@ public sealed class BeastBossAttack : MonoBehaviour
         while (elapsed < _biteDuration && CanAttack(player))
         {
             elapsed += Time.deltaTime;
-            Vector3 next = Vector3.Lerp(start, landing, Mathf.Clamp01(elapsed / _biteDuration));
+            float progress = Mathf.Clamp01(elapsed / _biteDuration);
+            // 직선 돌진 가운데에서 _pounceLift만큼 살짝 떠올랐다가 끝에서 땅에 닿는다.
+            Vector3 next = Vector3.Lerp(start, landing, progress) + Vector3.up * (_pounceLift * Mathf.Sin(progress * Mathf.PI));
             transform.SetPositionAndRotation(next, facing);
             Vector3 step = next - previous;
             if (!_attackResolved && step.sqrMagnitude > 0.000001f)
@@ -564,7 +601,7 @@ public sealed class BeastBossAttack : MonoBehaviour
             if (_lastAttackParried) break;
             yield return null;
         }
-        if (_lastAttackParried && _health.IsAlive) yield return ParryRecoil(-direction);
+        if (_lastAttackParried && _health.IsAlive && _escape == null) yield return ParryRecoil(-direction, start.y);
         if (_health.IsAlive) Landed?.Invoke();
         RestoreNavigation();
         _hasLandingSpot = true;
@@ -578,8 +615,9 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// <summary>
     /// 퍼펙트 패링에 막힌 돌진을 멈추고 direction(돌진 반대쪽)으로 _parryRecoilDistance만큼 _parryRecoilDuration 동안 감속하며 튕겨 물러난다.
     /// 돌진과 같이 NavMesh 갱신을 끈 상태에서 몸 방향은 그대로 두고, 걸을 수 있는 지면 끝에 닿으면 그 앞에서 멈춘다.
+    /// 덮치며 떠 있던 몸은 물러나는 동안 groundY(돌진 시작 땅 높이)로 내려앉는다.
     /// </summary>
-    private IEnumerator ParryRecoil(Vector3 direction)
+    private IEnumerator ParryRecoil(Vector3 direction, float groundY)
     {
         Vector3 start = transform.position;
         Vector3 end = start + direction * _parryRecoilDistance;
@@ -589,8 +627,10 @@ public sealed class BeastBossAttack : MonoBehaviour
         if (NavMesh.SamplePosition(ground, out NavMeshHit from, 5f, filter)
             && NavMesh.Raycast(from.position, from.position + direction * _parryRecoilDistance, out NavMeshHit edge, filter))
             end = start + direction * Mathf.Max(0f, Vector3.Distance(from.position, edge.position) - 0.1f);
+        end.y = groundY;
         float elapsed = 0f;
-        while (elapsed < _parryRecoilDuration && _health.IsAlive)
+        // 튕겨 물러나는 도중 맞아 피하는 잠수가 시작되면 몸을 더 옮기지 않고 잠수에 맡긴다.
+        while (elapsed < _parryRecoilDuration && _health.IsAlive && _escape == null)
         {
             elapsed += Time.deltaTime;
             float progress = Mathf.Clamp01(elapsed / _parryRecoilDuration);
@@ -881,10 +921,11 @@ public sealed class BeastBossAttack : MonoBehaviour
         _playingHeartbeat = SoundId.None;
     }
 
-    /// <summary>player와 자신이 생존하고 지면 이동이 가능한지 반환한다.</summary>
+    /// <summary>player와 자신이 생존하고 지면 이동이 가능하며 맞고 피하는 잠수 중이 아닌지 반환한다.</summary>
     private bool CanAttack(KatanaDamageReceiver player)
     {
-        return _health.IsAlive && player != null && player.IsAlive && _motor.IsReady;
+        // 맞고 피하는 잠수가 시작되면 남아 있던 전조·덮치기 코루틴이 몸을 움직이지 않고 바로 끝나게 한다.
+        return _health.IsAlive && player != null && player.IsAlive && _motor.IsReady && _escape == null;
     }
 
     /// <summary>desired 주변의 도달 가능한 지면을 destination으로 반환하고 불완전한 경로를 거부한다.</summary>
@@ -1004,7 +1045,7 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 배회·원형 이동·가장자리 질주·점프·잠수 기습을 중단하고 기존 NavMesh 설정과 이동 정지 상태를 복원한다.
-    /// 잠수 중이었으면 지금 자리에서 바로 땅 위로 돌려 피격 판정을 켠다.
+    /// 잠수 중이었으면 지금 자리에서 바로 땅 위로 돌려 피격 판정을 켠다. 맞고 피하는 잠수(IsEscaping) 중이면 잠수 상태는 그대로 둔다.
     /// </summary>
     public void CancelAttack()
     {
@@ -1019,18 +1060,23 @@ public sealed class BeastBossAttack : MonoBehaviour
         EndEdgeRun();
         RestoreNavigation();
         _warning.EndWarning();
-        // 잠수·출현 도중 멈춰도 다음 패턴에서 보이고 맞을 수 있도록 땅 위 상태로 되돌린다.
-        if (_burrowed) SetBurrowed(false);
         // 패턴이 끝나면 다음 패턴의 첫 덮치기는 다시 가장자리를 골라 나온다.
         _hasLandingSpot = false;
+        _motor.Stop();
+        // 맞고 피하는 잠수는 패턴 취소와 상관없이 끝까지 이어간다.
+        if (_escape != null) return;
+        // 잠수·출현 도중 멈춰도 다음 패턴에서 보이고 맞을 수 있도록 땅 위 상태로 되돌린다.
+        if (_burrowed) SetBurrowed(false);
         _momentum = Vector3.zero;
         BurrowDepth = 0f;
         BurrowMotion = BeastBurrowMotion.None;
-        _motor.Stop();
     }
 
     void OnDisable()
     {
+        // 꺼지면 피하는 잠수 코루틴도 멈추므로 무적을 풀고 땅 위 상태로 되돌린다.
+        if (_escape != null) _health.SetInvulnerable(false);
+        _escape = null;
         CancelAttack();
     }
 }

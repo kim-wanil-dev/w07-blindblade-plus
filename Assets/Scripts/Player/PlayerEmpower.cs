@@ -38,6 +38,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("퍼펙트 패링 순간부터 모든 공격을 무적으로 막는 실시간(초).")]
     private float _perfectParryInvulnerableDuration = 0.3f;
     private float _invulnerableUntil = float.NegativeInfinity;
+    private bool _counterFocusInvulnerable;
 
     [Header("불릿 타임")]
     [SerializeField, Range(0.1f, 1f), Tooltip("강화 준비와 강화 공격 동안 세계 시간 배율.")]
@@ -83,6 +84,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     public bool IsStriking => _active && _stage == PlayerEmpowerStage.Started;
     public bool IsBulletTimeActive => _active && _hitStopRemaining <= 0f;
     public bool IsPerfectParryInvulnerable => Time.unscaledTime < _invulnerableUntil;
+    public bool IsCounterFocusInvulnerable => _counterFocusInvulnerable;
     public float PlayerTimeScale => _playerTimeScale;
     public float WorldTimeScale => _worldTimeScale;
     public int Tokens => _tokens;
@@ -259,6 +261,15 @@ public sealed class PlayerEmpower : MonoBehaviour
     {
         _presentationProgress = Mathf.Clamp01(progress);
         _presentationSlowProgress = Mathf.Clamp01(slowProgress);
+    }
+
+    /// <summary>
+    /// 보스 거합을 받아친 뒤 X자 받아치기 강화 공격이 나가기 전까지 모든 공격을 무적으로 막을지 invulnerable로 정한다.
+    /// 강화 공격이 시작되면 강화 공격 무적이 이어받으므로 호출자가 끈다. _counterFocusInvulnerable을 바꾼다.
+    /// </summary>
+    public void SetCounterFocusInvulnerable(bool invulnerable)
+    {
+        _counterFocusInvulnerable = invulnerable;
     }
 
     /// <summary>

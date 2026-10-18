@@ -19,9 +19,6 @@ public sealed class TwinBossController : MonoBehaviour
     private const string COUNTER_TIME_OWNER_A = "TwinBossController.CounterA";
     private const string COUNTER_TIME_OWNER_B = "TwinBossController.CounterB";
     private const string REFLECTED_PROJECTILE_PATTERN_ID = "ReflectedProjectile";
-    private const int COUNTER_RETREAT_DIRECTION_COUNT = 24;
-    private const float COUNTER_RETREAT_PLAYER_CLEARANCE = 1.5f;
-    private const float MIN_BACKSTEP_GAIN = 0.5f;
 
     [Header("보스 연결")]
     [SerializeField] private HumanBossAttack _human;
@@ -99,13 +96,7 @@ public sealed class TwinBossController : MonoBehaviour
     private float _counterSlowDuration = 1.5f;
     [SerializeField, Min(0f)] private float _counterSlowFadeIn = 0.2f;
     [SerializeField, Min(0f)] private float _counterSlowFadeOut = 0.3f;
-    [SerializeField, Range(0f, 1f), Tooltip("감속 전체 시간 중 후퇴를 마치고 붉은 돌진 경고를 켜는 진행 비율")]
-    private float _counterWarningAt = 1f / 3f;
-    [SerializeField, Range(0f, 1f), Tooltip("감속 전체 시간 중 반격 돌진을 시작하는 진행 비율")]
-    private float _counterDashAt = 2f / 3f;
-    [SerializeField, Min(0f), Tooltip("감속 첫 구간에 플레이어에게서 멀어지는 최대 거리(미터)")]
-    private float _counterBackstepDistance = 18f;
-    [SerializeField, Min(0f), Tooltip("반격 돌진(인간 지그재그 돌진·짐승 직선 덮치기) 피해")]
+    [SerializeField, Min(0f), Tooltip("인간 반격 관통 베기 피해")]
     private float _counterDamage = 25f;
     [SerializeField, Tooltip("보스가 공격을 쳐낼 때 보스 발밑에서 퍼지는 파동의 바닥 링과 윤곽선 색")]
     private Color _counterPulseColor = new Color(1f, 0.1f, 0.06f, 1f);
@@ -115,9 +106,12 @@ public sealed class TwinBossController : MonoBehaviour
     [SerializeField, Min(0f)] private float _counterCameraKickPitch = 4f;
     [SerializeField, Min(0f)] private float _counterCameraShake = 0.05f;
     [SerializeField, Min(0.01f)] private float _counterCameraShakeDuration = 0.3f;
-    [SerializeField, Min(0f), Tooltip("보스가 공격을 쳐낼 때 플레이어가 뒷걸음질하는 거리(미터)")]
-    private float _counterStaggerDistance = 1.5f;
-    [SerializeField, Min(0.01f)] private float _counterStaggerDuration = 0.3f;
+    [SerializeField, Min(0f), Tooltip("인간이 공격을 쳐낼 때 플레이어를 좌후방 또는 우후방으로 밀어내는 거리(미터)")]
+    private float _humanCounterPushDistance = 12f;
+    [SerializeField, Min(0.01f), Tooltip("인간이 플레이어를 밀어내는 게임 시간(초). 반격 감속 속에서 흐른다.")]
+    private float _humanCounterPushDuration = 0.35f;
+    [SerializeField, Range(0f, 90f), Tooltip("시선 정반대 기준 밀어내는 방향이 좌우로 벌어지는 각도(도)")]
+    private float _humanCounterPushAngle = 45f;
     private PlayerEmpower _playerEmpower;
     private KatanaCombatCoordinator _playerCombat;
     private PlayerBulletTimeAudio _playerBulletTimeAudio;
@@ -130,6 +124,9 @@ public sealed class TwinBossController : MonoBehaviour
     private bool _counterSlowActive;
     private float _counterSlowElapsed;
     private float _appliedCounterTimeScale = 1f;
+    private Vector3 _counterLanding;
+    private Vector3 _counterPushSide;
+    private float _counterPushEndAt;
     private float _humanDefendAt;
     private float _beastDefendAt;
 
@@ -153,7 +150,7 @@ public sealed class TwinBossController : MonoBehaviour
     private bool _beastEvadeMoving;
 
     public TwinBossPattern Pattern => _pattern;
-    public bool IsHumanDefending => _humanInvulnerableUntil > 0f && _human != null && _human.Health.IsAlive;
+    public bool IsHumanDefending => _human != null && _human.Health.IsAlive && _human.Health.IsInvulnerable;
     public event Action<TwinBossPattern> PatternChanged;
     public event Action CooperationBroken;
     public event Action BattleFinished;
@@ -193,7 +190,10 @@ public sealed class TwinBossController : MonoBehaviour
         else _beastInvulnerableUntil = Time.time + _hitInvulnerabilityDuration;
     }
 
-    /// <summary>health의 무적 방어 예약·종료 시각을 비우고 무적을 푼다. 반격 중인 보스는 반격이 끝날 때 따로 푼다.</summary>
+    /// <summary>
+    /// health의 무적 방어 예약·종료 시각을 비우고 무적을 푼다. 인간이 반격을 시작할 때도 호출해 반격 동안은 무적이 없다.
+    /// 짐승이 맞고 피하는 잠수 중이면 그 무적은 그대로 둔다.
+    /// </summary>
     private void ClearInvulnerability(EnemyHealth health)
     {
         if (health == _human.Health)
@@ -205,6 +205,8 @@ public sealed class TwinBossController : MonoBehaviour
         {
             _beastDefendAt = 0f;
             _beastInvulnerableUntil = 0f;
+            // 맞고 피하는 잠수의 무적은 그 잠수가 튀어나올 때 직접 푼다.
+            if (_beast.IsEscaping) return;
         }
         health.SetInvulnerable(false);
     }
@@ -215,7 +217,7 @@ public sealed class TwinBossController : MonoBehaviour
     /// </summary>
     private void UpdateBeastProwl()
     {
-        bool prowl = _beast.Health.IsAlive && _player.IsAlive && !_beastEvadeMoving
+        bool prowl = _beast.Health.IsAlive && _player.IsAlive && !_beastEvadeMoving && !_beast.IsEscaping
             && (_pattern == TwinBossPattern.Idle || _pattern == TwinBossPattern.Evading
                 || (_pattern == TwinBossPattern.Countering && _counterBoss == _human.Health));
         if (!prowl)
@@ -399,13 +401,23 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 거합 차징 중 맞은 짐승이 하던 기습을 멈추고 바로 땅에 뛰어들어 피한 뒤 방해를 이어가게 한다.
-    /// 인간의 차징은 그대로 두며 피격 무적은 HandleBossDamaged가 이미 적용했다.
+    /// 거합 차징 중 맞은 짐승이 무적 잠수로 피해 다른 곳에서 나올 때까지(HandleBossDamaged가 시작한 BeginBeastEscape) 기다린 뒤 방해를 이어가게 한다.
+    /// 인간의 차징은 그대로 둔다.
     /// </summary>
     private IEnumerator EscapeThenHarass()
     {
-        yield return _beast.Dive();
+        while (_beast.IsEscaping) yield return null;
         yield return HarassPlayer(Time.time + _harassInterval);
+    }
+
+    /// <summary>
+    /// 맞은 짐승이 무적이 되어 물 파동과 함께 땅속으로 뛰어들고 잠시 숨었다가 공터 가장자리 중 플레이어와 떨어진 곳에서 파동과 함께 튀어나오게 한다.
+    /// 지금 공터 원(GetArenaCircle)과 플레이어를 BeastBossAttack.BeginEscapeDive에 넘기며 이미 피하는 중이면 아무것도 하지 않는다.
+    /// </summary>
+    private void BeginBeastEscape()
+    {
+        GetArenaCircle(out Vector3 center, out float radius);
+        _beast.BeginEscapeDive(_player, center, radius);
     }
 
     /// <summary>
@@ -472,11 +484,24 @@ public sealed class TwinBossController : MonoBehaviour
         radius = _fallbackArenaRadius;
     }
 
-    /// <summary>최초 피격 보스만 빈 위치로 빠르게 이동시키고 회복 후 피격 대상과 요청을 해제한다.</summary>
+    /// <summary>
+    /// 최초 피격 보스만 빈 위치로 빠르게 이동시키고 회복 후 피격 대상과 요청을 해제한다.
+    /// 짐승은 달려 피하는 대신 맞을 때 시작한 무적 잠수(BeginBeastEscape)가 다른 곳에서 튀어나올 때까지 기다린다.
+    /// </summary>
     private IEnumerator Evade()
     {
         ChangePattern(TwinBossPattern.Evading);
         bool humanHit = _hitBoss == _human.Health;
+        if (!humanHit)
+        {
+            while (_beast.IsEscaping && CanBattle()) yield return null;
+            float recoverUntil = Time.time + _breakRecovery;
+            while (Time.time < recoverUntil && CanBattle() && _counterBoss == null) yield return null;
+            _hitRequested = false;
+            _hitBoss = null;
+            _interrupted = false;
+            yield break;
+        }
         EnemyMotor motor = humanHit ? _humanMotor : _beastMotor;
         NavMeshAgent agent = humanHit ? _humanAgent : _beastAgent;
         Vector3 position = agent.transform.position;
@@ -500,9 +525,10 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 스테이지1 보스의 관통 베기 반격과 같은 흐름으로 인간(_counterBoss)이 반격한다. 쳐내기와 함께 시작한 감속(_counterSlowDuration) 첫 구간에
-    /// 플레이어에게서 멀어지는 곳으로 물러나고, _counterWarningAt부터 연기가 붉어지며 _counterDashAt에 지그재그 돌진(HumanBossAttack.CounterDash)으로
-    /// _counterDamage 피해를 준다. 퍼펙트 패링에 막히면 떨며 밀려난다. 반격 동안 무적을 유지하고 감속이 끝나면 무적과 반격 상태를 푼다.
+    /// 스테이지1 보스의 관통 베기 반격처럼 인간(_counterBoss)이 반격한다. 쳐낼 때 플레이어를 좌후방 또는 우후방으로 밀어낸 동안(HandleBossDamageBlocked)
+    /// 인간은 제자리에서 연기가 붉어지고, 밀려나는 플레이어가 내려앉는 순간(_counterPushEndAt) 그 자리(_counterLanding)에 닿도록 밀리는 도중에 출발해
+    /// 밀려난 쪽(_counterPushSide)으로 휜 원호로 플레이어를 뚫고 베어 지나가는 관통 베기(HumanBossAttack.CounterDash)로 _counterDamage 피해를 준다.
+    /// 플레이어와의 물리 충돌은 전투 내내 꺼져 있어 몸에 막히지 않는다. 퍼펙트 패링에 막히면 떨며 밀려난다. 반격 동안은 무적이 없으며 감속이 끝나면 반격 상태를 푼다.
     /// </summary>
     private IEnumerator Counter()
     {
@@ -510,30 +536,18 @@ public sealed class TwinBossController : MonoBehaviour
         ChangePattern(TwinBossPattern.Countering);
         _hitRequested = false;
         _hitBoss = null;
-        NavMeshAgent agent = _humanAgent;
-        EnemyMotor motor = _humanMotor;
         TwinBossWarningVisual warning = _humanWarning;
-        // 후퇴: 감속 첫 구간에 발자국 없이 플레이어에게서 가장 멀어지는 곳으로 물러나며 플레이어를 바라본다.
-        float retreatUntil = _counterSlowDuration * _counterWarningAt;
-        bool moving = TryGetCounterRetreat(agent, out Vector3 destination);
-        float distance = Vector3.ProjectOnPlane(destination - agent.transform.position, Vector3.up).magnitude;
-        float speed = retreatUntil > 0.01f ? distance / retreatUntil : float.PositiveInfinity;
-        while (_counterSlowActive && _counterSlowElapsed < retreatUntil && health.IsAlive)
+        _humanMotor.Stop();
+        // 전조: 출발 순간까지 게임 시간으로 연기가 붉게 물든다. 원호를 달리는 시간만큼 내려앉기 전에 출발한다.
+        float dashAt = Mathf.Max(Time.time, _counterPushEndAt - _human.GetCounterArcTime(_counterLanding));
+        warning.BeginWarning(dashAt - Time.time);
+        while (Time.time < dashAt && health.IsAlive)
         {
-            if (moving) moving = StepCounterRetreat(agent, destination, speed);
-            AssistPlayerView(agent.transform.position);
+            AssistPlayerView(_humanAgent.transform.position);
             yield return null;
         }
-        motor.Stop();
-        // 전조: 돌진 순간까지 연기가 붉게 물든다. 경고는 게임 시간으로 차오르므로 감속 배율만큼 줄인 시간을 준다.
-        float dashAt = _counterSlowDuration * Mathf.Max(_counterWarningAt, _counterDashAt);
-        warning.BeginWarning(Mathf.Max(0f, dashAt - _counterSlowElapsed) * _playerEmpower.WorldTimeScale);
-        while (_counterSlowActive && _counterSlowElapsed < dashAt && health.IsAlive)
-        {
-            AssistPlayerView(agent.transform.position);
-            yield return null;
-        }
-        if (health.IsAlive && _player.IsAlive) yield return _human.CounterDash(_player, _counterDamage);
+        if (health.IsAlive && _player.IsAlive)
+            yield return _human.CounterDash(_player, _counterDamage, _counterLanding, _counterPushSide);
         warning.EndWarning();
         while (_counterSlowActive) yield return null;
         EndCounter();
@@ -548,59 +562,6 @@ public sealed class TwinBossController : MonoBehaviour
         StopCounterSlow();
         _humanWarning.EndWarning();
         ClearInvulnerability(health);
-    }
-
-    /// <summary>
-    /// agent 주변 COUNTER_RETREAT_DIRECTION_COUNT 방향마다 _counterBackstepDistance 안에서 직선 NavMesh가 이어지고 공터 안인 가장 먼 지점을 후보로 삼아,
-    /// 플레이어 곁을 스쳐 지나가는 방향은 빼고 빈 지면 중 플레이어와 수평 거리가 가장 먼 후보를 destination으로 반환한다.
-    /// 현재보다 MIN_BACKSTEP_GAIN 이상 멀어지는 후보가 없으면 false를 반환한다.
-    /// </summary>
-    private bool TryGetCounterRetreat(NavMeshAgent agent, out Vector3 destination)
-    {
-        destination = agent.transform.position;
-        if (_counterBackstepDistance <= 0f) return false;
-        Vector3 origin = agent.transform.position;
-        Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - origin, Vector3.up);
-        float bestDistance = toPlayer.magnitude + MIN_BACKSTEP_GAIN;
-        GetArenaCircle(out Vector3 center, out float radius);
-        bool found = false;
-        for (int i = 0; i < COUNTER_RETREAT_DIRECTION_COUNT; i++)
-        {
-            Vector3 direction = Quaternion.Euler(0f, 360f * i / COUNTER_RETREAT_DIRECTION_COUNT, 0f) * Vector3.forward;
-            float length = _counterBackstepDistance;
-            if (agent.Raycast(origin + direction * length, out NavMeshHit hit))
-                length = Vector3.ProjectOnPlane(hit.position - origin, Vector3.up).magnitude - agent.radius;
-            while (length > 0.5f && Vector3.ProjectOnPlane(origin + direction * length - center, Vector3.up).sqrMagnitude > radius * radius)
-                length -= 0.5f;
-            if (length <= 0.5f) continue;
-            // 플레이어 곁을 지나가는 후퇴는 돌진 전에 겹치므로 후보에서 뺀다.
-            float along = Mathf.Clamp(Vector3.Dot(toPlayer, direction), 0f, length);
-            if ((toPlayer - direction * along).sqrMagnitude < COUNTER_RETREAT_PLAYER_CLEARANCE * COUNTER_RETREAT_PLAYER_CLEARANCE) continue;
-            Vector3 candidate = origin + direction * length;
-            float gap = Vector3.ProjectOnPlane(candidate - _player.transform.position, Vector3.up).magnitude;
-            if (gap <= bestDistance) continue;
-            bestDistance = gap;
-            destination = candidate;
-            found = true;
-        }
-        return found;
-    }
-
-    /// <summary>
-    /// agent를 destination 쪽으로 speed(미터/실제 초)만큼 한 프레임 옮기고 플레이어를 바라보게 한다.
-    /// 일시정지 중에는 움직이지 않으며 도착했거나 막혀 움직이지 못했으면 false를 반환한다.
-    /// </summary>
-    private bool StepCounterRetreat(NavMeshAgent agent, Vector3 destination, float speed)
-    {
-        float deltaTime = Time.timeScale > 0f ? Time.unscaledDeltaTime : 0f;
-        Vector3 previous = agent.transform.position;
-        Vector3 next = Vector3.MoveTowards(previous, destination, speed * deltaTime);
-        if (agent.Raycast(next, out NavMeshHit boundary)) next = boundary.position;
-        agent.Move(next - previous);
-        Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - agent.transform.position, Vector3.up);
-        if (toPlayer.sqrMagnitude > 0.000001f) agent.transform.rotation = Quaternion.LookRotation(toPlayer);
-        if (deltaTime > 0f && (agent.transform.position - previous).sqrMagnitude < 0.000001f) return false;
-        return Vector3.ProjectOnPlane(destination - agent.transform.position, Vector3.up).sqrMagnitude > 0.0025f;
     }
 
     /// <summary>position이 플레이어 시야 중심에서 _counterViewAssistAngle보다 벗어나면 실제 시간만큼 플레이어 좌우 시점을 그쪽으로 돌린다.</summary>
@@ -819,12 +780,13 @@ public sealed class TwinBossController : MonoBehaviour
     /// <summary>
     /// health를 최초 피격 회피 대상으로 기록하며 회피·회복 중 추가 피해는 대상을 바꾸지 않는다.
     /// 스테이지1 보스처럼 _hitInvulnerableDelay 뒤 무적 방어 상태가 시작되도록 예약하되, 플레이어 불릿 타임(강화 준비·강화 공격) 중이거나
-    /// 반사된 수리검(context.PatternId)에 맞으면 무적을 만들지 않는다. 거합 받아치기는 플레이어 강화 공격이라 불릿 타임 규칙으로 무적이 생기지 않는다. 반격 중 무적이 풀린 보스가 맞으면 반격을 멈추고 회피로 넘어간다.
+    /// 반사된 수리검(context.PatternId)에 맞거나 맞은 쪽이 짐승이면 무적을 만들지 않는다. 거합 받아치기는 플레이어 강화 공격이라 불릿 타임 규칙으로 무적이 생기지 않는다. 반격 중 무적이 풀린 보스가 맞으면 반격을 멈추고 회피로 넘어간다.
     /// </summary>
     private void HandleBossDamaged(EnemyHealth health, DamageContext context)
     {
+        // 짐승은 피격 후 무적·방어 상태가 없다.
         bool noDefense = _playerEmpower.IsReady || _playerEmpower.IsStriking
-            || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID;
+            || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID || health == _beast.Health;
         if (!health.IsAlive || noDefense) ClearInvulnerability(health);
         else if ((health == _human.Health ? _humanDefendAt : _beastDefendAt) <= 0f)
         {
@@ -833,6 +795,8 @@ public sealed class TwinBossController : MonoBehaviour
             else _beastDefendAt = Time.time + _hitInvulnerableDelay;
             if (_hitInvulnerableDelay <= 0f) BeginDefense(health);
         }
+        // 맞은 짐승은 돌진 준비 중이어도 바로 무적이 되어 땅속으로 뛰어들었다가 공터 가장자리에서 나온다.
+        if (health == _beast.Health && health.IsAlive && _pattern != TwinBossPattern.Finished) BeginBeastEscape();
         if (_counterBoss == health)
         {
             InterruptCounter(health);
@@ -868,24 +832,17 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 스테이지1 보스처럼 인간이 무적 방어 상태에서 플레이어의 근접 베기·발도 context를 막으면 검을 쳐내고 반격을 시작한다. 짐승은 반격 없이 검만 쳐낸다.
-    /// 진행 중인 패턴·회피를 멈추고 방어 상태 종료 시각을 비운 뒤(반격 동안 무적 유지) 감속을 먼저 시작해 퍼펙트 패링 소리가 먹먹하게 들리게 하고,
-    /// 칼 튕김·불꽃·퍼펙트 패링 소리·보스 발밑 붉은 파동·카메라 흔들림·플레이어 뒷걸음질을 낸다. 검기·반격 중 타격은 피해 없이 막기만 한다.
+    /// 스테이지1 보스처럼 인간이 무적 방어 상태에서 플레이어의 근접 베기·발도 context를 막으면 검을 쳐내고 반격을 시작한다. 짐승은 무적이 없어 막히지 않는다.
+    /// 진행 중인 패턴·회피를 멈추고 무적을 바로 끝내(방어 자세 칼도 사라짐, 밀려난 플레이어는 반격 중 공격할 수 없다) 감속을 먼저 시작해 퍼펙트 패링 소리가 먹먹하게 들리게 하고,
+    /// 칼 튕김·불꽃·퍼펙트 패링 소리·보스 발밑 붉은 파동·카메라 흔들림을 내고 플레이어를 좌후방 또는 우후방으로 크게 밀어낸다(PushPlayerForCounter). 검기 타격은 피해 없이 막기만 한다.
     /// </summary>
     private void HandleBossDamageBlocked(EnemyHealth health, DamageContext context)
     {
-        if (_counterBoss != null || !health.IsAlive || context.Instigator != _player.gameObject
+        if (_counterBoss != null || !health.IsAlive || health != _human.Health || context.Instigator != _player.gameObject
             || !IsPlayerMeleeAttack(context) || _pattern == TwinBossPattern.Finished) return;
-        if (health == _beast.Health)
-        {
-            // 짐승은 반격하지 않고 검만 쳐낸다. 방어 상태와 무적은 그대로 유지한다.
-            DeflectPlayerBlade(context);
-            return;
-        }
         _counterBoss = health;
-        if (health == _human.Health) _humanInvulnerableUntil = 0f;
-        else _beastInvulnerableUntil = 0f;
-        health.SetInvulnerable(true);
+        // 반격하는 동안은 무적도 방어 자세 칼도 없다.
+        ClearInvulnerability(health);
         CancelPattern();
         StartCounterSlow();
         Vector3 direction = -_playerMotor.ViewForward;
@@ -895,21 +852,31 @@ public sealed class TwinBossController : MonoBehaviour
         Managers.Sound.Play(SoundId.PerfectParryClash, context.Point, 1f, gameObject);
         _playerPerfectPulse.BeginAt(health.transform.position, Vector3.up, _counterPulseColor, _counterPulseColor);
         _playerMotor.AddCameraKick(_counterCameraKickPitch, _counterCameraShake, _counterCameraShakeDuration);
-        _playerMotor.ApplyCombatPush(direction, _counterStaggerDistance, _counterStaggerDuration);
+        PushPlayerForCounter();
     }
 
     /// <summary>
-    /// 반격하지 않는 보스가 무적 방어 중 플레이어 근접 베기 context를 막았을 때 칼 튕김·불꽃·쳐내기 소리를 내고 플레이어를 시선 반대쪽으로 뒷걸음질시킨다.
+    /// 인간 반격의 시작으로 플레이어를 시선 정반대에서 좌우 무작위로 _humanCounterPushAngle만큼 벌어진 좌후방 또는 우후방으로
+    /// _humanCounterPushDistance만큼 _humanCounterPushDuration 동안 밀어낸다. 내려앉을 자리를 NavMesh 끝까지로 줄여 _counterLanding에,
+    /// 밀려난 쪽 옆 방향을 _counterPushSide에, 밀어내기가 끝나는 게임 시각을 _counterPushEndAt에 저장해 관통 베기 원호가 쓴다.
     /// </summary>
-    private void DeflectPlayerBlade(DamageContext context)
+    private void PushPlayerForCounter()
     {
-        Vector3 direction = -_playerMotor.ViewForward;
-        KatanaWeaponVisual weapon = _player.GetComponent<KatanaWeaponVisual>();
-        if (weapon != null) weapon.PlayAttackDeflection();
-        Game.Instance.EffectManager.Play(EffectId.ParryClash, context.Point, Quaternion.LookRotation(direction));
-        Managers.Sound.Play(SoundId.ParryClash, context.Point, 1f, gameObject);
-        _playerMotor.ApplyCombatPush(direction, _counterStaggerDistance, _counterStaggerDuration);
+        Vector3 forward = Vector3.ProjectOnPlane(_playerMotor.ViewForward, Vector3.up).normalized;
+        float side = UnityEngine.Random.value < 0.5f ? -1f : 1f;
+        _counterPushSide = Vector3.Cross(Vector3.up, forward) * side;
+        float angle = _humanCounterPushAngle * Mathf.Deg2Rad;
+        Vector3 push = (-forward * Mathf.Cos(angle) + _counterPushSide * Mathf.Sin(angle)).normalized;
+        Vector3 from = _player.transform.position;
+        _counterLanding = from + push * _humanCounterPushDistance;
+        // 벽이나 공터 끝에서는 밀림이 멈추므로 걸을 수 있는 지면 끝까지만 내려앉는다고 본다.
+        if (NavMesh.SamplePosition(from, out NavMeshHit ground, 2f, NavMesh.AllAreas)
+            && NavMesh.Raycast(ground.position, _counterLanding, out NavMeshHit edge, NavMesh.AllAreas))
+            _counterLanding = edge.position;
+        _counterPushEndAt = Time.time + _humanCounterPushDuration;
+        _playerMotor.ApplyCombatPush(push, _humanCounterPushDistance, _humanCounterPushDuration);
     }
+
 
     /// <summary>context의 PatternId가 플레이어 일반 근접 베기 또는 발도 베기인지 반환한다.</summary>
     private static bool IsPlayerMeleeAttack(DamageContext context)

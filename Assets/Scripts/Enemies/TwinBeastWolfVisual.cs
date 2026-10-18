@@ -181,6 +181,8 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
     private float _leapPitch = -14f;
     [SerializeField, Tooltip("도약 중 앞다리는 앞으로, 뒷다리는 뒤로 뻗는 각도")]
     private float _leapStretch = 55f;
+    [SerializeField, Tooltip("덮치기 돌진 중 앞다리 무릎(앞발)을 살짝 굽히는 각도")]
+    private float _pounceFrontKneeBend = 25f;
     [SerializeField, Tooltip("물기 돌진 중 머리를 앞으로 내미는 거리(m)")]
     private float _biteLunge = 0.4f;
     [SerializeField, Tooltip("물거나 울 때 아래턱을 벌리는 각도")]
@@ -515,7 +517,9 @@ public sealed class TwinBeastWolfVisual : MonoBehaviour
             // 공중에서는 앞다리는 앞으로, 뒷다리는 뒤로 쭉 뻗어 덮치는 자세를 섞는다.
             bool front = i < 2;
             hip = Mathf.Lerp(hip, _restHipAngles[i] + (front ? -_leapStretch : _leapStretch), air);
-            knee = Mathf.Lerp(knee, _restKneeAngles[i], air);
+            // 덮치기 돌진 중에는 앞다리 무릎이 원래 굽는 쪽으로 살짝 굽어 앞발을 모은다.
+            float frontBend = front ? _kneeSigns[i] * _pounceFrontKneeBend * _bite : 0f;
+            knee = Mathf.Lerp(knee, _restKneeAngles[i] + frontBend, air);
             ankle = Mathf.Lerp(ankle, _restAnkleAngles[i], air);
             _hips[i].localRotation = Quaternion.Euler(hip, 0f, 0f);
             _knees[i].localRotation = Quaternion.Euler(knee, 0f, 0f);

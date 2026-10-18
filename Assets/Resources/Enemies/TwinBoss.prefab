@@ -73,9 +73,6 @@ MonoBehaviour:
   _counterSlowDuration: 1.5
   _counterSlowFadeIn: 0.2
   _counterSlowFadeOut: 0.3
-  _counterWarningAt: 0.33333334
-  _counterDashAt: 0.6666667
-  _counterBackstepDistance: 18
   _counterDamage: 25
   _counterPulseColor: {r: 1, g: 0.1, b: 0.06, a: 1}
   _counterViewAssistAngle: 20
@@ -83,8 +80,9 @@ MonoBehaviour:
   _counterCameraKickPitch: 4
   _counterCameraShake: 0.05
   _counterCameraShakeDuration: 0.3
-  _counterStaggerDistance: 1.5
-  _counterStaggerDuration: 0.3
+  _humanCounterPushDistance: 12
+  _humanCounterPushDuration: 0.35
+  _humanCounterPushAngle: 45
   _evadeRadius: 6
   _evadeSpeed: 10
   _evadeMinimumDistance: 3
@@ -311,6 +309,9 @@ MonoBehaviour:
     _ringColor: {r: 1, g: 1, b: 1, a: 1}
     _spherical: 0
   _dismountDistance: 2
+  _mountedLean: 60
+  _mountedBodyOffset: {x: 0, y: -0.8, z: -0.5}
+  _mountedLeanDuration: 0.25
   _barrageShots: 1
   _barrageSpreadAngle: 16
   _barragePreparation: 0.2
@@ -344,6 +345,9 @@ MonoBehaviour:
   _recoilShakeFrequency: 18
   _backstepDistance: 30
   _backstepDuration: 0.6
+  _counterSlashSpeed: 360
+  _counterSlashExitDistance: 12
+  _counterArcBulge: 0.25
   _maxCharges: 3
 --- !u!114 &208
 MonoBehaviour:
@@ -415,6 +419,14 @@ MonoBehaviour:
   _guardWeaponController: {fileID: 9100000, guid: 1eb1cf08b0ba4cd3b001f3714f5f04d7, type: 2}
   _guardWeaponOffset: {x: 0, y: 1.6, z: 0.6}
   _guardWeaponScale: 1.5
+  _smokeRoot: {fileID: 4934395196125393246}
+  _swayScale: 2.25
+  _maxSway: 6
+  _swayFrequency: 1.2
+  _swayDamping: 0.35
+  _teleportThreshold: 3
+  _mountedFallScale: 0.15
+  _mountedFlutterScale: 1.8
 --- !u!114 &231
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -674,7 +686,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 1.15, z: 0}
-  m_LocalScale: {x: 1.15, y: 1.15, z: 1.15}
+  m_LocalScale: {x: 0.644, y: 1.15, z: 1.15}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 201}
@@ -809,6 +821,7 @@ Transform:
   m_Children:
   - {fileID: 401}
   - {fileID: 321}
+  - {fileID: 801}
   m_Father: {fileID: 101}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!195 &302
@@ -973,6 +986,7 @@ MonoBehaviour:
   _biteDuration: 0.35
   _pounceBarkLeadTime: 0.9
   _pounceOvershoot: 3
+  _pounceLift: 0.5
   _parryRecoilDistance: 15
   _parryRecoilDuration: 0.15
   _chargeSound: 0
@@ -984,7 +998,7 @@ MonoBehaviour:
     _expandDuration: 0.6
     _ringCount: 2
     _ringInterval: 0.15
-    _afterimage: 1
+    _afterimage: 4
     _ringColor: {r: 1, g: 0.1, b: 0.06, a: 0.95}
     _spherical: 1
   _burrowRipple:
@@ -1000,6 +1014,7 @@ MonoBehaviour:
   _diveMinSpeed: 7
   _diveMaxSpeed: 14
   _emergeLeapSpeed: 7
+  _escapeHideDuration: 0.5
   _prowlRadius: 18
   _prowlKeepAway: 12
   _prowlBackHysteresis: 1.5
@@ -1108,6 +1123,68 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!1 &800
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 801}
+  - component: {fileID: 802}
+  m_Layer: 0
+  m_Name: WolfEyes
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &801
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 800}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 301}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &802
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 800}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4203d6a4475e44b88564d7c96effa5c4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TwinBeastEyes
+  _beast: {fileID: 307}
+  _head: {fileID: 429}
+  _smokePrefab: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+  _eyeOffsets:
+  - {x: -0.17, y: 0.52, z: 0.76}
+  - {x: 0.17, y: 0.52, z: 0.76}
+  _color: {r: 1, g: 0.1, b: 0.06, a: 1}
+  _rate: 8
+  _minLifetime: 1
+  _maxLifetime: 1.4
+  _trailSpeed: 0.8
+  _spreadSpeed: 0.2
+  _riseSpeed: 0.05
+  _trailWidth: 0.04
+  _trailLifetime: 1
+  _maxTrailLength: 1.5
+  _minVertexDistance: 0.03
+  _flutterScale: 0.3
 --- !u!4 &321
 Transform:
   m_ObjectHideFlags: 0
@@ -1316,6 +1393,7 @@ MonoBehaviour:
   _crouchPitch: 9
   _leapPitch: -14
   _leapStretch: 55
+  _pounceFrontKneeBend: 25
   _biteLunge: 0.4
   _jawOpen: 38
   _jawHinge: {x: 0, y: 0.26, z: 0.62}
@@ -5173,19 +5251,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.maxNumParticles
-      value: 140
+      value: 520
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startSize.scalar
-      value: 0.46
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startSize.minScalar
-      value: 0.27
+      value: 0.6
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: EmissionModule.rateOverTime.scalar
-      value: 165
+      value: 440
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: InitialModule.startLifetime.scalar
@@ -5201,15 +5279,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].value
-      value: 0.15
+      value: 0.45
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].inSlope
-      value: -0.85
+      value: -0.55
       objectReference: {fileID: 0}
     - target: {fileID: 237159198985919454, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].outSlope
-      value: -0.85
+      value: -0.55
       objectReference: {fileID: 0}
     - target: {fileID: 2309698054672481960, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_Name
@@ -5218,18 +5296,6 @@ PrefabInstance:
     - target: {fileID: 2517433616761548688, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 3
-      objectReference: {fileID: 0}
-    - target: {fileID: 2534582040691664032, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.35
       objectReference: {fileID: 0}
     - target: {fileID: 4934395196125393724, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LocalPosition.x
@@ -5313,31 +5379,35 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].value
-      value: 0.1
+      value: 0.3
       objectReference: {fileID: 0}
     - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[1].inSlope
-      value: -0.7
+      value: -0.5
       objectReference: {fileID: 0}
     - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: SizeModule.curve.maxCurve.m_Curve.Array.data[0].outSlope
-      value: -0.7
+      value: -0.5
       objectReference: {fileID: 0}
     - target: {fileID: 7599571416618648734, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_RenderMode
-      value: 1
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.startSize.scalar
+      value: 0.85
       objectReference: {fileID: 0}
-    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_LengthScale
-      value: 2.8
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.startSize.minScalar
+      value: 0.5
       objectReference: {fileID: 0}
-    - target: {fileID: 8235364978803624806, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
-      propertyPath: m_VelocityScale
-      value: 0.4
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: EmissionModule.rateOverTime.scalar
+      value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 6553188178901936670, guid: 2a38e704b4ef83e42869a4cc3bd64dbc, type: 3}
+      propertyPath: InitialModule.maxNumParticles
+      value: 80
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

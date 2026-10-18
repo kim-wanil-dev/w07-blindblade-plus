@@ -95,6 +95,21 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
         _alwaysVisible = visible;
     }
 
+    /// <summary>
+    /// root 아래 연기 파티클 렌더러를 붉은 테두리 대상(_renderers)에 더해 몸통 연기와 같은 경고 세기·항상 보임 여부를 받게 한다.
+    /// 몸체 밖에서 만든 뒤 붙인 늑대 눈 연기처럼 Awake 뒤에 생긴 연기에 쓴다. 다음 LateUpdate에 지금 값을 다시 넘긴다.
+    /// </summary>
+    public void AddRenderers(Transform root)
+    {
+        ParticleSystemRenderer[] added = root.GetComponentsInChildren<ParticleSystemRenderer>(true);
+        ParticleSystemRenderer[] merged = new ParticleSystemRenderer[_renderers.Length + added.Length];
+        _renderers.CopyTo(merged, 0);
+        added.CopyTo(merged, _renderers.Length);
+        _renderers = merged;
+        // 새 렌더러에도 값이 들어가도록 다음 Publish가 건너뛰지 않게 한다.
+        _publishedIntensity = -1f;
+    }
+
     /// <summary>붉은 유지 상태와 파동 없는 붉은 테두리를 끝내고 _whiteReturnDuration 동안 흰색으로 되돌린다.</summary>
     public void EndWarning()
     {
