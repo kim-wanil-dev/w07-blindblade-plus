@@ -375,7 +375,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77bb09cf75204f668050e7c814cf3b30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _stepDistance: 0.7
+  _stepDistance: 1.9
+  _pairedGait: 0
+  _pairedShortStepDistance: 0.48
+  _pairedLongStepDistance: 1.92
   _footOffset: 0.15
   _teleportDistance: 5
   _leaveFootprints: 0
@@ -1046,7 +1049,7 @@ MonoBehaviour:
   _idleSound: 32
   _chargeBarkSound: 45
   _waterFootstepVolume: 1.9
-  _waterFootstepInterval: 0.12
+  _waterFootstepInterval: 0.06
   _swordHitVolume: 1.1
   _swordHitPitch: 1.15
 --- !u!114 &309

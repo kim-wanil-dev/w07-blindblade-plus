@@ -371,12 +371,12 @@ MonoBehaviour:
   - {fileID: 1415526665678134583}
   _soundRevealRadius: 2
   _rangedRevealRadius: 5
-  _stepDistance: 0.8
+  _stepDistance: 1.9
   _groundMask:
     serializedVersion: 2
     m_Bits: 1
   _footstepSound: 7
-  _minimumStepSoundInterval: 0.18
+  _minimumStepSoundInterval: 0.5
   _movementRipple:
     _radius: 8
     _expandDuration: 0.9

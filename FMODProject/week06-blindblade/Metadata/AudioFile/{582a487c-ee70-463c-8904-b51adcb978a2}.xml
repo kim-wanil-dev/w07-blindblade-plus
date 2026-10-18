@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<objects serializationModel="Studio.02.03.00">
+	<object class="AudioFile" id="{582a487c-ee70-463c-8904-b51adcb978a2}">
+		<property name="assetPath">
+			<value>Enemy/Footsteps/Knight_ForestGrass_04.wav</value>
+		</property>
+		<property name="frequencyInKHz">
+			<value>44.1</value>
+		</property>
+		<property name="channelCount">
+			<value>1</value>
+		</property>
+		<property name="length">
+			<value>0.67</value>
+		</property>
+		<relationship name="masterAssetFolder">
+			<destination>{eaacc823-8802-44ec-b35a-5bbed5c487d9}</destination>
+		</relationship>
+	</object>
+</objects>

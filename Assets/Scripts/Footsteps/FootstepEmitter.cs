@@ -13,7 +13,13 @@ public sealed class FootstepEmitter : MonoBehaviour
 
     [Header("걸음")]
     [SerializeField, Min(0.01f), Tooltip("발자국 사이 이동 거리(미터)")]
-    private float _stepDistance = 0.7f;
+    private float _stepDistance = 1.9f;
+    [SerializeField, Tooltip("사족 보행의 발 디딤을 짧은 두 발과 긴 쉼으로 묶는다.")]
+    private bool _pairedGait;
+    [SerializeField, Min(0.01f), Tooltip("짝을 이루는 두 발 사이 이동 거리(미터)")]
+    private float _pairedShortStepDistance = 0.48f;
+    [SerializeField, Min(0.01f), Tooltip("다음 발 디딤 묶음까지 이동 거리(미터)")]
+    private float _pairedLongStepDistance = 1.92f;
     [SerializeField, Min(0f), Tooltip("중심에서 각 발까지의 거리(미터)")]
     private float _footOffset = 0.15f;
     [SerializeField, Min(0.01f), Tooltip("프레임 이동이 이 거리 이상이면 순간이동으로 처리(미터)")]
@@ -22,6 +28,8 @@ public sealed class FootstepEmitter : MonoBehaviour
     private bool _leaveFootprints = true;
     private Vector3 _previousPosition;
     private float _accumulatedDistance;
+    private float _nextStepDistance;
+    private bool _pairSecondStepPending;
     private bool _isLeft = true;
 
     [Header("지면")]
@@ -35,12 +43,16 @@ public sealed class FootstepEmitter : MonoBehaviour
         _attacks = GetComponents<EnemyAttackBehaviour>();
         _previousPosition = transform.position;
         _accumulatedDistance = 0f;
+        _nextStepDistance = _pairedGait ? _pairedLongStepDistance : _stepDistance;
+        _pairSecondStepPending = false;
         _isLeft = true;
     }
 
     void Start()
     {
         if (_groundLayers.value == 0 || _stepDistance <= 0f || _teleportDistance <= _stepDistance
+            || (_pairedGait && (_pairedShortStepDistance <= 0f || _pairedLongStepDistance <= 0f
+                || _teleportDistance <= _pairedLongStepDistance))
             || !Game.IsInitialized || Game.Instance.SensoryManager == null)
         {
             Debug.LogError("FootstepEmitter의 지면·걸음 거리 설정과 Game의 공통 Emitter 연결을 확인해야 합니다.", this);
@@ -60,6 +72,8 @@ public sealed class FootstepEmitter : MonoBehaviour
         if (movement.magnitude >= _teleportDistance)
         {
             _accumulatedDistance = 0f;
+            _nextStepDistance = _pairedGait ? _pairedLongStepDistance : _stepDistance;
+            _pairSecondStepPending = false;
             return;
         }
         movement.y = 0f;
@@ -67,15 +81,21 @@ public sealed class FootstepEmitter : MonoBehaviour
         if (distance <= Mathf.Epsilon)
             return;
         Vector3 direction = movement / distance;
-        float stepDistance = _stepDistance;
-        float nextDistance = stepDistance - _accumulatedDistance;
+        float nextDistance = _nextStepDistance - _accumulatedDistance;
         while (nextDistance <= distance)
         {
             Vector3 stepPosition = Vector3.Lerp(previousPosition, currentPosition, nextDistance / distance);
             EmitFootstep(stepPosition, direction);
-            nextDistance += stepDistance;
+            if (_pairedGait)
+            {
+                _nextStepDistance = _pairSecondStepPending ? _pairedLongStepDistance : _pairedShortStepDistance;
+                _pairSecondStepPending = !_pairSecondStepPending;
+            }
+            else
+                _nextStepDistance = _stepDistance;
+            nextDistance += _nextStepDistance;
         }
-        _accumulatedDistance = Mathf.Repeat(_accumulatedDistance + distance, stepDistance);
+        _accumulatedDistance = distance - (nextDistance - _nextStepDistance);
     }
 
     /// <summary>

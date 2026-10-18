@@ -86,7 +86,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5889778185624755816, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _stepDistance
-      value: 1.05
+      value: 1.9
       objectReference: {fileID: 0}
     - target: {fileID: 7523857855964521133, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: InitialModule.startSizeY.minMaxState

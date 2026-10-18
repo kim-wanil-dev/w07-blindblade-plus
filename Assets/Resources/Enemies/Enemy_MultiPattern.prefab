@@ -305,7 +305,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _useAnimationEvents: 0
-  _stepDistance: 1.2
+  _stepDistance: 1.9
   _minimumSpeed: 0.1
   _teleportDistance: 5
 --- !u!114 &2896713126719381251
@@ -454,7 +454,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 77bb09cf75204f668050e7c814cf3b30, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _stepDistance: 0.7
+  _stepDistance: 1.9
+  _pairedGait: 0
+  _pairedShortStepDistance: 0.48
+  _pairedLongStepDistance: 1.92
   _footOffset: 0.15
   _teleportDistance: 5
   _groundLayers:

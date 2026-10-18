@@ -81,11 +81,11 @@ MonoBehaviour:
     _type: 1
     _event:
       Guid:
-        Data1: -402080096
-        Data2: 1327994709
-        Data3: 1857727618
-        Data4: -1603979786
-      Path: event:/Footsteps/Footsteps_Wood
+        Data1: -1434453155
+        Data2: 1209828706
+        Data3: -877292382
+        Data4: -771762690
+      Path: event:/Footsteps/Footsteps_Enemy_Grass
     _enabled: 1
     _volumeMultiplier: 1.4
     _pitchMultiplier: 1
@@ -725,14 +725,14 @@ MonoBehaviour:
     _type: 1
     _event:
       Guid:
-        Data1: 728219267
-        Data2: 1150935217
-        Data3: 998187448
-        Data4: 193967979
-      Path: event:/Footsteps/Footsteps_Water_Enemy
+        Data1: 1974387921
+        Data2: 1186111738
+        Data3: 1717475982
+        Data4: -1792932505
+      Path: event:/Footsteps/Footsteps_Water_Light
     _enabled: 1
-    _volumeMultiplier: 1.4
-    _pitchMultiplier: 1
+    _volumeMultiplier: 0.65
+    _pitchMultiplier: 0.8408964
     _useCallerLabel: 1
     _combatCue: 0
     _spatialize2D: 0

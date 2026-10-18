@@ -12,7 +12,7 @@ public sealed class EnemyFootsteps : MonoBehaviour
 
     [Header("발걸음 설정")]
     [SerializeField] private bool _useAnimationEvents;
-    [SerializeField, Min(0.01f)] private float _stepDistance = 1.2f;
+    [SerializeField, Min(0.01f)] private float _stepDistance = 1.9f;
     [SerializeField, Min(0f)] private float _minimumSpeed = 0.1f;
     [SerializeField, Min(0.01f)] private float _teleportDistance = 5f;
     private NavMeshAgent _agent;
