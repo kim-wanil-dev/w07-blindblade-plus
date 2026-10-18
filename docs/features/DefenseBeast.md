@@ -13,7 +13,7 @@
 - 교전 판정: `CanAttack`은 생존과 9m 사거리만 본다. 돌진 경로(NavMesh·직선 장애물)는 `HasClearLunge`로 원 그리기의 돌진 허용 시점과 돌진 확정 때 따로 검사해, 경로가 잠깐 막혀도 추적 상태로 바뀌어 플레이어에게 곧장 달려오지 않게 했다.
 - 관절 애니메이션(`DefenseBeastWolfVisual`): 짐승 보스 `TwinBeastWolfVisual`의 방식으로 발 위치를 먼저 정하고 두 마디 다리를 풀어 엉덩이·무릎·발목을 돌린다. 엇갈림 질주, 발 디딤 스프링 반발, 질주 솟구침, 몸·고개 회전 지연, 플레이어를 노려보는 고개 돌림, 대기 동작(살피기·냄새·무게 옮기기·으르렁), 웅크림, 아래턱·귀를 쓴다. 잠수·울음 자세는 쓰지 않는다. 뛰어드는 동안 입을 벌리고 몸이 뜬 만큼 다리를 뻗으며, 물어뜯는 동안 머리를 좌우로 흔들고 턱을 다문다. 방어 반동은 움찔 자세로 보인다.
 - 삐걱임 보완(사용자 요청): 보폭을 질주 4.8m로 넓혀 이동 속도 7.2m/s에서 초당 1.5걸음이 되게 하고, 디딤 비율 0.2·솟구침 0.32m·발 들기 0.36m로 공중 구간을 늘렸다. 솟구침 구간은 디딤 비율로 계산한다. 다리 길이의 85%(`Soft Reach Start`)부터는 지수 곡선으로 천천히 펴 무릎이 끝까지 펴지며 튀지 않게 했다. 뛰어들기·물기·반동 중 몸 회전 지연은 한 번에 지우지 않고 4배 센 스프링으로 따라잡는다. 속도 반영 6, 발 디딤 충격 0.3, 출렁임 감쇠 0.6.
-- 형상과 연기: Play 시작 시 36개 몸체 렌더러를 꺼 짐승 보스처럼 연기만 보인다(Scene 뷰에는 `SceneShapeGizmo`). 연기는 기존 스킨 메시 방출 파티클 두 개를 유지하고 Wolf에 짐승 보스의 `TwinBeastSmokeTuning`을 추가해 월드 공간으로 계산한다. 늑대가 돌아도 남은 연기가 따라 돌지 않는다. 현재 프리팹 값은 사용자가 Play에서 조정한 Density 7, Size 0.5, Length 0.4, Lifetime 0.3, Flow Speed 1, Rise Force 0.5, Surface Push 0.5, Flutter 0.15/1/0.6, Sway 1.5·최대 3·2.5회·감쇠 0.6이다. 눈(`EyeGlow`)은 변경하지 않았다. 붉은 전조는 `TwinBossWarningVisual`이 연기 렌더러에 그린다.
+- 형상과 연기: Play 시작 시 36개 몸체 렌더러를 꺼 짐승 보스처럼 연기만 보인다(Scene 뷰에는 `SceneShapeGizmo`). 연기는 기존 스킨 메시 방출 파티클 두 개를 유지하고 Wolf에 짐승 보스의 `TwinBeastSmokeTuning`을 추가해 월드 공간으로 계산한다. 늑대가 돌아도 남은 연기가 따라 돌지 않는다. 현재 프리팹 값은 사용자가 Play에서 조정한 Density 7, Size 0.5, Length 0.4, Lifetime 0.3, Flow Speed 1, Rise Force 0.5, Surface Push 0.5, Flutter 0.15/1/0.6, Sway 1.5·최대 3·2.5회·감쇠 0.6이다. 눈은 아래 "2026-10-18 눈 줄기" 절로 바꿨다. 붉은 전조는 `TwinBossWarningVisual`이 연기 렌더러에 그린다.
 - 충돌: 피격 캡슐(`Placeholder`)과 루트 키네마틱 Rigidbody의 Exclude Layers를 모든 레이어로 설정해 물리 접촉만 끈다. Raycast·Overlap 검사는 그대로라 플레이어의 베기는 맞는다. NavMeshAgent 회피는 유지한다(사용자 결정).
 - 감지 거리: 8m 원과 물러나기 거리를 감지 안에 두려고 `EnemySensor` Detection Range를 8m에서 10m로 늘렸다.
 - 공용 코드: `EnemyController`에 선택 인터페이스 `IEnemyEngagementMovement` 연결을 추가했다. 구현 컴포넌트가 있으면 공격 범위 안에서 멈추는 대신 그 이동을 호출하고, 준비될 때만 공격을 시도하며, 후딜 중에도 이동을 호출한다. 구현이 없는 다른 적은 기존과 같다.
@@ -27,6 +27,28 @@
 | Assets/Scripts/Enemies/Attack/DefenseBeastLeapAttack.cs | `CanAttack`, `HasClearLunge`, `PerformAttack`, `UpdateLunge`, `TrackLungeDestination`, `UpdateBite`, `GetPeelDestination` | 물기 돌진·축 추적·물어뜯기·이탈 |
 | Assets/Scripts/Enemies/DefenseBeastWolfVisual.cs | `ApplyPose`, `SolveLeg`, `SoftenReach`, `UpdateTurnLag`, `UpdateHeadLook` | 관절 기반 걸음·공격 자세, 몸체 숨김 |
 | Assets/Resources/Defense/DefenseBeast.prefab | 위 컴포넌트, `TwinBeastSmokeTuning`, 센서·충돌 덮어쓰기 | 직렬화 값 직접 기록 |
+
+## 2026-10-18 눈 줄기 (사용자 요청, 최신 규칙)
+
+- 아래 "늑대형 연기 상승과 발광 눈" 절의 푸른 `EyeGlow_Left`·`EyeGlow_Right` Quad는 프리팹에서 지웠다. `DefenseBeastEyeGlow` 셰이더·재질 파일은 남아 있지만 쓰지 않는다.
+- 목표 모습: 사용자가 준 참고 이미지처럼 두 눈에서 붉은 줄기 하나씩이 머리 뒤로 길게 끌린다. 다른 화면처럼 안을 비우고 가장자리 선만 그리며, 눈알(점)은 그리지 않는다.
+- 위치: 루트의 `DefenseBeastEyes`가 머리 로컬 (±0.09, 0.3, 0.09)(귀와 입 사이, 사용자 조정값)에서 줄기를 낸다.
+- 줄기: 눈마다 `LineRenderer` 하나가 0.02초마다 눈 위치에 점을 내고, 점은 월드 공간에 남아 0.45초 동안 머리 뒤로 0.8m/s, 바깥 옆으로 0.35m/s, 위로 0.05m/s 흘러간다. 첫 점은 늘 현재 눈 위치라 줄기가 눈에 붙어 있다. 오래된 점일수록 머리 오른쪽·위로 최대 0.06m 펄럭이며(초당 3회), 이은 길이가 1.5m를 넘으면 자른다. 굵기는 0.06m에서 꼬리로 0까지, 밝기는 1→0.75(30%)→0.3(70%)→0으로 옅어진다.
+- 밀림: 점마다 몸 연기 `TwinBeastSmokeTuning`이 그 프레임 월드 연기에 더하는 바람 속도(`WorldDrift`)를 같이 더하고, 머리 움직임 반대쪽으로 1배(최대 8m/s, 사용자 조정값)를 더 밀어 몸 연기와 함께 뒤로 밀리게 했다.
+- 그리기: 새 `DefenseBeastEyeStreak` 셰이더(`Assets/Resources/Defense/DefenseBeastEyeStreak.mat`)가 윤곽선 합성 뒤(Transparent+10, 가산 합성, 깊이 검사)에 그린다. 윤곽선 모드(`Outline Only` 1)는 띠의 양옆만 1픽셀(`Outline Width`) 붉은 선(1, 0.1, 0.06)으로 그리고 끝을 막는 선은 없다. 발광 모드(0)는 뜨거운 심과 붉은 번짐으로 그린다.
+- 인지: `Use Perception` 1이면 윤곽선과 같은 전역 인지 값(시야원·소리·보상 파동·걸음 잔상·충격·구형 파동·빗방울)으로 줄기 위치의 공개 정도를 구해 몸처럼 드러날 때만 보인다. 계산은 `RainStage.shader`가 쓰는 방식과 같다.
+- 전조: 몸 연기가 붉어지는 세기(`TwinBossWarningVisual.Intensity`)에 따라 밝기 최대 2.2배, 굵기 최대 1.5배가 된다.
+- 이 과정에서 연기 입자 트레일과 별도 윤곽선 채널을 시도했으나 사용자 결정으로 되돌렸다. `OutlineVFX`·`OutlineVFXRouting`·`ScreenSpaceOutlineFeature`·`ScreenSpaceOutline.shader`·`ThreatPresentationRouting`은 원래대로다.
+- 공용 코드: 짐승 보스 `TwinBeastSmokeTuning`에 읽기 전용 `WorldDrift` 프로퍼티만 추가했다. 보스 동작은 바뀌지 않는다.
+- 확인: `dotnet build Assembly-CSharp.csproj` 오류 0개, 기존 경고 2개. 사용자가 Play에서 줄기를 보고 모양·밀림을 조정 요청해 반영했다. 최신 셰이더(윤곽선 모드)의 Unity 컴파일과 화면은 미확인이다.
+
+| 파일 경로 | 클래스 / 메서드 | 역할 |
+| --- | --- | --- |
+| Assets/Scripts/Enemies/DefenseBeastEyes.cs (신규) | `UpdatePoints`, `DrawLine`, `GetDrift`, `CreateLine` | 월드 공간 눈 줄기 점 진행·잇기·밀림 |
+| Assets/Shaders/DefenseBeastEyeStreak.shader (신규) | `OutlineStrength`, `PerceptionVisibility` | 가장자리 선·발광 그리기와 인지 공개 |
+| Assets/Resources/Defense/DefenseBeastEyeStreak.mat (신규) | 재질 | 윤곽선 모드·선 색·굵기 |
+| Assets/Scripts/Enemies/TwinBeastSmokeTuning.cs | `WorldDrift` | 몸 연기 바람 속도 공유 |
+| Assets/Resources/Defense/DefenseBeast.prefab | `DefenseBeastEyes`, `EyeGlow` 제거 | 직렬화 값 직접 기록 |
 
 ## 기능과 행동 규칙 (2026-10-17 도약 기록, 현재는 위 절이 우선)
 
@@ -98,6 +120,8 @@ DefenseBeastLeapAttack은 EnemyAttackBehaviour를 상속하고 공격 로그 종
 - 확인: Unity에서 두 파티클 시스템의 스킨 메시 Shape, 눈의 본 연결·공유 머티리얼, 셰이더 메시지 0건을 확인했다. 실제 게임 카메라의 최신 외형과 교전 중 성능은 별도 확인이 필요하다.
 
 ## 2026-10-18 늑대형 연기 상승과 발광 눈
+
+> 푸른 발광 눈은 "2026-10-18 눈 줄기" 절에서 지웠다. 아래 눈 기록은 이전 동작이다.
 
 - `BodySmoke`의 위쪽 속도를 0.20m/s로 올려 몸체 실루엣에서 많이 벗어나지 않으면서 연기가 천천히 피어오르게 했다. 기존 `TrailingWisps`는 0.25m/s로 상승하며 Beast의 로컬 좌표에 남는다.
 - `Head` 본 앞에 `EyeGlow_Left`와 `EyeGlow_Right` Quad를 배치해 머리 자세를 따라가게 했다. `DefenseBeastEyeGlow` 셰이더가 청록색 코어와 푸른 additive 후광을 그리고 Screen Space Outline 합성 뒤에 렌더한다. 두 눈은 `DefenseBeastEyeGlow.mat` 하나를 공유하며 별도 조명이나 충돌체는 사용하지 않는다.
