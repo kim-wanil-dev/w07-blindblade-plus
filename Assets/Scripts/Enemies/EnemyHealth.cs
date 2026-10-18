@@ -37,6 +37,9 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public bool IsAlive => isActiveAndEnabled && _currentHealth > 0f;
     public bool IsInvulnerable => _invulnerable;
     public bool IsDashTargetable => _dashTargetable;
+    /// <summary>_sharedHealth와 자신 중 인스턴스 ID가 작은 쪽을 반환해 같은 체력 묶음의 타격 기록을 하나로 합친다.</summary>
+    public EnemyHealth SharedDamageKey => _sharedHealth != null && _sharedHealth.GetInstanceID() < GetInstanceID()
+        ? _sharedHealth : this;
     public string TargetId => "Enemy_" + GetInstanceID();
     public int SpawnGeneration => _spawnGeneration;
     public event Action<DamageContext> Damaged;

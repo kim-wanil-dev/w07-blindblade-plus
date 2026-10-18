@@ -14,6 +14,8 @@ public enum BeastBurrowMotion { None, Diving, Emerging }
 public sealed class BeastBossAttack : MonoBehaviour
 {
     private const int EMERGE_ATTEMPTS = 12;
+    private const float HARASS_EMERGE_DISTANCE = 3f;
+    private const float HARASS_PLAYER_CLEARANCE = 2f;
 
     [Header("협력 이동")]
     [SerializeField] private Transform _riderSeat;
@@ -419,18 +421,27 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 잠수한 채 strikeAt(게임 시간) 덮치기에 맞춰 튀어나오고, 붉게 물들며 웅크린 뒤 플레이어를 지나 반대편 가장자리까지 덮친다.
-    /// 이전 덮치기로 내려앉은 자리가 있으면 그 자리에서 다시 나오고, 없으면 center·radius 원형 공터의 플레이어 정면 쪽 가장자리로 옮겨 나온다.
+    /// regroupTarget이 있으면 매번 그 주변에서 나오고, 없으면 이전 덮치기 착지 자리 또는 center·radius 공터 가장자리에서 나온다.
     /// 땅 위에 있으면 먼저 뛰어든다. player나 자신이 쓰러지면 남은 단계를 건너뛰고 땅 위에서 끝낸다.
     /// chargeRipple이 거짓이면 덮치기 전조의 붉은 파동을 내지 않는다(인간 거합 차징 중 방해처럼 다른 붉은 파동과 겹칠 때).
     /// </summary>
-    public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius, bool chargeRipple = true)
+    public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius,
+        bool chargeRipple = true, Transform regroupTarget = null)
     {
         if (!_burrowed) yield return Dive();
         float emergeAt = strikeAt - _biteTelegraph - _emergeDuration;
         while (Time.time < emergeAt && CanAttack(player)) yield return null;
         if (!CanAttack(player)) yield break;
-        Vector3 start = _hasLandingSpot || !TryGetEmergePosition(player, center, radius, out Vector3 position)
-            ? transform.position : position;
+        Vector3 start;
+        if (regroupTarget != null)
+        {
+            if (!TryGetHarassEmergePosition(regroupTarget, player, center, radius, out start)) yield break;
+        }
+        else
+        {
+            start = _hasLandingSpot || !TryGetEmergePosition(player, center, radius, out Vector3 position)
+                ? transform.position : position;
+        }
         yield return Emerge(start, player);
         if (CanAttack(player)) yield return Bite(player, center, radius, chargeRipple);
     }
@@ -544,7 +555,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 그 순간 플레이어 쪽으로 방향을 고정해 플레이어 위치를 반드시 지나 반대편 가장자리(적어도 플레이어 너머 _pounceOvershoot)까지
+    /// 그 순간 플레이어 쪽으로 방향을 고정해 공터 안쪽 가장자리까지, 공간이 허락하면 플레이어 너머 _pounceOvershoot만큼
     /// _biteDuration 동안 가운데에서 _pounceLift만큼 살짝 뜨는 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
     /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
     /// </summary>
@@ -552,9 +563,11 @@ public sealed class BeastBossAttack : MonoBehaviour
     {
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
-        // 플레이어를 반드시 지나 원을 빠져나가는 반대편 가장자리에 내려앉도록 정해진 직선으로 뛴다.
-        float length = Mathf.Max(toPlayer.magnitude + _pounceOvershoot,
-            GetCircleExitDistance(transform.position, direction, center, radius) - _edgeMargin);
+        // 플레이어가 가장자리에 있을 때도 몸 반지름을 포함해 공터 밖으로 착지하지 않는다.
+        float available = Mathf.Max(0f, GetCircleExitDistance(transform.position, direction,
+            center, Mathf.Max(1f, radius - _agent.radius)) - _edgeMargin);
+        float length = Mathf.Min(Mathf.Max(toPlayer.magnitude + _pounceOvershoot,
+            GetCircleExitDistance(transform.position, direction, center, radius) - _edgeMargin), available);
         Vector3 start = transform.position;
         Vector3 landing = start + direction * length;
         _navigationPosition = _agent.nextPosition;
@@ -664,6 +677,35 @@ public sealed class BeastBossAttack : MonoBehaviour
             float distance = GetCircleExitDistance(origin, direction, center, radius) - _edgeMargin;
             if (distance < _emergeDistance) continue;
             if (!TryDestination(origin + direction * distance, out Vector3 candidate) || IsBlocked(candidate)) continue;
+            position = candidate;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// regroupTarget 둘레 HARASS_EMERGE_DISTANCE 거리에서 center·radius 공터 안의 빈 NavMesh 지점을 찾는다.
+    /// player와 HARASS_PLAYER_CLEARANCE 이상 떨어진 첫 후보를 position으로 반환하고 없으면 false를 반환한다.
+    /// </summary>
+    private bool TryGetHarassEmergePosition(Transform regroupTarget, KatanaDamageReceiver player,
+        Vector3 center, float radius, out Vector3 position)
+    {
+        position = transform.position;
+        Vector3 inward = Vector3.ProjectOnPlane(center - regroupTarget.position, Vector3.up).normalized;
+        if (inward.sqrMagnitude < 0.0001f) inward = Vector3.forward;
+        float firstAngle = UnityEngine.Random.Range(0f, 360f);
+        float safeRadius = Mathf.Max(1f, radius - _agent.radius - _edgeMargin);
+        for (int attempt = 0; attempt < EMERGE_ATTEMPTS; attempt++)
+        {
+            float angle = firstAngle + attempt * 360f / EMERGE_ATTEMPTS;
+            Vector3 desired = regroupTarget.position
+                + Quaternion.Euler(0f, angle, 0f) * inward * HARASS_EMERGE_DISTANCE;
+            if (Vector3.ProjectOnPlane(desired - center, Vector3.up).sqrMagnitude > safeRadius * safeRadius
+                || !TryDestination(desired, out Vector3 candidate)
+                || Vector3.ProjectOnPlane(candidate - center, Vector3.up).sqrMagnitude > safeRadius * safeRadius
+                || IsBlocked(candidate)
+                || Vector3.ProjectOnPlane(candidate - player.transform.position, Vector3.up).sqrMagnitude
+                    < HARASS_PLAYER_CLEARANCE * HARASS_PLAYER_CLEARANCE) continue;
             position = candidate;
             return true;
         }

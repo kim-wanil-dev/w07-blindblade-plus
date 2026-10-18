@@ -27,7 +27,6 @@ public sealed class BossController : MonoBehaviour
     private const float COUNTER_RETREAT_STEP = 0.5f;
     private const float COUNTER_RETREAT_PLAYER_CLEARANCE = 1.5f;
     private const float COUNTER_RETREAT_FLOOR_CLEARANCE = 0.2f;
-    private const string REFLECTED_PROJECTILE_PATTERN_ID = "ReflectedProjectile";
 
     [Header("전투 연결")]
     [SerializeField, Min(0f), Tooltip("피격 후 다음 패턴으로 넘어가기 전 회복 시간(초)")]
@@ -777,9 +776,9 @@ public sealed class BossController : MonoBehaviour
     }
 
     /// <summary>
-    /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고 외형을 유지한 채 _hitInvulnerableDelay 뒤 무적 방어 상태가 시작되도록 예약하며 다음 패턴을 준비한다.
+    /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고, 플레이어 일반 베기·발도면 _hitInvulnerableDelay 뒤 무적 방어를 예약하며 다음 패턴을 준비한다.
     /// 짧은 시간의 누적 피해가 기준 이상이면 기존 회복 대신 무적 없이 도주 난사를 시작한다.
-    /// 플레이어 불릿 타임(강화 준비·강화 공격) 중이거나 반사된 수리검에 맞았으면 무적과 방어 상태 없이 회복한다.
+    /// 일섬 등 다른 공격이거나 불릿 타임(강화 준비·강화 공격) 중이면 무적과 방어 상태 없이 회복한다.
     /// </summary>
     private void HandleBossDamaged(DamageContext context)
     {
@@ -807,8 +806,9 @@ public sealed class BossController : MonoBehaviour
             _routine = StartCoroutine(EscapeBarrage());
             return;
         }
-        // 플레이어 불릿 타임 중이거나 반사된 수리검에 맞으면 피격 후 무적과 방어 상태를 만들지 않는다.
-        if (_playerEmpower.IsReady || _playerEmpower.IsStriking || context.PatternId == REFLECTED_PROJECTILE_PATTERN_ID)
+        // 플레이어 일반 베기·발도에 맞았을 때만 피격 후 무적과 방어 상태를 만든다.
+        if (_playerEmpower.IsReady || _playerEmpower.IsStriking
+            || context.Instigator != _player.gameObject || !IsPlayerMeleeAttack(context))
             RestoreAfterDisappearance(true);
         else if (_pendingDefenseAt <= 0f)
         {
@@ -820,7 +820,7 @@ public sealed class BossController : MonoBehaviour
     }
 
     /// <summary>
-    /// context가 방어 상태 중 플레이어의 근접 베기·발도이면 검을 쳐내고 관통 베기 반격을 시작한다.
+    /// context가 방어 상태 중 플레이어의 일반 베기·발도이면 검을 쳐내고 관통 베기 반격을 시작한다.
     /// 현재 행동을 중단하고 방어 상태를 끝내며 퍼펙트 패링 소리·불꽃·칼 튕김 모션과 보스 발밑 퍼펙트 파동을 재생한다.
     /// 반격 감속을 먼저 시작해 퍼펙트 패링 소리가 처음부터 먹먹하게 들리게 하고,
     /// 플레이어 카메라를 흔들며 위로 젖히고 플레이어를 시선 반대쪽으로 뒷걸음질시킨다.
@@ -850,7 +850,7 @@ public sealed class BossController : MonoBehaviour
         _routine = StartCoroutine(CounterSlash());
     }
 
-    /// <summary>context의 PatternId가 플레이어 일반 근접 베기 또는 발도 베기인지 반환한다.</summary>
+    /// <summary>context의 PatternId가 플레이어 일반 베기 또는 발도인지 반환한다.</summary>
     private bool IsPlayerMeleeAttack(DamageContext context)
     {
         return context.PatternId == PlayerAttackKind.Normal.ToString()

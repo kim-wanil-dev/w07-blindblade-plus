@@ -47,6 +47,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private readonly RaycastHit[] _dashHits = new RaycastHit[32];
     // 같은 검기 공격의 돌진과 검기가 함께 쓰는 맞은 적 목록이다.
     private readonly HashSet<EnemyHealth> _struck = new HashSet<EnemyHealth>();
+    private readonly HashSet<EnemyHealth> _blocked = new HashSet<EnemyHealth>();
     private CharacterController _controller;
     private bool _dashing;
     private Vector3 _dashLastCenter;
@@ -165,7 +166,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         Vector3 direction = _motor.ViewForward;
         Vector3 origin = _camera.transform.position + direction * _spawnDistance + Vector3.up * _spawnHeightOffset;
         DefenseSwordWave wave = Instantiate(_wavePrefab);
-        wave.Launch(gameObject, origin, direction, _struck);
+        wave.Launch(gameObject, origin, direction, _struck, _blocked);
         // 초승달 메시는 볼록한 쪽이 위를 향하므로 앞으로 눕혀야 진행 방향으로 날을 세워 날아간다.
         // 진행 방향 축의 양수 회전은 화면에서 반시계 방향이라 궁극기 사선 UI 회전과 같은 쪽으로 기운다.
         // 검기는 위치만 직선 이동하므로 발사 뒤 바꾼 회전이 그대로 유지된다.
@@ -182,6 +183,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private void BeginDash()
     {
         _struck.Clear();
+        _blocked.Clear();
         _dashing = false;
         if (_dashDistance <= 0f) return;
         _motor.ApplyCombatPush(_motor.ViewForward, _dashDistance, _dashDuration);
@@ -193,7 +195,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     /// <summary>
     /// 지난 몸 판정 위치에서 지금 플레이어 몸 중심까지 검기 판정 반경의 구를 쓸어 그 사이 생존 적에게 검기와 같은 피해를 준다.
-    /// 한 프레임에 멀리 움직여도 사이의 적을 건너뛰지 않으며, _struck에 이미 있는 적은 맞히지 않는다. 같은 구간에 닿은 적대 수리검은 없앤다.
+    /// 한 프레임에 멀리 움직여도 사이의 적을 건너뛰지 않으며, 이미 피해를 받은 공유 체력 묶음과 막힌 개별 적은 다시 맞히지 않는다. 같은 구간의 적대 수리검은 없앤다.
     /// RainyStage에서는 같은 구간 둘레의 빗방울도 경로 바깥쪽으로 터뜨린다.
     /// 돌진이 끝나면 _dashing을 끄고 발사 연출도 함께 끝낸 뒤 그 자리에서 검기를 발사한다.
     /// </summary>
@@ -205,13 +207,17 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         Vector3 direction = travel.sqrMagnitude > 0.0001f ? travel.normalized : _motor.ViewForward;
         DefenseShuriken.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         EnemyProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
+        TwinBossProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         RainStageWeather.RecordDashSweep(_dashLastCenter, center);
         int count = Physics.SphereCastNonAlloc(_dashLastCenter, _wavePrefab.HitRadius, direction, _dashHits,
             distance, _dashHitMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)
         {
             EnemyHealth enemy = _dashHits[i].collider.GetComponentInParent<EnemyHealth>();
-            if (enemy == null || !enemy.IsAlive || !_struck.Add(enemy)) continue;
+            if (enemy == null || !enemy.IsAlive || _blocked.Contains(enemy)
+                || _struck.Contains(enemy.SharedDamageKey)) continue;
+            if (enemy.IsInvulnerable) _blocked.Add(enemy);
+            else _struck.Add(enemy.SharedDamageKey);
             Vector3 point = _dashHits[i].distance > 0f ? _dashHits[i].point : _dashHits[i].collider.ClosestPoint(center);
             float amount = _wavePrefab.Damage > 0f ? _wavePrefab.Damage : Mathf.Max(enemy.CurrentHealth, 1f);
             enemy.TakeDamage(new DamageContext(amount, gameObject, point, direction, DASH_PATTERN_ID));
