@@ -998,6 +998,7 @@ public class SoundManager
             case SoundId.EnemySwordSwing:
             case SoundId.EnemyFinished:
             case SoundId.EnemyDie:
+            case SoundId.HumanEnemyDie:
             case SoundId.EnemyDetected:
             case SoundId.BossChargeCry:
             case SoundId.BossDuelCry:

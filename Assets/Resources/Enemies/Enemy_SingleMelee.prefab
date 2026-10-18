@@ -525,6 +525,7 @@ MonoBehaviour:
   _damageSound: 4
   _volume: 0.8
   _pitch: 1
+  _deathSound: 49
   _minimumDeathPitchSemitones: -4
   _maximumDeathPitchSemitones: -1
   _originalDeathPitchChance: 0.3

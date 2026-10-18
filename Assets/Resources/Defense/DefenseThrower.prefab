@@ -224,6 +224,7 @@ GameObject:
   - component: {fileID: 8892039143483168181}
   - component: {fileID: 8088586443167616543}
   - component: {fileID: 2113163858323081783}
+  - component: {fileID: 9018101800000003}
   m_Layer: 2
   m_Name: DefenseThrower
   m_TagString: Untagged
@@ -333,3 +334,22 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OutlineLayer
   _kind: 1
+--- !u!114 &9018101800000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8699794740363194082}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37becb1a49869b446a804dfe774638c6, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  _damageSound: 4
+  _volume: 0.8
+  _pitch: 1
+  _deathSound: 49
+  _minimumDeathPitchSemitones: -4
+  _maximumDeathPitchSemitones: -1
+  _originalDeathPitchChance: 0.3

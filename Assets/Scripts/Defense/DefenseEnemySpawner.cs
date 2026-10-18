@@ -511,13 +511,16 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
 
 
     /// <summary>
-    /// 투척수 프리팹을 비활성 상태로 생성하고 디스폰 사건을 구독한다.
+    /// 투척수 프리팹에 인간형 사망음을 연결한 뒤 비활성 상태로 생성하고 디스폰 사건을 구독한다.
     /// 생성한 투척수를 전체 목록에 보관하고 반환한다.
     /// </summary>
     private BambooThrower CreateThrower()
     {
         BambooThrower thrower = Instantiate(_throwerPrefab, transform.position, Quaternion.identity, _unitRoot);
 
+        EnemyDamageAudio audio = thrower.GetComponent<EnemyDamageAudio>();
+        if (audio == null) audio = thrower.gameObject.AddComponent<EnemyDamageAudio>();
+        audio.ConfigureDeathSound(SoundId.HumanEnemyDie);
         thrower.gameObject.SetActive(false);
         thrower.Despawned += HandleThrowerDespawned;
         _allThrowers.Add(thrower);

@@ -15,6 +15,9 @@ public sealed class EnemyDamageAudio : MonoBehaviour
     [SerializeField, Range(0.25f, 4f)] private float _pitch = 1f;
     private EnemyHealth _health;
 
+    [Header("사망음")]
+    [SerializeField] private SoundId _deathSound = SoundId.None;
+
     [Header("사망음 랜덤 피치")]
     [SerializeField, Range(-12f, 0f), Tooltip("낮아지는 피치의 최소 반음입니다. 0은 원래 피치입니다.")]
     private float _minimumDeathPitchSemitones = -4f;
@@ -23,7 +26,6 @@ public sealed class EnemyDamageAudio : MonoBehaviour
     [SerializeField, Range(0f, 1f), Tooltip("피치를 바꾸지 않고 원래 음성을 재생할 확률입니다.")]
     private float _originalDeathPitchChance = 0.3f;
     private float _deathPitch = 1f;
-    private SoundId _deathSound = SoundId.None;
 
     [Header("적 상태 연결")]
     private EnemyController _controller;
@@ -85,7 +87,8 @@ public sealed class EnemyDamageAudio : MonoBehaviour
 
     /// <summary>
     /// health의 사망 확정에 마지막 피해 지점 또는 적 위치에서 사망음을 한 번 재생한다.
-    /// 전용 사망음이 없으면 치명타격과 같은 피치의 공통 사망음을 사용하고, 적 비활성화 후에도 소리의 끝을 유지한다.
+    /// 인간형 전용 사망음에는 이벤트의 기본 -3반음에 더할 ±2반음 배율을 적용한다.
+    /// 다른 전용음 또는 공통 사망음은 기존 연결을 사용하며 적 비활성화 후에도 소리의 끝을 유지한다.
     /// </summary>
     private void HandleDeath(EnemyHealth health)
     {
@@ -93,7 +96,9 @@ public sealed class EnemyDamageAudio : MonoBehaviour
         _deathPlayed = true;
         if (!_hasDamagePoint) _deathPitch = GetDeathPitch();
         Vector3 position = _hasDamagePoint ? _lastDamagePoint : health.transform.position;
-        if (_deathSound != SoundId.None)
+        if (_deathSound == SoundId.HumanEnemyDie)
+            Managers.Sound.Play(_deathSound, position, playDuringMovement: true, pitch: GetHumanDeathPitch());
+        else if (_deathSound != SoundId.None)
             Managers.Sound.Play(_deathSound, position, playDuringMovement: true);
         else
             Managers.Sound.PlayCue(CombatSoundCue.EnemyDie, position, pitch: _deathPitch);
@@ -115,6 +120,15 @@ public sealed class EnemyDamageAudio : MonoBehaviour
         float minimum = Mathf.Clamp(_minimumDeathPitchSemitones, -12f, 0f);
         float maximum = Mathf.Clamp(_maximumDeathPitchSemitones, minimum, 0f);
         return Mathf.Pow(2f, Random.Range(minimum, maximum) / 12f);
+    }
+
+    /// <summary>
+    /// 인간형 사망음의 FMOD 기본 -3반음에 더할 -2~+2반음을 매 재생마다 선택한다.
+    /// 선택한 반음을 피치 배율로 변환해 반환한다.
+    /// </summary>
+    private float GetHumanDeathPitch()
+    {
+        return Mathf.Pow(2f, Random.Range(-2f, 2f) / 12f);
     }
 
     /// <summary>

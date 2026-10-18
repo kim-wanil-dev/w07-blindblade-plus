@@ -249,13 +249,21 @@ public sealed class PlayerCombatAudio : MonoBehaviour
 
     /// <summary>
     /// 로드된 씬의 EnemyHealth에 사운드 연결 컴포넌트가 없으면 런타임으로 추가한다.
-    /// 비활성 풀 대상도 확인하며 원본 씬·프리팹과 협업자의 적 스크립트는 변경하지 않는다.
+    /// 일반 인간형 적과 투척수에는 새 사망음을 설정하고 Beast 전용 컴포넌트가 있는 적은 기존 사망음을 유지한다.
     /// </summary>
     private void RegisterEnemyAudio()
     {
         foreach (EnemyHealth health in Object.FindObjectsByType<EnemyHealth>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            if (health.GetComponent<EnemyDamageAudio>() == null)
-                health.gameObject.AddComponent<EnemyDamageAudio>();
+        {
+            if (health.GetComponent<EnemyDamageAudio>() != null)
+                continue;
+
+            EnemyDamageAudio audio = health.gameObject.AddComponent<EnemyDamageAudio>();
+            if (health.GetComponent<BeastBossAudio>() != null || health.GetComponent<DefenseBeastLeapAttack>() != null)
+                continue;
+            if (health.GetComponent<EnemyController>() != null || health.GetComponent<BambooThrower>() != null)
+                audio.ConfigureDeathSound(SoundId.HumanEnemyDie);
+        }
     }
 
     /// <summary>
