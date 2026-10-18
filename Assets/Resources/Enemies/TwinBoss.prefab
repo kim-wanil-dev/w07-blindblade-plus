@@ -1211,14 +1211,14 @@ MonoBehaviour:
   _trailSpeed: 0.6
   _spreadSpeed: 0.6
   _riseSpeed: 0.05
-  _trailWidth: 0.015
+  _trailWidth: 0
   _trailLifetime: 1
   _maxTrailLength: 0.6
   _minVertexDistance: 0.03
   _flutterScale: 0.6
   _glintColor: {r: 1, g: 0.08, b: 0.05, a: 1}
-  _glintSize: 0.45
-  _glintWidthScale: 2
+  _glintSize: 1.8
+  _glintWidthScale: 4
   _glintDuration: 0.15
 --- !u!4 &321
 Transform:
