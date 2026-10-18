@@ -96,14 +96,14 @@ public sealed class GameStateManager : MonoBehaviour
         Cursor.visible = true;
     }
 
-    /// <summary>플레이 중인 게임을 클리어 상태로 전환하고 게임 시간을 멈춘 뒤 커서를 표시한다.</summary>
+    /// <summary>
+    /// 게임을 Cleared 상태로 전환해 게임플레이 입력을 차단하고 커서를 표시한다.
+    /// 전투 세션의 시간 배율은 변경하지 않는다.
+    /// </summary>
     public void RequestGameClear()
     {
         if (State != GameplayState.Playing) return;
-        _previousCursorLock = Cursor.lockState;
-        _previousCursorVisible = Cursor.visible;
-        _frozen = true;
-        CombatSessionRuntime.Active.SetFrozen(true);
+
         Managers.Sound.SetFootstepOnlyOwner(null);
         Managers.Sound.StopEffects();
         Cursor.lockState = CursorLockMode.None;

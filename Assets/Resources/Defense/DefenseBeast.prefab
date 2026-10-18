@@ -4444,6 +4444,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: DefenseBeast
       objectReference: {fileID: 0}
+    - target: {fileID: 4420659856810729815, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _deathSound
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8865722896377662893, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: m_Height
       value: 2.6
@@ -4549,7 +4553,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   _heartbeatSound: 26
-  _leapSound: 29
+  _leapSound: 48
 --- !u!114 &6611284687678998539
 MonoBehaviour:
   m_ObjectHideFlags: 0

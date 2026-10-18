@@ -72,6 +72,8 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private int _maximumMelee = 30;
     [Header("일반·Beast 선택 가중치")]
     [SerializeField] private GameObject _beastPrefab;
+    [SerializeField, Tooltip("이 씬에서 생성한 Beast만 사용할 전용 사망음입니다. None이면 공통 사망음을 사용합니다.")]
+    private SoundId _beastDeathSound = SoundId.None;
     [SerializeField, Min(0), InspectorName("보간 시작 스폰 수 (마리)")]
     private int _weightBlendStartSpawnCount;
     [SerializeField, Min(1), InspectorName("보간 종료 스폰 수 (마리)")]
@@ -509,13 +511,16 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
 
 
     /// <summary>
-    /// 투척수 프리팹을 비활성 상태로 생성하고 디스폰 사건을 구독한다.
+    /// 투척수 프리팹에 인간형 사망음을 연결한 뒤 비활성 상태로 생성하고 디스폰 사건을 구독한다.
     /// 생성한 투척수를 전체 목록에 보관하고 반환한다.
     /// </summary>
     private BambooThrower CreateThrower()
     {
         BambooThrower thrower = Instantiate(_throwerPrefab, transform.position, Quaternion.identity, _unitRoot);
 
+        EnemyDamageAudio audio = thrower.GetComponent<EnemyDamageAudio>();
+        if (audio == null) audio = thrower.gameObject.AddComponent<EnemyDamageAudio>();
+        audio.ConfigureDeathSound(SoundId.HumanEnemyDie);
         thrower.gameObject.SetActive(false);
         thrower.Despawned += HandleThrowerDespawned;
         _allThrowers.Add(thrower);
@@ -563,12 +568,14 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         return idlePool.Count > 0 ? idlePool.Pop() : CreateMelee(isBeast);
     }
 
-    /// <summary>isBeast에 해당하는 프리팹을 비활성 상태로 생성하고 체력 사망 사건을 구독해 반환한다.</summary>
+    /// <summary>isBeast에 해당하는 프리팹을 비활성 상태로 생성하고 Beast 전용 사망음을 설정한다. 체력 사망 사건을 구독한 유닛을 반환한다.</summary>
     private MeleeUnit CreateMelee(bool isBeast)
     {
         GameObject prefab = isBeast ? _beastPrefab : _meleePrefab;
         GameObject root = Instantiate(prefab, transform.position, Quaternion.identity, _unitRoot);
         root.SetActive(false);
+        if (isBeast)
+            root.GetComponent<EnemyDamageAudio>().ConfigureDeathSound(_beastDeathSound);
         root.GetComponent<FootstepEmitter>().SetGroundFootprintsVisible(_showMeleeGroundFootprints);
         MeleeUnit unit = new MeleeUnit(root, isBeast);
         _meleeByHealth.Add(unit.Health, unit);

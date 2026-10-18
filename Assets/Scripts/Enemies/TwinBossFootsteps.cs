@@ -44,7 +44,7 @@ public sealed class TwinBossFootsteps : MonoBehaviour
     {
         if (_rainAudio != null && _rainAudio.isActiveAndEnabled && _rainAudio.UseWaterFootsteps)
         {
-            Managers.Sound.Play(SoundId.RainFootstep, position, volume: _waterVolume, owner: gameObject,
+            Managers.Sound.Play(SoundId.EnemyWaterFootstep, position, volume: _waterVolume, owner: gameObject,
                 playDuringMovement: true);
             return;
         }

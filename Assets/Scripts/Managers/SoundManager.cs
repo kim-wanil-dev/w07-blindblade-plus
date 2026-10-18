@@ -994,10 +994,12 @@ public class SoundManager
         switch (soundId)
         {
             case SoundId.EnemyFootstep:
+            case SoundId.EnemyWaterFootstep:
             case SoundId.EnemyAttackPrepare:
             case SoundId.EnemySwordSwing:
             case SoundId.EnemyFinished:
             case SoundId.EnemyDie:
+            case SoundId.HumanEnemyDie:
             case SoundId.EnemyDetected:
             case SoundId.BossChargeCry:
             case SoundId.BossDuelCry:
@@ -1015,6 +1017,8 @@ public class SoundManager
             case SoundId.TwinBossChargePulse:
             case SoundId.TwinBossChargeFinalPulse:
             case SoundId.BeastBossChargeBark:
+            case SoundId.DefenseBeastDie:
+            case SoundId.DefenseBeastLeap:
             case SoundId.EnemyMeleeWarning:
                 return true;
             default:

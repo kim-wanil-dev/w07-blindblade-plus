@@ -18,6 +18,7 @@ public sealed class EnemyFootsteps : MonoBehaviour
     private NavMeshAgent _agent;
     private FootstepEmitter _emitter;
     private EnemySensor _sensor;
+    private RainyStageAudio _rainAudio;
     private EnemyAttackBehaviour[] _attacks;
     private Vector3 _previousPosition;
     private float _distanceSinceStep;
@@ -29,6 +30,7 @@ public sealed class EnemyFootsteps : MonoBehaviour
         _agent = GetComponent<NavMeshAgent>();
         _emitter = GetComponent<FootstepEmitter>();
         _sensor = GetComponent<EnemySensor>();
+        _rainAudio = FindFirstObjectByType<RainyStageAudio>();
         _attacks = GetComponents<EnemyAttackBehaviour>();
     }
 
@@ -120,7 +122,9 @@ public sealed class EnemyFootsteps : MonoBehaviour
     /// </summary>
     private void EmitFootstep(Vector3 position)
     {
-        SoundId soundId = EnemySoundSettings.GetSound(EnemySoundAction.Footstep, EnemySoundStage.Action);
+        SoundId soundId = _rainAudio != null && _rainAudio.isActiveAndEnabled && _rainAudio.UseWaterFootsteps
+            ? SoundId.EnemyWaterFootstep
+            : EnemySoundSettings.GetSound(EnemySoundAction.Footstep, EnemySoundStage.Action);
         bool attackMovement = false;
         foreach (EnemyAttackBehaviour attack in _attacks)
         {
