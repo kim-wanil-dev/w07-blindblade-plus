@@ -673,6 +673,22 @@ MonoBehaviour:
     _combatCue: 0
     _spatialize2D: 0
     _finishNaturally: 1
+  - _id: 46
+    _type: 1
+    _event:
+      Guid:
+        Data1: -264933918
+        Data2: 1102295291
+        Data3: -529365108
+        Data4: -1980467627
+      Path: event:/TwinBoss/WaterDrop
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 1
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _cinematicBusPath: bus:/Cinematic_Bus

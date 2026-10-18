@@ -50,4 +50,5 @@ public enum SoundId
     TwinBossChargePulse = 43,
     TwinBossChargeFinalPulse = 44,
     BeastBossChargeBark = 45,
+    TwinBossWaterDrop = 46,
 }

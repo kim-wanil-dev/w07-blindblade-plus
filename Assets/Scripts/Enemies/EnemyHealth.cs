@@ -18,6 +18,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     [SerializeField] private bool _cancelAttackOnHit;
     [SerializeField, Tooltip("끄면 플레이어의 대상 돌진 공격 후보에서 제외합니다. 다른 피해 판정은 유지합니다.")]
     private bool _dashTargetable = true;
+    [SerializeField, Tooltip("체력을 함께 쓰는 상대 적. 한쪽이 피해를 입으면 상대 체력도 같은 값이 되고 0이 되면 함께 쓰러진다. 비우면 혼자 쓴다.")]
+    private EnemyHealth _sharedHealth;
     [Header("피격 반응")]
     [SerializeField, Min(0f)] private float _hitRecovery = 0.16f;
     [SerializeField, Min(0f)] private float _hitInterruptCooldown = 0.45f;
@@ -69,6 +71,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     /// context의 양수 피해를 현재 HP에 반영하고 한 대 사망 설정이면 HP를 즉시 0으로 만든다.
     /// 무적이면 피해 대신 DamageBlocked에 context를 전달하며 HP는 유지한다.
     /// 설정에 따라 공격을 취소하며 HP가 0이면 사망 이벤트 후 적 루트를 비활성화한다.
+    /// 체력을 함께 쓰는 상대(_sharedHealth)가 있으면 상대 체력도 같은 값으로 맞춘다.
     /// </summary>
     public void TakeDamage(DamageContext context)
     {
@@ -86,6 +89,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         PlayDamageEffects(context);
         Damaged?.Invoke(context);
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
+        if (_sharedHealth != null) _sharedHealth.SyncSharedHealth(_currentHealth);
         if (_currentHealth <= 0f)
         {
             Died?.Invoke(this);
@@ -103,6 +107,21 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         effects.Play(EffectId.BloodHit, context.Point);
         if (_currentHealth <= 0f)
             effects.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+    }
+
+    /// <summary>
+    /// 체력을 함께 쓰는 상대가 맞아 바뀐 체력 current로 이 적의 체력을 맞추고 HealthChanged를 알린다.
+    /// 피격 반응·혈흔·Damaged는 맞은 쪽만 내며, current가 0이면 이 적도 사망 효과와 사망 이벤트 뒤 비활성화된다.
+    /// </summary>
+    private void SyncSharedHealth(float current)
+    {
+        if (!IsAlive || Mathf.Approximately(_currentHealth, current)) return;
+        _currentHealth = Mathf.Clamp(current, 0f, _maxHealth);
+        HealthChanged?.Invoke(_currentHealth, _maxHealth);
+        if (_currentHealth > 0f) return;
+        Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+        Died?.Invoke(this);
+        gameObject.SetActive(false);
     }
 
     /// <summary>invulnerable 값으로 일시적인 피해 수신 차단을 설정한다. 체력과 생존 상태는 유지한다.</summary>
