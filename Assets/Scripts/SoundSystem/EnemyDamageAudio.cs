@@ -23,6 +23,7 @@ public sealed class EnemyDamageAudio : MonoBehaviour
     [SerializeField, Range(0f, 1f), Tooltip("피치를 바꾸지 않고 원래 음성을 재생할 확률입니다.")]
     private float _originalDeathPitchChance = 0.3f;
     private float _deathPitch = 1f;
+    private SoundId _deathSound = SoundId.None;
 
     [Header("적 상태 연결")]
     private EnemyController _controller;
@@ -84,14 +85,24 @@ public sealed class EnemyDamageAudio : MonoBehaviour
 
     /// <summary>
     /// health의 사망 확정에 마지막 피해 지점 또는 적 위치에서 사망음을 한 번 재생한다.
-    /// 치명타격과 같은 피치를 사용하고 소유자를 지정하지 않아 적 비활성화 후에도 사망음의 끝을 유지한다.
+    /// 전용 사망음이 없으면 치명타격과 같은 피치의 공통 사망음을 사용하고, 적 비활성화 후에도 소리의 끝을 유지한다.
     /// </summary>
     private void HandleDeath(EnemyHealth health)
     {
         if (_deathPlayed) return;
         _deathPlayed = true;
         if (!_hasDamagePoint) _deathPitch = GetDeathPitch();
-        Managers.Sound.PlayCue(CombatSoundCue.EnemyDie, _hasDamagePoint ? _lastDamagePoint : health.transform.position, pitch: _deathPitch);
+        Vector3 position = _hasDamagePoint ? _lastDamagePoint : health.transform.position;
+        if (_deathSound != SoundId.None)
+            Managers.Sound.Play(_deathSound, position, playDuringMovement: true);
+        else
+            Managers.Sound.PlayCue(CombatSoundCue.EnemyDie, position, pitch: _deathPitch);
+    }
+
+    /// <summary>soundId를 이 적의 전용 사망음으로 저장한다. None이면 기존 공통 사망음을 사용한다.</summary>
+    internal void ConfigureDeathSound(SoundId soundId)
+    {
+        _deathSound = soundId;
     }
 
     /// <summary>
