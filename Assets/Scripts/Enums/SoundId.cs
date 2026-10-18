@@ -53,5 +53,6 @@ public enum SoundId
     TwinBossWaterDrop = 46,
     DefenseBeastDie = 47,
     DefenseBeastLeap = 48,
-    HumanEnemyDie = 49,
+    EnemyWaterFootstep = 49,
+    HumanEnemyDie = 50,
 }

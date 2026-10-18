@@ -725,6 +725,22 @@ MonoBehaviour:
     _type: 1
     _event:
       Guid:
+        Data1: 728219267
+        Data2: 1150935217
+        Data3: 998187448
+        Data4: 193967979
+      Path: event:/Footsteps/Footsteps_Water_Enemy
+    _enabled: 1
+    _volumeMultiplier: 1.4
+    _pitchMultiplier: 1
+    _useCallerLabel: 1
+    _combatCue: 0
+    _spatialize2D: 0
+    _finishNaturally: 0
+  - _id: 50
+    _type: 1
+    _event:
+      Guid:
         Data1: 1860531884
         Data2: 1074483298
         Data3: 1090929795

@@ -45,6 +45,7 @@ public sealed class BossPresentation : MonoBehaviour
     [SerializeField] private SoundId _footstepSound = SoundId.EnemyFootstep;
     [SerializeField, Min(0.05f)] private float _minimumStepSoundInterval = 0.18f;
     private float _nextStepSoundTime;
+    private RainyStageAudio _rainAudio;
 
     [Header("이동 파동")]
     [SerializeField] private RevealRippleSettings _movementRipple = new RevealRippleSettings(
@@ -90,6 +91,7 @@ public sealed class BossPresentation : MonoBehaviour
     void Awake()
     {
         _boss = GetComponent<BossController>();
+        _rainAudio = FindFirstObjectByType<RainyStageAudio>();
         _warningProperties = new MaterialPropertyBlock();
         CreateGuardWeapon();
     }
@@ -189,7 +191,7 @@ public sealed class BossPresentation : MonoBehaviour
         {
             StopHeartbeat();
             Managers.Sound.StopFor(gameObject, SoundId.EnemyDetected);
-            Managers.Sound.StopFor(gameObject, _footstepSound);
+            Managers.Sound.StopFor(gameObject, GetFootstepSound());
             Managers.Sound.StopFor(gameObject, _chargeCry, forceStop: true);
             Managers.Sound.StopFor(gameObject, SoundId.EnemyRangedAttackVoice, forceStop: true);
             Managers.Sound.StopFor(gameObject, SoundId.EnemyAttackVoice, forceStop: true);
@@ -217,8 +219,9 @@ public sealed class BossPresentation : MonoBehaviour
         if (Time.time >= _nextStepSoundTime)
         {
             _nextStepSoundTime = Time.time + _minimumStepSoundInterval;
-            Managers.Sound.StopFor(gameObject, _footstepSound);
-            Managers.Sound.Play(_footstepSound, transform.position, owner: gameObject, playDuringMovement: true);
+            SoundId footstepSound = GetFootstepSound();
+            Managers.Sound.StopFor(gameObject, footstepSound);
+            Managers.Sound.Play(footstepSound, transform.position, owner: gameObject, playDuringMovement: true);
         }
         if (!Game.IsInitialized) return;
         Vector3 direction = movement.normalized;
@@ -294,7 +297,7 @@ public sealed class BossPresentation : MonoBehaviour
         {
             StopHeartbeat();
             Managers.Sound.StopFor(gameObject, SoundId.EnemyDetected);
-            Managers.Sound.StopFor(gameObject, _footstepSound);
+            Managers.Sound.StopFor(gameObject, GetFootstepSound());
             Managers.Sound.StopFor(gameObject, _chargeCry, forceStop: true);
             Managers.Sound.StopFor(gameObject, SoundId.EnemyRangedAttackVoice, forceStop: true);
             Managers.Sound.StopFor(gameObject, SoundId.EnemyAttackVoice, forceStop: true);
@@ -345,8 +348,19 @@ public sealed class BossPresentation : MonoBehaviour
         Managers.Sound.StopFor(gameObject, SoundId.EnemyRangedAttackVoice, forceStop: true);
         Managers.Sound.StopFor(gameObject, SoundId.EnemyAttackVoice, forceStop: true);
         Managers.Sound.StopFor(gameObject, _strikeCue);
-        Managers.Sound.StopFor(gameObject, _footstepSound);
+        Managers.Sound.StopFor(gameObject, GetFootstepSound());
         _nextStepSoundTime = Time.time + _minimumStepSoundInterval;
+    }
+
+    /// <summary>
+    /// 활성 RainyStageAudio에서 물 발자국이 켜져 있으면 적 전용 물 발소리를 반환한다.
+    /// 비 설정이 없거나 꺼져 있으면 Inspector의 _footstepSound를 반환한다.
+    /// </summary>
+    private SoundId GetFootstepSound()
+    {
+        return _rainAudio != null && _rainAudio.isActiveAndEnabled && _rainAudio.UseWaterFootsteps
+            ? SoundId.EnemyWaterFootstep
+            : _footstepSound;
     }
 
     /// <summary>보스 준비 박동 사건에서 중앙 설정의 심장박동을 보스 위치에 한 번 재생하고 ID를 보관한다.</summary>

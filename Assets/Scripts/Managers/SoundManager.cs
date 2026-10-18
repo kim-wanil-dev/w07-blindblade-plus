@@ -994,6 +994,7 @@ public class SoundManager
         switch (soundId)
         {
             case SoundId.EnemyFootstep:
+            case SoundId.EnemyWaterFootstep:
             case SoundId.EnemyAttackPrepare:
             case SoundId.EnemySwordSwing:
             case SoundId.EnemyFinished:
