@@ -2,7 +2,31 @@
 
 - 작성일: 2026-10-17
 - 상태: **2026-10-18 관절 기반 애니메이션·원 그리기·물기 돌진·월드 공간 연기·몸체 숨김·눈 줄기·발 디딤 소리 연결. C# 빌드 확인, 실제 전투 Play 확인 대기**
-- 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
+- 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이며, 교전 시작 순서는 "2026-10-19 선공격 후 배회" 절, 돌진 직전 눈 섬광은 "2026-10-19 돌진 확정 눈 섬광" 절, 덮치기 궤적과 전조 시간은 "2026-10-19 로그 곡선 덮치기·전조 연장" 절이 우선한다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
+
+## 2026-10-19 로그 곡선 덮치기·전조 연장 (사용자 요청, 최신 규칙)
+
+- 궤적: 가운데가 0.35m 뜨는 포물선 대신 로그 곡선처럼 땅을 박차자마자 빠르게 솟고 뒤로 갈수록 평평해지는 경로로 뛴다. 높이 = `Lunge Peak Height`(0.6m) × log(1 + `Lunge Curve Steepness`(9) × 수평 진행도) / log(10)이며, 수평 진행도는 기존처럼 감속(1 − (1 − t)²)한다. 곡선은 계속 오르므로 물기 위치에서 몸 루트가 최고 높이 0.6m에 닿는다. 기존 `_lungeHop` 필드는 `_lungePeakHeight`·`_lungeCurveSteepness`로 바꿨다.
+- 속도: 기존 16m/s(`Lunge Speed`)를 유지하되, 비행 시간을 수평 거리 대신 높이를 포함한 실제 경로 길이(16구간 표본, `GetLungePathLength`)로 나눠 정한다. 8m에서 뛰면 약 0.43초로 기존과 거의 같다. 다리 뻗기(`LungeAir`)는 높이 ÷ 최고 높이다.
+- 물기: 이전에는 도착 즉시 NavMesh로 Warp한 뒤 물었다. 이제 공중 위치에서 접촉을 판정하고, 물어뜯는 0.25초 동안 바로 아래 땅으로 점점 빠르게 떨어진 뒤 NavMesh에 맞추고 이탈한다(맞추지 못하면 취소). 막기·쳐내기 반동은 공중 위치에서 땅 위 반동 지점으로 이동한다. 공중에서 취소되면 시작 NavMesh 높이에서 바로 아래 땅을 찾아 Warp한다.
+- 전조(사용자 요청): 점프 준비(웅크림·붉은 경고)를 0.2초 늘려 0.9초로 했다. `DefenseBeast.prefab`의 `_firstHeartbeatDelay`를 0.2초에서 0.4초로 바꿔 박동음부터 돌진까지 0.5초(`_postHeartbeatAttackDelay`)는 유지한다.
+- 관련 코드·프리팹: `Assets/Scripts/Enemies/Attack/DefenseBeastLeapAttack.cs`의 `PerformAttack`, `UpdateLunge`, `GetLungeHeight`, `GetLungePathLength`, `UpdateBite`, `OnAttackEnded`, `ActiveDuration`; `Assets/Resources/Defense/DefenseBeast.prefab`(값 직접 기록).
+- 확인: `dotnet build Assembly-CSharp.csproj` 오류 0개, 기존 경고 4개. Play에서 궤적 체감, 0.6m 높이 물기 판정, 공중 낙하 자세, 낮은 천장 근처 돌진 취소 여부, 늘어난 전조 체감은 미확인이다. 테스트 코드는 작성하지 않았다.
+
+## 2026-10-19 돌진 확정 눈 섬광 (사용자 요청, 최신 규칙)
+
+- 쌍둥이 늑대 보스의 덮치기 전 눈 섬광(`TwinBeastEyes`)과 같은 하늘색 + 모양 섬광을 일반 Beast에도 넣었다. `DefenseBeastEyes`가 `DefenseBeastLeapAttack.AttackCommitted`를 구독해, 박동 전조가 끝나고 물기 돌진이 확정되는 순간 두 눈에서 한 번 터뜨린다. 섬광 모양 텍스처는 `TwinBeastEyes.CreateGlintShape`(접근 제한자만 `internal`로 변경)를 같이 쓰고, 재질은 몸 연기(EnemySmokeVisual) 재질을 쓴다.
+- 크기(사용자 요청): 기본 0.9m, 가로 배율 1(0.9m)·세로 배율 1.5(1.35m), 눈 좌표보다 머리 로컬 0.5m 아래. 처음 0.03초 동안 원래 크기의 2.25배(`Glint Emphasis Scale`)로 터져 강조하고 0.2초(`Glint Emphasis Duration`)에 원래 크기로 돌아온 뒤 0.4초(`Glint Duration`) 동안 사라진다(전체 0.6초).
+- 윤곽선 두께(사용자 요청): 트윈 보스 섬광보다 2.5배 두꺼운 하늘색 경계로 그린다. `TwinBossWarningVisual.AddGlintRenderers`에 `thickOutline` 인자(기본 false)를 더해, 참이면 경고 마스크(`OutlineMeleeWarningMask`)가 섬광을 B 대신 A 채널에 기록한다(`ColorMask RGBA`, 다른 대상의 A는 0). `ScreenSpaceOutline`은 A 채널을 기존 섬광 표본 간격의 `_BeastThickGlintWidthScale`(2.5)배로 읽어 경계를 그린다. 트윈 보스 섬광과 다른 경고 윤곽선은 그대로다.
+- 관련 코드·프리팹: `Assets/Scripts/Enemies/DefenseBeastEyes.cs`의 `CreateGlints`, `HandleAttackCommitted`; `TwinBeastEyes.cs`의 `CreateGlintShape`; `TwinBossWarningVisual.cs`의 `AddRedFlashRenderers`, `AddGlintRenderers`; `Assets/Resources/Defense/OutlineMeleeWarningMask.shader`; `Assets/Shaders/ScreenSpaceOutline.shader`; `Assets/Resources/Defense/DefenseBeast.prefab`(새 섬광 값 직접 기록).
+- 확인: `dotnet build Assembly-CSharp.csproj` 오류 0개, 기존 경고 4개. 셰이더 컴파일, Play에서 섬광 크기·강조·두꺼운 경계 모양(표본 간격이 넓어 경계가 이중으로 보이는지)은 미확인이다. 돌진 위치를 찾지 못해 공격이 바로 끝나면 붉은 전조가 0.15초 안에 꺼지면서 섬광 윤곽도 함께 사라질 수 있다(미확인). 테스트 코드는 작성하지 않았다.
+
+## 2026-10-19 선공격 후 배회 (사용자 요청, 최신 규칙)
+
+- 교전 시작 순서를 "배회 후 공격"에서 "공격 후 배회"로 바꿨다. 추적 끝에 9m 안으로 처음 들어오면 원 그리기·물러나기 없이 바로 돌진 대기(`Ready`)가 되고, 돌진 경로가 열려 있으면 즉시 물기 돌진을 시도한다.
+- `DefenseBeastProwl`은 `DefenseBeastLeapAttack.TelegraphStarted`를 구독해 공격 전조 시작을 기록한다. 호출이 0.25초 넘게 끊겼다가 다시 시작될 때 그 사이 전조가 있었으면 기존처럼 새 원 그리기(`BeginCycle`)부터, 없었으면 `BeginReady`로 돌진 대기부터 시작한다. 이후 원 그리기 → 물러나기 → 돌진 순환과 돌진 대기 2초 초과 시 원 그리기로 넘어가는 규칙은 그대로다.
+- 관련 코드: `Assets/Scripts/Enemies/DefenseBeastProwl.cs`의 `UpdateEngagement`, `BeginReady`, `HandleTelegraphStarted`. 프리팹·다른 적은 바꾸지 않았다.
+- 확인: `dotnet build Assembly-CSharp.csproj` 오류 0개, 기존 경고 4개(CS0414·CS0618, 이번 변경과 무관). Play에서 첫 진입 즉시 돌진과 공격 뒤 배회 전환은 미확인이다. 테스트 코드는 작성하지 않았다.
 
 ## 2026-10-18 TwinBoss 눈 줄기·발 디딤 소리
 

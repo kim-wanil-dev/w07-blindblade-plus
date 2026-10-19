@@ -48,6 +48,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public event Action<DamageContext> Damaged;
     public event Action<DamageContext> DamageBlocked;
     public event Action<float, float> HealthChanged;
+    public event Action<EnemyHealth> Dying;
     public event Action<EnemyHealth> Died;
 
     void Awake()
@@ -98,6 +99,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         if (_sharedHealth != null) _sharedHealth.SyncSharedHealth(_currentHealth);
         if (_currentHealth <= 0f)
         {
+            Dying?.Invoke(this);
             Died?.Invoke(this);
             gameObject.SetActive(false);
         }
@@ -126,6 +128,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
         if (_currentHealth > 0f) return;
         Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+        Dying?.Invoke(this);
         Died?.Invoke(this);
         gameObject.SetActive(false);
     }

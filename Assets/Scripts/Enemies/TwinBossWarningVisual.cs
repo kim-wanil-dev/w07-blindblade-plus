@@ -16,6 +16,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     private static readonly int _warningIntensityId = Shader.PropertyToID("_MeleeWarningIntensity");
     private static readonly int _warningAlwaysVisibleId = Shader.PropertyToID("_MeleeWarningAlwaysVisible");
     private static readonly int _warningSeparateGlintId = Shader.PropertyToID("_MeleeWarningSeparateGlint");
+    private static readonly int _warningThickGlintId = Shader.PropertyToID("_MeleeWarningThickGlint");
 
     [Header("연기 몸체")]
     [SerializeField, Tooltip("붉은 테두리를 적용할 연기 파티클 렌더러를 찾는 루트")]
@@ -117,9 +118,10 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
     /// <summary>
     /// root 아래 파티클 렌더러를 몸통 경고 세기와 상관없이 근접 경고 마스크 대상에 더한다.
     /// shape가 있으면 재질 텍스처 대신 그 모양을 사용한다. separateGlintOutline이 참이면 파티클 채움을 숨기고 몸통과 다른 채널에 눈 섬광 테두리를 기록한다.
-    /// 속성 블록은 한 번만 넘기며 Publish가 덮어쓰지 않는다.
+    /// thickGlintOutline이 참이면 눈 섬광을 두꺼운 테두리 전용 채널에 기록한다. 속성 블록은 한 번만 넘기며 Publish가 덮어쓰지 않는다.
     /// </summary>
-    public void AddRedFlashRenderers(Transform root, Texture shape = null, bool separateGlintOutline = false)
+    public void AddRedFlashRenderers(Transform root, Texture shape = null, bool separateGlintOutline = false,
+        bool thickGlintOutline = false)
     {
         foreach (ParticleSystemRenderer renderer in root.GetComponentsInChildren<ParticleSystemRenderer>(true))
         {
@@ -133,6 +135,7 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
             _properties.SetFloat(_warningIntensityId, 1f);
             _properties.SetFloat(_warningAlwaysVisibleId, separateGlintOutline ? 0f : 1f);
             _properties.SetFloat(_warningSeparateGlintId, separateGlintOutline ? 1f : 0f);
+            _properties.SetFloat(_warningThickGlintId, separateGlintOutline && thickGlintOutline ? 1f : 0f);
             renderer.SetPropertyBlock(_properties);
             _warningRenderers.Add(renderer);
         }
@@ -140,11 +143,11 @@ public sealed class TwinBossWarningVisual : MonoBehaviour
 
     /// <summary>
     /// root 아래 눈 섬광 파티클의 내부 채움을 숨기고 shape 모양을 몸통의 붉은 테두리와 분리된 마스크 채널에 기록한다.
-    /// 등록된 렌더러를 _warningRenderers에 더한다.
+    /// thickOutline이 참이면 기본 섬광보다 두꺼운 테두리로 그린다. 등록된 렌더러를 _warningRenderers에 더한다.
     /// </summary>
-    public void AddGlintRenderers(Transform root, Texture shape)
+    public void AddGlintRenderers(Transform root, Texture shape, bool thickOutline = false)
     {
-        AddRedFlashRenderers(root, shape, true);
+        AddRedFlashRenderers(root, shape, true, thickOutline);
     }
 
     /// <summary>붉은 유지 상태와 파동 없는 붉은 테두리를 끝내고 _whiteReturnDuration 동안 흰색으로 되돌린다.</summary>

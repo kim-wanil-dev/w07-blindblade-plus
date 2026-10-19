@@ -11035,6 +11035,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 204, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
+      propertyPath: _maxHealth
+      value: 250
+      objectReference: {fileID: 0}
     - target: {fileID: 232, guid: d40b1d4aa1924ba2b5fe179c3867f4e1, type: 3}
       propertyPath: _dashDuration
       value: 0.5
@@ -55276,7 +55280,7 @@ MonoBehaviour:
   _warning: {fileID: 132706044}
   _weather: {fileID: 2200000003}
   _rainAudio: {fileID: 2200000100}
-  _startBossImmediately: 0
+  _startBossImmediately: 1
   _requiredKills: 30
   _bossDropletCount: 2662
   _warningDuration: 2

@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 
 using BlindBlade.Combat.Contracts;
 
-public enum GameplayState { Initializing, Playing, GameOver, Cleared, Restarting, Paused }
+public enum GameplayState { Initializing, Playing, GameOver, Cleared, Restarting, Paused, ActComplete }
 
 /// <summary>게임 상태와 시간·커서 수명을 관리하고 입력 및 UI에 상태 변경을 알린다.</summary>
 public sealed class GameStateManager : MonoBehaviour
@@ -109,6 +109,16 @@ public sealed class GameStateManager : MonoBehaviour
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
         ChangeState(GameplayState.Cleared);
+    }
+
+    /// <summary>1막 보스 사망 뒤 게임플레이 입력을 끄고 완료 버튼을 위한 커서를 표시한다.</summary>
+    public void RequestActComplete()
+    {
+        if (State != GameplayState.Playing) return;
+        Managers.Sound.SetFootstepOnlyOwner(null);
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        ChangeState(GameplayState.ActComplete);
     }
 
     /// <summary>게임오버 상태의 현재 씬을 재시작하며 시간과 커서를 복구한다.</summary>

@@ -10,6 +10,7 @@ using BlindBlade.Combat.Contracts;
 public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 {
     private const int CONTACT_BUFFER_SIZE = 32;
+    private const int LUNGE_PATH_SAMPLES = 16;
 
     private enum LeapState
     {
@@ -24,10 +25,12 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     [Header("물기 돌진 설정")]
     [SerializeField, Min(0.1f), Tooltip("이 수평 거리 안에서 교전하고 물기 돌진을 시작한다(m)")]
     private float _attackRange = 9f;
-    [SerializeField, Min(0.1f), Tooltip("땅을 박차고 대상에게 뛰어드는 속도(m/s)")]
+    [SerializeField, Min(0.1f), Tooltip("땅을 박차고 대상에게 뛰어드는 속도(m/s). 높이까지 포함한 비행 경로 길이를 이 속도로 날아간다.")]
     private float _lungeSpeed = 16f;
-    [SerializeField, Min(0f), Tooltip("뛰어드는 동안 몸이 뜨는 최고 높이(m)")]
-    private float _lungeHop = 0.35f;
+    [SerializeField, Min(0.01f), Tooltip("뛰어드는 경로의 최고 높이(m). 몸 루트가 땅에서 뜬 높이이며 물기 위치에 도착할 때 이 높이에 닿는다.")]
+    private float _lungePeakHeight = 0.6f;
+    [SerializeField, Min(0.1f), Tooltip("로그 곡선처럼 처음에 빠르게 솟는 정도. 클수록 초반에 급히 오르고 뒤쪽은 평평해진다.")]
+    private float _lungeCurveSteepness = 9f;
     [SerializeField, Min(0f), Tooltip("돌진을 멈추고 무는 대상 중심과의 거리(m)")]
     private float _biteStopDistance = 1.1f;
     [SerializeField, Min(0.1f), Tooltip("돌진 경로에서 대상과 닿았다고 보는 반지름(m). 멈추는 거리보다 커야 물기 위치에서 대상에 닿는다.")]
@@ -79,6 +82,8 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private Vector3 _repositionDestination;
     private Vector3 _bounceStartPosition;
     private Vector3 _bounceDestination;
+    private Vector3 _biteFromPosition;
+    private Vector3 _biteLandPosition;
     private float _lungeElapsed;
     private float _lungeDuration;
     private float _initialLungeReach;
@@ -108,7 +113,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     public Vector3 IncomingDirection => _incomingDirection;
     internal override string TelemetryKind => "Melee";
 
-    protected override float ActiveDuration => _attackRange / Mathf.Max(0.1f, _lungeSpeed) + _biteDuration
+    protected override float ActiveDuration => (_attackRange + 2f * _lungePeakHeight) / Mathf.Max(0.1f, _lungeSpeed) + _biteDuration
         + _repositionTimeout + _blockedBounceDuration;
     protected override bool HasFinishedActiveAttack => _attackMotionComplete;
     protected override EnemySoundAction SoundAction => EnemySoundAction.Melee;
@@ -209,9 +214,9 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _agent.updatePosition = false;
         _agent.updateRotation = false;
         _agent.isStopped = true;
-        float distance = Vector3.ProjectOnPlane(_lungeDestination - _startPosition, Vector3.up).magnitude;
-        _initialLungeReach = distance;
-        _lungeDuration = Mathf.Max(0.12f, distance / Mathf.Max(0.1f, _lungeSpeed));
+        _initialLungeReach = Vector3.ProjectOnPlane(_lungeDestination - _startPosition, Vector3.up).magnitude;
+        // 높이 때문에 길어진 경로도 같은 속도로 날아가도록 실제 비행 경로 길이로 시간을 정한다.
+        _lungeDuration = Mathf.Max(0.12f, GetLungePathLength() / Mathf.Max(0.1f, _lungeSpeed));
         _lungeElapsed = 0f;
         _lungeAir = 0f;
         _contactResolved = false;
@@ -247,8 +252,8 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// 시작 위치에서 _lungeDestination까지 감속하며 낮게 뛰어드는 위치를 한 프레임 진행하고 경로의 대상 접촉을 한 번 판정한다.
-    /// 막기·쳐내기면 반동을 시작하고, 대상에 닿거나 물기 위치에 도착하면 NavMesh 위로 돌아와 물기를 시작한다.
+    /// 시작 위치에서 _lungeDestination까지 감속하며 로그 곡선처럼 _lungePeakHeight 높이로 솟구쳐 뛰어드는 위치를 한 프레임 진행하고 경로의 대상 접촉을 한 번 판정한다.
+    /// 막기·쳐내기면 반동을 시작하고, 대상에 닿거나 물기 위치에 도착하면 그 공중 위치에서 물기를 시작한다.
     /// </summary>
     private void UpdateLunge(EnemyAttackContext context, PlayerHealth targetHealth)
     {
@@ -256,8 +261,10 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _lungeElapsed += Time.deltaTime;
         float progress = Mathf.Clamp01(_lungeElapsed / _lungeDuration);
         float eased = 1f - (1f - progress) * (1f - progress);
-        _lungeAir = 4f * progress * (1f - progress);
-        Vector3 nextPosition = Vector3.Lerp(_startPosition, _lungeDestination, eased) + Vector3.up * (_lungeHop * _lungeAir);
+        float height = GetLungeHeight(eased);
+        _lungeAir = Mathf.Clamp01(height / _lungePeakHeight);
+        Vector3 groundPosition = Vector3.Lerp(_startPosition, _lungeDestination, eased);
+        Vector3 nextPosition = groundPosition + Vector3.up * height;
         Vector3 previousPosition = transform.position;
         if ((nextPosition - previousPosition).sqrMagnitude > 0.000001f
             && !IsClearSegment(previousPosition, nextPosition, context.Target))
@@ -277,12 +284,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         if (progress < 1f && !_contactResolved)
             return;
 
-        if (!RestoreAgentAt(progress < 1f ? nextPosition : _lungeDestination, true))
-        {
-            CancelAttack();
-            return;
-        }
-
+        // 곡선의 최고 높이에서 물고, 물어뜯는 동안 땅으로 내려온 뒤 NavMesh에 맞춘다.
         TryResolveBiteContact(transform.position, transform.position, context, targetHealth);
         if (_bounceBackOnBlock)
         {
@@ -291,8 +293,37 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         }
 
         _lungeAir = 0f;
+        _biteFromPosition = transform.position;
+        _biteLandPosition = groundPosition;
         _biteEndsAt = Time.time + _biteDuration;
         _state = LeapState.Biting;
+    }
+
+    /// <summary>
+    /// 감속한 수평 진행도 eased로 땅에서 뜬 높이를 반환한다.
+    /// 로그 곡선 log(1 + _lungeCurveSteepness * eased)를 0~1로 맞춰 처음에 빠르게 솟고 물기 위치에서 _lungePeakHeight에 닿게 한다.
+    /// </summary>
+    private float GetLungeHeight(float eased)
+    {
+        return _lungePeakHeight * Mathf.Log(1f + _lungeCurveSteepness * eased) / Mathf.Log(1f + _lungeCurveSteepness);
+    }
+
+    /// <summary>
+    /// _startPosition에서 _lungeDestination까지 GetLungeHeight 높이를 포함한 비행 경로를 LUNGE_PATH_SAMPLES 구간으로 나눠 길이를 반환한다.
+    /// </summary>
+    private float GetLungePathLength()
+    {
+        float length = 0f;
+        Vector3 previous = _startPosition;
+        for (int i = 1; i <= LUNGE_PATH_SAMPLES; i++)
+        {
+            float progress = (float)i / LUNGE_PATH_SAMPLES;
+            float eased = 1f - (1f - progress) * (1f - progress);
+            Vector3 point = Vector3.Lerp(_startPosition, _lungeDestination, eased) + Vector3.up * GetLungeHeight(eased);
+            length += Vector3.Distance(previous, point);
+            previous = point;
+        }
+        return length;
     }
 
     /// <summary>
@@ -312,12 +343,23 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// _biteEndsAt까지 물기 자세로 머문 뒤 경고를 끄고 targetHealth에서 옆으로 비껴 물러나는 이탈 이동을 시작한다.
+    /// _biteEndsAt까지 물어뜯으며 _biteFromPosition에서 _biteLandPosition으로 점점 빠르게 떨어진다.
+    /// 끝나면 NavMesh 위로 돌아와 경고를 끄고 targetHealth에서 옆으로 비껴 물러나는 이탈 이동을 시작하며, NavMesh에 맞추지 못하면 공격을 취소한다.
     /// </summary>
     private void UpdateBite(PlayerHealth targetHealth)
     {
         if (Time.time < _biteEndsAt)
+        {
+            float fall = 1f - (_biteEndsAt - Time.time) / Mathf.Max(0.05f, _biteDuration);
+            transform.position = Vector3.Lerp(_biteFromPosition, _biteLandPosition, fall * fall);
             return;
+        }
+
+        if (!RestoreAgentAt(_biteLandPosition, true))
+        {
+            CancelAttack();
+            return;
+        }
 
         _contactResolved = true;
         _warning.EndWarning();
@@ -509,7 +551,10 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
             {
                 _motor.Stop();
                 _agent.updatePosition = true;
-                if (!TrySampleNavMeshPosition(transform.position, out Vector3 sampledPosition))
+                // 높이 뛰어든 공중에서 취소돼도 바로 아래 땅을 찾도록 시작 NavMesh 높이에서 샘플한다.
+                Vector3 groundPosition = transform.position;
+                groundPosition.y = _navigationPosition.y;
+                if (!TrySampleNavMeshPosition(groundPosition, out Vector3 sampledPosition))
                     sampledPosition = _navigationPosition;
                 _agent.Warp(sampledPosition);
             }

@@ -123,13 +123,14 @@ public sealed class HumanBossAttack : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("밀려나는 동안 좌우로 떠는 빠르기(초당 횟수)")]
     private float _recoilShakeFrequency = 18f;
     [SerializeField, Min(0f), Tooltip("교대 근접에서 돌진 베기를 마치고 짐승 덮치기를 기다리는 동안 크게 뒤로 물러나는 거리(미터)")]
-    private float _backstepDistance = 30f;
+    private float _backstepDistance = 18f;
     [SerializeField, Min(0.01f), Tooltip("크게 뒤로 물러나는 시간(초)")]
-    private float _backstepDuration = 0.6f;
+    private float _backstepDuration = 0.36f;
     private TwinBossWarningVisual _warning;
     private PerceptionRevealMap _revealMap;
     private bool _slashing;
     private bool _dashParried;
+    private bool _dashPassedThrough;
     private float _strikeDamage;
 
     [Header("반격 관통 베기")]
@@ -532,7 +533,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     /// <summary>
     /// 지금 위치에서 플레이어 쪽으로 좌우 _zigzagWidth만큼 _zigzagTurns번 휘어지는 유선형 곡선을 따라 _dashSpeed로 돌진하고 베기 소리를 낸다.
     /// 휘어진 꼭짓점을 지날 때마다 붉은 파동을 내고, 마지막 구간에 들어설 때 그 순간 플레이어 위치를 _dashOvershoot만큼 지나는 곳을 끝점으로 고정한다.
-    /// 곡선 어디에서든 플레이어에 닿으면 그 앞에서 멈추며 damage 피해를 판정한다.
+    /// 곡선 어디에서든 플레이어에 닿으면 그 앞에서 멈추며 damage 피해를 판정한다. 회피·무적으로 피해가 없으면 멈추지 않고 그대로 지나간다.
     /// </summary>
     private IEnumerator Dash(float damage)
     {
@@ -541,6 +542,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
         Vector3 forward = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
         _dashParried = false;
+        _dashPassedThrough = false;
         if (_slashSound != SoundId.None)
             Managers.Sound.Play(_slashSound, transform.position, 1f, gameObject, true);
         Vector3[] points = BuildCurvePoints(start, forward * toPlayer.magnitude);
@@ -693,13 +695,18 @@ public sealed class HumanBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// start에서 direction으로 travel만큼 몸 캡슐을 밀어 플레이어에 닿으면 전방 막기·쳐내기를 확인하고 실패 시 이번 돌진 피해 _strikeDamage를 주며 밀어낸다.
-    /// 닿은 거리를 contact로 출력하고 판정했으면 true를 반환한다.
+    /// start에서 direction으로 travel만큼 몸 캡슐을 밀어 플레이어에 닿으면 인간에서 플레이어 쪽 수평 방향으로 전방 막기·쳐내기를 확인한다.
+    /// 막으면 밀어내지 않고, 실제로 맞았을 때만 이번 돌진 피해 _strikeDamage를 주며 밀어낸다. 닿은 거리를 contact로 출력하고 판정했으면 true를 반환한다.
+    /// 회피·무적으로 피해가 없으면 _dashPassedThrough를 켜고 false를 반환해 이번 돌진은 플레이어를 그대로 지나가게 한다.
     /// </summary>
     private bool TryHitSlash(Vector3 start, Vector3 direction, float travel, out float contact)
     {
-        if (!TryCastPlayer(start, direction, travel, out contact, out Vector3 point)) return false;
-        DamageContext context = new DamageContext(_strikeDamage, gameObject, point, direction,
+        contact = 0f;
+        if (_dashPassedThrough || !TryCastPlayer(start, direction, travel, out contact, out Vector3 point)) return false;
+        // 휘어 들어오는 돌진도 플레이어가 인간을 바라보면 막을 수 있도록 실제 진입 방향을 쓴다.
+        Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
+        Vector3 incoming = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : direction;
+        DamageContext context = new DamageContext(_strikeDamage, gameObject, point, incoming,
             "TwinHumanSlash", _telemetryAttackId, 1, IncomingAttackKind.Melee);
         if (_player.TryDefendProjectile(context, out bool parried))
         {
@@ -707,8 +714,13 @@ public sealed class HumanBossAttack : MonoBehaviour
             _telemetryAttackId = 0;
             return true;
         }
-        _player.TakeDamage(context);
+        DefenseResolution resolution = _player.ResolveIncomingAttack(context);
         _telemetryAttackId = 0;
+        if (resolution.Outcome != DefenseOutcome.Hit)
+        {
+            _dashPassedThrough = true;
+            return false;
+        }
         if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
         return true;
     }
