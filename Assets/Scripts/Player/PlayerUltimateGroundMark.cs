@@ -20,7 +20,7 @@ public sealed class PlayerUltimateGroundMark : MonoBehaviour
     private static readonly int _markCountId = Shader.PropertyToID("_OutlineGroundMarkCount");
     private static readonly int _markSegmentsId = Shader.PropertyToID("_OutlineGroundMarkSegments");
     private static readonly int _markParamsId = Shader.PropertyToID("_OutlineGroundMarkParams");
-    private static readonly int _markColorId = Shader.PropertyToID("_OutlineGroundMarkColor");
+    private static readonly int _markColorsId = Shader.PropertyToID("_OutlineGroundMarkColors");
 
     [Header("흔적 선")]
     [SerializeField] private Color _lineColor = Color.white;
@@ -41,11 +41,13 @@ public sealed class PlayerUltimateGroundMark : MonoBehaviour
     private readonly List<Mark> _marks = new List<Mark>();
     private readonly Vector4[] _segments = new Vector4[MAX_MARKS];
     private readonly Vector4[] _parameters = new Vector4[MAX_MARKS];
+    private readonly Vector4[] _colors = new Vector4[MAX_MARKS];
 
     private sealed class Mark
     {
         public Vector3 Start { get; set; }
         public Vector3 End { get; set; }
+        public Color Color { get; set; }
         public float Age { get; set; }
     }
 
@@ -72,11 +74,20 @@ public sealed class PlayerUltimateGroundMark : MonoBehaviour
     }
 
     /// <summary>
-    /// planePoint·planeNormal 평면이 플레이어 발밑 높이의 땅과 만나는 직선을 구한다.
-    /// 그중 viewProjection 화면 안에 보이고 발밑에서 _maxLength 안인 구간을 흰 선 흔적으로 남긴다.
-    /// 흔적이 MAX_MARKS개를 넘으면 가장 오래된 것을 지운다. 평면이 땅과 거의 나란하거나 보이는 구간이 없으면 남기지 않는다.
+    /// planePoint·planeNormal 평면이 viewProjection 화면에 보이던 땅 위 구간을 기본 흔적 색 _lineColor로 남긴다.
+    /// 자세한 규칙은 색을 받는 Show와 같다.
     /// </summary>
     public void Show(Vector3 planePoint, Vector3 planeNormal, Matrix4x4 viewProjection)
+    {
+        Show(planePoint, planeNormal, viewProjection, _lineColor);
+    }
+
+    /// <summary>
+    /// planePoint·planeNormal 평면이 플레이어 발밑 높이의 땅과 만나는 직선을 구한다.
+    /// 그중 viewProjection 화면 안에 보이고 발밑에서 _maxLength 안인 구간을 color 선 흔적으로 남긴다. 나중에 남긴 흔적이 겹치는 자리에서 위에 그려진다.
+    /// 흔적이 MAX_MARKS개를 넘으면 가장 오래된 것을 지운다. 평면이 땅과 거의 나란하거나 보이는 구간이 없으면 남기지 않는다.
+    /// </summary>
+    public void Show(Vector3 planePoint, Vector3 planeNormal, Matrix4x4 viewProjection, Color color)
     {
         Vector3 feet = transform.position;
         Vector3 direction = Vector3.Cross(planeNormal, Vector3.up);
@@ -94,7 +105,7 @@ public sealed class PlayerUltimateGroundMark : MonoBehaviour
             return;
         if (_marks.Count == MAX_MARKS)
             _marks.RemoveAt(0);
-        _marks.Add(new Mark { Start = origin + direction * start, End = origin + direction * end });
+        _marks.Add(new Mark { Start = origin + direction * start, End = origin + direction * end, Color = color });
     }
 
     /// <summary>
@@ -118,7 +129,7 @@ public sealed class PlayerUltimateGroundMark : MonoBehaviour
     }
 
     /// <summary>
-    /// 남아 있는 흔적의 선분·높이·반폭·세기·양 끝 흐림을 화면 윤곽선 셰이더 전역 배열과 개수로 넘긴다.
+    /// 남아 있는 흔적의 선분·높이·반폭·세기·양 끝 흐림·색을 남긴 순서대로 화면 윤곽선 셰이더 전역 배열과 개수로 넘긴다.
     /// 세기는 머무는 동안 1이고 이후 SmoothStep으로 0까지 줄어든다.
     /// </summary>
     private void Publish()
@@ -129,10 +140,11 @@ public sealed class PlayerUltimateGroundMark : MonoBehaviour
             float fade = Mathf.Clamp01((mark.Age - _holdDuration) / _fadeDuration);
             _segments[i] = new Vector4(mark.Start.x, mark.Start.z, mark.End.x, mark.End.z);
             _parameters[i] = new Vector4(mark.Start.y, _lineWidth * 0.5f, 1f - Mathf.SmoothStep(0f, 1f, fade), _endFade);
+            _colors[i] = mark.Color;
         }
         Shader.SetGlobalInt(_markCountId, _marks.Count);
         Shader.SetGlobalVectorArray(_markSegmentsId, _segments);
         Shader.SetGlobalVectorArray(_markParamsId, _parameters);
-        Shader.SetGlobalColor(_markColorId, _lineColor);
+        Shader.SetGlobalVectorArray(_markColorsId, _colors);
     }
 }

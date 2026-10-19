@@ -440,7 +440,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineGroundMarkSegments[MAX_GROUND_MARKS];
             // x: 땅 높이, y: 반폭, z: 세기, w: 양 끝 흐림 비율
             float4 _OutlineGroundMarkParams[MAX_GROUND_MARKS];
-            half4 _OutlineGroundMarkColor;
+            // 흔적별 색. 배열 순서대로 덮어 나중 흔적이 위에 보인다.
+            float4 _OutlineGroundMarkColors[MAX_GROUND_MARKS];
 
             float _OutlineGroundGuideEnabled;
             float _OutlineGroundGuideHeight;
@@ -459,7 +460,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 if (HasSurface(rawDepth) == 0.0)
                     return 0.0;
                 float3 position = SurfacePosition(uv, rawDepth);
-                float coverage = 0.0;
+                float3 color = 0.0;
                 [loop]
                 for (int i = 0; i < _OutlineGroundMarkCount; i++)
                 {
@@ -474,9 +475,10 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     float side = 1.0 - smoothstep(markParams.y * 0.5, markParams.y, distanceFromLine);
                     float ends = smoothstep(0.0, max(markParams.w, 0.0001), progress)
                         * smoothstep(0.0, max(markParams.w, 0.0001), 1.0 - progress);
-                    coverage = max(coverage, side * ends * markParams.z);
+                    float4 markColor = _OutlineGroundMarkColors[i];
+                    color = lerp(color, markColor.rgb * markColor.a, side * ends * markParams.z);
                 }
-                return _OutlineGroundMarkColor.rgb * _OutlineGroundMarkColor.a * coverage;
+                return color;
             }
 
             // 실제 깊이와 위쪽 노멀을 가진 지면만 안내 대상으로 삼는다.
