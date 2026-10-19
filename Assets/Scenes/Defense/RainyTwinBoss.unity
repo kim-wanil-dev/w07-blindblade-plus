@@ -56602,7 +56602,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 14c4bf4e5ad8c964d96be4f5092aad87, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DefenseEnemySpawner
-  _minimumSpawnDistance: 8
+  _minimumSpawnDistance: 13
   _unitRoot: {fileID: 194119305}
   _throwerPrefab: {fileID: 8088586443167616543, guid: ad82129a3f7118648a5fb6022eeceef5, type: 3}
   _throwerMinimumRadius: 25.4
@@ -56618,8 +56618,8 @@ MonoBehaviour:
   _throwerSpawnInterval: 1.33
   _meleePrefab: {fileID: 2678292632270529432, guid: 69709147bb3f3ad4fb6c4e311ac6ce72, type: 3}
   _showMeleeGroundFootprints: 0
-  _meleeSpawnMinimumRadius: 24
-  _meleeSpawnMaximumRadius: 28.6
+  _meleeSpawnMinimumRadius: 22.5
+  _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
   _meleeSpawnsPerMinute: 30
   _meleeSpawnGrowthPerMinute: 16
