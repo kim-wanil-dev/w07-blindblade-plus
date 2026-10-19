@@ -8,7 +8,7 @@
 - 일반 Beast 도약 공격은 `DefenseBeastLeap`으로 기록한다. 쌍둥이 보스 부모 패턴은 `Cooperation`, `IaiCharge`, `AlternatingMelee`, `Countering`; 개별 공격은 `TwinBossRanged`, `TwinHumanSlash`, `TwinHumanCounterSlash`, `TwinHumanIai`, `TwinBeastBite`다. 시작·확정·최종 판정은 AttackId 및 부모 패턴 ID로 연결한다.
 - `stage_config`는 스폰 설정과 전장 중심·반경을 도전당 한 번 기록한다. 전장 히트맵은 이 중심을 원점으로 정규화하고 2m 격자를 사용한다. 대나무 벽 근사는 1막에서만 표시하고 2막은 대나무 오버레이 없이 전장 범위를 표시한다.
 - CSV 내보내기는 Events, Sessions, OnboardingSteps, Patterns, Heatmaps, EnemyLifecycle, BossPatterns, Diagnostics를 만든다. Events와 Sessions 외 두 CSV는 원본 Events에서 파생한 로컬 분석 보조 자료이며 게임이 별도 전송하지 않는다.
-- 대시보드는 0.1.2와 0.1.3의 표본 수·평균 지표, run_id 스테이지 퍼널, 2-1 적 구성과 Beast 기대 비율, 2-2 부모/개별 공격 결과와 보스별 피해·처치 시각, 데이터 품질 경고를 제공한다. 자료가 없는 구간은 0 대신 `수집 안 됨`으로 표시한다.
+- 대시보드는 0.2.0 이상 빌드의 구간·빌드 다중 선택, run_id 스테이지 퍼널, 2-1 적 구성, 패턴별 공격 결과와 입력/결과별 반응 시간 분포를 제공한다. 통합된 쌍둥이 보스는 일반 패턴 결과에 포함하며, 보스 개체별 피해·처치 및 별도 개별 공격 결과 표는 제공하지 않는다. 자료가 없는 구간은 0 대신 `수집 안 됨`으로 표시한다.
 - 봉투 형식은 [0.4.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.4.schema.json), 이전 형식은 [0.3.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.3.schema.json)를 따른다.
 
 ## 2026-10-19 거합 역거합 성공 판정 수정
@@ -75,7 +75,7 @@
 - `Sessions.status=application_quit`는 플레이 중 종료다. `Events.event_type=session_ended`이고 `reason=application_quit`이면 `stage_attempt_id`로 Sessions와 연결해 사망 후 종료도 확인한다. 구간 완료 후 종료는 상세에 표시하되 중도 종료율에서는 제외한다.
 - 종료까지 시간은 해당 구간의 `active_play_seconds`이며 일시정지를 제외한다. 정확한 종료 KST는 Events의 `occurred_at_kst`다. 이벤트가 없으면 시각 미수집으로 표시한다. 강제 종료·전송 누락은 확인된 종료에 포함하지 않는다.
 - 같은 `stage_attempt_id`의 중복 행은 최신 `last_event_sequence`만 반영한다. `run_id`는 이어 하기에도 유지될 수 있으므로, 뒤에 플레이를 재개했더라도 이전 종료 기록을 삭제하지 않는다.
-- 기존 스프레드시트 열만 사용한다. 이번 대시보드 추가를 위해 게임을 다시 빌드하거나 Apps Script를 재배포할 필요는 없다.
+- 이탈 분석 자체는 기존 스프레드시트 열을 사용하므로 게임 재빌드는 필요 없다. 다만 2026-10-19 추가된 일관된 전체 스냅샷 조회는 `Code.gs` 변경이 필요하며, 아래 절차에 따라 Apps Script 새 버전을 배포해야 서버 측 초기화/업로드 경합도 감지한다.
 
 ## 요청한 분석과 필터
 
@@ -98,6 +98,14 @@
 비율을 여러 도전에 걸쳐 계산할 때는 비율의 평균 대신 **분자 합/분모 합**을 쓴다. 전체 적중률 분모는 실행 후 결과가 확정된 공격이며 취소·중단은 제외한다. Miss는 빗나감이고 Dodge는 실제 회피 무적/극한 회피 판정이다. Guard·다른 무적·공격 제거도 별도 결과라서 네 결과만 합하면 100%가 아닐 수 있다.
 
 방어 결과 열은 접촉 횟수다. 한 번 누른 가드로 여러 공격을 막을 수 있어 입력 횟수와 같지 않다. guardHitCount는 누르고 있던 가드 의도와 연결된 피격이며 거부된 입력도 포함한다.
+
+대시보드의 `패턴별 공격 결과`는 선택한 빌드들의 같은 패턴을 한 행으로 합산한다. 패턴명과 전체 결과·유효 판정·적중·회피·퍼펙트 패링·방어·빗나감·취소·중단·유효 판정 적중률만 표시한다. 유효 판정은 취소·중단을 뺀 모든 결과이므로 표시하지 않는 일반 패링·기타 판정도 분모에 포함된다. 비율은 합산 적중 / 합산 유효 판정으로 다시 계산한다. Events가 없을 때만 Patterns.csv를 사용하며 그 CSV에 없는 전체 결과·취소·중단은 `미수집`이다.
+
+`전체 요약 → 플레이어별 총 플레이시간`은 익명 ID별로 최신 도전 Sessions의 활성 시간을 합산한다. 일시정지를 제외하며 현재 구간·빌드·날짜·Editor 필터가 적용된다. ID 미제공 도전은 임의로 한 사람으로 묶지 않고 시간 누락도 별도 표시한다. 현재 읽기 API에 익명 ID 허용 열을 추가할지는 사용자 답변 대기이며, 원본 Sessions.csv에는 해당 열이 있다.
+
+`전투 판정 → 사망할 때 맞은 공격`은 같은 도전의 양수 피해 결과를 사망 시각과 비교한다. 전후 0.1초의 동시 피격은 모두 후보로, 그 밖의 마지막 이전 피격은 추정으로 표시한다. 실제 치명타 ID는 기존 사망 로그에 없으므로 후보를 확정 원인으로 해석하지 않는다. 사망 후 콜백으로 기록된 동일 시점 피해도 포함하며, 기록이 없으면 연결 불가다.
+
+`패턴별 반응 시간 분포`는 빌드·패턴·입력 종류/상태·공격 결과별로 행을 나눈다. 표본 수와 같은 빌드·패턴·결과의 판정 공격 수 대비 연결 비율을 함께 본다. 여러 빌드나 서로 다른 패턴 기준을 한 평균으로 섞지 않으며, 기준 신호부터 입력까지의 시간을 `input_to_contact_seconds`와 혼동하지 않는다.
 
 ## 반응 시간 해석
 
@@ -155,13 +163,20 @@ Events와 OnboardingSteps는 헤더 순서가 다르면 `header_mismatch`로 거
 
 ## 분석 대시보드
 
-- 비공개 대시보드: https://blindblade-combat-analysis.wan1k.chatgpt.site
-- 사이트 프로젝트 소스는 `tools/combat_telemetry/dashboard_site`에 있다. 사이트는 소유자 전용 Sites Worker 버전 4로 배포했다. 기존 Google Apps Script 웹 앱 URL을 유지한 채 `dashboard_snapshot`과 온보딩 7단계 허용 목록을 웹 앱 버전 7에 배포했다. Apps Script 실행 계정은 소유자, 액세스 권한은 기존 `Anyone` 설정 그대로다. 자동 연결을 확인했으며, 2026-10-16 확인 당시 Events·Sessions·OnboardingSteps는 모두 0행이었다.
+- 분석 대시보드: https://blindblade-combat-analysis.wan1k.chatgpt.site
+- 사이트 프로젝트 소스는 `tools/combat_telemetry/dashboard_site`에 있다. Sites 프로젝트 접근은 `public`이다. Google Spreadsheet 자체는 비공개이며 Worker 서버가 Apps Script의 읽기 전용 API를 호출한다. 최신 페이지 버전과 스프레드시트 연결 상태는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에서 확인한다.
 - Google Sheets에서 Events, Sessions, OnboardingSteps 탭을 각각 CSV로 다운로드하고, 사이트에서 파일을 한 번에 선택한다. Patterns, Heatmaps, Diagnostics 탭도 선택 입력할 수 있다.
 - CSV 파일은 브라우저 안에서만 처리되며 사이트 서버로 업로드되지 않는다. 한 파일만 가져와도 보이지만 전체 분석에는 Events·Sessions·OnboardingSteps를 함께 불러온다.
 - 로컬 JSONL을 분석하려면 위의 `Export-Telemetry.ps1` 명령으로 동일한 CSV 묶음을 생성한다.
 - 자동 연결 설정: 같은 `DASHBOARD_READ_TOKEN`을 Apps Script Script Properties와 Sites 런타임 secret 양쪽에 저장한다. 현재 둘 다 설정되어 있고 자동 연결을 확인했다. 토큰을 바꿀 때는 두 값을 함께 갱신하고 Apps Script 웹 앱과 사이트를 다시 배포한다. 게임 업로드 `UPLOAD_TOKEN`은 재사용하지 않는다.
+- 서버 공유 캐시: R2 `BUCKET`에 완성 스냅샷과 Events 진행 위치를 보관한다. 여러 탭이 같은 전역 임대를 사용하므로 한 번만 시트를 읽는다. 최초 전체 준비 뒤에는 1분마다 core(Sessions·OnboardingSteps·Events 행 상한)를 확인하고 마지막 행 다음의 Events만 읽는다. 같은 브라우저에서는 이미 받은 이벤트 조각도 재사용한다. 재배포가 캐시를 초기화하지 않는다.
+- 새 세대 또는 감소한 Events 행 수를 확인하면 새 캐시를 준비한다. 준비·실패 중에는 마지막 완성 자료와 진행률을 표시한다. Events 기존 행 수동 수정은 감지하지 않으므로 데이터 초기화는 기존 `resetTelemetrySheets`를 사용한다. 한 번도 준비된 캐시가 없다면 최초 준비가 끝날 때까지 분석 수치는 비어 있다. 사이트가 닫혀 있으면 조회하지 않고 다음 접속 때 이어간다.
+- 기존에 열어 둔 사이트는 한 번 새로고침한다. 구형 `/api/dashboard-data` 직접 조회는 410으로 중단하고 새 페이지는 `/api/dashboard-cache`를 사용한다. Apps Script·게임 빌드·업로드 URL·형식은 바꾸지 않으므로 이번 캐시 변경에 Apps Script 재배포는 필요 없다.
 - Apps Script 웹 앱은 소유자 계정으로 실행되고 액세스 권한은 기존 `Anyone` 설정 그대로다. 별도 토큰 검증 전에는 시트 데이터를 반환하지 않는다. `/exec`를 브라우저에서 직접 열면 doGet 없음 메시지가 나오는 것은 정상이며, Sites Worker가 POST 요청을 보낸다. 스프레드시트 공유는 제한됨/소유자만으로 유지한다.
+- Sites v16는 선택 빌드의 패턴 결과를 합산하고 플레이어별 시간·사망 피격 후보 표를 추가했다. 소스 커밋 `8884dadf0ecfc94841a832aed8eab444caa7d5c4`, 배포 ID `appgdep_6ad5ecf5a23481918752917496228194`, 상태 `succeeded`다. 이후 공유 캐시 배포·검증 상태는 대시보드 기능 명세의 서버 공유 캐시 절을 따른다. 자동 읽기 API의 Sessions 익명 ID 열 추가는 범위 확인 대기다.
+- 이전 Sites v15는 2026-10-19 배포됐다. 소스 커밋 `739b33d21c79024c97987ba5e6166941dbc3f916`, 배포 ID `appgdep_6ad5d64238a88191a23f0badd16d2c07`, 상태 `succeeded`다. 운영 URL과 기존 `public` 접근 범위를 유지한다. 통합 쌍둥이 보스는 일반 패턴표로 분석한다.
+- 운영 502의 일부는 Apps Script가 JSON 대신 HTTP 200 HTML을 반환한 경우였다. 같은 시각 Apps Script 실행 내역에는 실패한 doGet이 있었고 doPost는 대체로 3~9초에 완료됐다. v15 Worker는 Google 리다이렉트를 직접 처리해 동일 배포에는 POST를 보존하고 ContentService의 `script.googleusercontent.com/macros/echo`에는 본문·토큰 없이 GET으로 이동한다. 허용 목적지와 최대 6회 이동을 제한한다. 진단에는 응답 상태와 오류 분류만 남기며 응답 본문·쿼리·토큰·시트 행은 저장하지 않는다.
+- Chrome에서 Events 61,631행·Sessions 362행·OnboardingSteps 218행 전체 자동 수신과 `스냅샷 최신화 완료`를 확인했다. 기준 시각은 `2026-10-19T17:31:35.595+09:00`이다. v15 적용 뒤 확인한 API 요청 34건은 모두 HTTP 200이었다. 빌드 0.2.0·0.2.1 복수 선택 시 패턴 결과 23행·반응 시간 55행이 표시됐고 온보딩 지표도 채워졌다. 초기 전체 조회는 수분이 걸릴 수 있으므로 Events 진행 행 수를 확인한다. 이번 사이트 수정에는 Apps Script 추가 배포가 필요 없다.
 - 상세 데이터 흐름과 보안 경계는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)를 따른다.
 
 ## 온보딩 0-1~0-5 단계 로그
@@ -396,6 +411,6 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 
 - Stage1의 이동 표본 0.5→1초, 진행 요약 5→15초. 5분 동안 계속 이동했다면 정기 표본 약 600→300건, 요약 약 60→20건이다. 실제 건수는 플레이 행동에 따라 달라진다.
 - 반복된 전체 Inspector 설정 덤프, 위치 표본의 체력과 Y 좌표, 중복 반응 후보·회피 종료·상태 변경 사건은 새 로그에서 보내지 않는다. 반응 시간은 실제 적 공격 접촉 결과에서 확인한다.
-- Apps Script의 `setupSheets`는 기존 Events·Sessions 행을 보존하면서 새 열을 추가하고 OnboardingSteps를 생성한다. 웹 앱은 동일 URL의 **버전 7**, 대시보드는 소유자 전용 **Sites 버전 4**로 갱신됐다. `resetTelemetrySheets`는 세 탭 데이터를 비우므로 초기화가 필요할 때만 실행한다.
+- Apps Script의 `setupSheets`는 기존 Events·Sessions 행을 보존하면서 새 열을 추가하고 OnboardingSteps를 생성한다. `resetTelemetrySheets`는 세 탭 데이터를 비우므로 초기화가 필요할 때만 실행한다. 현재 대시보드는 서버 공유 캐시를 사용하며, 스냅샷 계약과 `getValues()` 읽기는 Apps Script에 배포됐다. 사이트와 Apps Script의 기존 URL·토큰 및 업로드 형식은 유지한다.
 - CSV 전처리는 Events.csv, Sessions.csv, OnboardingSteps.csv, Patterns.csv, Heatmaps.csv, EnemyLifecycle.csv, BossPatterns.csv, Diagnostics.csv를 만든다. 기존 0.3.0 JSONL도 같은 변환기가 수신하며 신규 빌드 봉투는 0.4.0이다.
 - 구간 ID가 Google Sheets에서 날짜로 바뀐 과거 Events·Sessions 행은 stage_attempt_id에서 복원했으며, 세 탭의 stage_id 열은 텍스트 형식이다. 
