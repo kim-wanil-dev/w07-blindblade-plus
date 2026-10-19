@@ -7,6 +7,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
         _MeleeWarningIntensity ("Melee Warning Intensity", Range(0, 1)) = 0
         _MeleeWarningAlwaysVisible ("Melee Warning Always Visible", Range(0, 1)) = 0
         _MeleeWarningSeparateGlint ("Melee Warning Separate Glint", Range(0, 1)) = 0
+        _MeleeWarningThickGlint ("Melee Warning Thick Glint", Range(0, 1)) = 0
         _TransparentThreshold ("Transparent Threshold", Float) = 0.015
 
     }
@@ -23,7 +24,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
             Cull Off
             Blend One One
             BlendOp Max
-            ColorMask RGB
+            ColorMask RGBA
 
             HLSLPROGRAM
             #pragma target 3.5
@@ -41,6 +42,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 float _MeleeWarningIntensity;
                 float _MeleeWarningAlwaysVisible;
                 float _MeleeWarningSeparateGlint;
+                float _MeleeWarningThickGlint;
                 float _TransparentThreshold;
             CBUFFER_END
 
@@ -84,11 +86,13 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 half brightness = max(visibleRgb.r, max(visibleRgb.g, visibleRgb.b));
                 half shape = smoothstep(0.0, max(_TransparentThreshold, 0.0001), brightness);
 
-                // R은 붉은 전조, G는 항상 보이는 붉은 테두리, B는 몸통과 분리해 그릴 눈 섬광이다.
+                // R은 붉은 전조, G는 항상 보이는 붉은 테두리, B는 몸통과 분리해 그릴 눈 섬광, A는 두껍게 그릴 눈 섬광이다.
                 half warning = shape * saturate(_MeleeWarningIntensity);
+                half thickGlint = saturate(_MeleeWarningThickGlint);
                 return half4(warning * (1 - separateGlint),
                     warning * saturate(_MeleeWarningAlwaysVisible) * (1 - separateGlint),
-                    warning * separateGlint, 1);
+                    warning * separateGlint * (1 - thickGlint),
+                    warning * separateGlint * thickGlint);
             }
             ENDHLSL
         }

@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 일반 Beast가 공격 범위 안에서 대상 주변을 달리며 원을 그리다가 거리를 벌린 뒤 다음 물기 돌진을 허용한다.
+/// 일반 Beast가 공격 범위에 처음 들어오면 바로 물기 돌진을 허용하고, 공격 뒤에는 대상 주변을 달리며 원을 그리다가 거리를 벌린 뒤 다음 물기 돌진을 허용한다.
 /// EnemyController가 공격 중이 아닐 때 UpdateEngagement를 호출하며, 공격이 끝나면 새 원 그리기부터 다시 시작한다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -48,8 +48,9 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
     private float _readyTimeout = 2f;
 
     [Header("교전 재시작")]
-    [SerializeField, Min(0.05f), Tooltip("이 시간보다 오래 호출이 끊기면 공격이나 추적이 끼어든 것으로 보고 원 그리기부터 다시 시작한다(초)")]
+    [SerializeField, Min(0.05f), Tooltip("이 시간보다 오래 호출이 끊기면 공격이나 추적이 끼어든 것으로 보고, 공격 뒤면 원 그리기부터, 아니면 바로 돌진 대기부터 다시 시작한다(초)")]
     private float _resetGap = 0.25f;
+    private bool _attackedSinceReset;
 
     // 다른 적에 돌진 경로가 막혀 있으면 원을 계속 돌며 길이 열리기를 기다린다.
     public bool IsReadyToAttack => _phase == ProwlPhase.Ready && _attack.HasClearLunge(_target);
@@ -64,11 +65,18 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
     {
         _lastUpdateAt = float.NegativeInfinity;
         _phase = ProwlPhase.Circling;
+        _attackedSinceReset = false;
+        _attack.TelegraphStarted += HandleTelegraphStarted;
+    }
+
+    void OnDisable()
+    {
+        _attack.TelegraphStarted -= HandleTelegraphStarted;
     }
 
     /// <summary>
     /// target 주변의 원 그리기·물러나기·돌진 대기를 한 프레임 진행한다.
-    /// 호출이 _resetGap보다 오래 끊겼으면 새 원을 고르고, 단계 시간이 끝나면 다음 단계로 _phase를 넘긴다.
+    /// 호출이 _resetGap보다 오래 끊겼으면 _attackedSinceReset에 따라 공격 뒤면 새 원을, 아니면 돌진 대기를 시작하고, 단계 시간이 끝나면 다음 단계로 _phase를 넘긴다.
     /// </summary>
     public void UpdateEngagement(Transform target)
     {
@@ -80,7 +88,14 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
         }
 
         if (Time.time - _lastUpdateAt > _resetGap)
-            BeginCycle();
+        {
+            // 추적 끝에 처음 교전에 들어오면 배회 없이 먼저 물기 돌진을 시도한다.
+            if (_attackedSinceReset)
+                BeginCycle();
+            else
+                BeginReady();
+            _attackedSinceReset = false;
+        }
         _lastUpdateAt = Time.time;
 
         switch (_phase)
@@ -122,6 +137,27 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
         _orbitSign = Random.value < 0.5f ? -1f : 1f;
         _phaseEndsAt = Time.time + Random.Range(_circleDurationMin, Mathf.Max(_circleDurationMin, _circleDurationMax));
         _nextRepathAt = 0f;
+    }
+
+    /// <summary>
+    /// 원 그리기와 물러나기를 건너뛰고 _phase를 Ready로 바꿔 바로 물기 돌진을 허용한다.
+    /// _readyTimeout 안에 공격이 시작되지 않으면 원 그리기로 넘어가도록 _phaseEndsAt을 정한다.
+    /// </summary>
+    private void BeginReady()
+    {
+        _phase = ProwlPhase.Ready;
+        _orbitSign = Random.value < 0.5f ? -1f : 1f;
+        _phaseEndsAt = Time.time + _readyTimeout;
+        _nextRepathAt = 0f;
+    }
+
+    /// <summary>
+    /// 물기 돌진 전조가 시작됐음을 _attackedSinceReset에 기록해 공격이 끝난 뒤 원 그리기부터 다시 시작하게 한다.
+    /// context는 사용하지 않는다.
+    /// </summary>
+    private void HandleTelegraphStarted(EnemyAttackContext context)
+    {
+        _attackedSinceReset = true;
     }
 
     /// <summary>

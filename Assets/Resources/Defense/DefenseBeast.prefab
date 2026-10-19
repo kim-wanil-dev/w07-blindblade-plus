@@ -4664,6 +4664,15 @@ MonoBehaviour:
   _teleportThreshold: 3
   _warningIntensity: 2.2
   _warningWidthScale: 1.5
+  _glintColor: {r: 0.5691823, g: 0.8328799, b: 1, a: 1}
+  _glintSize: 0.9
+  _glintWidthScale: 1
+  _glintHeightScale: 1.5
+  _glintVerticalOffset: -0.5
+  _glintDuration: 0.4
+  _glintEmphasisScale: 2.25
+  _glintEmphasisDuration: 0.2
+  _glintPopDuration: 0.03
 --- !u!4 &4009256518855688098 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 5135211428147630035, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
