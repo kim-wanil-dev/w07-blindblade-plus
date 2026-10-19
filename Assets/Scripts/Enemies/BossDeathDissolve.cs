@@ -3,10 +3,10 @@ using System.Collections.Generic;
 
 using UnityEngine;
 
-/// <summary>사망 순간 보스의 메시와 연기 입자를 복제해 윤곽선을 유지하며 위에서부터 가루로 침식시킨다.</summary>
+/// <summary>사망 순간 보스의 메시와 연기 입자를 복제해 윤곽선을 유지하며 위에서 아래로 재를 흩뿌린다.</summary>
 public sealed class BossDeathDissolve : MonoBehaviour
 {
-    public const float DURATION = 1.5f;
+    public const float DURATION = 3f;
 
     private const int MAX_ASH_PER_FRAME = 30;
 
@@ -55,7 +55,7 @@ public sealed class BossDeathDissolve : MonoBehaviour
         }
     }
 
-    /// <summary>boss의 활성 메시와 현재 연기 입자를 캡처하고 소멸 범위·가루 방출기를 준비한다.</summary>
+    /// <summary>boss의 활성 메시와 현재 연기 입자를 캡처하고 재 방출기를 준비한다.</summary>
     private void Capture(Transform boss)
     {
         _minimumY = float.PositiveInfinity;
@@ -198,7 +198,7 @@ public sealed class BossDeathDissolve : MonoBehaviour
         main.simulationSpace = ParticleSystemSimulationSpace.World;
         main.useUnscaledTime = true;
         main.startSize3D = true;
-        main.maxParticles = 1600;
+        main.maxParticles = 2000;
         ParticleSystem.EmissionModule emission = _dust.emission;
         emission.enabled = false;
         ParticleSystem.ShapeModule shape = _dust.shape;
@@ -214,7 +214,7 @@ public sealed class BossDeathDissolve : MonoBehaviour
             new Keyframe(1f, 0.12f)));
         ParticleSystem.NoiseModule noise = _dust.noise;
         noise.enabled = true;
-        noise.strengthMultiplier = 0.8f;
+        noise.strengthMultiplier = 0.5f;
         noise.frequency = 2.5f;
         noise.scrollSpeedMultiplier = 1.3f;
         ParticleSystem.ColorOverLifetimeModule color = _dust.colorOverLifetime;
@@ -259,7 +259,7 @@ public sealed class BossDeathDissolve : MonoBehaviour
         return mesh;
     }
 
-    /// <summary>DURATION 동안 메시와 연기 윤곽선을 위에서부터 침식시키고 표면에서 재를 방출한다.</summary>
+    /// <summary>DURATION 동안 메시와 연기 윤곽선을 위에서 아래로 침식시키고 재를 방출한다.</summary>
     private IEnumerator RunDissolve()
     {
         float elapsed = 0f;
@@ -268,18 +268,18 @@ public sealed class BossDeathDissolve : MonoBehaviour
         {
             elapsed = Mathf.Min(DURATION, elapsed + Time.unscaledDeltaTime);
             float progress = elapsed / DURATION;
-            float height = Mathf.Max(0.1f, _maximumY - _minimumY);
             foreach (MeshRenderer renderer in _ghosts)
             {
                 MaterialPropertyBlock properties = new MaterialPropertyBlock();
                 renderer.GetPropertyBlock(properties);
                 properties.SetFloat(_dissolveId, progress);
                 properties.SetFloat(_minYId, _minimumY);
-                properties.SetFloat(_heightId, height);
+                properties.SetFloat(_heightId, _maximumY - _minimumY);
                 renderer.SetPropertyBlock(properties);
             }
             ErodeSmoke(progress);
-            dustBudget += Time.unscaledDeltaTime * 500f;
+            float emissionRate = Mathf.Lerp(450f, 1600f, Mathf.Sin(progress * Mathf.PI));
+            dustBudget += Time.unscaledDeltaTime * emissionRate;
             while (dustBudget >= 1f)
             {
                 EmitDust(progress);
@@ -292,7 +292,7 @@ public sealed class BossDeathDissolve : MonoBehaviour
         Destroy(gameObject);
     }
 
-    /// <summary>progress가 지나간 연기 입자를 위쪽부터 불규칙하게 제거하고 사라진 위치에서 재를 날린다.</summary>
+    /// <summary>progress가 지나간 연기 입자를 위에서 아래로 불규칙하게 제거하고 사라진 위치에서 재를 날린다.</summary>
     private void ErodeSmoke(float progress)
     {
         float height = Mathf.Max(0.1f, _maximumY - _minimumY);
@@ -319,7 +319,7 @@ public sealed class BossDeathDissolve : MonoBehaviour
         }
     }
 
-    /// <summary>progress 높이 부근의 원본 표면에서 재가 떨어져 나온 위치를 찾아 방출한다.</summary>
+    /// <summary>progress에 맞는 소멸 경계의 원본 표면을 찾아 재를 방출한다.</summary>
     private void EmitDust(float progress)
     {
         if (_dust == null || _dustOrigins.Count == 0) return;
@@ -327,14 +327,15 @@ public sealed class BossDeathDissolve : MonoBehaviour
         if (remaining <= 0.05f) return;
         float height = Mathf.Max(0.1f, _maximumY - _minimumY);
         Vector3 origin = _dustOrigins[Random.Range(0, _dustOrigins.Count)];
-        for (int attempt = 0; attempt < 7; attempt++)
+        float closest = Mathf.Abs((_maximumY - origin.y) / height - progress);
+        for (int attempt = 0; attempt < 12; attempt++)
         {
             Vector3 candidate = _dustOrigins[Random.Range(0, _dustOrigins.Count)];
-            if (Mathf.Abs((_maximumY - candidate.y) / height - progress) < 0.28f)
-            {
-                origin = candidate;
-                break;
-            }
+            float distance = Mathf.Abs((_maximumY - candidate.y) / height - progress);
+            if (distance >= closest) continue;
+            origin = candidate;
+            closest = distance;
+            if (closest < 0.08f) break;
         }
         EmitAsh(origin, remaining);
     }
@@ -345,14 +346,14 @@ public sealed class BossDeathDissolve : MonoBehaviour
         if (_dust == null || remaining <= 0.05f) return;
         float phase = 1f - remaining / DURATION;
         float stageSpeed = Mathf.Lerp(0.65f, 1f, Mathf.Sin(phase * Mathf.PI));
-        Vector2 drift = Random.insideUnitCircle.normalized * Random.Range(1.8f, 3.8f) * stageSpeed;
+        Vector2 drift = Random.insideUnitCircle.normalized * Random.Range(1f, 2.2f) * stageSpeed;
         ParticleSystem.EmitParams ash = new ParticleSystem.EmitParams
         {
             position = origin,
-            velocity = new Vector3(drift.x, Random.Range(0.15f, 1.2f), drift.y),
-            startLifetime = Mathf.Min(Random.Range(0.45f, 0.75f), remaining),
-            startSize3D = new Vector3(Random.Range(0.008f, 0.023f),
-                Random.Range(0.007f, 0.02f), 1f),
+            velocity = new Vector3(drift.x, Random.Range(0.08f, 0.7f), drift.y),
+            startLifetime = Mathf.Min(Random.Range(0.7f, 1.1f), remaining),
+            startSize3D = new Vector3(Random.Range(0.0027f, 0.0077f),
+                Random.Range(0.0023f, 0.0067f), 1f),
             rotation = Random.Range(0f, 360f),
             startColor = Color.Lerp(new Color(0.42f, 0.4f, 0.39f, 0.6f),
                 new Color(0.85f, 0.82f, 0.79f, 0.85f), Random.value)
