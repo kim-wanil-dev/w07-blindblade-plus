@@ -11,6 +11,11 @@
 - 대시보드는 0.1.2와 0.1.3의 표본 수·평균 지표, run_id 스테이지 퍼널, 2-1 적 구성과 Beast 기대 비율, 2-2 부모/개별 공격 결과와 보스별 피해·처치 시각, 데이터 품질 경고를 제공한다. 자료가 없는 구간은 0 대신 `수집 안 됨`으로 표시한다.
 - 봉투 형식은 [0.4.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.4.schema.json), 이전 형식은 [0.3.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.3.schema.json)를 따른다.
 
+## 2026-10-19 거합 역거합 성공 판정 수정
+
+- 쌍둥이 인간 거합을 적절한 타이밍에 막아 역거합이 발동하면 `enemy_attack_resolved`의 `patternId=TwinHumanIai`, `outcome=PerfectParry`로 기록한다. 사이트의 **쌍둥이 인간 거합 → 퍼펙트 패링**에 집계된다.
+- 이전에는 막기 처리 후 닫힌 패링 창의 상태를 읽어 `Guard`로 기록될 수 있었다. 이제 처리 직전 성공 판정을 보관한다. 게임을 다시 빌드한 이후의 기록부터 적용되며 기존 행은 자동 변경하지 않는다. Apps Script·사이트 재배포는 필요 없다.
+
 ## 2026-10-19 업로드 지연 개선 (배포 대기)
 
 - `google_apps_script/Code.gs`에서 업로드마다 Events 전체 `event_key`를 읽던 코드를 제거했다. 숨김 시트 `_TelemetryUploadIndex`에 세션별로 실제 저장된 사건 순번 구간을 기록하고 마지막 색인 위치 뒤의 행만 추가로 확인한다. 정상 운영에서는 직전 배치의 최대 100행만 추가로 읽는다. 전체 Events 재조회 대신 세션당 한 행의 작은 인덱스를 읽는다.
