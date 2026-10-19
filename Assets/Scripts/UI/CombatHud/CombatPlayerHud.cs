@@ -61,7 +61,7 @@ namespace BlindBlade.UI.CombatHud
             if (_boundHealth != null)
             {
                 _boundHealth.HealthChanged += HandleHealthChanged;
-                _healthGauge.SetValue(_boundHealth.CurrentHealth, _boundHealth.MaxHealth, true);
+                _healthGauge.SetValue(_boundHealth.CurrentHealth, _boundHealth.MaxHealth, true, true);
             }
             else
                 _healthGauge.SetUnavailable();
@@ -90,7 +90,7 @@ namespace BlindBlade.UI.CombatHud
         /// <summary>current와 maximum으로 HP 게이지 목표를 갱신한다. 전투 상태는 변경하지 않는다.</summary>
         private void HandleHealthChanged(float current, float maximum)
         {
-            _healthGauge.SetValue(current, maximum);
+            _healthGauge.SetValue(current, maximum, false, true);
         }
 
         /// <summary>snapshot의 실제 스태미너 값으로 게이지 목표를 갱신한다. 소모·회복 규칙은 실행하지 않는다.</summary>

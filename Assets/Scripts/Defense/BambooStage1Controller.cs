@@ -12,6 +12,8 @@ using TMPro;
 public sealed class BambooStage1Controller : MonoBehaviour
 {
     private const int ENTRANCE_WAVE_LAYERS = 5;
+    private const float ACT_TITLE_DURATION = 1.5f;
+    private const float RAINY_TRANSITION_DELAY = 0.8f;
 
     [Header("스테이지 연결")]
     [SerializeField] private BambooDefenseDirector _director;
@@ -43,6 +45,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 
     private EnemyHealth _bossHealth;
     private Coroutine _warningRoutine;
+    private Coroutine _actTitleRoutine;
     private Coroutine _entranceWaveRoutine;
     private Coroutine _stageTransitionRoutine;
     private Camera _playerCamera;
@@ -78,6 +81,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 
     void Start()
     {
+        _actTitleRoutine = StartCoroutine(ShowActTitle());
         BambooStage1Progress.MarkStage1Started();
         CurrentTelemetryEntryMode = _startBossImmediately ? "editor_skip"
             : BambooStage1Progress.BossCheckpointReached ? "checkpoint_retry" : CombatTelemetryRunContext.EntryMode;
@@ -136,11 +140,14 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _bossHealth.Died -= HandleBossDied;
         if (_warningRoutine != null)
             StopCoroutine(_warningRoutine);
+        if (_actTitleRoutine != null)
+            StopCoroutine(_actTitleRoutine);
         if (_entranceWaveRoutine != null)
             StopCoroutine(_entranceWaveRoutine);
         if (_stageTransitionRoutine != null)
             StopCoroutine(_stageTransitionRoutine);
         _warningRoutine = null;
+        _actTitleRoutine = null;
         _entranceWaveRoutine = null;
         _stageTransitionRoutine = null;
         if (_warning != null) _warning.alpha = 0f;
@@ -150,6 +157,12 @@ public sealed class BambooStage1Controller : MonoBehaviour
     /// <summary>Director의 누적 처치가 목표에 도달하면 웨이브를 끝내고 경고 표시를 시작한다.</summary>
     private void BeginBossWarning()
     {
+        if (_actTitleRoutine != null)
+        {
+            StopCoroutine(_actTitleRoutine);
+            _actTitleRoutine = null;
+        }
+        _warning.GetComponentInChildren<TMP_Text>(true).text = "강적 출현";
         _phase = StagePhase.Warning;
         _director.StopWave();
         _warning.alpha = 1f;
@@ -316,7 +329,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         }
     }
 
-    /// <summary>bossHealth가 현재 보스의 사망을 알리면 2막 진입을 저장하고 전환 메시지를 표시한다.</summary>
+    /// <summary>bossHealth가 현재 보스의 사망을 알리면 2막 진입을 저장하고 씬 전환을 예약한다.</summary>
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         if (bossHealth == _bossHealth && _phase == StagePhase.Boss)
@@ -324,17 +337,24 @@ public sealed class BambooStage1Controller : MonoBehaviour
             _phase = StagePhase.Complete;
             BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2", true);
             BambooStage1Progress.MarkRainyStageReached();
-            _stageTransitionRoutine = StartCoroutine(ShowActTwoThenTransition());
+            _stageTransitionRoutine = StartCoroutine(TransitionToRainyStage());
         }
     }
 
-    /// <summary>2막 문구를 잠시 보여 준 뒤 페이드와 함께 RainyTwinBoss 씬으로 이동한다.</summary>
-    private IEnumerator ShowActTwoThenTransition()
+    /// <summary>씬 시작에 1막 제목을 warning 캔버스로 잠시 표시하고 보스 경고 전에는 숨긴다.</summary>
+    private IEnumerator ShowActTitle()
     {
-        _warning.GetComponentInChildren<TMP_Text>(true).text = "2막";
+        _warning.GetComponentInChildren<TMP_Text>(true).text = "1막";
         _warning.alpha = 1f;
-        yield return new WaitForSecondsRealtime(2f);
+        yield return new WaitForSecondsRealtime(ACT_TITLE_DURATION);
         _warning.alpha = 0f;
+        _actTitleRoutine = null;
+    }
+
+    /// <summary>보스 사망 뒤 짧게 기다리고 페이드와 함께 RainyTwinBoss 씬으로 이동한다.</summary>
+    private IEnumerator TransitionToRainyStage()
+    {
+        yield return new WaitForSecondsRealtime(RAINY_TRANSITION_DELAY);
         _stageTransitionRoutine = null;
         if (Game.Instance.GameStateManager.State != GameplayState.Playing)
             yield break;

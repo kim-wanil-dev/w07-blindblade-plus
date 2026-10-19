@@ -2,6 +2,9 @@ using System.Collections;
 
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.SceneManagement;
+
+using TMPro;
 
 /// <summary>비 내리는 공터에서 일반 적 50명을 처치하면 쌍둥이 보스를 등장시키고 둘의 사망 시 클리어를 요청한다.</summary>
 // 등장 흔들림은 PlayerMotor(0)와 GameSceneInitializer(100) 뒤, 칼 궤적(200)·돌진 대상 실(300)·칼 구슬(310) 앞에 적용한다.
@@ -10,6 +13,7 @@ using UnityEngine.AI;
 public sealed class RainyStageController : MonoBehaviour
 {
     private const int ENTRANCE_WAVE_LAYERS = 5;
+    private const float ACT_TITLE_DURATION = 1.5f;
     private const float WAVE_DURATION = 100f;
     private const float SPAWN_RAMP_INTERVAL = 10f;
 
@@ -53,6 +57,7 @@ public sealed class RainyStageController : MonoBehaviour
     [SerializeField, Min(0.1f)] private float _cameraShakeFrequency = 24f;
 
     private Coroutine _warningRoutine;
+    private Coroutine _actTitleRoutine;
     private Coroutine _entranceWaveRoutine;
     private Camera _playerCamera;
     private float _shakeElapsed;
@@ -86,6 +91,8 @@ public sealed class RainyStageController : MonoBehaviour
 
     void Start()
     {
+        if (SceneManager.GetActiveScene().name == "RainyTwinBoss")
+            _actTitleRoutine = StartCoroutine(ShowActTitle());
         _twinBoss.GetComponent<TwinBossController>().ConfigureArena(_arena, _edgeInset);
         BambooStage1Progress.MarkRainyStageReached();
         CurrentTelemetryEntryMode = _startBossImmediately ? "editor_skip"
@@ -147,9 +154,12 @@ public sealed class RainyStageController : MonoBehaviour
         _beast.Died -= HandleBossDied;
         if (_warningRoutine != null)
             StopCoroutine(_warningRoutine);
+        if (_actTitleRoutine != null)
+            StopCoroutine(_actTitleRoutine);
         if (_entranceWaveRoutine != null)
             StopCoroutine(_entranceWaveRoutine);
         _warningRoutine = null;
+        _actTitleRoutine = null;
         _entranceWaveRoutine = null;
         // 씬 해제 때는 경고 Canvas가 먼저 파괴될 수 있으므로 남아 있을 때만 숨긴다.
         if (_warning != null)
@@ -157,9 +167,25 @@ public sealed class RainyStageController : MonoBehaviour
         _playerCamera = null;
     }
 
+    /// <summary>RainyTwinBoss 씬 시작에 2막 제목을 warning 캔버스로 잠시 표시한다.</summary>
+    private IEnumerator ShowActTitle()
+    {
+        _warning.GetComponentInChildren<TMP_Text>(true).text = "2막";
+        _warning.alpha = 1f;
+        yield return new WaitForSecondsRealtime(ACT_TITLE_DURATION);
+        _warning.alpha = 0f;
+        _actTitleRoutine = null;
+    }
+
     /// <summary>일반 적 처치 목표에 도달하면 웨이브를 멈추고 경고와 보스 등장 대기를 시작한다.</summary>
     private void BeginBossWarning()
     {
+        if (_actTitleRoutine != null)
+        {
+            StopCoroutine(_actTitleRoutine);
+            _actTitleRoutine = null;
+        }
+        _warning.GetComponentInChildren<TMP_Text>(true).text = "강적 출현";
         _phase = StagePhase.Warning;
         _director.StopWave();
         _warning.alpha = 1f;
