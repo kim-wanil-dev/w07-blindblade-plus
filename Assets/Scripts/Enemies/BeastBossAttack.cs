@@ -94,12 +94,16 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _edgeMargin = 0.5f;
     [SerializeField, Min(0.05f), Tooltip("가장자리에 나온 뒤 점점 붉게 물드는 시간(초). 완전히 붉어지는 순간 돌진한다.")]
     private float _biteTelegraph = 2f;
-    [SerializeField, Min(0.05f), Tooltip("플레이어를 지나 반대편 가장자리까지 땅을 스치듯 직선으로 돌진하는 시간(초)")]
+    [SerializeField, Min(0.05f), Tooltip("짧은 덮치기의 최소 돌진 시간(초). 먼 거리는 최대 이동 속도에 맞춰 더 오래 돌진한다.")]
     private float _biteDuration = 0.35f;
+    [SerializeField, Min(0.1f), Tooltip("덮치기의 최대 이동 속도(미터/초). 먼 곳에서 출발해도 경고를 보고 회피할 시간을 확보한다.")]
+    private float _pounceSpeed = 32f;
+    [SerializeField, Min(0.1f), Tooltip("돌진 중 플레이어가 들어오면 눈 섬광을 내는 수평 원기둥 반경(미터)")]
+    private float _pounceGlintRadius = 17.5f;
+    [SerializeField, Min(0.1f), Tooltip("돌진 중 눈 섬광 감지 원기둥의 전체 높이(미터)")]
+    private float _pounceGlintHeight = 4f;
     [SerializeField, Min(0f), Tooltip("덮치기 도약 몇 초 전에 짖음을 재생할지 정한다. 0이면 도약 순간에 재생한다.")]
     private float _pounceBarkLeadTime = 1f;
-    [SerializeField, Min(0f), Tooltip("덮치기 도약 몇 초 전에 늑대 눈이 번쩍이는지 정한다(PounceGlint).")]
-    private float _pounceGlintLeadTime = 0.3f;
     [SerializeField, Min(0f), Tooltip("덮치기가 플레이어 위치를 지나 최소한 더 나아가는 거리(미터)")]
     private float _pounceOvershoot = 3f;
     [SerializeField, Min(0f), Tooltip("덮치기 돌진 가운데에서 몸이 뜨는 최대 높이(미터). 시작과 끝은 땅 높이다.")]
@@ -180,6 +184,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     public bool IsEscaping => _escape != null;
     public float EdgeRunTraveledAngle { get; private set; }
     public bool IsBiting => _biting;
+    public float ContactRadius => _contactRadius;
     public BeastBurrowMotion BurrowMotion { get; private set; }
     public float BurrowDepth { get; private set; }
     public bool IsProwling => _prowling;
@@ -437,12 +442,13 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 잠수한 채 strikeAt(게임 시간) 덮치기에 맞춰 튀어나오고, 붉게 물들며 웅크린 뒤 플레이어를 지나 반대편 가장자리까지 덮친다.
-    /// regroupTarget이 있으면 매번 그 주변에서 나오고, 없으면 이전 덮치기 착지 자리 또는 center·radius 공터 가장자리에서 나온다.
+    /// regroupTarget이 있으면 매번 그 주변에서 나오고, farthestFromPlayer이면 공터 안에서 플레이어와 가장 먼 지점을 고른다.
+    /// 그 외에는 이전 착지 자리 또는 center·radius 공터에서 나온다. 돌진 착지는 pounceRadius 안에서 정한다.
     /// 땅 위에 있으면 먼저 뛰어든다. player나 자신이 쓰러지면 남은 단계를 건너뛰고 땅 위에서 끝낸다.
     /// chargeRipple이 거짓이면 덮치기 전조의 붉은 파동을 내지 않는다(인간 거합 차징 중 방해처럼 다른 붉은 파동과 겹칠 때).
     /// </summary>
-    public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius,
-        bool chargeRipple = true, Transform regroupTarget = null)
+    public IEnumerator Ambush(KatanaDamageReceiver player, float strikeAt, Vector3 center, float radius, float pounceRadius,
+        bool chargeRipple = true, Transform regroupTarget = null, bool farthestFromPlayer = false)
     {
         if (!_burrowed) yield return Dive();
         float emergeAt = strikeAt - _biteTelegraph - _emergeDuration;
@@ -453,13 +459,20 @@ public sealed class BeastBossAttack : MonoBehaviour
         {
             if (!TryGetHarassEmergePosition(regroupTarget, player, center, radius, out start)) yield break;
         }
+        else if (farthestFromPlayer)
+        {
+            if (!TryGetFarthestEmergePosition(player, center, radius, out start)
+                && !TryGetEmergePosition(player, center, radius, out start)) yield break;
+        }
         else
         {
-            start = _hasLandingSpot || !TryGetEmergePosition(player, center, radius, out Vector3 position)
+            float playerDistance = Vector3.ProjectOnPlane(player.transform.position - center, Vector3.up).magnitude;
+            bool reuseLanding = _hasLandingSpot && playerDistance < radius - _agent.radius - _edgeMargin;
+            start = reuseLanding || !TryGetEmergePosition(player, center, radius, out Vector3 position)
                 ? transform.position : position;
         }
         yield return Emerge(start, player);
-        if (CanAttack(player)) yield return Bite(player, center, radius, chargeRipple);
+        if (CanAttack(player)) yield return Bite(player, center, pounceRadius, chargeRipple);
     }
 
     /// <summary>
@@ -527,9 +540,9 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 공격 전조를 알리고 낮춘 퍼펙트 패링음을 울리며 _biteTelegraph 동안 웅크려 연기를 점점 붉게 물들이고, 완전히 붉어지는 순간 Pounce로 _biteDamage 직선 덮치기를 한다.
-    /// chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다. 돌진 _pounceGlintLeadTime 전에 눈이 번쩍이도록 PounceGlint를 한 번 알린다.
+    /// chargeRipple이 참일 때만 전조 시작에 붉은 파동을 낸다. 눈 섬광은 Pounce가 돌진 중 플레이어 접근을 감지할 때 알린다.
     /// </summary>
-    private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float radius, bool chargeRipple)
+    private IEnumerator Bite(KatanaDamageReceiver player, Vector3 center, float pounceRadius, bool chargeRipple)
     {
         _motor.Stop();
         AttackPreparing?.Invoke();
@@ -543,7 +556,6 @@ public sealed class BeastBossAttack : MonoBehaviour
         _preparing = true;
         float until = Time.time + _biteTelegraph;
         bool barkPlayed = false;
-        bool glinted = false;
         // 연기가 완전히 붉어진 다음에야 돌진한다.
         while ((Time.time < until || _warning.Intensity < 1f) && CanAttack(player))
         {
@@ -552,11 +564,6 @@ public sealed class BeastBossAttack : MonoBehaviour
             {
                 PounceApproaching?.Invoke();
                 barkPlayed = true;
-            }
-            if (!glinted && until - Time.time <= _pounceGlintLeadTime)
-            {
-                PounceGlint?.Invoke();
-                glinted = true;
             }
             FaceTowards(player.transform.position);
             yield return null;
@@ -570,13 +577,14 @@ public sealed class BeastBossAttack : MonoBehaviour
             yield break;
         }
         if (!barkPlayed) PounceApproaching?.Invoke();
-        if (!glinted) PounceGlint?.Invoke();
-        yield return Pounce(player, center, radius, _biteDamage, "TwinBeastBite", _telemetryAttackId);
+        yield return Pounce(player, center, pounceRadius, _biteDamage, "TwinBeastBite", _telemetryAttackId);
     }
 
     /// <summary>
     /// 그 순간 플레이어 쪽으로 방향을 고정해 공터 안쪽 가장자리까지, 공간이 허락하면 플레이어 너머 _pounceOvershoot만큼
-    /// _biteDuration 동안 가운데에서 _pounceLift만큼 살짝 뜨는 직선으로 돌진한다. 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
+    /// 최소 _biteDuration 동안 _pounceSpeed 이하로 가운데에서 _pounceLift만큼 살짝 뜨는 직선으로 돌진한다.
+    /// 플레이어가 수평 반경 _pounceGlintRadius·높이 _pounceGlintHeight 원기둥 안에 들어오면 이동 중 PounceGlint를 한 번 알린다.
+    /// 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
     /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
     /// </summary>
     private IEnumerator Pounce(KatanaDamageReceiver player, Vector3 center, float radius, float damage,
@@ -584,13 +592,14 @@ public sealed class BeastBossAttack : MonoBehaviour
     {
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
-        // 플레이어가 가장자리에 있을 때도 몸 반지름을 포함해 공터 밖으로 착지하지 않는다.
+        // 공터 끝 플레이어에게 접촉 반경이 닿되 늑대 몸은 공터 밖으로 나가지 않게 한다.
         float available = Mathf.Max(0f, GetCircleExitDistance(transform.position, direction,
-            center, Mathf.Max(1f, radius - _agent.radius)) - _edgeMargin);
+            center, Mathf.Max(1f, radius - Mathf.Max(_contactRadius, _agent.radius) - 0.1f)));
         float length = Mathf.Min(Mathf.Max(toPlayer.magnitude + _pounceOvershoot,
             GetCircleExitDistance(transform.position, direction, center, radius) - _edgeMargin), available);
         Vector3 start = transform.position;
         Vector3 landing = start + direction * length;
+        float travelDuration = Mathf.Max(_biteDuration, length / Mathf.Max(0.1f, _pounceSpeed));
         _navigationPosition = _agent.nextPosition;
         _previousUpdatePosition = _agent.updatePosition;
         _previousUpdateRotation = _agent.updateRotation;
@@ -608,14 +617,21 @@ public sealed class BeastBossAttack : MonoBehaviour
         Quaternion facing = Quaternion.LookRotation(direction);
         Vector3 previous = start;
         float elapsed = 0f;
+        bool glinted = false;
         _lastAttackParried = false;
-        while (elapsed < _biteDuration && CanAttack(player))
+        if (length <= 0.001f)
+        {
+            TryShowPounceGlint(player, ref glinted);
+            CheckChargeContact(player, start, direction, 0f, damage, pattern);
+        }
+        while (elapsed < travelDuration && CanAttack(player) && !_lastAttackParried)
         {
             elapsed += Time.deltaTime;
-            float progress = Mathf.Clamp01(elapsed / _biteDuration);
+            float progress = Mathf.Clamp01(elapsed / travelDuration);
             // 직선 돌진 가운데에서 _pounceLift만큼 살짝 떠올랐다가 끝에서 땅에 닿는다.
             Vector3 next = Vector3.Lerp(start, landing, progress) + Vector3.up * (_pounceLift * Mathf.Sin(progress * Mathf.PI));
             transform.SetPositionAndRotation(next, facing);
+            TryShowPounceGlint(player, ref glinted);
             Vector3 step = next - previous;
             if (!_attackResolved && step.sqrMagnitude > 0.000001f)
                 CheckChargeContact(player, previous, step.normalized, step.magnitude, damage, pattern);
@@ -628,12 +644,26 @@ public sealed class BeastBossAttack : MonoBehaviour
         RestoreNavigation();
         _hasLandingSpot = true;
         // 멈춘 기세를 남겨 바로 이어지는 뛰어들기가 돌진하던 방향으로 미끄러지듯 이어지게 한다. 튕겨 났으면 기세가 없다.
-        _momentum = _lastAttackParried ? Vector3.zero : direction * Mathf.Min(length / _biteDuration, _diveMaxSpeed);
+        _momentum = _lastAttackParried ? Vector3.zero : direction * Mathf.Min(length / travelDuration, _diveMaxSpeed);
         _biting = false;
         _motor.Stop();
         _warning.EndWarning();
         if (telemetryAttackId != 0)
             EndTelemetryAttack(_health.IsAlive && player.IsAlive ? "Miss" : "Cancelled");
+    }
+
+    /// <summary>
+    /// 돌진 중 player가 늑대 중심의 수평 반경 _pounceGlintRadius·전체 높이 _pounceGlintHeight 원기둥에 들어오면
+    /// PounceGlint를 한 번 알리고 glinted를 참으로 바꾼다. 이미 알렸거나 범위 밖이면 상태를 유지한다.
+    /// </summary>
+    private void TryShowPounceGlint(KatanaDamageReceiver player, ref bool glinted)
+    {
+        if (glinted) return;
+        Vector3 offset = player.transform.position - transform.position;
+        if (Mathf.Abs(offset.y) > _pounceGlintHeight * 0.5f
+            || offset.x * offset.x + offset.z * offset.z > _pounceGlintRadius * _pounceGlintRadius) return;
+        PounceGlint?.Invoke();
+        glinted = true;
     }
 
     /// <summary>
@@ -688,7 +718,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     /// <summary>
     /// player의 수평 시점 기준 _emergeArc 범위 방향으로 뻗은 선이 center·radius 원 가장자리와 만나는 지점 중
     /// 플레이어와 _emergeDistance 이상 떨어진 빈 NavMesh 지면을 찾아 position으로 반환한다. 지점은 _edgeMargin만큼 원 안쪽으로 당긴다.
-    /// 경로가 끊기거나 몸이 들어갈 공간이 없는 후보는 버리며 EMERGE_ATTEMPTS번 안에 찾지 못하면 false를 반환한다.
+    /// 경로가 끊기거나 몸이 들어갈 공간이 없는 후보는 버리고, 실패하면 공터 안쪽의 출현 지점을 더 검사한다.
     /// </summary>
     private bool TryGetEmergePosition(KatanaDamageReceiver player, Vector3 center, float radius, out Vector3 position)
     {
@@ -702,6 +732,66 @@ public sealed class BeastBossAttack : MonoBehaviour
             float distance = GetCircleExitDistance(origin, direction, center, radius) - _edgeMargin;
             if (distance < _emergeDistance) continue;
             if (!TryDestination(origin + direction * distance, out Vector3 candidate) || IsBlocked(candidate)) continue;
+            position = candidate;
+            return true;
+        }
+        return TryGetInnerEmergePosition(origin, center, radius, out position);
+    }
+
+    /// <summary>
+    /// center·radius 공터 안의 가장자리에서 안쪽으로 3개 원주를 검사해 빈 NavMesh 지점 중 player와 수평으로 가장 먼 곳을 position으로 반환한다.
+    /// 각 후보는 늑대 반경과 가장자리 여백을 지키며, 유효한 위치가 없으면 false를 반환한다.
+    /// </summary>
+    private bool TryGetFarthestEmergePosition(KatanaDamageReceiver player, Vector3 center, float radius, out Vector3 position)
+    {
+        position = transform.position;
+        float safeRadius = Mathf.Max(1f, radius - _agent.radius - _edgeMargin);
+        float bestDistance = -1f;
+        NavMeshQueryFilter filter = new NavMeshQueryFilter
+        {
+            agentTypeID = _agent.agentTypeID,
+            areaMask = _agent.areaMask
+        };
+        for (int ring = 0; ring < 3; ring++)
+        {
+            float ringRadius = Mathf.Max(1f, safeRadius - ring * 2f);
+            for (int sector = 0; sector < 32; sector++)
+            {
+                float angle = sector * 360f / 32f * Mathf.Deg2Rad;
+                Vector3 desired = center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ringRadius;
+                desired.y = _agent.nextPosition.y;
+                if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, 1f, filter)
+                    || Vector3.ProjectOnPlane(hit.position - center, Vector3.up).sqrMagnitude > safeRadius * safeRadius
+                    || IsBlocked(hit.position)) continue;
+                float distance = Vector3.ProjectOnPlane(hit.position - player.transform.position, Vector3.up).sqrMagnitude;
+                if (distance <= bestDistance) continue;
+                bestDistance = distance;
+                position = hit.position;
+            }
+        }
+        return bestDistance >= 0f;
+    }
+
+    /// <summary>
+    /// 플레이어가 공터 가장자리에서 바깥을 볼 때도 origin에서 center 쪽 _emergeDistance 떨어진 빈 지면을 position으로 반환한다.
+    /// 중앙 방향과 좌우 두 각도씩 검사하며 유효한 NavMesh 지점이 없으면 false를 반환한다.
+    /// </summary>
+    private bool TryGetInnerEmergePosition(Vector3 origin, Vector3 center, float radius, out Vector3 position)
+    {
+        position = transform.position;
+        Vector3 inward = Vector3.ProjectOnPlane(center - origin, Vector3.up).normalized;
+        if (inward.sqrMagnitude < 0.0001f) return false;
+        float safeRadius = Mathf.Max(1f, radius - _agent.radius - _edgeMargin);
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            float angle = attempt == 0 ? 0f : (attempt % 2 == 1 ? 1f : -1f) * ((attempt + 1) / 2) * 25f;
+            Vector3 desired = origin + Quaternion.Euler(0f, angle, 0f) * inward * _emergeDistance;
+            if (Vector3.ProjectOnPlane(desired - center, Vector3.up).sqrMagnitude > safeRadius * safeRadius
+                || !TryDestination(desired, out Vector3 candidate)
+                || Vector3.ProjectOnPlane(candidate - center, Vector3.up).sqrMagnitude > safeRadius * safeRadius
+                || Vector3.ProjectOnPlane(candidate - origin, Vector3.up).sqrMagnitude
+                    < _emergeDistance * _emergeDistance * 0.8f
+                || IsBlocked(candidate)) continue;
             position = candidate;
             return true;
         }

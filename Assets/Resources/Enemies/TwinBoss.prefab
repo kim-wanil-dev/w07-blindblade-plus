@@ -985,8 +985,10 @@ MonoBehaviour:
   _edgeMargin: 0.5
   _biteTelegraph: 2
   _biteDuration: 0.35
+  _pounceSpeed: 32
+  _pounceGlintRadius: 17.5
+  _pounceGlintHeight: 4
   _pounceBarkLeadTime: 0.9
-  _pounceGlintLeadTime: 0.3
   _pounceOvershoot: 3
   _pounceLift: 0.5
   _parryRecoilDistance: 15
@@ -1174,10 +1176,12 @@ MonoBehaviour:
   _maxTrailLength: 0.6
   _minVertexDistance: 0.03
   _flutterScale: 0.6
-  _glintColor: {r: 1, g: 0.08, b: 0.05, a: 1}
+  _glintColor: {r: 0.5691823, g: 0.8328799, b: 1, a: 1}
   _glintSize: 1.8
-  _glintWidthScale: 4
-  _glintDuration: 0.15
+  _glintWidthScale: 3
+  _glintHeightScale: 1.5
+  _glintVerticalOffset: -1
+  _glintDuration: 0.4
 --- !u!4 &321
 Transform:
   m_ObjectHideFlags: 0

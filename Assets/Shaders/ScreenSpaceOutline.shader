@@ -12,6 +12,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
         _ThreatFillOpacity ("Threat Fill Opacity", Float) = 0.6
         _ThreatHighlightFillOpacity ("Threat Highlight Fill Opacity", Float) = 0.6
         _MeleeWarningColor ("Melee Warning Color", Color) = (1, 0.1, 0.06, 1)
+        _BeastGlintColor ("Beast Glint Color", Color) = (0.5691823, 0.8328799, 1, 1)
     }
 
     SubShader
@@ -49,6 +50,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 float _ThreatFillOpacity;
                 float _ThreatHighlightFillOpacity;
                 half4 _MeleeWarningColor;
+                half4 _BeastGlintColor;
             CBUFFER_END
 
             // 불릿 타임·극한 회피 파동 동안 플레이어가 전역으로 넘기는 위협 채움 강조 세기(0~1).
@@ -541,16 +543,16 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 edge *= 1.0 - TransparentCoverage(uv);
                 float3 transparentEdge = max(TransparentEdgeBetween(firstUv, secondUv),
                     TransparentEdgeBetween(thirdUv, fourthUv));
-                float2 warningCenterMask = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, uv).rg;
-                float2 warningFirstMask = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, firstUv).rg;
-                float2 warningSecondMask = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, secondUv).rg;
-                float2 warningThirdMask = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, thirdUv).rg;
-                float2 warningFourthMask = SAMPLE_TEXTURE2D_X(
-                    _OutlineMeleeWarningMask, sampler_PointClamp, fourthUv).rg;
+                float3 warningCenterMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, uv).rgb;
+                float3 warningFirstMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, firstUv).rgb;
+                float3 warningSecondMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, secondUv).rgb;
+                float3 warningThirdMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, thirdUv).rgb;
+                float3 warningFourthMask = SAMPLE_TEXTURE2D_X(
+                    _OutlineMeleeWarningMask, sampler_PointClamp, fourthUv).rgb;
 
                 float warningAmount = saturate(max(
                     warningCenterMask.r,
@@ -576,6 +578,21 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 edge = max(edge, GroundMarkColor(uv));
                 edge = max(edge, GroundGuideColor(uv, firstUv, secondUv, thirdUv, fourthUv));
                 edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a, alwaysWarningEdge);
+                // 눈 섬광 전용 B 채널은 기본 윤곽선의 약 세 배 간격으로 표본을 읽어 두꺼운 하늘색 경계를 그린다.
+                float glintLowerOffset = floor(_LineWidth * 1.5);
+                float glintUpperOffset = ceil(_LineWidth * 1.5);
+                float2 glintFirstUv = saturate(uv + float2(-glintLowerOffset, -glintLowerOffset) * texelSize);
+                float2 glintSecondUv = saturate(uv + float2(glintUpperOffset, glintUpperOffset) * texelSize);
+                float2 glintThirdUv = saturate(uv + float2(-glintLowerOffset, glintUpperOffset) * texelSize);
+                float2 glintFourthUv = saturate(uv + float2(glintUpperOffset, -glintLowerOffset) * texelSize);
+                float glintFirstMask = SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, glintFirstUv).b;
+                float glintSecondMask = SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, glintSecondUv).b;
+                float glintThirdMask = SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, glintThirdUv).b;
+                float glintFourthMask = SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, glintFourthUv).b;
+                float glintEdge = saturate(max(
+                    abs(glintFirstMask - glintSecondMask),
+                    abs(glintThirdMask - glintFourthMask)) * 1.5);
+                edge = lerp(edge, _BeastGlintColor.rgb * _BeastGlintColor.a, glintEdge);
                 // 위협 실루엣은 경계를 선명하게, 내부는 반투명하게 다른 모든 선 위에 덮는다.
                 float threatFirst = ThreatCoverage(firstUv);
                 float threatSecond = ThreatCoverage(secondUv);

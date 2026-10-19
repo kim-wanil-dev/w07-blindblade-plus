@@ -6,6 +6,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
         _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
         _MeleeWarningIntensity ("Melee Warning Intensity", Range(0, 1)) = 0
         _MeleeWarningAlwaysVisible ("Melee Warning Always Visible", Range(0, 1)) = 0
+        _MeleeWarningSeparateGlint ("Melee Warning Separate Glint", Range(0, 1)) = 0
         _TransparentThreshold ("Transparent Threshold", Float) = 0.015
 
     }
@@ -22,7 +23,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
             Cull Off
             Blend One One
             BlendOp Max
-            ColorMask RG
+            ColorMask RGB
 
             HLSLPROGRAM
             #pragma target 3.5
@@ -39,6 +40,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 half4 _BaseColor;
                 float _MeleeWarningIntensity;
                 float _MeleeWarningAlwaysVisible;
+                float _MeleeWarningSeparateGlint;
                 float _TransparentThreshold;
             CBUFFER_END
 
@@ -75,14 +77,18 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
                 half4 texel = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
-                half coverage = texel.a * input.color.a * _BaseColor.a;
-                half3 visibleRgb = texel.rgb * input.color.rgb * _BaseColor.rgb * coverage;
+                half separateGlint = saturate(_MeleeWarningSeparateGlint);
+                half4 maskColor = lerp(_BaseColor, half4(1, 1, 1, 1), separateGlint);
+                half coverage = texel.a * input.color.a * maskColor.a;
+                half3 visibleRgb = texel.rgb * input.color.rgb * maskColor.rgb * coverage;
                 half brightness = max(visibleRgb.r, max(visibleRgb.g, visibleRgb.b));
                 half shape = smoothstep(0.0, max(_TransparentThreshold, 0.0001), brightness);
 
-                // R은 파동으로 드러난 테두리를 붉게 물들일 세기, G는 파동 없이도 붉은 테두리를 그릴 세기다.
+                // R은 붉은 전조, G는 항상 보이는 붉은 테두리, B는 몸통과 분리해 그릴 눈 섬광이다.
                 half warning = shape * saturate(_MeleeWarningIntensity);
-                return half4(warning, warning * saturate(_MeleeWarningAlwaysVisible), 0, 1);
+                return half4(warning * (1 - separateGlint),
+                    warning * saturate(_MeleeWarningAlwaysVisible) * (1 - separateGlint),
+                    warning * separateGlint, 1);
             }
             ENDHLSL
         }
