@@ -847,12 +847,13 @@ RectTransform:
   - {fileID: 249177474903101824}
   - {fileID: 1742712342509744350}
   - {fileID: 5391682125458889144}
+  - {fileID: 2809901884417188228}
   m_Father: {fileID: 3502392638948316619}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 760, y: 751.8135}
+  m_AnchoredPosition: {x: 0, y: -1.4106}
+  m_SizeDelta: {x: 760, y: 855.8447}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2547500421754330280
 CanvasRenderer:
@@ -981,6 +982,8 @@ MonoBehaviour:
   _modalRoot: {fileID: 5486997798105967667}
   _closeButton: {fileID: 7288032052652028535}
   _closeButtonSliceEffect: {fileID: 9046296621900889933}
+  _quitButton: {fileID: 651216797895477835}
+  _quitButtonSliceEffect: {fileID: 1272049650296686449}
   _controlsText: {fileID: 1431881556679756770}
   _volumeSlider: {fileID: 6750287706557792787}
   _sensitivitySlider: {fileID: 1960150867440602621}
@@ -1998,7 +2001,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 0.000030518
       objectReference: {fileID: 0}
     - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
       propertyPath: m_AnchoredPosition.y
@@ -2052,3 +2055,115 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eeeeb964c9aeaf843bd2f134eee8b5c9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::IntroBambooButtonSliceEffect
+--- !u!1001 &6936571028410965083
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 3086188174670149363}
+    m_Modifications:
+    - target: {fileID: 1926904871526050768, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 32
+      objectReference: {fileID: 0}
+    - target: {fileID: 1926904871526050768, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 35.8386
+      objectReference: {fileID: 0}
+    - target: {fileID: 1926904871526050768, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2490937909949072846, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_text
+      value: "\uAC8C\uC784 \uC885\uB8CC"
+      objectReference: {fileID: 0}
+    - target: {fileID: 2490937909949072846, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_fontSize
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 2490937909949072846, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_fontSizeBase
+      value: 20
+      objectReference: {fileID: 0}
+    - target: {fileID: 2768049222632196808, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_PreferredWidth
+      value: 180
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_Pivot.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 112
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 48
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: -0.000030518
+      objectReference: {fileID: 0}
+    - target: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 108
+      objectReference: {fileID: 0}
+    - target: {fileID: 5149300133426003786, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+      propertyPath: m_Name
+      value: SettingsQuitButton
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+--- !u!114 &651216797895477835 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7586930001008678416, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+  m_PrefabInstance: {fileID: 6936571028410965083}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &1272049650296686449 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8206856991103753002, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+  m_PrefabInstance: {fileID: 6936571028410965083}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: eeeeb964c9aeaf843bd2f134eee8b5c9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IntroBambooButtonSliceEffect
+--- !u!224 &2809901884417188228 stripped
+RectTransform:
+  m_CorrespondingSourceObject: {fileID: 5097336426359471583, guid: f08aa601cb53bd547a502c6ad42f3b0e, type: 3}
+  m_PrefabInstance: {fileID: 6936571028410965083}
+  m_PrefabAsset: {fileID: 0}
