@@ -79,10 +79,10 @@ public sealed class BambooThrower : MonoBehaviour
     }
 
     /// <summary>
-    /// 온보딩 지시를 받아 기존 전조·조준·수리검 발사 흐름으로 한 발을 예약한다.
-    /// director가 투척 예산을 허용하면 전조 코루틴을 시작하고 성공 여부를 반환한다.
+    /// 온보딩 지시를 받아 기존 전조·조준 흐름으로 shotCount발의 수리검을 shotGap 간격으로 예약한다.
+    /// director가 첫 발의 투척 예산을 허용하면 전조 코루틴을 시작하고 성공 여부를 반환한다.
     /// </summary>
-    public bool TryThrowForOnboarding(BambooDefenseDirector director)
+    public bool TryThrowForOnboarding(BambooDefenseDirector director, int shotCount = 1, float shotGap = 0.3f)
     {
         if (director == null || !isActiveAndEnabled || _routine != null) return false;
         _director = director;
@@ -92,15 +92,15 @@ public sealed class BambooThrower : MonoBehaviour
 
         _reserved = true;
         _director.NotifyThrowTelegraph(_signalPoint.position, _telegraphDuration);
-        _routine = StartCoroutine(RunOnboardingThrow());
+        _routine = StartCoroutine(RunOnboardingThrow(Mathf.Max(1, shotCount), Mathf.Max(0.25f, shotGap)));
         return true;
     }
 
     /// <summary>
-    /// 기존 투척수의 전조 시간을 기다린 뒤 발사 조건을 확인하고 수리검 한 발을 발사한다.
-    /// 예약을 취소해야 하는 경우 예산을 반환하고 코루틴 상태를 비운다.
+    /// 기존 투척수의 전조 시간을 기다린 뒤 shotCount발을 shotGap 간격으로 쏜다.
+    /// 각 후속 발사 전에 director의 투척 예산을 다시 예약하며, 취소 시 예약을 반환하고 코루틴 상태를 비운다.
     /// </summary>
-    private IEnumerator RunOnboardingThrow()
+    private IEnumerator RunOnboardingThrow(int shotCount, float shotGap)
     {
         if (_telegraphSound != SoundId.None)
             Managers.Sound.PlayAttached(_telegraphSound, gameObject);
@@ -112,7 +112,17 @@ public sealed class BambooThrower : MonoBehaviour
             yield break;
         }
 
-        Throw();
+        for (int shot = 0; shot < shotCount; shot++)
+        {
+            if (shot > 0)
+            {
+                yield return new WaitForSeconds(shotGap);
+                while (CanThrow() && !_director.TryReserveThrow()) yield return null;
+                if (!CanThrow()) break;
+                _reserved = true;
+            }
+            Throw();
+        }
         if (_revealDuration > 0f)
             yield return new WaitForSeconds(_revealDuration);
         _routine = null;

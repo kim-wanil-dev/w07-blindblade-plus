@@ -194,12 +194,12 @@ public static class OnboardingSceneBuilder
         };
         string[] followUpKeyboardHints =
         {
-            "", "", "", "일섬* - 마우스 왼쪽 버튼 클릭\n*전방으로 검기를 날리며 돌진한다",
+            "", "", "", "일섬 - 마우스 왼쪽 버튼 클릭",
             "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다."
         };
         string[] followUpGamepadHints =
         {
-            "", "", "", "일섬* - RB 버튼\n*전방으로 검기를 날리며 돌진한다",
+            "", "", "", "일섬 - RB 버튼",
             "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다."
         };
         string[][] objectives =
@@ -247,7 +247,9 @@ public static class OnboardingSceneBuilder
         serializedHud.FindProperty("_parryHudTutorialGamepadText").stringValue = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
         serializedHud.FindProperty("_parryBeadsTutorialText").stringValue = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
         serializedHud.FindProperty("_parryBeadsTutorialGamepadText").stringValue = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
-        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 좌클릭 홀드로 계속 진행";
+        serializedHud.FindProperty("_swordWaveTutorialText").stringValue = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\n마우스 왼쪽 버튼 클릭으로 계속 진행";
+        serializedHud.FindProperty("_swordWaveTutorialGamepadText").stringValue = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
         serializedHud.FindProperty("_ultimateReadyTutorialGamepadText").stringValue = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 RB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
         serializedHud.FindProperty("_idleMovementText").stringValue = "WASD키로 이동하기";
         serializedHud.FindProperty("_idleMovementGamepadText").stringValue = "왼쪽 스틱으로 이동하기";
