@@ -4527,7 +4527,7 @@ MonoBehaviour:
   _cancelWhenHidden: 0
   _useHeartbeatTelegraph: 1
   _heartbeatCount: 1
-  _firstHeartbeatDelay: 0.2
+  _firstHeartbeatDelay: 0.4
   _minimumHeartbeatInterval: 0.4
   _maximumHeartbeatInterval: 0.55
   _postHeartbeatAttackDelay: 0.5
@@ -4536,7 +4536,8 @@ MonoBehaviour:
   _actionVolume: 1
   _attackRange: 9
   _lungeSpeed: 16
-  _lungeHop: 0.35
+  _lungePeakHeight: 0.6
+  _lungeCurveSteepness: 9
   _biteStopDistance: 1.1
   _biteRadius: 1.6
   _maxTrackDistance: 3
