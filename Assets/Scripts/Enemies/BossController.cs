@@ -45,6 +45,7 @@ public sealed class BossController : MonoBehaviour
     private BossState _state;
     private bool _started;
     private BossState _resumeState;
+    private float _entranceHoldUntil;
 
     [Header("패턴 사이 대기")]
     [SerializeField, Min(0f), Tooltip("패턴 사이 최소 대기 시간(초)")]
@@ -261,6 +262,15 @@ public sealed class BossController : MonoBehaviour
         _arenaInset = Mathf.Max(0f, inset);
     }
 
+    /// <summary>
+    /// 스테이지 등장 파동이 끝날 때까지 duration초 동안 패턴을 시작하지 않게 한다.
+    /// 보스를 켜기 직전에 호출하며 지금 게임 시각에 duration을 더해 _entranceHoldUntil에 저장한다.
+    /// </summary>
+    public void HoldForEntrance(float duration)
+    {
+        _entranceHoldUntil = Time.time + Mathf.Max(0f, duration);
+    }
+
     /// <summary>현재 세션 플레이어와 필수 참조를 확인하고 전투 결과를 구독하여 행동을 시작한다.</summary>
     private void InitializeBattle()
     {
@@ -293,10 +303,13 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// startingState부터 단일 행동 흐름을 실행하고 전투 종료 시 코루틴 참조를 정리한다.
     /// resumeAfterHit이면 무적을 해제하고 첫 패턴 대기·돌진 재배치를 생략해 공격을 재개한다.
+    /// 등장 파동 대기(_entranceHoldUntil)가 남아 있으면 끝날 때까지 행동하지 않는다.
     /// </summary>
     private IEnumerator RunBattle(BossState startingState = BossState.Ranged, bool resumeAfterHit = false)
     {
         yield return null;
+        // 등장 파동이 끝나기 전에는 패턴을 시작하지 않는다.
+        while (Time.time < _entranceHoldUntil && _health.IsAlive && _playerHealth.IsAlive) yield return null;
         if (resumeAfterHit)
             RestoreAfterDisappearance();
         while (_health.IsAlive && _playerHealth.IsAlive)

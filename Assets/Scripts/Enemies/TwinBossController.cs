@@ -39,6 +39,7 @@ public sealed class TwinBossController : MonoBehaviour
     private Coroutine _humanRoutine;
     private bool _started;
     private bool _subscribed;
+    private float _entranceHoldUntil;
     private bool _patternFinished;
     private bool _interrupted;
     private bool _hitRequested;
@@ -264,11 +265,12 @@ public sealed class TwinBossController : MonoBehaviour
 
     /// <summary>
     /// 패턴 대기·회피 회복 중에는 짐승이 멈추지 않고 플레이어 주위를 배회하게 하고, 그 밖에는 배회를 끝낸다.
-    /// 피격당한 짐승이 회피 이동 중이면 배회하지 않는다.
+    /// 피격당한 짐승이 회피 이동 중이거나 등장 파동 대기(_entranceHoldUntil) 중이면 배회하지 않는다.
     /// </summary>
     private void UpdateBeastProwl()
     {
         bool prowl = _beast.Health.IsAlive && _player.IsAlive && !_beastEvadeMoving && !_beast.IsEscaping
+            && Time.time >= _entranceHoldUntil
             && (_pattern == TwinBossPattern.Idle || _pattern == TwinBossPattern.Evading
                 || (_pattern == TwinBossPattern.Countering && _counterBoss == _human.Health));
         if (!prowl)
@@ -289,6 +291,15 @@ public sealed class TwinBossController : MonoBehaviour
     {
         _arena = arena;
         _arenaInset = Mathf.Max(0f, inset);
+    }
+
+    /// <summary>
+    /// 스테이지 등장 파동이 끝날 때까지 duration초 동안 패턴·배회를 시작하지 않게 한다.
+    /// 보스를 켜기 직전에 호출하며 지금 게임 시각에 duration을 더해 _entranceHoldUntil에 저장한다.
+    /// </summary>
+    public void HoldForEntrance(float duration)
+    {
+        _entranceHoldUntil = Time.time + Mathf.Max(0f, duration);
     }
 
     /// <summary>필수 연결과 독립 루트를 확인하고 이동 참조를 캐싱하며 실제 피해·사망 사건을 구독한다.</summary>
@@ -349,12 +360,14 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 생존 조건에 맞는 패턴을 실행하고 실제 피격은 회피·회복으로, 무적 중 근접 베기는 반격으로 전환하며 전투 종료를 정리한다.
+    /// 등장 파동 대기(_entranceHoldUntil)가 끝난 뒤 생존 조건에 맞는 패턴을 실행하고 실제 피격은 회피·회복으로, 무적 중 근접 베기는 반격으로 전환하며 전투 종료를 정리한다.
     /// 반격 뒤에는 스테이지1 보스처럼 패턴 사이 대기를 거쳐 다음 패턴을 고른다.
     /// </summary>
     private IEnumerator RunBattle()
     {
         yield return null;
+        // 등장 파동이 끝나기 전에는 패턴을 고르지 않는다.
+        while (Time.time < _entranceHoldUntil && CanBattle()) yield return null;
         while (CanBattle())
         {
             bool recovered = false;

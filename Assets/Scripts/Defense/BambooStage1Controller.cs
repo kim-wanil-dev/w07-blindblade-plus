@@ -190,6 +190,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
     /// <summary>
     /// position에 보스를 배치하고 공터 이동 범위와 체크포인트를 설정하며 플레이어 체력을 최대로 회복한다.
     /// 등장 파동은 첫 진입과 재도전 모두 시작하며 shakeCamera가 참인 첫 진입에서만 카메라를 흔든다.
+    /// 보스는 마지막 등장 파동이 끝날 때까지 행동하지 않는다.
     /// </summary>
     private void ActivateBoss(Vector3 position, bool shakeCamera)
     {
@@ -199,7 +200,9 @@ public sealed class BambooStage1Controller : MonoBehaviour
         toPlayer.y = 0f;
         _boss.transform.SetPositionAndRotation(position,
             toPlayer.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(toPlayer) : Quaternion.identity);
-        _boss.GetComponent<BossController>().ConfigureArena(_arena, _edgeInset);
+        BossController bossController = _boss.GetComponent<BossController>();
+        bossController.ConfigureArena(_arena, _edgeInset);
+        bossController.HoldForEntrance(GetEntranceWaveDuration());
         BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2");
         _boss.SetActive(true);
         _director.HideRecord();
@@ -285,6 +288,15 @@ public sealed class BambooStage1Controller : MonoBehaviour
             }
         }
         return bestDistance >= 0f;
+    }
+
+    /// <summary>
+    /// 첫 등장 파동부터 마지막 파동이 사라질 때까지의 시간을 반환한다.
+    /// _entranceWaveCount·_entranceWaveInterval·_entranceWaveDuration을 사용한다.
+    /// </summary>
+    private float GetEntranceWaveDuration()
+    {
+        return (_entranceWaveCount - 1) * _entranceWaveInterval + _entranceWaveDuration;
     }
 
     /// <summary>position을 중심으로 설정된 횟수만큼 interval 간격으로 보스 등장 파동을 재생한다.</summary>
