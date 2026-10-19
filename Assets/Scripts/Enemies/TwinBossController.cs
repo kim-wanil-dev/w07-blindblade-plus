@@ -83,7 +83,7 @@ public sealed class TwinBossController : MonoBehaviour
     [SerializeField, Min(1), Tooltip("한 차례에 인간이 돌진·베기·후퇴를 반복하는 횟수")]
     private int _humanSlashesPerRound = 4;
     [SerializeField, Min(0.1f), Tooltip("인간 돌진 사이 간격(초). 돌진마다 붉은 전조가 앞에 붙고 베고 나면 물러난다.")]
-    private float _humanSlashInterval = 2f;
+    private float _humanSlashInterval = 2.5f;
     [SerializeField, Min(0f), Tooltip("패턴 시작부터 첫 돌진까지의 준비 시간(초). 시작 위치로 달려가고 전조를 보이는 시간을 포함한다.")]
     private float _alternatingLead = 1.2f;
 

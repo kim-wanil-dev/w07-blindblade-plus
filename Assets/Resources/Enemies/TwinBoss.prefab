@@ -63,7 +63,7 @@ MonoBehaviour:
   _harassInterval: 1.8
   _alternatingRounds: 2
   _humanSlashesPerRound: 3
-  _humanSlashInterval: 2
+  _humanSlashInterval: 2.5
   _alternatingLead: 1.2
   _hitInvulnerableDelay: 0.08
   _hitInvulnerabilityDuration: 2
@@ -340,8 +340,8 @@ MonoBehaviour:
   _parryRecoilDuration: 0.45
   _recoilShake: 0.25
   _recoilShakeFrequency: 18
-  _backstepDistance: 30
-  _backstepDuration: 0.6
+  _backstepDistance: 18
+  _backstepDuration: 0.36
   _counterSlashSpeed: 360
   _counterSlashExitDistance: 12
   _counterArcBulge: 0.25
