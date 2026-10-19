@@ -37,6 +37,7 @@ namespace BlindBlade.Telemetry
         private readonly Dictionary<int, JObject> _pendingEnds = new Dictionary<int, JObject>();
         private bool _completePending;
         private readonly Dictionary<int, JObject> _attacks = new Dictionary<int, JObject>();
+        private readonly Dictionary<int, double> _reactionStartTimes = new Dictionary<int, double>();
         private readonly Dictionary<int, PlayerInputRecord> _inputs = new Dictionary<int, PlayerInputRecord>();
         private readonly HashSet<int> _attempts = new HashSet<int>();
         private readonly HashSet<int> _guardContacts = new HashSet<int>();
@@ -180,6 +181,7 @@ namespace BlindBlade.Telemetry
             _patterns = new JObject();
             _bossPatterns = new JObject();
             _attacks.Clear();
+            _reactionStartTimes.Clear();
             _pendingEnds.Clear();
             _completePending = false;
             _inputs.Clear();
@@ -260,7 +262,7 @@ namespace BlindBlade.Telemetry
                     (int?)payload["hitId"] ?? 0, 0, dodgeId)), ["payload"] = payload });
         }
 
-        /// <summary>type·id·data의 생산자 사건을 공격 상태에 반영한다. 중복 종료와 종료된 구간의 사건은 무시한다.</summary>
+        /// <summary>type·id·data의 생산자 사건을 공격 상태와 반응 기준 시각에 반영한다. 중복 종료와 종료된 구간의 사건은 무시한다.</summary>
         private void HandleSignal(string type, int id, JObject data)
         {
             if (type == "stage_change")
@@ -334,10 +336,17 @@ namespace BlindBlade.Telemetry
             if (_stageClosed || id == 0) return;
             if (type == "enemy_attack_started")
             {
-                data["telegraphRealtime"] = Time.realtimeSinceStartupAsDouble;
+                double attackStartRealtime = Time.realtimeSinceStartupAsDouble;
+                data["telegraphRealtime"] = attackStartRealtime;
                 data["committed"] = false;
                 _attacks[id] = (JObject)data.DeepClone();
+                _reactionStartTimes[id] = attackStartRealtime;
                 Record(type, data, id);
+            }
+            else if (type == "enemy_attack_reaction_started" && _attacks.ContainsKey(id)
+                && _reactionStartTimes.ContainsKey(id))
+            {
+                _reactionStartTimes[id] = Time.realtimeSinceStartupAsDouble;
             }
             else if (type == "enemy_attack_committed" && _attacks.TryGetValue(id, out JObject attack))
             {
@@ -359,7 +368,7 @@ namespace BlindBlade.Telemetry
             _pendingEnds.Clear();
         }
 
-        /// <summary>공격 id의 최초 결과만 확정하고 적중 분모·분자와 정확한 접촉의 반응 시간을 갱신한다.</summary>
+        /// <summary>id와 data, contact 여부로 최초 공격 결과를 확정하고, 연결 입력과 공격별 반응 기준 시각을 사용해 집계를 갱신한다.</summary>
         private void ResolveAttack(int id, JObject data, bool contact)
         {
             if (!_attacks.TryGetValue(id, out JObject attack) || (bool?)attack["resolved"] == true) return;
@@ -397,7 +406,9 @@ namespace BlindBlade.Telemetry
                         _guardContacts.Add(inputId);
                         Add(_counts, "guard" + outcome + "Count");
                     }
-                    double reaction = input.FrameRealTime - (double)attack["telegraphRealtime"];
+                    double reactionStartRealtime = _reactionStartTimes.TryGetValue(id, out double startRealtime)
+                        ? startRealtime : (double)attack["telegraphRealtime"];
+                    double reaction = input.FrameRealTime - reactionStartRealtime;
                     double lead = Time.realtimeSinceStartupAsDouble - input.FrameRealTime;
                     payload["inputToContactSeconds"] = Math.Max(0, lead);
                     payload["reactionSeconds"] = reaction >= 0 ? (JToken)reaction : JValue.CreateNull();
@@ -406,6 +417,7 @@ namespace BlindBlade.Telemetry
                 }
             }
             Record("enemy_attack_resolved", payload, id, inputId);
+            _reactionStartTimes.Remove(id);
         }
 
         /// <summary>input의 고유 누름만 시도로 합산하고 예약 후 시작은 중복 집계하지 않는다.</summary>

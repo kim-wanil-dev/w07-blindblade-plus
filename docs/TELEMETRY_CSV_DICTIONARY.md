@@ -101,7 +101,7 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `aim_x`, `aim_z` | 공격이 향한 목표 위치 |
 | `player_x`, `player_z` | 공격 판정 시점 플레이어 위치 |
 | `duration_seconds` | 이동 표본 등 이벤트가 지속된 시간 |
-| `reaction_seconds` | 연결된 공격 전조 시작부터 입력까지의 반응 시간 |
+| `reaction_seconds` | 공격별 반응 기준 신호부터 연결 입력까지의 시간. 일반 패턴은 전조 시작, 2막 짐승 물기(`TwinBeastBite`)는 돌진 중 눈 섬광 시점부터 계산 |
 | `input_to_contact_seconds` | 연결된 입력부터 공격 접촉까지의 시간 |
 | `reaction_association` | 반응 시간을 공격에 연결한 근거. 예: `resolved_contact`, `held_guard_intent` |
 | `payload_json` | 구조화된 전체 이벤트 데이터. 위 열과 값이 중복될 수 있음 |
