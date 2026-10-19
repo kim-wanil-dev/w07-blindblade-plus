@@ -61,6 +61,13 @@ namespace BlindBlade.Telemetry
             Raised?.Invoke("enemy_attack_committed", id, new JObject { ["origin"] = TelemetryJson.Position(origin) });
         }
 
+        /// <summary>id 공격의 반응 시간 기준 시각을 현재 프레임으로 갱신하도록 Recorder에 알린다. 유효한 공격 ID를 사용하며 별도 분석 이벤트는 저장하지 않는다.</summary>
+        public static void MarkReactionStart(int id)
+        {
+            if (id == 0) return;
+            Raised?.Invoke("enemy_attack_reaction_started", id, new JObject());
+        }
+
         /// <summary>id의 비접촉 종료 사유와 끝점을 알린다. 이미 접촉한 공격의 결과는 분석기가 유지한다.</summary>
         public static void End(int id, string outcome, Vector3 endpoint)
         {

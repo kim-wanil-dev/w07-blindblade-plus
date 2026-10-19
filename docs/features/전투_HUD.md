@@ -1,5 +1,13 @@
 ### 전투 HUD
 
+#### 1·2막 보스 수리검 방향 표시 (2026-10-19)
+
+- 1막 보스의 `EnemyProjectile`과 2막 보스의 `TwinBossProjectile`도 일반 `DefenseShuriken`과 같은 방향 인디케이터 판정을 사용한다. 보스 수리검이 적대 비행 중이고, 현재 씬에 속하며, 세션 투사체 ID가 있고, 플레이어를 지나지 않았을 때 기존 `CombatThreatPresentationProvider.CreateSnapshot` 경로에 등록한다.
+- 화면 안에서 인지되는 수리검은 방향 UI를 숨기고, 화면 밖 또는 인지되지 않은 수리검은 플레이어 카메라 기준 방향과 기존 색·근접도 정책으로 표시한다. 일반 스테이지의 소리 인지 거리 제한도 기존 HUD 판정이 그대로 적용한다.
+- 플레이어를 지나간 수리검, 반사된 수리검, 비행 종료·소멸 수리검은 활성 목록에서 빠져 마커가 종료된다. 발사 전 전조 표시가 아니라 실제 발사된 보스 수리검의 비행 표시다.
+- 관련 코드: `EnemyProjectile.Initialize`, `EnemyProjectile.UpdatePassedPlayer`, `TwinBossProjectile.Initialize`, `TwinBossProjectile.UpdatePassedPlayer`, `CombatThreatPresentationProvider.AddProjectileThreat`.
+- 구현 확인: 일반 수리검과 같은 공통 스냅샷·HUD 구독 경로에 연결했다. Unity Play에서 1막·2막 보스 전투를 진행하는 화면 확인은 아직 하지 않았다.
+
 #### 일반 스테이지 소리 인지 거리 연동 (2026-10-18)
 
 - 씬 `BambooDefenseDirector`에서 `소리 인지 거리 제한 사용`을 켜면 수리검 비행·투척 전조와 적 발소리 인디케이터는 같은 XZ 수평 반경 안에서만 표시한다. 기본 꺼짐이며 보스전·온보딩은 제한하지 않는다. 설정 위치와 검증은 [대숲 방어](대숲_방어.md)의 같은 절을 따른다.
@@ -20,7 +28,8 @@
 | Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs | Show, Hide | 교체 가능한 Image와 그 아래 방향 원호에 C 표시 결과 적용 |
 | Assets/Scripts/Defense/DefenseDirectionMarker.cs | Configure, OnPopulateMesh | 기존 수리검/원호 도형 재사용, 발소리에서는 아이콘 없이 원호만 그리기 |
 | Assets/Scripts/UI/CombatHud/CombatHudReferences.cs | RecordText, DirectionMarkers, PlayerHud, FootstepHud | HUD 내부의 명시적 직렬화 참조 |
-| Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | ExpireFootsteps, PublishEndedFootsteps | C의 감쇠·만료·발행자 사망/세대 변경·종료 사건 |
+| Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | PublishThreatSnapshots, AddProjectileThreat, ExpireFootsteps, PublishEndedFootsteps | 일반·보스 수리검 공통 위협 스냅샷, C의 감쇠·만료·발행자 종료 사건 |
+| Assets/Scripts/Enemies/EnemyProjectile.cs, TwinBossProjectile.cs | IsHostileFlying, HasPassedPlayer, ProjectileId | 보스 수리검의 적대 비행·통과 상태와 세션 고유 식별자 제공 |
 | Assets/Scripts/UI/PlayerLowHealthVignette.cs | HandleDamageReceived, ApplyVignette, ResetPulse | 실제 피해 구독, 고정 두께·강도의 짧은 피격 펄스 |
 | Assets/Scripts/UI/CombatHud/CombatPerfectParryTokenHud.cs | ApplyTokens, Update, CreateOrbitThreads, UpdateOrbitThreads | 퍼펙트 패링 토큰 3칸 표시(2026-10-15). 2026-10-16 찬 토큰을 실 두 가닥이 감싸는 구체로 표시, 토큰 크기 2배, 빈 토큰 이미지 추가. 규칙과 이미지 교체는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
 | Assets/Scripts/UI/CombatHud/CombatTokenOrbitThread.cs, CombatTokenOrbitStyle.cs, ThreadSphere.cs, ThreadSphereFlow.cs | OnPopulateMesh / 설정값 / 경로·흐름 | 토큰 실 구체 UI 메시와 설정, 칼 구슬과 공유하는 실 구체 계산. 상세는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |

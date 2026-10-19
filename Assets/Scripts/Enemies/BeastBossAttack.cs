@@ -621,7 +621,7 @@ public sealed class BeastBossAttack : MonoBehaviour
         _lastAttackParried = false;
         if (length <= 0.001f)
         {
-            TryShowPounceGlint(player, ref glinted);
+            TryShowPounceGlint(player, ref glinted, telemetryAttackId);
             CheckChargeContact(player, start, direction, 0f, damage, pattern);
         }
         while (elapsed < travelDuration && CanAttack(player) && !_lastAttackParried)
@@ -631,7 +631,7 @@ public sealed class BeastBossAttack : MonoBehaviour
             // 직선 돌진 가운데에서 _pounceLift만큼 살짝 떠올랐다가 끝에서 땅에 닿는다.
             Vector3 next = Vector3.Lerp(start, landing, progress) + Vector3.up * (_pounceLift * Mathf.Sin(progress * Mathf.PI));
             transform.SetPositionAndRotation(next, facing);
-            TryShowPounceGlint(player, ref glinted);
+            TryShowPounceGlint(player, ref glinted, telemetryAttackId);
             Vector3 step = next - previous;
             if (!_attackResolved && step.sqrMagnitude > 0.000001f)
                 CheckChargeContact(player, previous, step.normalized, step.magnitude, damage, pattern);
@@ -654,15 +654,16 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// 돌진 중 player가 늑대 중심의 수평 반경 _pounceGlintRadius·전체 높이 _pounceGlintHeight 원기둥에 들어오면
-    /// PounceGlint를 한 번 알리고 glinted를 참으로 바꾼다. 이미 알렸거나 범위 밖이면 상태를 유지한다.
+    /// PounceGlint와 telemetryAttackId의 반응 기준 갱신을 한 번 알리고 glinted를 참으로 바꾼다. 이미 알렸거나 범위 밖이면 상태를 유지한다.
     /// </summary>
-    private void TryShowPounceGlint(KatanaDamageReceiver player, ref bool glinted)
+    private void TryShowPounceGlint(KatanaDamageReceiver player, ref bool glinted, int telemetryAttackId)
     {
         if (glinted) return;
         Vector3 offset = player.transform.position - transform.position;
         if (Mathf.Abs(offset.y) > _pounceGlintHeight * 0.5f
             || offset.x * offset.x + offset.z * offset.z > _pounceGlintRadius * _pounceGlintRadius) return;
         PounceGlint?.Invoke();
+        CombatTelemetrySignals.MarkReactionStart(telemetryAttackId);
         glinted = true;
     }
 

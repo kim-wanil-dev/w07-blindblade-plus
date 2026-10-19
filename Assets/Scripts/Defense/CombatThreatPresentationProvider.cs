@@ -237,7 +237,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         _footstepHandlers.Clear();
     }
 
-    /// <summary>C 연결 결과 또는 기존 수리검 판정을 발행하고 현재 목록에 없는 대상의 종료를 전달한다.</summary>
+    /// <summary>C 연결 결과 또는 일반·보스 수리검 판정을 발행하고 현재 목록에 없는 대상의 종료를 전달한다.</summary>
     private void PublishThreatSnapshots()
     {
         _seenThreats.Clear();
@@ -260,15 +260,18 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         else
         {
             DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
-
             foreach (DefenseShuriken shuriken in shurikens)
-            {
-                if (shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying || shuriken.HasPassedPlayer)
-                    continue;
+                AddProjectileThreat(shuriken.transform, shuriken.ProjectileId, shuriken.IsFlying, shuriken.HasPassedPlayer);
 
-                CombatEntityKey key = new CombatEntityKey("Projectile_" + shuriken.ProjectileId, 1);
-                AddCurrentThreat(CreateSnapshot(key, shuriken.transform.position, true, true));
-            }
+            EnemyProjectile[] enemyProjectiles = FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None);
+            foreach (EnemyProjectile projectile in enemyProjectiles)
+                AddProjectileThreat(projectile.transform, projectile.ProjectileId,
+                    projectile.IsHostileFlying, projectile.HasPassedPlayer);
+
+            TwinBossProjectile[] twinBossProjectiles = FindObjectsByType<TwinBossProjectile>(FindObjectsSortMode.None);
+            foreach (TwinBossProjectile projectile in twinBossProjectiles)
+                AddProjectileThreat(projectile.transform, projectile.ProjectileId,
+                    projectile.IsHostileFlying, projectile.HasPassedPlayer);
         }
 
         _endedThreats.Clear();
@@ -292,6 +295,20 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         _currentThreats.Add(snapshot);
         _previousThreats[snapshot.Target] = snapshot;
         ThreatChanged?.Invoke(snapshot);
+    }
+
+    /// <summary>
+    /// 같은 씬의 아직 플레이어를 지나지 않은 적대 투사체를 현재 수리검 위협 목록에 등록한다.
+    /// transform과 양수 projectileId를 사용해 기존 CreateSnapshot의 화면·인지·방향 판정을 적용한다.
+    /// </summary>
+    private void AddProjectileThreat(Transform projectile, int projectileId, bool isFlying, bool hasPassedPlayer)
+    {
+        if (projectile == null || projectile.gameObject.scene != gameObject.scene
+            || projectileId <= 0 || !isFlying || hasPassedPlayer)
+            return;
+
+        CombatEntityKey key = new CombatEntityKey("Projectile_" + projectileId, 1);
+        AddCurrentThreat(CreateSnapshot(key, projectile.position, true, true));
     }
 
     /// <summary>등록된 발소리의 수명·발행자를 확인하고 적의 현재 위치로 표시 결과와 초기 조회 목록을 갱신한다.</summary>
