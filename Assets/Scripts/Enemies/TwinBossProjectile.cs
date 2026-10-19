@@ -31,12 +31,17 @@ public sealed class TwinBossProjectile : MonoBehaviour
     private float _elapsed;
     private bool _reflected;
     private bool _flying;
+    private int _projectileId;
+    private bool _hasPassedPlayer;
     private int _telemetryAttackId;
     private string _telemetryParentPatternId;
     private string _telemetryPatternInstanceId;
 
     public event Action<TwinBossProjectile> ReflectedHit;
     public event Action<TwinBossProjectile> Released;
+    public bool IsHostileFlying => _flying && !_reflected;
+    public bool HasPassedPlayer => _hasPassedPlayer;
+    public int ProjectileId => _projectileId;
 
     /// <summary>
     /// start에서 end까지 radius 반경으로 쓸고 지나간 공간에 닿은 적대 비행 수리검을 가드 소리와 함께 없앤다.
@@ -92,6 +97,9 @@ public sealed class TwinBossProjectile : MonoBehaviour
             "TwinBossRanged", attackId, 1, IncomingAttackKind.Projectile);
         _elapsed = 0f;
         _reflected = false;
+        _hasPassedPlayer = false;
+        CombatSessionRuntime session = CombatSessionRuntime.Active;
+        _projectileId = session != null && session.IsInitialized ? session.AllocateProjectileId() : 0;
         _flying = true;
         if (_flightSound != SoundId.None)
             Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
@@ -114,6 +122,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
         }
         else
             SteerTowardsPlayer();
+        UpdatePassedPlayer();
         transform.rotation = Quaternion.LookRotation(_direction);
         int overlaps = Physics.OverlapSphereNonAlloc(transform.position, _hitRadius,
             _contacts, _collisionMask, QueryTriggerInteraction.Ignore);
@@ -141,6 +150,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
             return;
         }
         transform.position += _direction * distance;
+        UpdatePassedPlayer();
     }
 
     /// <summary>
@@ -154,6 +164,20 @@ public sealed class TwinBossProjectile : MonoBehaviour
         if (toTarget.sqrMagnitude <= _homingStopDistance * _homingStopDistance) return;
         _direction = Vector3.RotateTowards(_direction, toTarget.normalized,
             _homingTurnRate * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
+    }
+
+    /// <summary>
+    /// 플레이어 시점과 현재 투사체 방향을 비교해 플레이어를 통과했는지 판정한다.
+    /// 통과 상태는 비행 중 다시 해제하지 않고 HUD가 지나간 수리검을 숨기도록 유지한다.
+    /// </summary>
+    private void UpdatePassedPlayer()
+    {
+        if (_hasPassedPlayer || _reflected || _player == null)
+            return;
+
+        Vector3 playerPoint = _playerMotor != null ? _playerMotor.ViewOrigin : _player.transform.position;
+        if (Vector3.Dot(playerPoint - transform.position, _direction) <= 0f)
+            _hasPassedPlayer = true;
     }
 
     /// <summary>collider가 비행 대상 또는 장애물인지 반환하며 다른 적과 발사자 충돌을 제외한다.</summary>
