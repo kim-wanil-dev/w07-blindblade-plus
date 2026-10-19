@@ -16,12 +16,15 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     private const float MIN_LOOK_SENSITIVITY = 0.02f;
     private const float MAX_LOOK_SENSITIVITY = 0.5f;
     private const float SHURIKEN_PREVIEW_DURATION = 0.8f;
+    private const string POPUP_RESOURCE_PATH = "Prefabs/UI/Intro/GameSettingsPopup";
     private static GameSettingsPopupUI _instance;
 
     [Header("영속 설정 UI")]
     [SerializeField] private GameObject _modalRoot;
     [SerializeField] private Button _closeButton;
     [SerializeField] private IntroBambooButtonSliceEffect _closeButtonSliceEffect;
+    [SerializeField] private Button _quitButton;
+    [SerializeField] private IntroBambooButtonSliceEffect _quitButtonSliceEffect;
     [SerializeField] private TMP_Text _controlsText;
     [SerializeField] private Slider _volumeSlider;
     [SerializeField] private Slider _sensitivitySlider;
@@ -30,8 +33,8 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     private Coroutine _previewRoutine;
     private bool _bgmPausedForPreview;
     private Button _introButton;
-    private Button[] _menuButtons;
-    private bool[] _menuButtonStates;
+    private Button[] _menuButtons = Array.Empty<Button>();
+    private bool[] _menuButtonStates = Array.Empty<bool>();
     private bool _menuInputBlocked;
     private bool _openedForGameplay;
     private bool _isCloseAnimating;
@@ -50,6 +53,7 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
 
         _instance = this;
         _closeButton.onClick.AddListener(RequestClose);
+        _quitButton.onClick.AddListener(RequestQuit);
         DontDestroyOnLoad(gameObject);
     }
 
@@ -94,6 +98,8 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     void OnDestroy()
     {
         InputDeviceDisplay.DeviceChanged -= HandleDeviceChanged;
+        _closeButton.onClick.RemoveListener(RequestClose);
+        _quitButton.onClick.RemoveListener(RequestQuit);
         StopShurikenPreviewImmediately();
         if (_instance == this)
             _instance = null;
@@ -180,10 +186,20 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         return true;
     }
 
-    /// <summary>전투 상태에서 영속 설정 팝업을 열 수 있으면 열고 성공 여부를 반환한다.</summary>
+    /// <summary>
+    /// 전투 설정 입력을 받아 영속 팝업이 없으면 Resources 프리팹으로 준비하고 연다.
+    /// 인트로를 거치지 않은 씬 실행에서도 저장된 설정을 연결하며, 일시정지 진입 성공 여부를 반환한다.
+    /// </summary>
     public static bool TryOpenForGameplay()
     {
-        return _instance != null && _instance.OpenForGameplay();
+        if (_instance == null)
+        {
+            GameObject prefab = Resources.Load<GameObject>(POPUP_RESOURCE_PATH);
+            _instance = Instantiate(prefab).GetComponent<GameSettingsPopupUI>();
+            _instance.Configure();
+        }
+
+        return _instance.OpenForGameplay();
     }
 
     /// <summary>전투 일시정지 상태에서 열려 있는 설정 팝업을 닫을 수 있으면 닫고 성공 여부를 반환한다.</summary>
@@ -211,6 +227,9 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         _isCloseAnimating = false;
         _closeButton.interactable = true;
         _closeButtonSliceEffect.RestoreOriginal();
+        _quitButton.gameObject.SetActive(_openedForGameplay);
+        _quitButton.interactable = true;
+        _quitButtonSliceEffect.RestoreOriginal();
         for (int i = 0; i < _menuButtons.Length; i++)
         {
             if (_menuButtons[i] == null)
@@ -280,6 +299,49 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     {
         _isCloseAnimating = false;
         ClosePopup();
+    }
+
+    /// <summary>
+    /// 게임 중 설정 팝업에서 종료 입력을 받고 대나무 절단 연출을 시작한다.
+    /// 팝업 표시 상태와 gameplay 진입 여부를 확인하고, 완료 후 종료 처리를 예약한다.
+    /// </summary>
+    private void RequestQuit()
+    {
+        if (!IsVisible || !_openedForGameplay || _isCloseAnimating)
+            return;
+
+        if (_quitButtonSliceEffect.Play(CompleteQuitSlice))
+        {
+            _isCloseAnimating = true;
+            _quitButton.interactable = false;
+            return;
+        }
+
+        QuitGame();
+    }
+
+    /// <summary>
+    /// 종료 버튼 절단 연출이 끝난 뒤 설정값을 저장하고 앱을 종료한다.
+    /// 완료된 애니메이션 뒤 PlayerPrefs를 저장하고 Editor 또는 플레이어를 닫는다.
+    /// </summary>
+    private void CompleteQuitSlice()
+    {
+        QuitGame();
+    }
+
+    /// <summary>
+    /// 미리듣기와 설정값을 정리한 뒤 현재 앱 또는 Editor Play Mode를 종료한다.
+    /// 종료 시 활성 미리듣기를 중지하고 PlayerPrefs를 저장한 다음 실행 환경을 닫는다.
+    /// </summary>
+    private void QuitGame()
+    {
+        StopShurikenPreviewImmediately();
+        PlayerPrefs.Save();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
     }
 
     /// <summary>팝업 진입 전에 기록한 인트로 버튼별 interactable 상태를 원래 값으로 복원한다.</summary>
