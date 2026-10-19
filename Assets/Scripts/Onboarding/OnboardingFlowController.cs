@@ -18,6 +18,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private const int PERFECT_DODGE_STAGE = 1;
     private const int MELEE_STAGE = 2;
     private const int RANGED_SWORD_WAVE_OBJECTIVE = 2;
+    private const int RANGED_THROW_BURST_COUNT = 3;
     private const int ULTIMATE_PARRY_OBJECTIVE = 2;
     private const int FINAL_STAGE_ULTIMATE_OBJECTIVE = 3;
     private const float ARENA_RADIUS = 23.6f;
@@ -41,9 +42,11 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private const int SWORD_WAVE_TARGET_COUNT = 2;
     private const float THROWER_DISTANCE = 12f;
     private const float THROW_INTERVAL = 2f;
+    private const float RANGED_THROW_BURST_GAP = 0.3f;
     private const float HEALTH_REGEN_PER_SECOND = 45f;
     private const float STAMINA_REGEN_PER_SECOND = 100f;
     private const float STAGE1_FADE_DURATION = 0.5f;
+    private const float FINAL_STAGE_EXIT_DELAY = 0.8f;
     private const float OPENING_FADE_DURATION = 0.6f;
 
     private static int _savedRunStage;
@@ -53,6 +56,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private static bool _targetThreadTutorialSeen;
     private static bool _perfectDodgeTutorialSeen;
     private static bool _parryMeterTutorialSeen;
+    private static bool _swordWaveTutorialSeen;
     private static bool _parryRewardTutorialRunning;
 
     [Header("씬 연습 자산")]
@@ -140,6 +144,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _targetThreadTutorialSeen = false;
         _perfectDodgeTutorialSeen = false;
         _parryMeterTutorialSeen = false;
+        _swordWaveTutorialSeen = false;
         _parryRewardTutorialRunning = false;
         PlayerPerfectPulse.ResetOnboardingStartPulseFade();
         OnboardingTelemetryRecorder.BeginNewRun();
@@ -556,7 +561,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             _combat.GuardContactOutcome, _combat.GuardTimingWindow);
     }
 
-    /// <summary>현재 2초 간격 시각에 BambooThrower가 예약 허용한 경우 실제 전조·투척 사이클을 시작한다.</summary>
+    /// <summary>현재 2초 간격 시각에 연습 단계별 전조·투척을 시작한다. 일섬 단계는 3발을 연속 발사한다.</summary>
     private void UpdateRangedThrower()
     {
         bool followUpStage = _stage == RANGED_STAGE || _stage == FINAL_STAGE;
@@ -570,7 +575,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
             return;
         }
         if (Time.unscaledTime < _nextThrowAt) return;
-        if (_trainingThrower.TryThrowForOnboarding(_director))
+        int shotCount = _stage == RANGED_STAGE ? RANGED_THROW_BURST_COUNT : 1;
+        if (_trainingThrower.TryThrowForOnboarding(_director, shotCount, RANGED_THROW_BURST_GAP))
             _nextThrowAt = Time.unscaledTime + THROW_INTERVAL;
         else
             _nextThrowAt = Time.unscaledTime + 0.2f;
@@ -1035,7 +1041,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     }
 
     /// <summary>
-    /// nextObjective의 목표로 넘어가며 단계 완료 카드 없이 안내를 갱신한다.
+    /// nextObjective의 목표로 넘어가며 단계 완료 카드 없이 안내를 갱신하고 첫 일섬 목표에는 설명판을 보여 준다.
     /// 거합 게이지를 모으는 중에는 집중을 고정하지 않고, 최종 거합 목표에서만 집중을 유지한다.
     /// </summary>
     private IEnumerator AdvanceToNextObjective(int nextObjective)
@@ -1047,27 +1053,41 @@ public sealed class OnboardingFlowController : MonoBehaviour
             _empower.HoldOnboardingReady();
             ClearRangedPractice();
         }
+        bool showSwordWaveTutorial = _stage == RANGED_STAGE
+            && nextObjective == RANGED_SWORD_WAVE_OBJECTIVE && !_swordWaveTutorialSeen;
         _objectiveIndex = nextObjective;
-        _hud.ShowObjective(_stage, _objectiveIndex, true);
+        _hud.ShowObjective(_stage, _objectiveIndex, !showSwordWaveTutorial);
         ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
         _advanceQueued = false;
+        if (showSwordWaveTutorial)
+        {
+            _swordWaveTutorialSeen = true;
+            PauseTutorial();
+            _hud.ShowTutorial(_hud.SwordWaveTutorialText, _hud.SwordWaveTutorialGamepadText);
+            yield return WaitForTutorialClick();
+            _hud.HideTutorial();
+            _inputManager.ConsumeOnboardingAttackUntilRelease();
+            EndTutorialPause();
+        }
         if (_stage == FINAL_STAGE && _objectiveIndex == FINAL_STAGE_ULTIMATE_OBJECTIVE
             && _ultimateTutorialPending)
             yield return ShowUltimateTutorial();
         yield return ReadyStageAndUnlockInput();
     }
 
-    /// <summary>중복 이벤트를 막고 다음 단계 이동 코루틴을 예약한다.</summary>
+    /// <summary>중복 완료를 막고 마지막 단계면 남은 수리검을 지운 뒤 다음 단계 전환을 예약한다.</summary>
     private void QueueAdvance()
     {
         if (_advanceQueued) return;
         _advanceQueued = true;
+        if (_stage == FINAL_STAGE)
+            ClearRangedPractice();
         ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 
     /// <summary>
-    /// 실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 표시와 필요한 재배치를 진행한다.
+    /// 실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 표시 또는 마지막 씬 전환을 진행한다.
     /// 극한 회피 단계는 파동 확산이 끝나면 안내를 멈춰 보여 준 뒤 파동이 사라질 때까지 기다린다.
     /// </summary>
     private IEnumerator AdvanceAfterResolvedEvent()
@@ -1100,13 +1120,15 @@ public sealed class OnboardingFlowController : MonoBehaviour
             yield return null;
         }
         int nextStage = _stage + 1;
-        yield return _hud.ShowStageCompletion(_stage, nextStage <= FINAL_STAGE);
-        if (_restartQueued) yield break;
         if (nextStage > FINAL_STAGE)
         {
+            yield return new WaitForSecondsRealtime(FINAL_STAGE_EXIT_DELAY);
+            if (_restartQueued) yield break;
             CompleteOnboarding();
             yield break;
         }
+        yield return _hud.ShowStageCompletion(_stage);
+        if (_restartQueued) yield break;
 
         yield return _hud.FadeForReposition(() => EnterStage(nextStage));
         if (_restartQueued) yield break;

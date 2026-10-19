@@ -111,8 +111,8 @@ public sealed class OnboardingHud : MonoBehaviour
             new[] { "막기 1회", "공격 쳐내기 0/1" }),
         new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
             new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
-            "일섬* - 마우스 왼쪽 버튼 클릭\n*전방으로 검기를 날리며 돌진한다",
-            "일섬* - RB 버튼\n*전방으로 검기를 날리며 돌진한다", null, 2),
+            "일섬 - 마우스 왼쪽 버튼 클릭",
+            "일섬 - RB 버튼", null, 2),
         new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
             new[] { "정확한 시점에 공격을 막아 쳐내기 0/3", "정확한 시점에 공격을 막아 쳐내기 1/3", "정확한 시점에 공격을 막아 쳐내기 2/3", "거합으로 적 8명 처치" },
             "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.",
@@ -130,7 +130,9 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 좌클릭 홀드로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\n마우스 왼쪽 버튼 클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 RB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
@@ -183,6 +185,8 @@ public sealed class OnboardingHud : MonoBehaviour
     public string ParryHudTutorialGamepadText => _parryHudTutorialGamepadText;
     public string ParryBeadsTutorialText => _parryBeadsTutorialText;
     public string ParryBeadsTutorialGamepadText => _parryBeadsTutorialGamepadText;
+    public string SwordWaveTutorialText => _swordWaveTutorialText;
+    public string SwordWaveTutorialGamepadText => _swordWaveTutorialGamepadText;
     public string UltimateReadyTutorialText => _ultimateReadyTutorialText;
     public string UltimateReadyTutorialGamepadText => _ultimateReadyTutorialGamepadText;
 
@@ -414,14 +418,14 @@ public sealed class OnboardingHud : MonoBehaviour
     }
 
     /// <summary>
-    /// 완료된 stage 번호와 다음 온보딩 단계 여부를 사용해 단계 전환 화면을 표시한다.
-    /// 마지막 단계는 설명 없이 1막만 표시하며 남아 있는 목표 갱신 카드는 이 카드로 대체한다.
+    /// 완료된 stage 번호를 사용해 다음 온보딩 단계의 전환 화면을 표시한다.
+    /// 남아 있는 목표 갱신 카드는 이 카드로 대체한다.
     /// </summary>
-    public IEnumerator ShowStageCompletion(int stage, bool hasNextStage)
+    public IEnumerator ShowStageCompletion(int stage)
     {
         StopObjectiveUpdate();
-        string heading = hasNextStage ? "단계 " + (stage + 1) + "/" + _prompts.Length + " 완료" : "1막";
-        string detail = hasNextStage ? "다음 단계 " + (stage + 2) + "/" + _prompts.Length : string.Empty;
+        string heading = "단계 " + (stage + 1) + "/" + _prompts.Length + " 완료";
+        string detail = "다음 단계 " + (stage + 2) + "/" + _prompts.Length;
         yield return ShowCompletion(heading, detail, 0.65f);
     }
 
