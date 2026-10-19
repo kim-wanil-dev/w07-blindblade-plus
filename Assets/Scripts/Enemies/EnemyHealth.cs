@@ -20,6 +20,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     private bool _dashTargetable = true;
     [SerializeField, Tooltip("체력을 함께 쓰는 상대 적. 한쪽이 피해를 입으면 상대 체력도 같은 값이 되고 0이 되면 함께 쓰러진다. 비우면 혼자 쓴다.")]
     private EnemyHealth _sharedHealth;
+    [SerializeField, Tooltip("켜면 체력을 함께 쓰는 묶음이 한 번의 범위 공격에 함께 걸렸을 때 이 적이 먼저 피해를 받는다.")]
+    private bool _sharedDamagePriority;
     [Header("피격 반응")]
     [SerializeField, Min(0f)] private float _hitRecovery = 0.16f;
     [SerializeField, Min(0f)] private float _hitInterruptCooldown = 0.45f;
@@ -40,6 +42,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     /// <summary>_sharedHealth와 자신 중 인스턴스 ID가 작은 쪽을 반환해 같은 체력 묶음의 타격 기록을 하나로 합친다.</summary>
     public EnemyHealth SharedDamageKey => _sharedHealth != null && _sharedHealth.GetInstanceID() < GetInstanceID()
         ? _sharedHealth : this;
+    public bool HasSharedDamagePriority => _sharedDamagePriority;
     public string TargetId => "Enemy_" + GetInstanceID();
     public int SpawnGeneration => _spawnGeneration;
     public event Action<DamageContext> Damaged;
@@ -125,6 +128,16 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
         Died?.Invoke(this);
         gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// 체력을 함께 쓰는 상대가 대신 맞은 범위 공격에 이 적도 걸렸을 때 point에 혈흔만 재생한다.
+    /// 살아 있고 무적이 아니며 피격 판정 _hitCollider가 켜져 있을 때만 재생하고 HP·피격 반응·Damaged는 바꾸지 않는다.
+    /// </summary>
+    public void PlaySharedHitEffect(Vector3 point)
+    {
+        if (!IsAlive || _invulnerable || !_hitCollider.enabled) return;
+        Game.Instance.EffectManager.Play(EffectId.BloodHit, point);
     }
 
     /// <summary>invulnerable 값으로 일시적인 피해 수신 차단을 설정한다. 체력과 생존 상태는 유지한다.</summary>
