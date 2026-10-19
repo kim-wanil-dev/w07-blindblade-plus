@@ -13,7 +13,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 {
     private const int ENTRANCE_WAVE_LAYERS = 5;
     private const float ACT_TITLE_DURATION = 1.5f;
-    private const float RAINY_TRANSITION_DELAY = 0.8f;
+    private const float ACT_COMPLETE_DELAY = 1.5f;
 
     [Header("스테이지 연결")]
     [SerializeField] private BambooDefenseDirector _director;
@@ -48,6 +48,8 @@ public sealed class BambooStage1Controller : MonoBehaviour
     private Coroutine _actTitleRoutine;
     private Coroutine _entranceWaveRoutine;
     private Coroutine _stageTransitionRoutine;
+    private Coroutine _deathFocusRoutine;
+    private ActCompleteUI _actCompleteUi;
     private Camera _playerCamera;
     private float _shakeElapsed;
     private StagePhase _phase;
@@ -108,6 +110,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 
     void OnEnable()
     {
+        _bossHealth.Dying += HandleBossDying;
         _bossHealth.Died += HandleBossDied;
     }
 
@@ -137,6 +140,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
 
     void OnDisable()
     {
+        _bossHealth.Dying -= HandleBossDying;
         _bossHealth.Died -= HandleBossDied;
         if (_warningRoutine != null)
             StopCoroutine(_warningRoutine);
@@ -146,10 +150,15 @@ public sealed class BambooStage1Controller : MonoBehaviour
             StopCoroutine(_entranceWaveRoutine);
         if (_stageTransitionRoutine != null)
             StopCoroutine(_stageTransitionRoutine);
+        if (_deathFocusRoutine != null)
+            StopCoroutine(_deathFocusRoutine);
         _warningRoutine = null;
         _actTitleRoutine = null;
         _entranceWaveRoutine = null;
         _stageTransitionRoutine = null;
+        _deathFocusRoutine = null;
+        if (_actCompleteUi != null) Destroy(_actCompleteUi.gameObject);
+        _actCompleteUi = null;
         if (_warning != null) _warning.alpha = 0f;
         _playerCamera = null;
     }
@@ -329,7 +338,18 @@ public sealed class BambooStage1Controller : MonoBehaviour
         }
     }
 
-    /// <summary>bossHealth가 현재 보스의 사망을 알리면 2막 진입을 저장하고 씬 전환을 예약한다.</summary>
+    /// <summary>bossHealth가 비활성화되기 전 보스 외형을 가루 잔상으로 복제하고 카메라를 향하게 한다.</summary>
+    private void HandleBossDying(EnemyHealth bossHealth)
+    {
+        if (bossHealth != _bossHealth || _phase != StagePhase.Boss) return;
+        BossDeathDissolve.Play(bossHealth);
+        if (_deathFocusRoutine != null) StopCoroutine(_deathFocusRoutine);
+        Collider bossCollider = bossHealth.GetComponent<Collider>();
+        Vector3 target = bossCollider != null ? bossCollider.bounds.center : bossHealth.transform.position + Vector3.up;
+        _deathFocusRoutine = StartCoroutine(BossDeathDissolve.FocusCamera(target));
+    }
+
+    /// <summary>bossHealth의 사망을 확정하면 1막 완료 상태로 전환하고 소멸 뒤 완료 UI 표시를 예약한다.</summary>
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         if (bossHealth == _bossHealth && _phase == StagePhase.Boss)
@@ -337,7 +357,8 @@ public sealed class BambooStage1Controller : MonoBehaviour
             _phase = StagePhase.Complete;
             BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-2", true);
             BambooStage1Progress.MarkRainyStageReached();
-            _stageTransitionRoutine = StartCoroutine(TransitionToRainyStage());
+            Game.Instance.GameStateManager.RequestActComplete();
+            _stageTransitionRoutine = StartCoroutine(ShowActCompleteAfterDeath());
         }
     }
 
@@ -351,13 +372,21 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _actTitleRoutine = null;
     }
 
-    /// <summary>보스 사망 뒤 짧게 기다리고 페이드와 함께 RainyTwinBoss 씬으로 이동한다.</summary>
-    private IEnumerator TransitionToRainyStage()
+    /// <summary>보스 소멸 종료 1.5초 뒤 공용 UI 캔버스 중앙에 1막 완료 카드를 열고 버튼을 선택한다.</summary>
+    private IEnumerator ShowActCompleteAfterDeath()
     {
-        yield return new WaitForSecondsRealtime(RAINY_TRANSITION_DELAY);
+        yield return new WaitForSecondsRealtime(BossDeathDissolve.DURATION + ACT_COMPLETE_DELAY);
         _stageTransitionRoutine = null;
-        if (Game.Instance.GameStateManager.State != GameplayState.Playing)
+        if (Game.Instance.GameStateManager.State != GameplayState.ActComplete)
             yield break;
-        SceneTransitionOverlay.TransitionToScene("RainyTwinBoss", 0.5f, null);
+        ActCompleteUI prefab = Resources.Load<ActCompleteUI>("Prefabs/UI/ActCompleteUI");
+        Canvas canvas = Game.Instance.UIManager.GetComponentInChildren<Canvas>(true);
+        if (prefab == null || canvas == null)
+        {
+            Debug.LogError("1막 완료 UI 프리팹 또는 공용 캔버스를 찾지 못했습니다.", this);
+            yield break;
+        }
+        _actCompleteUi = Instantiate(prefab, canvas.transform, false);
+        _actCompleteUi.Show();
     }
 }
