@@ -2,6 +2,7 @@ using System;
 
 using UnityEngine;
 
+using BlindBlade.Combat.Contracts;
 
 public class EnemyProjectile : MonoBehaviour
 {
@@ -27,6 +28,8 @@ public class EnemyProjectile : MonoBehaviour
     private float _elapsedTime;
     private bool _isFlying;
     private bool _reflected;
+    private int _projectileId;
+    private bool _hasPassedPlayer;
 
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
@@ -41,6 +44,9 @@ public class EnemyProjectile : MonoBehaviour
 
     protected DamageContext Damage => _damage;
     protected Vector3 FlightDirection => _direction;
+    public bool IsHostileFlying => _isFlying && !_reflected;
+    public bool HasPassedPlayer => _hasPassedPlayer;
+    public int ProjectileId => _projectileId;
 
     void Update()
     {
@@ -55,6 +61,7 @@ public class EnemyProjectile : MonoBehaviour
         }
 
         SteerTowardsTarget();
+        UpdatePassedPlayer();
 
 #if UNITY_EDITOR
         _debugStart = transform.position;
@@ -100,6 +107,7 @@ public class EnemyProjectile : MonoBehaviour
         }
 
         transform.position += _direction * distance;
+        UpdatePassedPlayer();
     }
 
     void OnDisable()
@@ -118,6 +126,9 @@ public class EnemyProjectile : MonoBehaviour
         _speedMultiplier = 1f;
         _homingMultiplier = 1f;
         _reflected = false;
+        _hasPassedPlayer = false;
+        CombatSessionRuntime session = CombatSessionRuntime.Active;
+        _projectileId = session != null && session.IsInitialized ? session.AllocateProjectileId() : 0;
         _target = target;
         _targetMotor = target != null ? target.GetComponent<PlayerMotor>() : null;
         _direction = direction.normalized;
@@ -168,6 +179,20 @@ public class EnemyProjectile : MonoBehaviour
         _direction = Vector3.RotateTowards(_direction, toTarget.normalized,
             _homingTurnRate * _homingMultiplier * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
         transform.rotation = Quaternion.LookRotation(_direction);
+    }
+
+    /// <summary>
+    /// _targetMotor의 시점과 현재 투사체 방향을 비교해 플레이어를 통과했는지 판정한다.
+    /// 통과 상태는 비행 중 다시 해제하지 않고 HUD가 지나간 수리검을 숨기도록 유지한다.
+    /// </summary>
+    private void UpdatePassedPlayer()
+    {
+        if (_hasPassedPlayer || _reflected || _target == null)
+            return;
+
+        Vector3 playerPoint = _targetMotor != null ? _targetMotor.ViewOrigin : _target.position;
+        if (Vector3.Dot(playerPoint - transform.position, _direction) <= 0f)
+            _hasPassedPlayer = true;
     }
 
     /// <summary>
