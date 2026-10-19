@@ -48,8 +48,9 @@ const STEP_HEADERS = ['step_key','received_kst','run_id','session_id','stage_id'
   'dropped_inputs','reason'];
 const DASHBOARD_EVENT_HEADERS = ['event_key','received_kst','schema_version','build_version','config_version','session_id','stage_id',
   'stage_attempt_id','event_sequence','event_type','occurred_at_kst','attack_id','kind','pattern_id','outcome','is_attempt',
-  'applied_damage','x','z','origin_x','origin_z','duration_seconds','reaction_seconds','input_to_contact_seconds','run_id',
-  'step_index','objective_index','reason','enemy_archetype','beast_probability','parent_pattern_id','attacker_actor','boss_actor',
+  'input_id','action_id','input_status','reaction_association','expected','defense_outcome','applied_damage','x','z','origin_x','origin_z',
+  'duration_seconds','reaction_seconds','input_to_contact_seconds','run_id','step_index','objective_index','reason','enemy_archetype',
+  'beast_probability','parent_pattern_id','attacker_actor','boss_actor',
   'pattern_outcome','arena_radius','arena_center_x','arena_center_z','time_since_stage_start'];
 const DASHBOARD_SESSION_HEADERS = ['stage_attempt_id','session_id','stage_id','build_version','config_version','started_kst',
   'last_event_sequence','status','active_play_seconds','kills','deaths','damageTaken','damageHitCount','dodgeAttempts','dodgeRejected',
@@ -68,8 +69,10 @@ const DASHBOARD_SESSION_HEADERS = ['stage_attempt_id','session_id','stage_id','b
   'bossPatternCounteringCompleted','bossPatternCounteringInterrupted','bossPatternCounteringCancelled',
   'bossPatternCounteringMeanDurationSeconds','entry_mode','schema_version'];
 const DASHBOARD_STEP_HEADERS = ['received_kst','run_id','session_id','stage_id','stage_attempt_id','step_index','objective_index',
-  'retry_count','active_seconds','first_input_seconds','attempts','wrong_attempts','movement_attempts','reason'];
+  'step_key','retry_count','active_seconds','first_input_seconds','attempts','wrong_attempts','movement_attempts',
+  'started_inputs','rejected_inputs','buffered_inputs','dropped_inputs','reason'];
 const DASHBOARD_EVENT_PAGE_SIZE = 2500;
+const DASHBOARD_DATA_GENERATION_PROPERTY = 'DASHBOARD_DATA_GENERATION';
 const UPLOAD_INDEX_SHEET = '_TelemetryUploadIndex';
 const UPLOAD_INDEX_VERSION = 'telemetry-upload-index-v1';
 const UPLOAD_INDEX_CHUNK_SIZE = 5000;
@@ -135,7 +138,10 @@ function resetTelemetrySheets() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    const book = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID'));
+    const properties = PropertiesService.getScriptProperties();
+    const generation = Number(properties.getProperty(DASHBOARD_DATA_GENERATION_PROPERTY) || '0');
+    properties.setProperty(DASHBOARD_DATA_GENERATION_PROPERTY,String(Number.isSafeInteger(generation) ? generation+1 : 1));
+    const book = SpreadsheetApp.openById(properties.getProperty('SPREADSHEET_ID'));
     [['Events',EVENT_HEADERS],['Sessions',SESSION_HEADERS],['OnboardingSteps',STEP_HEADERS]].forEach(([name,headers]) => {
       const sheet = book.getSheetByName(name) || book.insertSheet(name);
       sheet.clearContents();
@@ -369,35 +375,74 @@ function dashboardSnapshot(body, properties) {
   if (!spreadsheetId) return jsonResponse({ok:false,error:'not_configured'});
   const book = SpreadsheetApp.openById(spreadsheetId);
   const dataset = String(body.dataset || 'all');
-  const generatedAtKst = formatKst(new Date());
-  if (dataset === 'core') {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return jsonResponse({ok:false,error:'dashboard_busy'});
+  try {
+    const generatedAtKst = formatKst(new Date());
+    const generation = dashboardDataGeneration(properties);
+    if (dataset === 'core') {
+      const eventsSheet = book.getSheetByName('Events');
+      const eventsRowLimit = eventsSheet ? Math.max(0,eventsSheet.getLastRow()-1) : 0;
+      return jsonResponse({
+        ok:true,
+        generatedAtKst:generatedAtKst,
+        snapshot:{eventsGeneration:generation,eventsRowLimit:eventsRowLimit},
+        sheets:{
+          Sessions:dashboardRows(book.getSheetByName('Sessions'),DASHBOARD_SESSION_HEADERS),
+          OnboardingSteps:dashboardRows(book.getSheetByName('OnboardingSteps'),DASHBOARD_STEP_HEADERS)
+        }
+      });
+    }
+    if (dataset === 'events') {
+      const offset = Number(body.offset ?? 0);
+      const limit = Number(body.limit ?? DASHBOARD_EVENT_PAGE_SIZE);
+      const hasGeneration = body.snapshotGeneration !== undefined && body.snapshotGeneration !== null && body.snapshotGeneration !== '';
+      const hasRowLimit = body.snapshotRowLimit !== undefined && body.snapshotRowLimit !== null && body.snapshotRowLimit !== '';
+      if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit)
+          || limit < 1 || limit > DASHBOARD_EVENT_PAGE_SIZE || hasGeneration !== hasRowLimit)
+        return jsonResponse({ok:false,error:'invalid_page'});
+      let rowLimit = null;
+      if (hasGeneration) {
+        const requestedGeneration = Number(body.snapshotGeneration);
+        rowLimit = Number(body.snapshotRowLimit);
+        if (!Number.isSafeInteger(requestedGeneration) || requestedGeneration < 0
+            || !Number.isSafeInteger(rowLimit) || rowLimit < 0)
+          return jsonResponse({ok:false,error:'invalid_snapshot'});
+        if (requestedGeneration !== generation) return jsonResponse({ok:false,error:'snapshot_changed'});
+      }
+      const eventsSheet = book.getSheetByName('Events');
+      const availableRows = eventsSheet ? Math.max(0,eventsSheet.getLastRow()-1) : 0;
+      if (rowLimit !== null && availableRows < rowLimit) return jsonResponse({ok:false,error:'snapshot_changed'});
+      if (rowLimit === null) rowLimit = availableRows;
+      const page = dashboardRowsPage(eventsSheet,DASHBOARD_EVENT_HEADERS,offset,limit,rowLimit);
+      return jsonResponse({
+        ok:true,
+        generatedAtKst:generatedAtKst,
+        snapshot:{eventsGeneration:generation,eventsRowLimit:rowLimit},
+        sheets:{Events:page.rows},
+        pagination:page.pagination
+      });
+    }
+    if (dataset !== 'all') return jsonResponse({ok:false,error:'invalid_dataset'});
     return jsonResponse({
       ok:true,
       generatedAtKst:generatedAtKst,
+      snapshot:{eventsGeneration:generation,eventsRowLimit:Math.max(0,(book.getSheetByName('Events')?.getLastRow()||1)-1)},
       sheets:{
+        Events:dashboardRows(book.getSheetByName('Events'),DASHBOARD_EVENT_HEADERS),
         Sessions:dashboardRows(book.getSheetByName('Sessions'),DASHBOARD_SESSION_HEADERS),
         OnboardingSteps:dashboardRows(book.getSheetByName('OnboardingSteps'),DASHBOARD_STEP_HEADERS)
       }
     });
+  } finally {
+    lock.releaseLock();
   }
-  if (dataset === 'events') {
-    const offset = Number(body.offset ?? 0);
-    const limit = Number(body.limit ?? DASHBOARD_EVENT_PAGE_SIZE);
-    if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit)
-        || limit < 1 || limit > DASHBOARD_EVENT_PAGE_SIZE) return jsonResponse({ok:false,error:'invalid_page'});
-    const page = dashboardRowsPage(book.getSheetByName('Events'),DASHBOARD_EVENT_HEADERS,offset,limit);
-    return jsonResponse({ok:true,generatedAtKst:generatedAtKst,sheets:{Events:page.rows},pagination:page.pagination});
-  }
-  if (dataset !== 'all') return jsonResponse({ok:false,error:'invalid_dataset'});
-  return jsonResponse({
-    ok:true,
-    generatedAtKst:generatedAtKst,
-    sheets:{
-      Events:dashboardRows(book.getSheetByName('Events'),DASHBOARD_EVENT_HEADERS),
-      Sessions:dashboardRows(book.getSheetByName('Sessions'),DASHBOARD_SESSION_HEADERS),
-      OnboardingSteps:dashboardRows(book.getSheetByName('OnboardingSteps'),DASHBOARD_STEP_HEADERS)
-    }
-  });
+}
+
+/** 초기화 세대를 숫자로 반환하며 아직 초기화 이력이 없는 시트는 0세대로 처리한다. */
+function dashboardDataGeneration(properties) {
+  const generation = Number(properties.getProperty(DASHBOARD_DATA_GENERATION_PROPERTY) || '0');
+  return Number.isSafeInteger(generation) && generation >= 0 ? generation : 0;
 }
 
 /** 지정한 분석 열만 객체 행으로 만들어 시트의 불필요한 열 전송을 막는다. */
@@ -406,7 +451,7 @@ function dashboardRows(sheet, allowedHeaders) {
 }
 
 /** 지정한 행 구간만 객체로 만들어 페이지 메타데이터와 함께 반환한다. */
-function dashboardRowsPage(sheet, allowedHeaders, offset, limit) {
+function dashboardRowsPage(sheet, allowedHeaders, offset, limit, rowLimit = null) {
   if (!sheet || sheet.getLastRow() < 2 || sheet.getLastColumn() < 1)
     return {rows:[],pagination:{offset:0,limit:0,totalRows:0,nextOffset:0}};
   const lastRow = sheet.getLastRow();
@@ -414,18 +459,19 @@ function dashboardRowsPage(sheet, allowedHeaders, offset, limit) {
   const headers = sheet.getRange(1,1,1,lastColumn).getDisplayValues()[0].map(value => String(value).trim());
   const columns = allowedHeaders.map(name => ({name,index:headers.indexOf(name)}))
     .filter(item => item.index >= 0).sort((left,right) => left.index-right.index);
-  const totalRows = lastRow-1;
+  const totalRows = Math.min(lastRow-1,rowLimit ?? lastRow-1);
   const startOffset = Math.min(offset,totalRows);
   const rowCount = Math.min(limit ?? totalRows,totalRows-startOffset);
   if (rowCount < 1) return {rows:[],pagination:{offset:startOffset,limit:0,totalRows:totalRows,nextOffset:startOffset}};
   if (columns.length < 1) return {rows:[],pagination:{offset:startOffset,limit:rowCount,totalRows:totalRows,nextOffset:startOffset+rowCount}};
   const firstColumnIndex = columns[0].index;
   const lastColumnIndex = columns[columns.length-1].index;
-  const values = sheet.getRange(2+startOffset,firstColumnIndex+1,rowCount,lastColumnIndex-firstColumnIndex+1).getDisplayValues();
+  const values = sheet.getRange(2+startOffset,firstColumnIndex+1,rowCount,lastColumnIndex-firstColumnIndex+1).getValues();
   const records = values.map(row => {
     const record = {};
     columns.forEach(column => {
-      const value = row[column.index-firstColumnIndex];
+      const rawValue = row[column.index-firstColumnIndex];
+      const value = rawValue instanceof Date ? formatKst(rawValue) : rawValue;
       if (value !== '') record[column.name]=value;
     });
     return record;
