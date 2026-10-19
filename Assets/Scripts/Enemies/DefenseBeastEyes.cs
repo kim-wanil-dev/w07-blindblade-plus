@@ -7,12 +7,15 @@ using UnityEngine.Rendering;
 /// 남은 점은 머리 뒤 바깥쪽으로 흘러가며 늑대 움직임에 따라 바람에 밀리듯 흔들리고 꼬리로 갈수록 펄럭인다.
 /// 줄기와 점은 눈 전용 발광 셰이더(DefenseBeastEyeStreak)로 윤곽선 합성 뒤에 더해 그리며, 몸 연기처럼 파동에 드러날 때만 보인다.
 /// 몸 연기가 붉어지는 전조 동안에는 줄기가 더 밝고 굵어진다.
+/// 물기 돌진이 확정되는 순간(DefenseBeastLeapAttack.AttackCommitted) 쌍둥이 늑대 보스처럼 두 눈에서 파동과 상관없이 보이는 하늘색 섬광이 번쩍인다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class DefenseBeastEyes : MonoBehaviour
 {
     private const float MAX_SWAY_DELTA_TIME = 0.05f;
     private const float FLUTTER_SEED_RANGE = 100f;
+    private const float GLINT_SORTING_FUDGE = 100f;
+    private const float GLINT_MAX_SCREEN_SIZE = 4f;
 
     private static readonly int _intensityId = Shader.PropertyToID("_Intensity");
     private static readonly int _dotModeId = Shader.PropertyToID("_DotMode");
@@ -80,8 +83,31 @@ public sealed class DefenseBeastEyes : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("몸 연기가 완전히 붉어졌을 때 줄기 굵기 배율")]
     private float _warningWidthScale = 1.5f;
 
+    [Header("돌진 전 번쩍임")]
+    [SerializeField, Tooltip("번쩍임 색")]
+    private Color _glintColor = new Color(0.5691823f, 0.8328799f, 1f, 1f);
+    [SerializeField, Min(0.01f), Tooltip("번쩍임이 가장 커졌을 때 기본 크기(미터)")]
+    private float _glintSize = 0.9f;
+    [SerializeField, Min(0.1f), Tooltip("번쩍임 좌우 길이를 기본 크기의 몇 배로 늘일지 정한다")]
+    private float _glintWidthScale = 1f;
+    [SerializeField, Min(0.1f), Tooltip("번쩍임 세로 길이를 기본 크기의 몇 배로 늘일지 정한다")]
+    private float _glintHeightScale = 1.5f;
+    [SerializeField, Tooltip("눈 좌표 기준 번쩍임 중심의 머리 로컬 높이 오프셋(미터). 음수는 아래다.")]
+    private float _glintVerticalOffset = -0.5f;
+    [SerializeField, Min(0.01f), Tooltip("강조 뒤 원래 크기에서 사라지는 시간(초)")]
+    private float _glintDuration = 0.4f;
+    [SerializeField, Min(1f), Tooltip("번쩍임이 처음 터질 때 원래 크기의 몇 배로 커질지 정한다")]
+    private float _glintEmphasisScale = 2.25f;
+    [SerializeField, Min(0.01f), Tooltip("처음 커진 크기에서 원래 크기로 돌아오는 시간(초)")]
+    private float _glintEmphasisDuration = 0.2f;
+    [SerializeField, Min(0f), Tooltip("번쩍임이 0에서 강조 크기까지 커지는 시간(초)")]
+    private float _glintPopDuration = 0.03f;
+    private DefenseBeastLeapAttack _attack;
+    private ParticleSystem[] _glints;
+
     void Awake()
     {
+        _attack = GetComponent<DefenseBeastLeapAttack>();
         int eyeCount = _eyeOffsets.Length;
         int capacity = Mathf.CeilToInt(_lifetime / _emitInterval) + 2;
         _properties = new MaterialPropertyBlock();
@@ -117,6 +143,18 @@ public sealed class DefenseBeastEyes : MonoBehaviour
             _lastEmitAt[i] = float.NegativeInfinity;
             _lines[i].positionCount = 0;
         }
+    }
+
+    void Start()
+    {
+        // 경고 표시가 Awake에서 속성 블록과 몸 연기 렌더러를 준비한 뒤 섬광을 더한다.
+        CreateGlints();
+        _attack.AttackCommitted += HandleAttackCommitted;
+    }
+
+    void OnDestroy()
+    {
+        _attack.AttackCommitted -= HandleAttackCommitted;
     }
 
     void LateUpdate()
@@ -187,6 +225,73 @@ public sealed class DefenseBeastEyes : MonoBehaviour
         renderer.receiveShadows = false;
         _dots[eye] = dot.transform;
         _dotRenderers[eye] = renderer;
+    }
+
+    /// <summary>
+    /// 눈마다 머리(_head) 아래 눈 좌표에서 _glintVerticalOffset만큼 옮긴 위치에 쌍둥이 늑대 보스와 같은 + 모양 섬광 파티클을 한 번 만든다.
+    /// 몸 연기 재질·_glintColor·_glintSize(가로 _glintWidthScale배, 세로 _glintHeightScale배)를 쓴다. _glintPopDuration 동안 _glintEmphasisScale배로 터진 뒤
+    /// _glintEmphasisDuration 시점에 원래 크기로 돌아오고 _glintDuration 동안 사라진다.
+    /// _warningVisual의 두꺼운 하늘색 윤곽선 대상으로 더해 붉은 전조 테두리와 겹쳐도 분리해 보인다. 만든 파티클을 _glints에 저장한다.
+    /// </summary>
+    private void CreateGlints()
+    {
+        _glints = new ParticleSystem[_eyeOffsets.Length];
+        Texture2D glintShape = TwinBeastEyes.CreateGlintShape();
+        Material smokeMaterial = _warningVisual.WarningRenderers[0].sharedMaterial;
+        float lifetime = _glintEmphasisDuration + _glintDuration;
+        float popTime = Mathf.Min(_glintPopDuration, _glintEmphasisDuration * 0.5f) / lifetime;
+        for (int i = 0; i < _eyeOffsets.Length; i++)
+        {
+            GameObject glint = new GameObject("WolfEyeGlint_" + i);
+            glint.SetActive(false);
+            glint.transform.SetParent(_head, false);
+            glint.transform.localPosition = _eyeOffsets[i] + Vector3.up * _glintVerticalOffset;
+            ParticleSystem particles = glint.AddComponent<ParticleSystem>();
+            particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = particles.main;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.duration = lifetime;
+            main.startLifetime = lifetime;
+            main.startSpeed = 0f;
+            main.startSize3D = true;
+            main.startSizeX = _glintSize * _glintWidthScale;
+            main.startSizeY = _glintSize * _glintHeightScale;
+            main.startSizeZ = _glintSize;
+            main.startColor = _glintColor;
+            main.startRotation = 0f;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.maxParticles = 1;
+            ParticleSystem.EmissionModule emission = particles.emission;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.enabled = false;
+            // 처음에 크게 터져 강조한 뒤 원래 크기로 줄었다가 사라진다.
+            ParticleSystem.SizeOverLifetimeModule size = particles.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(_glintEmphasisScale, new AnimationCurve(
+                new Keyframe(0f, 0f), new Keyframe(popTime, 1f),
+                new Keyframe(_glintEmphasisDuration / lifetime, 1f / _glintEmphasisScale), new Keyframe(1f, 0f)));
+            ParticleSystemRenderer renderer = glint.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            renderer.sortingFudge = -GLINT_SORTING_FUDGE;
+            renderer.maxParticleSize = GLINT_MAX_SCREEN_SIZE;
+            renderer.sharedMaterial = smokeMaterial;
+            glint.SetActive(true);
+            _warningVisual.AddGlintRenderers(glint.transform, glintShape, true);
+            _glints[i] = particles;
+        }
+    }
+
+    /// <summary>물기 돌진 확정 알림(DefenseBeastLeapAttack.AttackCommitted)마다 두 눈의 섬광 _glints를 처음부터 다시 터뜨린다. context는 사용하지 않는다.</summary>
+    private void HandleAttackCommitted(EnemyAttackContext context)
+    {
+        foreach (ParticleSystem glint in _glints)
+        {
+            glint.Clear(false);
+            glint.Play(false);
+        }
     }
 
     /// <summary>

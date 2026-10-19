@@ -13,6 +13,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
         _ThreatHighlightFillOpacity ("Threat Highlight Fill Opacity", Float) = 0.6
         _MeleeWarningColor ("Melee Warning Color", Color) = (1, 0.1, 0.06, 1)
         _BeastGlintColor ("Beast Glint Color", Color) = (0.5691823, 0.8328799, 1, 1)
+        _BeastThickGlintWidthScale ("Beast Thick Glint Width Scale", Float) = 2.5
     }
 
     SubShader
@@ -51,6 +52,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 float _ThreatHighlightFillOpacity;
                 half4 _MeleeWarningColor;
                 half4 _BeastGlintColor;
+                float _BeastThickGlintWidthScale;
             CBUFFER_END
 
             // 불릿 타임·극한 회피 파동 동안 플레이어가 전역으로 넘기는 위협 채움 강조 세기(0~1).
@@ -440,8 +442,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             float4 _OutlineGroundMarkSegments[MAX_GROUND_MARKS];
             // x: 땅 높이, y: 반폭, z: 세기, w: 양 끝 흐림 비율
             float4 _OutlineGroundMarkParams[MAX_GROUND_MARKS];
-            // 흔적별 색. 배열 순서대로 덮어 나중 흔적이 위에 보인다.
-            float4 _OutlineGroundMarkColors[MAX_GROUND_MARKS];
+            half4 _OutlineGroundMarkColor;
 
             float _OutlineGroundGuideEnabled;
             float _OutlineGroundGuideHeight;
@@ -460,7 +461,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 if (HasSurface(rawDepth) == 0.0)
                     return 0.0;
                 float3 position = SurfacePosition(uv, rawDepth);
-                float3 color = 0.0;
+                float coverage = 0.0;
                 [loop]
                 for (int i = 0; i < _OutlineGroundMarkCount; i++)
                 {
@@ -475,10 +476,9 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     float side = 1.0 - smoothstep(markParams.y * 0.5, markParams.y, distanceFromLine);
                     float ends = smoothstep(0.0, max(markParams.w, 0.0001), progress)
                         * smoothstep(0.0, max(markParams.w, 0.0001), 1.0 - progress);
-                    float4 markColor = _OutlineGroundMarkColors[i];
-                    color = lerp(color, markColor.rgb * markColor.a, side * ends * markParams.z);
+                    coverage = max(coverage, side * ends * markParams.z);
                 }
-                return color;
+                return _OutlineGroundMarkColor.rgb * _OutlineGroundMarkColor.a * coverage;
             }
 
             // 실제 깊이와 위쪽 노멀을 가진 지면만 안내 대상으로 삼는다.
@@ -595,6 +595,19 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     abs(glintFirstMask - glintSecondMask),
                     abs(glintThirdMask - glintFourthMask)) * 1.5);
                 edge = lerp(edge, _BeastGlintColor.rgb * _BeastGlintColor.a, glintEdge);
+                // A 채널 눈 섬광(일반 Beast)은 같은 방식으로 표본 간격만 _BeastThickGlintWidthScale배 넓혀 더 두꺼운 경계를 그린다.
+                float thickGlintLowerOffset = floor(_LineWidth * 1.5 * _BeastThickGlintWidthScale);
+                float thickGlintUpperOffset = ceil(_LineWidth * 1.5 * _BeastThickGlintWidthScale);
+                float2 thickGlintFirstUv = saturate(uv + float2(-thickGlintLowerOffset, -thickGlintLowerOffset) * texelSize);
+                float2 thickGlintSecondUv = saturate(uv + float2(thickGlintUpperOffset, thickGlintUpperOffset) * texelSize);
+                float2 thickGlintThirdUv = saturate(uv + float2(-thickGlintLowerOffset, thickGlintUpperOffset) * texelSize);
+                float2 thickGlintFourthUv = saturate(uv + float2(thickGlintUpperOffset, -thickGlintLowerOffset) * texelSize);
+                float thickGlintEdge = saturate(max(
+                    abs(SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, thickGlintFirstUv).a
+                        - SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, thickGlintSecondUv).a),
+                    abs(SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, thickGlintThirdUv).a
+                        - SAMPLE_TEXTURE2D_X(_OutlineMeleeWarningMask, sampler_PointClamp, thickGlintFourthUv).a)) * 1.5);
+                edge = lerp(edge, _BeastGlintColor.rgb * _BeastGlintColor.a, thickGlintEdge);
                 // 위협 실루엣은 경계를 선명하게, 내부는 반투명하게 다른 모든 선 위에 덮는다.
                 float threatFirst = ThreatCoverage(firstUv);
                 float threatSecond = ThreatCoverage(secondUv);

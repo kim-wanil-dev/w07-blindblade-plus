@@ -145,7 +145,6 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다. 같은 선을 따라 땅에 흰 흔적을 남긴다.
     /// RainyStage에서는 암전이 걷히고 _rainBurstDelay 뒤에 같은 사선 평면 주변 빗방울이 카메라 옆·조금 뒤까지 평면 바깥쪽으로 터진다.
     /// counter이면 보스 거합 받아치기로, enemyCutColor의 적 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자를 _counterLayerDelay 간격으로 긋고 세계도 두 사선으로 벤다.
-    /// 이때 땅에는 대칭 사선(좌상단→우하단)을 enemyCutColor 흔적으로 먼저 남기고 기본 사선(좌하단→우상단)의 흰 흔적을 그 위에 남긴다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished, bool counter, Color enemyCutColor)
     {
@@ -189,13 +188,12 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         PlaySound(_sheatheSound);
         StrikeEnemies(targets);
         BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
+        _groundMark.Show(bambooCutPoint, bambooCutNormal, bambooView);
         if (counter)
         {
             BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, mirrorCutNormal);
-            // 받아치기는 적의 붉은 대칭 사선 흔적을 먼저 남겨 기본 사선의 흰 흔적이 그 위에 덮이게 한다.
-            _groundMark.Show(bambooCutPoint, mirrorCutNormal, bambooView, enemyCutColor);
+            _groundMark.Show(bambooCutPoint, mirrorCutNormal, bambooView);
         }
-        _groundMark.Show(bambooCutPoint, bambooCutNormal, bambooView);
         // 암전 동안은 강화 공격 무적이라 투사체를 그대로 두고, 화면이 돌아오는 순간 한꺼번에 막아 낸다.
         ReleaseProjectiles();
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
