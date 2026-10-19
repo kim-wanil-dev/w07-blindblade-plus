@@ -14,6 +14,9 @@ public sealed class RainyStageController : MonoBehaviour
 {
     private const int ENTRANCE_WAVE_LAYERS = 5;
     private const float ACT_TITLE_DURATION = 1.5f;
+    private const float CLEAR_AFTER_DISSOLVE_DELAY = 1.5f;
+    private const float FINAL_DISSOLVE_PAIR_DISTANCE = 5f;
+    private const float FINAL_DISSOLVE_BEAST_OFFSET = 2.3f;
     private const float WAVE_DURATION = 100f;
     private const float SPAWN_RAMP_INTERVAL = 10f;
 
@@ -59,6 +62,7 @@ public sealed class RainyStageController : MonoBehaviour
     private Coroutine _warningRoutine;
     private Coroutine _actTitleRoutine;
     private Coroutine _entranceWaveRoutine;
+    private Coroutine _deathFocusRoutine;
     private Camera _playerCamera;
     private float _shakeElapsed;
     private StagePhase _phase;
@@ -120,6 +124,8 @@ public sealed class RainyStageController : MonoBehaviour
 
     void OnEnable()
     {
+        _human.Dying += HandleBossDying;
+        _beast.Dying += HandleBossDying;
         _human.Died += HandleBossDied;
         _beast.Died += HandleBossDied;
     }
@@ -150,6 +156,8 @@ public sealed class RainyStageController : MonoBehaviour
 
     void OnDisable()
     {
+        _human.Dying -= HandleBossDying;
+        _beast.Dying -= HandleBossDying;
         _human.Died -= HandleBossDied;
         _beast.Died -= HandleBossDied;
         if (_warningRoutine != null)
@@ -158,9 +166,12 @@ public sealed class RainyStageController : MonoBehaviour
             StopCoroutine(_actTitleRoutine);
         if (_entranceWaveRoutine != null)
             StopCoroutine(_entranceWaveRoutine);
+        if (_deathFocusRoutine != null)
+            StopCoroutine(_deathFocusRoutine);
         _warningRoutine = null;
         _actTitleRoutine = null;
         _entranceWaveRoutine = null;
+        _deathFocusRoutine = null;
         // 씬 해제 때는 경고 Canvas가 먼저 파괴될 수 있으므로 남아 있을 때만 숨긴다.
         if (_warning != null)
             _warning.alpha = 0f;
@@ -328,7 +339,42 @@ public sealed class RainyStageController : MonoBehaviour
         }
     }
 
-    /// <summary>bossHealth 사망 시 인간과 짐승이 모두 쓰러졌으면 단계를 Complete로 바꾸고 게임 클리어를 요청한다.</summary>
+    /// <summary>bossHealth가 사라지기 전에 가루 잔상을 만들고 카메라를 그 보스 쪽으로 부드럽게 돌린다.</summary>
+    private void HandleBossDying(EnemyHealth bossHealth)
+    {
+        if (_phase != StagePhase.Boss && _phase != StagePhase.Complete) return;
+        bool bothDead = !_human.IsAlive && !_beast.IsAlive;
+        if (bothDead) TeleportBeastBesideHuman();
+        BossDeathDissolve.Play(bossHealth);
+        if (_deathFocusRoutine != null) StopCoroutine(_deathFocusRoutine);
+        Collider bossCollider = bossHealth.GetComponent<Collider>();
+        Vector3 target = bothDead ? _human.transform.position + Vector3.up * 1.3f
+            : bossCollider != null ? bossCollider.bounds.center : bossHealth.transform.position + Vector3.up;
+        _deathFocusRoutine = StartCoroutine(BossDeathDissolve.FocusCamera(target));
+    }
+
+    /// <summary>최종 사망 시 beast가 human과 5m 이상 떨어져 있으면 NavMesh의 인간 옆 2.3m 지점으로 옮긴다.</summary>
+    private void TeleportBeastBesideHuman()
+    {
+        Vector3 humanPosition = _human.transform.position;
+        Vector3 offset = Vector3.ProjectOnPlane(_beast.transform.position - humanPosition, Vector3.up);
+        if (offset.sqrMagnitude <= FINAL_DISSOLVE_PAIR_DISTANCE * FINAL_DISSOLVE_PAIR_DISTANCE)
+            return;
+        Vector3 side = Vector3.ProjectOnPlane(_human.transform.right, Vector3.up).normalized;
+        Vector3 desired = humanPosition + side * FINAL_DISSOLVE_BEAST_OFFSET;
+        Vector3 center = _arena.transform.position;
+        float limit = Mathf.Max(1f, _arena.Radius - _edgeInset);
+        if (Vector3.ProjectOnPlane(desired - center, Vector3.up).magnitude > limit)
+            desired = humanPosition - side * FINAL_DISSOLVE_BEAST_OFFSET;
+        Vector3 destination = SampleNear(desired, humanPosition + side * 1.2f);
+        NavMeshAgent agent = _beast.GetComponent<NavMeshAgent>();
+        if (agent != null && agent.isActiveAndEnabled)
+            agent.Warp(destination);
+        // 돌진 중 NavMesh의 Transform 자동 갱신이 꺼져 있어도 사망 외형은 즉시 새 위치를 써야 한다.
+        _beast.transform.position = destination;
+    }
+
+    /// <summary>bossHealth 사망 시 두 보스가 쓰러졌으면 소멸 시간과 1.5초를 기다려 클리어 UI를 표시한다.</summary>
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         // 사망 사건 시점에 죽은 쪽은 체력 0이므로 남은 쪽의 생존 여부만 확인하면 된다.
@@ -337,6 +383,8 @@ public sealed class RainyStageController : MonoBehaviour
 
         _phase = StagePhase.Complete;
         BlindBlade.Telemetry.CombatTelemetrySignals.Stage("2-2", true);
+        Game.Instance.UIManager.Get<GameClearUI>().SetNextDisplayDelay(
+            BossDeathDissolve.DURATION + CLEAR_AFTER_DISSOLVE_DELAY);
         Game.Instance.GameStateManager.RequestGameClear();
     }
 }

@@ -323,6 +323,26 @@ private Vector3 _attackLungeDirection;
     }
 
     /// <summary>
+    /// worldTarget을 향한 시점을 damping과 deltaTime으로 부드럽게 보간한다.
+    /// 보간한 좌우·상하 각도를 카메라와 플레이어 회전에 저장하고 대기 중인 시점 입력을 지운다.
+    /// </summary>
+    public void SmoothFaceTarget(Vector3 worldTarget, float damping, float deltaTime)
+    {
+        Vector3 direction = worldTarget - ViewOrigin;
+        if (direction.sqrMagnitude < 0.0001f) return;
+        Vector3 horizontal = Vector3.ProjectOnPlane(direction, Vector3.up);
+        float targetYaw = Mathf.Atan2(horizontal.x, horizontal.z) * Mathf.Rad2Deg;
+        float targetPitch = Mathf.Clamp(-Mathf.Atan2(direction.y, horizontal.magnitude) * Mathf.Rad2Deg,
+            -_verticalLookLimit, _verticalLookLimit);
+        float weight = 1f - Mathf.Exp(-Mathf.Max(0f, damping) * Mathf.Max(0f, deltaTime));
+        _yaw = Mathf.LerpAngle(_yaw, targetYaw, weight);
+        _pitch = Mathf.Lerp(_pitch, targetPitch, weight);
+        _pendingLookDelta = Vector2.zero;
+        transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+        _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+    }
+
+    /// <summary>
     /// worldTarget이 시야 중심에서 수평으로 deadAngle(도)보다 벗어나 있으면 벗어난 만큼을 maxDegrees 안에서 좌우 시점으로 보정한다.
     /// 상하 시점과 대기 중인 시점 입력은 유지하며 _yaw와 Transform 회전을 갱신한다.
     /// </summary>

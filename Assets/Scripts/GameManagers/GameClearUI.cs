@@ -12,14 +12,19 @@ public sealed class GameClearUI : GameUI
     [Header("게임 클리어 UI")]
     [SerializeField] private GameObject _panel;
     [SerializeField] private Button _titleButton;
-
-    private GameStateManager _stateManager;
-    private bool _returningToTitle;
-
     [SerializeField, Min(0f), Tooltip("게임 클리어 패널을 표시하기 전 대기 시간(초).")]
     private float _displayDelay = 1.25f;
 
+    private GameStateManager _stateManager;
+    private bool _returningToTitle;
     private Coroutine _displayRoutine;
+    private float _nextDisplayDelay = -1f;
+
+    /// <summary>delay초를 다음 Cleared 진입의 패널 표시 대기로 저장해 사망 연출 뒤 UI를 연다.</summary>
+    public void SetNextDisplayDelay(float delay)
+    {
+        _nextDisplayDelay = Mathf.Max(0f, delay);
+    }
 
     /// <summary>게임 상태 이벤트와 타이틀 버튼을 연결하고 현재 상태에 맞게 화면을 초기화한다.</summary>
     public override void Initialize()
@@ -49,13 +54,15 @@ public sealed class GameClearUI : GameUI
         gameObject.SetActive(true);
         _panel.SetActive(false);
 
-        if (_displayDelay <= 0f)
+        float displayDelay = _nextDisplayDelay >= 0f ? _nextDisplayDelay : _displayDelay;
+        _nextDisplayDelay = -1f;
+        if (displayDelay <= 0f)
         {
             SetVisible(true);
             return;
         }
 
-        _displayRoutine = StartCoroutine(ShowAfterDelay());
+        _displayRoutine = StartCoroutine(ShowAfterDelay(displayDelay));
     }
 
     /// <summary>visible에 따라 화면 패널을 표시하고, 보일 때 타이틀 복귀 버튼에 선택을 둔다.</summary>
@@ -102,11 +109,11 @@ public sealed class GameClearUI : GameUI
     }
 
     /// <summary>
-    /// 실제 시간으로 _displayDelay만큼 기다린 뒤, 상태가 Cleared이면 클리어 패널을 표시한다.
+    /// 실제 시간으로 delay만큼 기다린 뒤, 상태가 Cleared이면 클리어 패널을 표시한다.
     /// </summary>
-    private IEnumerator ShowAfterDelay()
+    private IEnumerator ShowAfterDelay(float delay)
     {
-        yield return new WaitForSecondsRealtime(_displayDelay);
+        yield return new WaitForSecondsRealtime(delay);
         _displayRoutine = null;
 
         if (_stateManager != null && _stateManager.State == GameplayState.Cleared)
