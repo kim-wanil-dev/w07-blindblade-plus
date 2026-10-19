@@ -195,7 +195,8 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// agent의 현재 수평 위치가 공터 반경과 몸 반지름을 넘으면 안쪽 NavMesh 지점으로 되돌린다.
+    /// agent의 현재 수평 위치가 허용 반경을 넘으면 안쪽 NavMesh 지점으로 되돌린다.
+    /// 짐승은 가장자리 플레이어에게 덮치기가 닿도록 접촉 반경을, 인간은 공터 여백과 몸 반지름을 적용한다.
     /// 수동 도약 중에는 높이를 유지한 채 위치만 제한하고, 지상 이동 중에는 NavMeshAgent를 이동시킨다.
     /// </summary>
     private void ConstrainBossToArena(NavMeshAgent agent)
@@ -203,10 +204,14 @@ public sealed class TwinBossController : MonoBehaviour
         if (agent == null || !agent.isActiveAndEnabled) return;
         Vector3 center = _arena.transform.position;
         Vector3 offset = Vector3.ProjectOnPlane(agent.transform.position - center, Vector3.up);
-        float radius = Mathf.Max(1f, _arena.Radius - _arenaInset - agent.radius);
+        float inset = agent == _beastAgent
+            ? Mathf.Max(_beast.ContactRadius, agent.radius)
+            : _arenaInset + agent.radius;
+        float radius = Mathf.Max(1f, _arena.Radius - inset);
         if (offset.sqrMagnitude <= radius * radius) return;
         Vector3 direction = offset.normalized;
-        Vector3 desired = center + direction * (radius - 0.25f);
+        float correction = agent == _beastAgent ? 0.05f : 0.25f;
+        Vector3 desired = center + direction * (radius - correction);
         desired.y = agent.transform.position.y;
         if (!agent.updatePosition)
         {
@@ -216,7 +221,7 @@ public sealed class TwinBossController : MonoBehaviour
         NavMeshQueryFilter filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
         for (int i = 0; i < 5; i++)
         {
-            desired = center + direction * Mathf.Max(0f, radius - 0.25f - i * radius * 0.25f);
+            desired = center + direction * Mathf.Max(0f, radius - correction - i * radius * 0.25f);
             desired.y = agent.transform.position.y;
             if (!NavMesh.SamplePosition(desired, out NavMeshHit hit, 1f, filter)
                 || Vector3.ProjectOnPlane(hit.position - center, Vector3.up).sqrMagnitude > radius * radius) continue;
@@ -441,7 +446,8 @@ public sealed class TwinBossController : MonoBehaviour
         {
             GetArenaCircle(out Vector3 center, out float radius);
             // 거합 차징의 붉은 파동과 섞이지 않도록 방해 덮치기는 전조 파동을 내지 않는다.
-            yield return _beast.Ambush(_player, strikeAt, center, radius, false, _human.transform);
+            yield return _beast.Ambush(_player, strikeAt, center, radius,
+                _arena != null ? _arena.Radius : radius, false, _human.transform);
             strikeAt = Time.time + _harassInterval;
             yield return null;
         }
@@ -471,7 +477,8 @@ public sealed class TwinBossController : MonoBehaviour
     /// <summary>
     /// 인간 연속 돌진 베기와 짐승 가장자리 덮치기를 서로 겹치지 않게 _alternatingRounds번 번갈아 한다.
     /// 한 차례마다 짐승이 땅에 뛰어드는 동안 인간이 스테이지1 보스 돌진처럼 _humanSlashInterval 간격으로 _humanSlashesPerRound번 돌진해 베고 물러나며,
-    /// 마지막 돌진 베기가 끝난 뒤에야 짐승이 가장자리에서 나와 전조 후 가로질러 돌진하고, 그동안 인간은 크게 뒤로 물러난다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
+    /// 마지막 돌진 베기가 끝난 뒤에야 짐승이 플레이어에게서 가장 먼 공터 지점에 나타나 전조 후 가로질러 돌진하고,
+    /// 그동안 인간은 크게 뒤로 물러난다. 끝나면 잠수 중인 짐승을 땅 위로 돌린다.
     /// </summary>
     private IEnumerator AlternateMelee()
     {
@@ -487,7 +494,8 @@ public sealed class TwinBossController : MonoBehaviour
             GetArenaCircle(out Vector3 center, out float radius);
             // 돌진 베기를 마친 인간은 짐승이 덮치는 동안 크게 뒤로 물러나 자리를 비킨다.
             _humanRoutine = StartCoroutine(HumanBackstep());
-            yield return _beast.Ambush(_player, Time.time, center, radius);
+            yield return _beast.Ambush(_player, Time.time, center, radius,
+                _arena != null ? _arena.Radius : radius, farthestFromPlayer: true);
             firstStrikeAt = Time.time + _alternatingLead;
         }
         yield return _beast.Resurface();

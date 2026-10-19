@@ -781,7 +781,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// material은 전조 중인 렌더러의 붉은 세기를 R 채널에 기록한다.
+        /// material은 붉은 전조를 R/G 채널, 독립된 눈 섬광을 B 채널에 기록한다.
         /// material은 공격 중 렌더러 배열에서 사용한다.
         /// </summary>
         public MeleeWarningMaskPass(Material material)
@@ -863,7 +863,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 현재 카메라 크기의 마스크를 만들고 경고 렌더러를 등록한다.
+        /// 현재 카메라 크기의 RGB 경고 마스크를 만들고 경고 렌더러를 등록한다.
         /// 대상이 없는 프레임에도 검정으로 초기화해 이전 프레임의 붉은색을 제거한다.
         /// </summary>
         public override void RecordRenderGraph(
@@ -874,8 +874,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             desc.name = "Melee Warning Mask";
             desc.depthBufferBits = DepthBits.None;
             desc.msaaSamples = MSAASamples.None;
-            // G 채널에는 파동 없이도 보이는 붉은 테두리 대상(쌍둥이 늑대 공격)을 기록한다.
-            desc.colorFormat = GraphicsFormat.R8G8_UNorm;
+            // G는 붉은 몸통, B는 몸통과 별도로 그릴 눈 섬광을 기록한다.
+            desc.colorFormat = GraphicsFormat.R8G8B8A8_UNorm;
             desc.filterMode = FilterMode.Point;
             desc.clearBuffer = true;
             desc.clearColor = Color.clear;
@@ -899,7 +899,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 전조 중인 입자와 몸체를 붉은색 세기 마스크에 기록한다.
+        /// 전조 중인 입자와 몸체 및 별도 눈 섬광을 경고 마스크에 기록한다.
         /// 원본 머티리얼과 GameObject 상태는 변경하지 않는다.
         /// </summary>
         private static void DrawMask(
@@ -923,7 +923,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 
 #pragma warning disable CS0618, CS0672
         /// <summary>
-        /// 호환 모드에서 전조 파티클과 몸체를 붉은색 세기 마스크에 기록한다.
+        /// 호환 모드에서 전조 파티클과 몸체 및 별도 눈 섬광을 경고 마스크에 기록한다.
         /// 카메라 깊이를 읽어 가려진 표면은 마스크에서 제외한다.
         /// </summary>
         public override void Execute(
@@ -933,7 +933,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             var desc = renderingData.cameraData.cameraTargetDescriptor;
             desc.depthBufferBits = 0;
             desc.msaaSamples = 1;
-            desc.graphicsFormat = GraphicsFormat.R8G8_UNorm;
+            desc.graphicsFormat = GraphicsFormat.R8G8B8A8_UNorm;
 
             RenderingUtils.ReAllocateHandleIfNeeded(
                 ref _legacyMask, desc, FilterMode.Point,

@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-/// 쌍둥이의 지상 이동 상태를 공용 발자국 생성기와 발소리에 연결한다.
+/// 쌍둥이의 지상 이동 상태를 공용 발자국 생성기와 발소리에 연결한다. 짐승의 사람 모양 지면 발자국은 숨긴다.
 /// 비 내리는 스테이지가 물 발소리를 쓰면 플레이어와 같은 찰박이는 물 발소리를 낸다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -31,6 +31,7 @@ public sealed class TwinBossFootsteps : MonoBehaviour
         _rainAudio = FindFirstObjectByType<RainyStageAudio>();
         _humanAttack = GetComponent<HumanBossAttack>();
         _beastVisual = GetComponentInChildren<TwinBeastWolfVisual>(true);
+        if (_beastVisual != null) _emitter.SetGroundFootprintsVisible(false);
     }
 
     void OnEnable()
