@@ -6,7 +6,7 @@ using UnityEngine;
 /// 연기와 같은 재질로 그린다. 트레일은 연기 렌더러에 속하므로 연기처럼 파동에 드러날 때만 보인다.
 /// Awake에서 늑대 몸체 밖(이 오브젝트 아래)에 복제해 털 연기 조정(TwinBeastSmokeTuning)이 건드리지 않게 하고, Start에서 늑대 머리(_head) 자식으로 옮기며
 /// 짐승 TwinBossWarningVisual에 렌더러를 더해 윤곽선 색이 몸통과 함께 바뀌게 한다. 잠수 중에는 방출을 멈춘다.
-/// 덮치기 직전(BeastBossAttack.PounceGlint)에는 두 눈에서 파동과 상관없이 보이는 붉은 빛이 좌우로 길게 짧게 번쩍인다.
+/// 덮치며 플레이어가 가까워질 때(BeastBossAttack.PounceGlint) 두 눈에서 파동과 상관없이 보이는 하늘색 빛과 몸통에서 분리된 윤곽선이 번쩍인다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class TwinBeastEyes : MonoBehaviour
@@ -14,10 +14,12 @@ public sealed class TwinBeastEyes : MonoBehaviour
     private const string BODY_SMOKE_NAME = "BodySmoke";
     private const string TRAILING_WISPS_NAME = "TrailingWisps";
     private const float HIDDEN_PARTICLE_SIZE = 0.001f;
-    private const int GLINT_TEXTURE_SIZE = 256;
+    private const int GLINT_TEXTURE_SIZE = 1024;
     private const float GLINT_SORTING_FUDGE = 100f;
     private const float GLINT_MAX_SCREEN_SIZE = 4f;
-    private const float GLINT_CURVE_POWER = 4f;
+    private const float GLINT_CURVE_POWER = 32f;
+    private const float GLINT_CENTER_WIDTH_SCALE = 0.1f;
+    private const float GLINT_ARM_HALF_HEIGHT = 0.035f;
 
     [Header("연결")]
     [SerializeField] private BeastBossAttack _beast;
@@ -59,13 +61,17 @@ public sealed class TwinBeastEyes : MonoBehaviour
 
     [Header("돌진 전 번쩍임")]
     [SerializeField, Tooltip("번쩍임 색")]
-    private Color _glintColor = new Color(1f, 0.08f, 0.05f, 1f);
-    [SerializeField, Min(0.01f), Tooltip("번쩍임이 가장 커졌을 때 크기(미터)")]
+    private Color _glintColor = new Color(0.5691823f, 0.8328799f, 1f, 1f);
+    [SerializeField, Min(0.01f), Tooltip("번쩍임이 가장 커졌을 때 기본 크기(미터)")]
     private float _glintSize = 1.8f;
-    [SerializeField, Min(0.1f), Tooltip("번쩍임 좌우 길이를 세로 크기의 몇 배로 늘일지 정한다")]
-    private float _glintWidthScale = 4f;
+    [SerializeField, Min(0.1f), Tooltip("번쩍임 좌우 길이를 기본 크기의 몇 배로 늘일지 정한다")]
+    private float _glintWidthScale = 3f;
+    [SerializeField, Min(0.1f), Tooltip("번쩍임 세로 길이를 기본 크기의 몇 배로 늘일지 정한다")]
+    private float _glintHeightScale = 1.5f;
+    [SerializeField, Tooltip("눈 좌표 기준 번쩍임 중심의 머리 로컬 높이 오프셋(미터). 음수는 아래다.")]
+    private float _glintVerticalOffset = -1f;
     [SerializeField, Min(0.01f), Tooltip("번쩍임이 커졌다 사라지는 시간(초)")]
-    private float _glintDuration = 0.15f;
+    private float _glintDuration = 0.4f;
     private ParticleSystem[] _glints;
 
     void Awake()
@@ -118,8 +124,10 @@ public sealed class TwinBeastEyes : MonoBehaviour
     }
 
     /// <summary>
-    /// 눈마다 머리(_head) 아래 같은 위치에 한 번만 별빛 하나를 터뜨리는 파티클을 만든다. 눈 연기 재질·_glintColor·_glintSize(가로는 _glintWidthScale배)로
-    /// _glintDuration 동안 커졌다 사라지며, 짐승 TwinBossWarningVisual의 붉은 번쩍임 대상으로 더해 파동에 드러나지 않아도 붉은 테두리로 보이게 한다. 만든 파티클을 _glints에 저장한다.
+    /// 눈마다 머리(_head) 아래 눈 좌표에서 _glintVerticalOffset만큼 옮긴 위치에 한 번만 별빛 파티클을 만든다.
+    /// 눈 연기 재질·_glintColor·_glintSize(가로는 _glintWidthScale배, 세로는 _glintHeightScale배)로
+    /// _glintDuration 동안 커졌다 사라지며, 짐승 TwinBossWarningVisual의 별도 하늘색 윤곽선 대상으로 더해 몸통의 붉은 테두리와 겹쳐도 분리해 보인다.
+    /// 만든 파티클을 _glints에 저장한다.
     /// </summary>
     private void CreateGlints()
     {
@@ -130,7 +138,7 @@ public sealed class TwinBeastEyes : MonoBehaviour
             GameObject glint = new GameObject("WolfEyeGlint_" + i);
             glint.SetActive(false);
             glint.transform.SetParent(_head, false);
-            glint.transform.localPosition = _eyeOffsets[i];
+            glint.transform.localPosition = _eyeOffsets[i] + Vector3.up * _glintVerticalOffset;
             ParticleSystem particles = glint.AddComponent<ParticleSystem>();
             particles.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ParticleSystem.MainModule main = particles.main;
@@ -139,10 +147,10 @@ public sealed class TwinBeastEyes : MonoBehaviour
             main.duration = _glintDuration;
             main.startLifetime = _glintDuration;
             main.startSpeed = 0f;
-            // 좌우로 길게 늘인 번쩍임이라 가로만 _glintWidthScale배로 키운다.
+            // 가로와 세로 배율을 각각 적용한다.
             main.startSize3D = true;
             main.startSizeX = _glintSize * _glintWidthScale;
-            main.startSizeY = _glintSize;
+            main.startSizeY = _glintSize * _glintHeightScale;
             main.startSizeZ = _glintSize;
             main.startColor = _glintColor;
             main.startRotation = 0f;
@@ -153,29 +161,26 @@ public sealed class TwinBeastEyes : MonoBehaviour
             emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 1) });
             ParticleSystem.ShapeModule shape = particles.shape;
             shape.enabled = false;
-            // 짧게 확 커졌다가 바로 사라지는 삐칭 하는 번쩍임이다.
+            // 짧게 확 커졌다가 바로 사라지는 번쩍임이다.
             ParticleSystem.SizeOverLifetimeModule size = particles.sizeOverLifetime;
             size.enabled = true;
             size.size = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
                 new Keyframe(0f, 0f), new Keyframe(0.25f, 1f), new Keyframe(1f, 0f)));
             ParticleSystemRenderer renderer = glint.GetComponent<ParticleSystemRenderer>();
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
-            // 털 연기보다 늘 앞에 그려 연기에 덮여 흐려지지 않게 한다.
             renderer.sortingFudge = -GLINT_SORTING_FUDGE;
-            // 큰 번쩍임이 화면 크기 제한(기본 화면의 절반)에 잘려 작아지지 않게 한다.
             renderer.maxParticleSize = GLINT_MAX_SCREEN_SIZE;
-            // 눈 연기와 같은 재질로 그려 몸통처럼 파동에 드러날 때만 보이고, 붉은 번쩍임 테두리는 경고 마스크가 늘 그린다.
             renderer.sharedMaterial = _smokes[i].GetComponent<ParticleSystemRenderer>().sharedMaterial;
-            glint.AddComponent<OutlineVFX>();
             glint.SetActive(true);
-            _beast.GetComponent<TwinBossWarningVisual>().AddRedFlashRenderers(glint.transform, glintShape);
+            _beast.GetComponent<TwinBossWarningVisual>().AddGlintRenderers(glint.transform, glintShape);
             _glints[i] = particles;
         }
     }
 
     /// <summary>
-    /// 가장자리가 매끄럽고 또렷한 유선형(가운데에서 양끝으로 오목하게 좁아지는 뾰족한 섬광) 흰 텍스처를 GLINT_TEXTURE_SIZE 크기로 만들어 반환한다.
-    /// 세로 반폭이 (1 - |x|)^GLINT_CURVE_POWER인 오목한 곡선 안쪽만 채우고 경계는 한 픽셀만 부드럽게 해 계단지거나 연기처럼 번지지 않는다.
+    /// 가운데의 세로 빛줄기와 얇은 가로 팔이 + 모양에 가깝게 보이는 흰 텍스처를 GLINT_TEXTURE_SIZE 크기로 만들어 반환한다.
+    /// 가로 팔의 얇은 높이 위로 GLINT_CENTER_WIDTH_SCALE에 한정된 높은 곡률의 중앙 빛줄기를 세워 + 모양을 만든다.
+    /// 팔 끝은 0으로 좁아지며 경계는 한 픽셀만 부드럽게 해 계단지거나 연기처럼 번지지 않는다.
     /// </summary>
     private static Texture2D CreateGlintShape()
     {
@@ -187,13 +192,15 @@ public sealed class TwinBeastEyes : MonoBehaviour
         };
         Color32[] pixels = new Color32[GLINT_TEXTURE_SIZE * GLINT_TEXTURE_SIZE];
         float pixel = 2f / GLINT_TEXTURE_SIZE;
-        for (int y = 0; y < GLINT_TEXTURE_SIZE; y++)
+        for (int x = 0; x < GLINT_TEXTURE_SIZE; x++)
         {
-            for (int x = 0; x < GLINT_TEXTURE_SIZE; x++)
+            float u = Mathf.Abs((x + 0.5f) * pixel - 1f);
+            float horizontalArm = GLINT_ARM_HALF_HEIGHT * Mathf.Sqrt(Mathf.Max(0f, 1f - u));
+            float centerSpan = Mathf.Max(0f, 1f - u / GLINT_CENTER_WIDTH_SCALE);
+            float halfHeight = horizontalArm + (1f - horizontalArm) * Mathf.Pow(centerSpan, GLINT_CURVE_POWER);
+            for (int y = 0; y < GLINT_TEXTURE_SIZE; y++)
             {
-                float u = Mathf.Abs((x + 0.5f) * pixel - 1f);
                 float v = Mathf.Abs((y + 0.5f) * pixel - 1f);
-                float halfHeight = Mathf.Pow(Mathf.Max(0f, 1f - u), GLINT_CURVE_POWER);
                 byte alpha = (byte)(Mathf.Clamp01((halfHeight - v) / pixel + 0.5f) * 255f);
                 pixels[y * GLINT_TEXTURE_SIZE + x] = new Color32(255, 255, 255, alpha);
             }
@@ -203,7 +210,7 @@ public sealed class TwinBeastEyes : MonoBehaviour
         return texture;
     }
 
-    /// <summary>덮치기 직전 알림(BeastBossAttack.PounceGlint)마다 두 눈의 별빛 _glints를 처음부터 다시 터뜨린다.</summary>
+    /// <summary>덮치며 플레이어에게 접근했다는 알림(BeastBossAttack.PounceGlint)마다 두 눈의 별빛 _glints를 처음부터 다시 터뜨린다.</summary>
     private void HandlePounceGlint()
     {
         foreach (ParticleSystem glint in _glints)
