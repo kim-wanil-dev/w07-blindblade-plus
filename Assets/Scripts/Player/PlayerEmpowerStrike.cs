@@ -289,15 +289,23 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 
     /// <summary>
     /// targets 중 아직 살아 있는 적에게 _damage만큼 피해를 주되 공유 체력 묶음에는 한 번만 적용한다.
-    /// 무적인 적은 개별적으로 막고 같은 묶음의 다른 적은 계속 검사하며, 실제 피해는 EnemyHealth.TakeDamage에 전달한다.
+    /// 공유 피해 우선(HasSharedDamagePriority) 적을 먼저 처리하고, 무적인 적은 개별적으로 막고 같은 묶음의 다른 적은 계속 검사한다.
+    /// 실제 피해는 EnemyHealth.TakeDamage에 전달하며, 묶음 상대가 이미 맞아 피해를 건너뛴 적은 혈흔만 재생한다.
     /// </summary>
     private void StrikeEnemies(List<EnemyHealth> targets)
     {
         Vector3 origin = transform.position;
         HashSet<EnemyHealth> struck = new HashSet<EnemyHealth>();
+        // 같은 묶음이 함께 걸리면 우선 적이 피격 반응을 받도록 앞에 둔다.
+        targets.Sort((a, b) => (b != null && b.HasSharedDamagePriority).CompareTo(a != null && a.HasSharedDamagePriority));
         foreach (EnemyHealth enemy in targets)
         {
-            if (enemy == null || !enemy.IsAlive || struck.Contains(enemy.SharedDamageKey)) continue;
+            if (enemy == null || !enemy.IsAlive) continue;
+            if (struck.Contains(enemy.SharedDamageKey))
+            {
+                enemy.PlaySharedHitEffect(enemy.transform.position + Vector3.up);
+                continue;
+            }
             if (!enemy.IsInvulnerable) struck.Add(enemy.SharedDamageKey);
             Vector3 toEnemy = Vector3.ProjectOnPlane(enemy.transform.position - origin, Vector3.up);
             Vector3 direction = toEnemy.sqrMagnitude > 0.0001f ? toEnemy.normalized : _motor.ViewForward;

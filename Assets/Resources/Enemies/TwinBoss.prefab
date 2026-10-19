@@ -215,6 +215,7 @@ MonoBehaviour:
   _cancelAttackOnHit: 0
   _dashTargetable: 1
   _sharedHealth: {fileID: 304}
+  _sharedDamagePriority: 1
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45
   _hitPushDistance: 0
@@ -899,6 +900,7 @@ MonoBehaviour:
   _cancelAttackOnHit: 0
   _dashTargetable: 1
   _sharedHealth: {fileID: 204}
+  _sharedDamagePriority: 0
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45
   _hitPushDistance: 0
