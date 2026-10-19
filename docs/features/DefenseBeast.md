@@ -2,7 +2,15 @@
 
 - 작성일: 2026-10-17
 - 상태: **2026-10-18 관절 기반 애니메이션·원 그리기·물기 돌진·월드 공간 연기·몸체 숨김·눈 줄기·발 디딤 소리 연결. C# 빌드 확인, 실제 전투 Play 확인 대기**
-- 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이며, 교전 시작 순서는 "2026-10-19 선공격 후 배회" 절이 우선한다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
+- 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이며, 교전 시작 순서는 "2026-10-19 선공격 후 배회" 절, 돌진 직전 눈 섬광은 "2026-10-19 돌진 확정 눈 섬광" 절이 우선한다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
+
+## 2026-10-19 돌진 확정 눈 섬광 (사용자 요청, 최신 규칙)
+
+- 쌍둥이 늑대 보스의 덮치기 전 눈 섬광(`TwinBeastEyes`)과 같은 하늘색 + 모양 섬광을 일반 Beast에도 넣었다. `DefenseBeastEyes`가 `DefenseBeastLeapAttack.AttackCommitted`를 구독해, 박동 전조가 끝나고 물기 돌진이 확정되는 순간 두 눈에서 한 번 터뜨린다. 섬광 모양 텍스처는 `TwinBeastEyes.CreateGlintShape`(접근 제한자만 `internal`로 변경)를 같이 쓰고, 재질은 몸 연기(EnemySmokeVisual) 재질을 쓴다.
+- 크기(사용자 요청): 기본 0.9m, 가로 배율 1(0.9m)·세로 배율 1.5(1.35m), 눈 좌표보다 머리 로컬 0.5m 아래. 처음 0.03초 동안 원래 크기의 2.25배(`Glint Emphasis Scale`)로 터져 강조하고 0.2초(`Glint Emphasis Duration`)에 원래 크기로 돌아온 뒤 0.4초(`Glint Duration`) 동안 사라진다(전체 0.6초).
+- 윤곽선 두께(사용자 요청): 트윈 보스 섬광보다 2.5배 두꺼운 하늘색 경계로 그린다. `TwinBossWarningVisual.AddGlintRenderers`에 `thickOutline` 인자(기본 false)를 더해, 참이면 경고 마스크(`OutlineMeleeWarningMask`)가 섬광을 B 대신 A 채널에 기록한다(`ColorMask RGBA`, 다른 대상의 A는 0). `ScreenSpaceOutline`은 A 채널을 기존 섬광 표본 간격의 `_BeastThickGlintWidthScale`(2.5)배로 읽어 경계를 그린다. 트윈 보스 섬광과 다른 경고 윤곽선은 그대로다.
+- 관련 코드·프리팹: `Assets/Scripts/Enemies/DefenseBeastEyes.cs`의 `CreateGlints`, `HandleAttackCommitted`; `TwinBeastEyes.cs`의 `CreateGlintShape`; `TwinBossWarningVisual.cs`의 `AddRedFlashRenderers`, `AddGlintRenderers`; `Assets/Resources/Defense/OutlineMeleeWarningMask.shader`; `Assets/Shaders/ScreenSpaceOutline.shader`; `Assets/Resources/Defense/DefenseBeast.prefab`(새 섬광 값 직접 기록).
+- 확인: `dotnet build Assembly-CSharp.csproj` 오류 0개, 기존 경고 4개. 셰이더 컴파일, Play에서 섬광 크기·강조·두꺼운 경계 모양(표본 간격이 넓어 경계가 이중으로 보이는지)은 미확인이다. 돌진 위치를 찾지 못해 공격이 바로 끝나면 붉은 전조가 0.15초 안에 꺼지면서 섬광 윤곽도 함께 사라질 수 있다(미확인). 테스트 코드는 작성하지 않았다.
 
 ## 2026-10-19 선공격 후 배회 (사용자 요청, 최신 규칙)
 
