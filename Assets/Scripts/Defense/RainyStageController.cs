@@ -187,6 +187,7 @@ public sealed class RainyStageController : MonoBehaviour
     /// <summary>
     /// position 좌우에 인간과 짐승을 플레이어를 향하게 배치하고 쌍둥이 보스를 활성화한다.
     /// 플레이어 체력을 최대로 회복하고 단계를 Boss로 바꾸며 등장 파동을 시작한다. shakeCamera가 참이면 카메라도 흔든다.
+    /// 쌍둥이 보스는 첫 진입과 재도전 모두 마지막 등장 파동이 끝날 때까지 행동하지 않는다.
     /// </summary>
     private void ActivateBoss(Vector3 position, bool shakeCamera)
     {
@@ -200,6 +201,7 @@ public sealed class RainyStageController : MonoBehaviour
         _weather.SetDropletCount(_bossDropletCount);
         _rainAudio.TransitionToHeavy();
         BlindBlade.Telemetry.CombatTelemetrySignals.Stage("2-2");
+        _twinBoss.GetComponent<TwinBossController>().HoldForEntrance(GetEntranceWaveDuration());
         _twinBoss.SetActive(true);
         _director.HideRecord();
         _phase = StagePhase.Boss;
@@ -259,6 +261,15 @@ public sealed class RainyStageController : MonoBehaviour
             }
         }
         return bestDistance >= 0f;
+    }
+
+    /// <summary>
+    /// 첫 등장 파동부터 마지막 파동이 사라질 때까지의 시간을 반환한다.
+    /// _entranceWaveCount·_entranceWaveInterval·_entranceWaveDuration을 사용한다.
+    /// </summary>
+    private float GetEntranceWaveDuration()
+    {
+        return (_entranceWaveCount - 1) * _entranceWaveInterval + _entranceWaveDuration;
     }
 
     /// <summary>position을 중심으로 설정된 횟수만큼 interval 간격으로 보스 등장 파동을 재생한다.</summary>
