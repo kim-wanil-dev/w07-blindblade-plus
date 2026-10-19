@@ -182,7 +182,7 @@ public sealed class TwinBeastEyes : MonoBehaviour
     /// 가로 팔의 얇은 높이 위로 GLINT_CENTER_WIDTH_SCALE에 한정된 높은 곡률의 중앙 빛줄기를 세워 + 모양을 만든다.
     /// 팔 끝은 0으로 좁아지며 경계는 한 픽셀만 부드럽게 해 계단지거나 연기처럼 번지지 않는다.
     /// </summary>
-    private static Texture2D CreateGlintShape()
+    internal static Texture2D CreateGlintShape()
     {
         Texture2D texture = new Texture2D(GLINT_TEXTURE_SIZE, GLINT_TEXTURE_SIZE, TextureFormat.RGBA32, false)
         {
