@@ -5,9 +5,9 @@ using UnityEngine;
 using BlindBlade.Combat.Contracts;
 
 /// <summary>
-/// 퍼펙트 패링 뒤의 강화 준비와 강화 공격 수명, 퍼펙트 패링 토큰을 관리한다.
-/// 퍼펙트 패링 순간 토큰을 하나 모으고 짧게 세계를 멈춘 뒤 불릿 타임으로 좌클릭을 기다린다.
-/// 좌클릭은 검기 공격으로 준비를 끝내고, 토큰이 가득 차 있으면 차징으로 궁극기를 시작한다. 수명 변화는 EmpowerChanged 사건으로 발행한다.
+/// 쳐내기·극한 회피 뒤의 강화 준비와 거합 공격 수명, 거합 토큰을 관리한다.
+/// 쳐내기 또는 극한 회피로 토큰을 모으고, 각 성공 원인에 맞는 불릿 타임에서 공격 입력을 기다린다.
+/// 쳐내기 준비에서는 일섬, 극한 회피 준비에서는 일반·돌진 공격을 허용하고 토큰이 가득 차면 거합 차징을 허용한다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
@@ -28,6 +28,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     [Header("준비")]
     [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 뒤 좌클릭을 기다리는 시간. 일시정지를 제외한 실시간으로 잰다.")]
     private float _readyDuration = 5f;
+    [SerializeField, Range(0.5f, 1.5f), Tooltip("극한 회피 뒤 공격 또는 거합 차징을 시작할 수 있는 실시간. 차징 중에는 남은 시간이 멈춘다.")]
+    private float _dodgeReadyDuration = 1f;
 
     [Header("히트스톱")]
     [SerializeField, Min(0f), Tooltip("퍼펙트 패링 순간 세계와 플레이어가 함께 거의 멈추는 실시간. 0이면 바로 불릿 타임이다.")]
@@ -74,6 +76,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     private CombatTimeToken _timeToken;
     private PlayerEmpowerStage _stage;
     private bool _active;
+    private bool _dodgeReady;
     private int _empowerId;
     private int _sourceAttackId;
     private float _readyElapsed;
@@ -81,6 +84,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private bool _onboardingReadyHeld;
 
     public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready;
+    public bool IsDodgeReady => IsReady && _dodgeReady;
+    public bool IsSwordWaveReady => IsReady && !_dodgeReady;
     public bool IsStriking => _active && _stage == PlayerEmpowerStage.Started;
     public bool IsBulletTimeActive => _active && _hitStopRemaining <= 0f;
     public bool IsPerfectParryInvulnerable => Time.unscaledTime < _invulnerableUntil;
@@ -99,6 +104,7 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>거합 게이지가 가득 찬 상태에서 퍼펙트 패링이 성공했을 때 알린다.</summary>
     public event Action UltimateReadyParry;
+    public event Action UltimateReadyDodge;
 
     void Awake()
     {
@@ -132,21 +138,21 @@ public sealed class PlayerEmpower : MonoBehaviour
             _hitStopRemaining -= dt;
             if (_hitStopRemaining <= 0f) ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
         }
-        _readyElapsed += dt;
         if (_charging)
         {
             _chargeElapsed += dt;
             if (_hitStopRemaining <= 0f) UpdateChargeSlow();
             return;
         }
-        // 차징 중에는 궁극기 발동이나 차징 취소로 끝나도록 준비 만료를 미룬다.
-        if (!_onboardingReadyHeld && _readyElapsed >= _readyDuration) End(PlayerEmpowerEndReason.Expired);
+        _readyElapsed += dt;
+        if (!_onboardingReadyHeld && _readyElapsed >= (_dodgeReady ? _dodgeReadyDuration : _readyDuration))
+            End(PlayerEmpowerEndReason.Expired);
     }
 
     /// <summary>
     /// 퍼펙트 패링을 알리고 attackId를 원인으로 강화 준비를 시작한다. 새 준비이면 히트스톱 뒤 불릿 타임으로 넘어가며 퍼펙트 파동을 낸다.
     /// 퍼펙트 패링마다 토큰을 MAX_TOKENS까지 하나 늘리고, 거합을 쓸 수 있는 상태에서 패링하면 UltimateReadyParry를 발행한다.
-    /// 이미 준비 중이면 대기 시간만 처음부터 다시 세고 false를 반환하며, 새 준비를 시작했을 때만 true를 반환한다.
+    /// 이미 쳐내기 준비 중이면 대기 시간만 다시 세고 false를 반환한다. 회피 준비 중이면 쳐내기 준비로 바꾸고 true를 반환한다.
     /// 준비 중이든 새 준비든 _perfectParryInvulnerableDuration 실시간 동안 무적을 건다. 강화 공격 중이면 아무것도 바꾸지 않고 false를 반환한다.
     /// </summary>
     public bool NotifyPerfectParry(int attackId)
@@ -156,6 +162,13 @@ public sealed class PlayerEmpower : MonoBehaviour
         _invulnerableUntil = Time.unscaledTime + _perfectParryInvulnerableDuration;
         if (IsReady)
         {
+            if (_dodgeReady)
+            {
+                End(PlayerEmpowerEndReason.Cancelled);
+                BeginReady(attackId);
+                if (_tokens == MAX_TOKENS) UltimateReadyParry?.Invoke();
+                return true;
+            }
             _readyElapsed = 0f;
             if (_tokens == MAX_TOKENS && !_charging) UltimateReadyParry?.Invoke();
             return false;
@@ -164,6 +177,35 @@ public sealed class PlayerEmpower : MonoBehaviour
         BeginReady(attackId);
         if (_tokens == MAX_TOKENS && !_charging) UltimateReadyParry?.Invoke();
         return true;
+    }
+
+    /// <summary>극한 회피 attackId로 토큰을 한 칸 늘리고 회피 전용 불릿 타임을 시작하거나 갱신한다. 거합을 쓸 수 있으면 준비음을 알린다.</summary>
+    public void NotifyPerfectDodge(int attackId)
+    {
+        if (IsStriking) return;
+        _tokens = Mathf.Min(_tokens + 1, MAX_TOKENS);
+        BeginDodgeBulletTime(attackId);
+        if (_tokens == MAX_TOKENS && !_charging) UltimateReadyDodge?.Invoke();
+    }
+
+    /// <summary>attackId의 회피 성공으로 토큰 변경 없이 1초 회피 전용 불릿 타임을 시작하거나 갱신한다. 쳐내기 준비와 강화 공격은 유지한다.</summary>
+    public void BeginDodgeBulletTime(int attackId)
+    {
+        if (IsStriking) return;
+        if (IsDodgeReady)
+            _readyElapsed = 0f;
+        else if (!IsReady)
+        {
+            _active = true;
+            _dodgeReady = true;
+            _stage = PlayerEmpowerStage.Ready;
+            _empowerId++;
+            _sourceAttackId = attackId;
+            _readyElapsed = 0f;
+            _hitStopRemaining = 0f;
+            ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
+            Publish(PlayerEmpowerStage.Ready, PlayerEmpowerEndReason.None);
+        }
     }
 
     /// <summary>
@@ -224,6 +266,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     private void BeginReady(int attackId)
     {
         _active = true;
+        _dodgeReady = false;
         _stage = PlayerEmpowerStage.Ready;
         _empowerId++;
         _sourceAttackId = attackId;
@@ -273,16 +316,27 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
-    /// 궁극기 차징을 발동 없이 멈추고 세계 배율을 준비 배율로 되돌린다. 차징 중이 아니면 아무것도 바꾸지 않는다.
-    /// 준비와 토큰은 그대로 두며 _charging을 거짓으로 바꾼다.
+    /// 궁극기 차징을 발동 없이 멈춘다. 회피 준비라면 감속을 즉시 끝내고, 쳐내기 준비라면 준비 감속으로 돌아간다.
+    /// 차징 중이 아니면 상태를 바꾸지 않으며 토큰은 유지한다.
     /// </summary>
     public void CancelCharge()
     {
         if (!IsCharging) return;
         _charging = false;
         _chargeElapsed = 0f;
+        if (_dodgeReady)
+        {
+            End(PlayerEmpowerEndReason.Cancelled);
+            return;
+        }
         if (_hitStopRemaining <= 0f)
             ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
+    }
+
+    /// <summary>회피 전용 준비 중 일반·돌진 공격이 수락되면 검기 없이 준비와 시간 요청을 즉시 끝낸다.</summary>
+    public void CompleteDodgeReadyWithAttack()
+    {
+        if (IsDodgeReady) End(PlayerEmpowerEndReason.Attack);
     }
 
     /// <summary>
@@ -370,6 +424,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     {
         if (IsStriking && reason != PlayerEmpowerEndReason.Completed) _strike.Stop();
         _active = false;
+        _dodgeReady = false;
         _onboardingReadyHeld = false;
         _stage = PlayerEmpowerStage.Ended;
         _hitStopRemaining = 0f;

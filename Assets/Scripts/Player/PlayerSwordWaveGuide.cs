@@ -62,7 +62,7 @@ public sealed class PlayerSwordWaveGuide : MonoBehaviour
     void Update()
     {
         float step = Time.unscaledDeltaTime / _fadeDuration;
-        _visibility = Mathf.MoveTowards(_visibility, _empower.IsReady ? 1f : 0f, step);
+        _visibility = Mathf.MoveTowards(_visibility, _empower.IsSwordWaveReady ? 1f : 0f, step);
         if (_visibility <= 0f)
         {
             _line.enabled = false;

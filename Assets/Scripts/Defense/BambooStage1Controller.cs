@@ -181,7 +181,32 @@ public sealed class BambooStage1Controller : MonoBehaviour
     /// <summary>warningDuration 뒤 플레이어에서 가장 먼 공터 NavMesh 지점에 보스를 켜고 등장 연출을 시작한다.</summary>
     private IEnumerator ShowWarningThenBoss()
     {
-        yield return new WaitForSecondsRealtime(_warningDuration);
+        float remaining = _warningDuration;
+
+        while (true)
+        {
+            GameplayState state = Game.Instance.GameStateManager.State;
+
+            if (state == GameplayState.Paused)
+            {
+                yield return null;
+                continue;
+            }
+
+            if (state != GameplayState.Playing || Game.Player == null)
+            {
+                _warning.alpha = 0f;
+                _warningRoutine = null;
+                yield break;
+            }
+
+            if (remaining <= 0f)
+                break;
+
+            remaining -= Time.unscaledDeltaTime;
+            yield return null;
+        }
+
         _warning.alpha = 0f;
         _warningRoutine = null;
         if (Game.Instance.GameStateManager.State != GameplayState.Playing || Game.Player == null)

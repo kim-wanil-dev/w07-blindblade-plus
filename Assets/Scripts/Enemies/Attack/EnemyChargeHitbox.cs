@@ -18,6 +18,18 @@ public sealed class EnemyChargeHitbox : MonoBehaviour
     private EnemyAttackContext _context;
     private Vector3 _previousCenter;
 
+    /// <summary>현재 돌진 타격 구가 cylinder에 닿고 아직 피해를 줄 수 있으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || _activeAttack == null || _activeAttack.Phase != EnemyAttackPhase.Active
+            || (_context.Target != null && _damaged.Contains(_context.Target.GetComponent<IDamageable>()))
+            || _damage <= 0f || !cylinder.OverlapsSphere(transform.position + Vector3.up * _height, _radius))
+            return false;
+        attackId = _context.AttackId;
+        return true;
+    }
+
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
     [SerializeField, Min(0.1f)] private float _gizmoDuration = 2f;
@@ -120,6 +132,11 @@ public sealed class EnemyChargeHitbox : MonoBehaviour
         _debugCenters.Add(center);
         _debugUntil = Time.time + _gizmoDuration;
 #endif
+        if (DodgeAfterimage.IsActive && !IsAfterimageBlocked())
+            DodgeAfterimage.ReportSphereSweep(_previousCenter, center, _radius,
+                new DamageContext(_damage, gameObject, DodgeAfterimage.ActiveOrigin, _context.Direction,
+                    _context.PatternId, _context.AttackId, 1,
+                    BlindBlade.Combat.Contracts.IncomingAttackKind.Charge));
         foreach (Collider overlap in Physics.OverlapSphere(_previousCenter, _radius, _hitMask, QueryTriggerInteraction.Ignore))
             TryApplyDamage(overlap, overlap.ClosestPoint(_previousCenter));
         Vector3 delta = center - _previousCenter;
@@ -131,6 +148,20 @@ public sealed class EnemyChargeHitbox : MonoBehaviour
         }
         foreach (Collider overlap in Physics.OverlapSphere(center, _radius, _hitMask, QueryTriggerInteraction.Ignore))
             TryApplyDamage(overlap, overlap.ClosestPoint(center));
+    }
+
+    /// <summary>이전 돌진 중심과 잔상 사이에 자신·대상을 제외한 _obstacleMask 차폐물이 있으면 참을 반환한다.</summary>
+    private bool IsAfterimageBlocked()
+    {
+        Vector3 delta = DodgeAfterimage.ActiveOrigin + Vector3.up * _height - _previousCenter;
+        if (delta.sqrMagnitude < 0.000001f) return false;
+        foreach (RaycastHit hit in Physics.RaycastAll(_previousCenter, delta.normalized, delta.magnitude,
+            _obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            if (!hit.transform.IsChildOf(transform)
+                && (_context.Target == null || !hit.transform.IsChildOf(_context.Target))) return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -93,15 +93,18 @@ public enum PlayerEmpowerEndReason
     Dodged,
     Died,
     SessionEnded,
-    SwordWave
+    SwordWave,
+    Attack,
+    Cancelled
 }
 
-/// <summary>회피 사건의 단계. PerfectDodge는 극한 회피 구간에 실제 공격 접촉이 확정된 경우이며 회피 1회에 한 번이다.</summary>
+/// <summary>회피 사건의 단계. PerfectDodge는 일반 극한 회피 보상, IaiDodge는 쌍둥이 거합의 감속·감각 피드백만 나타낸다.</summary>
 public enum PlayerDodgeStage
 {
     Started,
     Ended,
-    PerfectDodge
+    PerfectDodge,
+    IaiDodge
 }
 
 /// <summary>플레이어 주변 파동을 요청한 원인.</summary>
@@ -350,7 +353,7 @@ public readonly struct PlayerEmpowerEvent
     }
 }
 
-/// <summary>회피 시작·종료·극한 회피 사건. KatanaDamageReceiver가 회피 판정 구간에 맞춰 발행한다.</summary>
+/// <summary>회피 시작·종료·일반 극한 회피 보상·쌍둥이 거합 회피 피드백 사건. KatanaDamageReceiver가 회피 판정 구간에 맞춰 발행한다.</summary>
 public readonly struct PlayerDodgeEvent
 {
     public int DodgeId { get; }
@@ -362,7 +365,7 @@ public readonly struct PlayerDodgeEvent
 
     /// <summary>
     /// dodgeId, stage, 극한 회피를 만든 공격 attackId, 플레이어 position과 시각으로 사건을 만든다.
-    /// attackId는 PerfectDodge 단계에서만 값이 있고 그 외에는 0이다.
+    /// attackId는 PerfectDodge 또는 IaiDodge 단계에서만 값이 있고 그 외에는 0이다.
     /// </summary>
     public PlayerDodgeEvent(int dodgeId, PlayerDodgeStage stage, int attackId, Vector3 position,
         float gameTime, double realTime)

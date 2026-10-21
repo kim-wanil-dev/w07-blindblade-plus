@@ -143,24 +143,25 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
     }
 
     /// <summary>
-    /// resolution이 회피 판정 구간(회피 Started 뒤 Ended 전)에 난 DodgeAvoided 또는 Invulnerable인지 반환한다.
-    /// 판정 수신기는 회피 구간을 반격 무적보다 먼저 보므로 이 구간의 무적은 회피 무적으로 본다.
+    /// resolution이 체력 손실 없는 회피 판정 구간에 난 DodgeAvoided 또는 Invulnerable인지 반환한다.
+    /// 불릿 타임 중이나 이미 피격된 회피의 무적 접촉은 회피 성공 횟수에 포함하지 않는다.
     /// </summary>
     private bool IsDodgeContact(DefenseResolution resolution)
     {
-        return _dodgeWindowActive && (resolution.Outcome == DefenseOutcome.DodgeAvoided
+        return _dodgeWindowActive && _receiver.IsDodgeAvoiding
+            && (resolution.Outcome == DefenseOutcome.DodgeAvoided
             || resolution.Outcome == DefenseOutcome.Invulnerable);
     }
 
     /// <summary>
     /// outcome과 회피 구간 접촉 여부 dodged로 읽기 쉬운 구분을 반환한다.
-    /// DodgeAvoided는 퍼펙트 회피, 회피 구간의 Invulnerable은 일반 회피, 그 밖의 Invulnerable은 반격·강화 공격 무적이며 그 외에는 빈 문자열이다.
+    /// DodgeAvoided는 퍼펙트 회피, 회피 구간의 Invulnerable은 일반 회피, 그 밖의 Invulnerable은 보상 없는 무적이며 그 외에는 빈 문자열이다.
     /// </summary>
     private static string GetOutcomeLabel(DefenseOutcome outcome, bool dodged)
     {
         if (outcome == DefenseOutcome.DodgeAvoided) return "(퍼펙트 회피)";
         if (outcome != DefenseOutcome.Invulnerable) return "";
-        return dodged ? "(일반 회피)" : "(반격·강화 무적)";
+        return dodged ? "(일반 회피)" : "(무적)";
     }
 
     /// <summary>

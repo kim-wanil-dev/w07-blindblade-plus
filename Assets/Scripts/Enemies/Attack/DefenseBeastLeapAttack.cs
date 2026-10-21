@@ -111,6 +111,17 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     public bool IsBouncingBack => _state == LeapState.BouncingBack;
     public float LungeAir => _state == LeapState.Lunging ? _lungeAir : 0f;
     public Vector3 IncomingDirection => _incomingDirection;
+
+    /// <summary>늑대가 피해 가능한 도약 중이고 현재 물기 구가 cylinder에 닿으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !IsLunging || _contactResolved || _biteDamage <= 0f
+            || !cylinder.OverlapsSphere(transform.position + Vector3.up * Mathf.Max(0.1f, _agent.height * 0.5f), _biteRadius))
+            return false;
+        attackId = Context.AttackId;
+        return true;
+    }
     internal override string TelemetryKind => "Melee";
 
     protected override float ActiveDuration => (_attackRange + 2f * _lungePeakHeight) / Mathf.Max(0.1f, _lungeSpeed) + _biteDuration
@@ -395,6 +406,9 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         float verticalOffset = Mathf.Max(0.1f, _agent.height * 0.5f);
         Vector3 start = from + Vector3.up * verticalOffset;
         Vector3 end = to + Vector3.up * verticalOffset;
+        DodgeAfterimage.ReportCapsuleSweep(start, end, _biteRadius, Vector3.zero,
+            new DamageContext(_biteDamage, gameObject, DodgeAfterimage.ActiveOrigin, _leapDirection,
+                PatternId, context.AttackId, 1, IncomingAttackKind.Melee));
         int contactCount = Physics.OverlapCapsuleNonAlloc(start, end, _biteRadius, _landingContacts,
             _landingMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < contactCount; i++)

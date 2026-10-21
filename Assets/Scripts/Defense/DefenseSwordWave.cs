@@ -24,9 +24,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
     private readonly RaycastHit[] _hits = new RaycastHit[32];
     private readonly HashSet<EnemyHealth> _struck = new HashSet<EnemyHealth>();
     private readonly HashSet<EnemyHealth> _blocked = new HashSet<EnemyHealth>();
-    // 다른 공격과 맞은 적을 함께 셀 때는 넘겨받은 목록을 쓰고, 아니면 자기 목록을 쓴다.
-    private HashSet<EnemyHealth> _struckTargets;
-    private HashSet<EnemyHealth> _blockedTargets;
+    private SharedDamageHitTracker _hitTracker;
     private GameObject _owner;
     private Vector3 _direction;
     private float _travelled;
@@ -69,7 +67,11 @@ public sealed class DefenseSwordWave : MonoBehaviour
         }
         transform.localScale = Vector3.one * Mathf.Lerp(1f, _endScale, _travelled / _maxDistance);
         if (_travelled >= _maxDistance - 0.001f)
+        {
+            _hitTracker.ResolvePendingHits();
+            _flying = false;
             Destroy(gameObject);
+        }
     }
 
     void OnDestroy()
@@ -85,7 +87,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
     {
         _struck.Clear();
         _blocked.Clear();
-        Launch(owner, origin, direction, _struck, _blocked);
+        Launch(owner, origin, direction, new SharedDamageHitTracker(_struck, _blocked));
     }
 
     /// <summary>
@@ -95,7 +97,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
     public void Launch(GameObject owner, Vector3 origin, Vector3 direction, HashSet<EnemyHealth> sharedStruck)
     {
         _blocked.Clear();
-        Launch(owner, origin, direction, sharedStruck, _blocked);
+        Launch(owner, origin, direction, new SharedDamageHitTracker(sharedStruck, _blocked));
     }
 
     /// <summary>
@@ -105,8 +107,16 @@ public sealed class DefenseSwordWave : MonoBehaviour
     public void Launch(GameObject owner, Vector3 origin, Vector3 direction,
         HashSet<EnemyHealth> sharedStruck, HashSet<EnemyHealth> sharedBlocked)
     {
-        _struckTargets = sharedStruck;
-        _blockedTargets = sharedBlocked;
+        Launch(owner, origin, direction, new SharedDamageHitTracker(sharedStruck, sharedBlocked));
+    }
+
+    /// <summary>
+    /// owner의 검기를 origin에서 direction으로 발사하고 hitTracker의 돌진 피격·보류 기록을 이어받는다.
+    /// 비행 중 맞은 공유 체력 묶음을 같은 기록에 추가한다.
+    /// </summary>
+    internal void Launch(GameObject owner, Vector3 origin, Vector3 direction, SharedDamageHitTracker hitTracker)
+    {
+        _hitTracker = hitTracker;
         _owner = owner;
         _direction = direction.normalized;
         _travelled = 0f;
@@ -118,8 +128,8 @@ public sealed class DefenseSwordWave : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 위치에서 step만큼의 구간을 반경 검사하여 처음 닿은 생존 적마다 _damage만큼, 0이면 남은 체력 전체의 피해를 적용한다.
-    /// 공유 체력은 한 번만 피해를 주고 막힌 적은 개별 기록하며, 적이 아닌 접촉은 무시하여 관통 이동을 유지한다. 같은 구간의 적대 수리검은 없앤다.
+    /// 현재 위치에서 step만큼의 구간을 반경 검사하여 생존 적마다 _damage만큼, 0이면 남은 체력 전체의 피해를 추적기에 요청한다.
+    /// 공유 체력의 후순위 피격은 우선 대상 확인까지 보류하며, 적이 아닌 접촉은 무시해 관통 이동을 유지한다. 같은 구간의 적대 수리검은 없앤다.
     /// </summary>
     private void StrikeAlong(float step)
     {
@@ -132,14 +142,10 @@ public sealed class DefenseSwordWave : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             EnemyHealth enemy = _hits[i].collider.GetComponentInParent<EnemyHealth>();
-            if (enemy == null || !enemy.IsAlive || _blockedTargets.Contains(enemy)
-                || _struckTargets.Contains(enemy.SharedDamageKey))
-                continue;
-            if (enemy.IsInvulnerable) _blockedTargets.Add(enemy);
-            else _struckTargets.Add(enemy.SharedDamageKey);
+            if (enemy == null || !enemy.IsAlive) continue;
             Vector3 point = _hits[i].distance > 0f ? _hits[i].point : _hits[i].collider.ClosestPoint(transform.position);
             float amount = _damage > 0f ? _damage : Mathf.Max(enemy.CurrentHealth, 1f);
-            enemy.TakeDamage(new DamageContext(amount, _owner, point, _direction, PATTERN_ID));
+            _hitTracker.ProcessHit(enemy, new DamageContext(amount, _owner, point, _direction, PATTERN_ID));
         }
     }
 
@@ -189,5 +195,87 @@ public sealed class DefenseSwordWave : MonoBehaviour
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
+    }
+}
+
+/// <summary>
+/// 같은 돌진과 검기에서 공유 체력 묶음의 피해를 한 번만 적용한다.
+/// 우선 피격 대상이 있는 묶음은 다른 적의 첫 접촉을 보류해 우선 대상도 실제로 맞으면 그 대상의 피격 사건을 발생시킨다.
+/// </summary>
+internal sealed class SharedDamageHitTracker
+{
+    private readonly struct PendingHit
+    {
+        internal readonly EnemyHealth Enemy;
+        internal readonly DamageContext Context;
+
+        /// <summary>enemy와 첫 접촉의 context를 보관해 우선 대상이 끝내 맞지 않았을 때 사용한다.</summary>
+        internal PendingHit(EnemyHealth enemy, DamageContext context)
+        {
+            Enemy = enemy;
+            Context = context;
+        }
+    }
+
+    private readonly HashSet<EnemyHealth> _struck;
+    private readonly HashSet<EnemyHealth> _blocked;
+    private readonly Dictionary<EnemyHealth, PendingHit> _pending = new Dictionary<EnemyHealth, PendingHit>();
+
+    /// <summary>struck와 blocked를 돌진·검기 사이에 공유하고, 우선 대상 대기 기록을 비운 상태로 시작한다.</summary>
+    public SharedDamageHitTracker(HashSet<EnemyHealth> struck, HashSet<EnemyHealth> blocked)
+    {
+        _struck = struck;
+        _blocked = blocked;
+    }
+
+    /// <summary>
+    /// 실제 판정에 들어온 enemy의 context를 처리한다. 공유 체력 우선 대상이 있으면 다른 적의 접촉은 보류한다.
+    /// 우선 대상이 맞으면 그 대상에게 한 번 피해를 주고, 무적이면 개별 차단 후 보류한 상대를 처리한다.
+    /// </summary>
+    public void ProcessHit(EnemyHealth enemy, DamageContext context)
+    {
+        if (enemy == null || !enemy.IsAlive || _blocked.Contains(enemy)) return;
+        EnemyHealth key = enemy.SharedDamageKey;
+        if (_struck.Contains(key)) return;
+
+        if (enemy.IsInvulnerable)
+        {
+            _blocked.Add(enemy);
+            enemy.TakeDamage(context);
+            if (enemy.HasSharedDamagePriority) ResolvePendingHit(key);
+            return;
+        }
+
+        if (enemy.DefersSharedDamage)
+        {
+            if (!_pending.ContainsKey(key)) _pending.Add(key, new PendingHit(enemy, context));
+            return;
+        }
+
+        _pending.Remove(key);
+        _struck.Add(key);
+        enemy.TakeDamage(context);
+    }
+
+    /// <summary>일섬이 끝날 때까지 우선 대상이 실제로 맞지 않은 묶음에 보류된 첫 피격을 적용하고 대기 기록을 비운다.</summary>
+    public void ResolvePendingHits()
+    {
+        foreach (KeyValuePair<EnemyHealth, PendingHit> pair in _pending)
+        {
+            if (_struck.Contains(pair.Key) || !pair.Value.Enemy.IsAlive) continue;
+            _struck.Add(pair.Key);
+            pair.Value.Enemy.TakeDamage(pair.Value.Context);
+        }
+        _pending.Clear();
+    }
+
+    /// <summary>무적인 우선 대상 대신 key 묶음의 보류된 적에게 첫 피격을 적용하고 대기 기록에서 제거한다.</summary>
+    private void ResolvePendingHit(EnemyHealth key)
+    {
+        if (!_pending.TryGetValue(key, out PendingHit pending)) return;
+        _pending.Remove(key);
+        if (!pending.Enemy.IsAlive) return;
+        _struck.Add(key);
+        pending.Enemy.TakeDamage(pending.Context);
     }
 }

@@ -52,6 +52,17 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     public bool IsLeftToRightSlash => _diagonalSign > 0;
     public Vector3 BladeBase { get; private set; }
     public Vector3 BladeTip { get; private set; }
+
+    /// <summary>진행 중인 실제 칼날과 cylinder가 겹치면 현재 공격 ID를 attackId에 저장하고 참을 반환한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || Phase != EnemyAttackPhase.Active || _contactConsumed
+            || !_useBuiltInHitDetection || _damage <= 0f
+            || !cylinder.OverlapsCapsule(BladeBase, BladeTip, _hitRadius)) return false;
+        attackId = Context.AttackId;
+        return true;
+    }
     public event Action<EnemyAttackContext> MeleeAttack;
     protected override float ActiveDuration => _swingDuration;
     protected override EnemySoundAction SoundAction => EnemySoundAction.Melee;
@@ -97,6 +108,17 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         }
         UpdateHitboxPose(Mathf.Clamp01((Time.time - _startedAt) / _swingDuration));
         if (!_useBuiltInHitDetection) return;
+        Vector3 ghostPoint = DodgeAfterimage.ActiveOrigin;
+        if (DodgeAfterimage.IsActive
+            && !IsBlocked(Context, ghostPoint + Vector3.up * _hitHeight,
+                Context.Target != null ? Context.Target.GetComponent<IDamageable>() : null))
+        {
+            Vector3 sweepDirection = (BladeTip - _previousTip).normalized;
+            if (sweepDirection.sqrMagnitude < 0.001f) sweepDirection = _swingForward;
+            DodgeAfterimage.ReportBladeSweep(_previousBase, _previousTip, BladeBase, BladeTip, _hitRadius,
+                new DamageContext(_damage, gameObject, ghostPoint, sweepDirection,
+                    Context.PatternId, Context.AttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
+        }
         Collider contact = EnemyCombatService.FindBladeContact(transform, Context.Target,
             _previousBase, _previousTip, BladeBase, BladeTip, _hitRadius,
             _hitMask.value | _obstacleMask.value, out Vector3 point);

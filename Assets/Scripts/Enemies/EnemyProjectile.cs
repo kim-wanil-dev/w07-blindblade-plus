@@ -48,6 +48,16 @@ public class EnemyProjectile : MonoBehaviour
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int ProjectileId => _projectileId;
 
+    /// <summary>적대 투사체의 현재 피해 구가 cylinder에 닿으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !IsHostileFlying || _damage.Amount <= 0f
+            || !cylinder.OverlapsSphere(transform.position, _hitRadius)) return false;
+        attackId = _damage.AttackId;
+        return true;
+    }
+
     void Update()
     {
         if (!_isFlying)
@@ -74,6 +84,9 @@ public class EnemyProjectile : MonoBehaviour
             if (!CanHit(overlap))
                 continue;
 
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position, transform.position,
+                _hitRadius, _damage);
+
 #if UNITY_EDITOR
             _debugEnd = _debugStart;
 #endif
@@ -98,6 +111,8 @@ public class EnemyProjectile : MonoBehaviour
         if (closestIndex >= 0)
         {
             RaycastHit hit = hits[closestIndex];
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+                transform.position + _direction * hit.distance, _hitRadius, _damage);
             transform.position += _direction * hit.distance;
 #if UNITY_EDITOR
             _debugEnd = transform.position;
@@ -106,6 +121,8 @@ public class EnemyProjectile : MonoBehaviour
             return;
         }
 
+        if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+            transform.position + _direction * distance, _hitRadius, _damage);
         transform.position += _direction * distance;
         UpdatePassedPlayer();
     }
