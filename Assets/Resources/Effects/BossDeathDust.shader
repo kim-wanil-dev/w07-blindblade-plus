@@ -40,9 +40,9 @@ Shader "BlindBlade/BossDeathDust"
 
             half4 Frag(Varyings input) : SV_Target
             {
-                float2 point = input.uv * 2.0 - 1.0;
-                float angle = atan2(point.y, point.x);
-                float radius = length(point);
+                float2 centeredUv = input.uv * 2.0 - 1.0;
+                float angle = atan2(centeredUv.y, centeredUv.x);
+                float radius = length(centeredUv);
                 float seed = frac(dot(input.color.rgb, float3(17.13, 31.71, 47.33)));
                 float edge = 0.58 + 0.11 * sin(angle * 3.0 + seed * 6.283)
                     + 0.07 * sin(angle * 7.0 - seed * 11.4)
