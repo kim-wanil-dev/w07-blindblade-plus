@@ -86,8 +86,10 @@ namespace BlindBlade.Telemetry
                             using (StreamReader reader = new StreamReader(path, Encoding.UTF8))
                             {
                                 string first = reader.ReadLine();
-                                if (string.IsNullOrWhiteSpace(first)
-                                    || (string)JObject.Parse(first)["schemaVersion"] != TelemetryJson.SCHEMA_VERSION)
+                                if (string.IsNullOrWhiteSpace(first))
+                                    continue;
+                                string schema = (string)JObject.Parse(first)["schemaVersion"];
+                                if (!new[] { "0.3.0", "0.4.0", TelemetryJson.SCHEMA_VERSION }.Contains(schema))
                                     continue;
                             }
                             long offset = File.Exists(cursorPath) ? long.Parse(File.ReadAllText(cursorPath)) : 0L;
@@ -195,7 +197,8 @@ namespace BlindBlade.Telemetry
                     string first = reader.ReadLine();
                     if (string.IsNullOrWhiteSpace(first)) return bytes;
                     string schema = (string)JObject.Parse(first)["schemaVersion"];
-                    if (!string.IsNullOrEmpty(schema) && schema != TelemetryJson.SCHEMA_VERSION) return 0L;
+                    if (!string.IsNullOrEmpty(schema)
+                        && !new[] { "0.3.0", "0.4.0", TelemetryJson.SCHEMA_VERSION }.Contains(schema)) return 0L;
                 }
             }
             catch (JsonException) { return bytes; }

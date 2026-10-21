@@ -30,6 +30,7 @@ public sealed class SensoryManager : MonoBehaviour
     public bool IsReady => _initialized && _observer != null && isActiveAndEnabled;
     public Transform Observer => _observer;
     public int ActiveEffectCount => _activeEffects.Count;
+    public float MaximumDistance => _maximumDistance;
     public float CrouchPulseInterval
     {
         get

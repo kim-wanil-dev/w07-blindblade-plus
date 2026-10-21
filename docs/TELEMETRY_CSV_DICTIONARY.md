@@ -1,6 +1,6 @@
 # 텔레메트리 CSV 변수 사전과 분석 파일 만들기
 
-이 문서는 `tools/combat_telemetry/Export-Telemetry.ps1`가 생성하는 CSV의 열 의미와 기본 분석 절차를 설명한다. 현재 변환기는 스키마 `0.3.0`, 공통 계약 `0.2.0` JSONL을 처리한다.
+이 문서는 `tools/combat_telemetry/Export-Telemetry.ps1`가 생성하는 CSV의 열 의미와 기본 분석 절차를 설명한다. 현재 변환기는 신규 스키마 `0.5.0`과 기존 `0.3.0`·`0.4.0`, 공통 계약 `0.2.0` JSONL을 처리한다.
 
 > 최신 스프레드시트 열 전체 사전과 웹 대시보드 지표 해석은 [텔레메트리 README](../tools/combat_telemetry/README.md)를 기준으로 한다. CSV 가져오기와 전처리 절차는 이 문서를 참고한다.
 
@@ -155,10 +155,10 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `guardPerfectParryCount` | 퍼펙트 패링 성공 접촉 수 |
 | `attackAttempts` | 플레이어 공격 입력 시도 수 |
 | `attackRejected` | 거부된 플레이어 공격 입력 수 |
-| `enemyAttackCount` | 실제 실행된 적 공격 수 |
-| `enemyResolvedCount` | 결과 판정이 완료된 적 공격 수. 취소·중단은 제외 |
+| `enemyAttackCount` | 실제 commit된 적 공격 수 |
+| `enemyResolvedCount` | commit된 최종 결과 수. 기존 의미대로 Cancelled·Interrupted는 제외 |
 | `enemyHitCount` | 플레이어에게 적중한 적 공격 수 |
-| `enemyDodgeCount` | 실제 회피 판정으로 피한 공격 수 |
+| `enemyDodgeCount` | 0.5.0에서는 일반 회피 수. 극한 회피는 별도 `enemyPerfectDodgeCount`; 0.4.0 이하에서는 일반/극한 회피가 분리되지 않음 |
 | `enemyNormalParryCount` | 일반 패링으로 막은 적 공격 수 |
 | `enemyPerfectParryCount` | 퍼펙트 패링으로 막은 적 공격 수 |
 | `enemyGuardCount` | 일반 방어로 막은 적 공격 수 |
@@ -285,3 +285,29 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `problem` | JSON 파싱 또는 스키마 검증 오류 |
 
 이 문서의 스키마는 `tools/combat_telemetry/google_apps_script/Code.gs`와 `tools/combat_telemetry/Export-Telemetry.cjs`의 현재 열 정의를 기준으로 한다. 변환기나 Apps Script의 열이 바뀌면 이 사전도 함께 갱신한다.
+
+## 스키마 0.5.0 추가 필드
+
+| 열 또는 필드 | 의미 |
+| --- | --- |
+| `attemptSessionId` / `attempt_session_id` | 구간 도전별 분석 ID. 0.5.0의 `stageAttemptId`와 동일 |
+| `retryIndex` / `retry_index` | 같은 run과 stage의 0부터 시작하는 도전 횟수 |
+| `previousAttemptSessionId` / `previous_attempt_session_id` | 같은 구간의 바로 전 도전 ID. 첫 도전이면 빈 값 |
+| `exitStageId`, `exitStageAttemptId`, `exitLocation`, `exitOccurredAtKst` | `session_ended(application_quit)`에서 남기는 종료 위치·도전·시각. death 상태와 deaths를 변경하지 않음 |
+| `gameCompleted`, `gameCompletedOccurredAtKst` | 최종 게임 클리어 여부와 발생 시각. Sheets Sessions에는 `game_completed`, `game_completed_occurred_at_kst`로 제공 |
+| `enemyFinalOutcomeCount` | 등록된 AttackId 중 최종 결과가 확정된 수. commit 전 Cancelled/Interrupted도 포함하며 각 결과 열 합계와 같음 |
+| `enemyNormalDodgeCount`, `enemyPerfectDodgeCount` | 서로 배타적인 일반·극한 회피 최종 결과 수. 0.5.0 `enemyDodgeCount`는 일반 회피와 같음 |
+| `enemyValidOutcomeCount` | commit된 공격 중 Hit·Dodge·PerfectDodge·Guard·NormalParry·PerfectParry·Miss 수 |
+| `enemyResolvedCount` | 기존 의미 유지: commit된 최종 결과 중 Cancelled·Interrupted를 제외한 수 |
+| `guardRepresentativeGuardCount`, `guardRepresentativePerfectParryCount`, `guardRepresentativeNoResultCount` | 고유 방어 입력당 우선순위가 적용된 대표 결과 |
+| `dodgePerfectCount` | 극한 회피가 한 번 이상 발생한 고유 DodgeId 수 |
+| `skillEmpowerActivationCount`, `skillSwordWaveActivationCount` | 수동 거합 시작(`skillSource=manual`)과 실제 일섬 발사 횟수. 자동 반격 거합은 `skillSource=counter` 사건으로 남고 수동 횟수에는 포함되지 않음 |
+| `awarenessHitCount`, `awarenessRadiusMetersMean`, `normalEnemiesNearHitMean`, `bossesNearHitMean`, `hostileShurikensNearHitMean`, `hostileTotalNearHitMean` | 양수 피해 접촉에서 수집된 실제 인지 반경과 반경 안 개체 수의 세션별 건수·평균. 적대 투사체는 DefenseShuriken·EnemyProjectile·TwinBossProjectile을 포함하며 반사·비행 종료·파괴 및 GameObject 중복은 제외 |
+| `exit_occurred_at_kst`, `game_completed_occurred_at_kst` | Apps Script core `sheets.Sessions` 응답의 종료·클리어 사건 시각. Events 페이지를 가져오기 전에도 플레이어 이탈을 분석할 수 있음 |
+
+`enemyFinalOutcomeCount`에는 commit 전 공격 취소도 들어가므로 `enemyAttackCount`보다 커질 수 있다. `enemyValidOutcomeCount`와 `enemyResolvedCount`의 분모는 commit된 공격 기준으로 유지한다. 누락되거나 미수집된 값은 0으로 대체하지 않는다.
+
+
+## Session event sequence fields
+
+`Sessions.csv` ends with four ordering fields: `last_summary_sequence`, `last_exit_sequence`, `last_completion_sequence`, and `status_sequence`. The first three track the newest stage snapshot, application quit fact, and game completion fact independently. `status_sequence` tracks the event that supplied the selected status. Status precedence is death/final_clear/cleared, then scene_unloaded/application_quit, then in_progress/started; event sequence breaks ties within a level. The existing `last_event_sequence` remains a monotonic maximum for compatibility. An out-of-order quit cannot cause a later-arriving death summary to be discarded, and terminal facts do not change the summary event's own sequence.

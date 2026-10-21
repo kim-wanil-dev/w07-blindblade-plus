@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -17,6 +18,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     private const string REFLECT_SHADER_NAME = "Universal Render Pipeline/Unlit";
 
     private static Material _reflectMaterial;
+    private static readonly HashSet<DefenseShuriken> _activeShurikens = new HashSet<DefenseShuriken>();
 
     [Header("비행")]
     [SerializeField, Min(0.1f)] private float _speed = 13f;
@@ -73,9 +75,15 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     public event Action<DefenseShuriken> Released;
     public bool IsFlying => _flying;
+    public bool IsHostile => _flying && !_reflected;
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int AttackId => _attackId;
     public int ProjectileId => _projectileId;
+
+    void OnEnable()
+    {
+        _activeShurikens.Add(this);
+    }
 
     /// <summary>적대 수리검의 현재 피해 구가 cylinder에 닿으면 비행 attackId를 출력한다.</summary>
     public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
@@ -157,11 +165,22 @@ public sealed class DefenseShuriken : MonoBehaviour
 
     void OnDisable()
     {
+        _activeShurikens.Remove(this);
         if (!_flying)
             return;
         _flying = false;
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Cancelled", transform.position);
         Released?.Invoke(this);
+    }
+
+    /// <summary>현재 활성 상태에서 플레이어에게 적대적인 비반사 수리검을 반환한다.</summary>
+    public static List<DefenseShuriken> GetActiveHostileShurikens()
+    {
+        List<DefenseShuriken> hostileShurikens = new List<DefenseShuriken>(_activeShurikens.Count);
+        foreach (DefenseShuriken shuriken in _activeShurikens)
+            if (shuriken != null && shuriken.IsHostile)
+                hostileShurikens.Add(shuriken);
+        return hostileShurikens;
     }
 
     /// <summary>

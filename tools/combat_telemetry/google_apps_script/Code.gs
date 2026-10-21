@@ -15,7 +15,10 @@
   'weight_blend_start_spawn_count','weight_blend_end_spawn_count','melee_weight_at_start',
   'beast_weight_at_start','melee_weight_at_end','beast_weight_at_end','sound_awareness_enabled',
   'sound_awareness_distance','show_melee_ground_footprints','human_defeat_time','beast_defeat_time',
-  'stage_clear_time','time_since_stage_start'];
+  'stage_clear_time','time_since_stage_start','attempt_session_id','retry_index','previous_attempt_session_id',
+  'exit_stage_id','exit_stage_attempt_id','exit_location','game_completed','awareness_radius','normal_enemy_count',
+  'boss_count','hostile_shuriken_count','hostile_total_count','awareness_snapshot_collected','skill_name',
+  'skill_source','skill_execution_id','representative_outcome','exit_occurred_at_kst','game_completed_occurred_at_kst'];
 const BASE_METRICS = ['deaths','kills','damageTaken','damageHitCount','dodgeAttempts','dodgeRejected','dodgeStarted',
   'guardAttempts','guardRejected','guardAttemptsWithContact','guardAttemptsWithoutContact','guardHitCount','guardGuardCount',
   'guardNormalParryCount','guardPerfectParryCount','attackAttempts','attackRejected','enemyAttackCount',
@@ -36,12 +39,21 @@ const NEW_METRICS = ['enemySpawnCount','enemyMeleeSpawnCount','enemyBeastSpawnCo
   ['Attempts','Resolved','Hits','Dodges','Parries','PerfectParries','Damage','HitRate','DamageShare'].forEach(metric => NEW_METRICS.push(group+metric)));
 ['Cooperation','IaiCharge','AlternatingMelee','Countering'].forEach(parent =>
   ['Started','Completed','Interrupted','Cancelled','MeanDurationSeconds'].forEach(metric => NEW_METRICS.push('bossPattern'+parent+metric)));
+const V05_METRICS = ['guardRepresentativeGuardCount','guardRepresentativePerfectParryCount',
+  'guardRepresentativeNoResultCount','dodgePerfectCount','skillEmpowerActivationCount',
+  'skillSwordWaveActivationCount','awarenessHitCount','awarenessRadiusMetersMean',
+  'normalEnemiesNearHitMean','bossesNearHitMean','hostileShurikensNearHitMean','hostileTotalNearHitMean',
+  'gameCompleted','enemyPerfectDodgeCount','enemyNormalDodgeCount','enemyValidOutcomeCount','enemyFinalOutcomeCount'];
+NEW_METRICS.push(...V05_METRICS);
 const METRICS = BASE_METRICS.concat(BASE_ATTACK_METRICS,NEW_METRICS);
 const SESSION_HEADERS = ['stage_attempt_id','session_id','stage_id','anonymous_player_id','build_version',
   'config_version','started_kst','last_event_sequence','status','realtime_seconds','gameplay_seconds',
   'active_play_seconds','health'].concat(BASE_METRICS,BASE_ATTACK_METRICS,
     ['patterns_json','run_id','exit_step_index','exit_objective_index','steps_completed','attempts','retry_count'],
-    NEW_METRICS,['entry_mode','schema_version']);
+    NEW_METRICS,['entry_mode','schema_version','attempt_session_id','retry_index','previous_attempt_session_id',
+      'exit_stage_id','exit_stage_attempt_id','exit_location','game_completed','exit_occurred_at_kst',
+      'game_completed_occurred_at_kst','last_summary_sequence','last_exit_sequence','last_completion_sequence',
+      'status_sequence']);
 const STEP_HEADERS = ['step_key','received_kst','run_id','session_id','stage_id','stage_attempt_id',
   'step_index','objective_index','retry_count','active_seconds','first_input_seconds','attempts',
   'wrong_attempts','movement_attempts','started_inputs','rejected_inputs','buffered_inputs',
@@ -51,7 +63,11 @@ const DASHBOARD_EVENT_HEADERS = ['event_key','received_kst','schema_version','bu
   'input_id','action_id','input_status','reaction_association','expected','defense_outcome','applied_damage','x','z','origin_x','origin_z',
   'duration_seconds','reaction_seconds','input_to_contact_seconds','run_id','step_index','objective_index','reason','enemy_archetype',
   'beast_probability','parent_pattern_id','attacker_actor','boss_actor',
-  'pattern_outcome','arena_radius','arena_center_x','arena_center_z','time_since_stage_start'];
+  'pattern_outcome','arena_radius','arena_center_x','arena_center_z','time_since_stage_start','anonymous_player_id',
+  'attempt_session_id','retry_index','previous_attempt_session_id','exit_stage_id','exit_stage_attempt_id','exit_location',
+  'game_completed','awareness_radius','normal_enemy_count','boss_count','hostile_shuriken_count','hostile_total_count',
+  'awareness_snapshot_collected','skill_name','skill_source','skill_execution_id','representative_outcome',
+  'exit_occurred_at_kst','game_completed_occurred_at_kst'];
 const DASHBOARD_SESSION_HEADERS = ['stage_attempt_id','session_id','stage_id','build_version','config_version','started_kst',
   'last_event_sequence','status','active_play_seconds','kills','deaths','damageTaken','damageHitCount','dodgeAttempts','dodgeRejected',
   'dodgeStarted','guardAttempts','guardRejected','guardAttemptsWithContact','guardAttemptsWithoutContact','guardHitCount',
@@ -67,7 +83,18 @@ const DASHBOARD_SESSION_HEADERS = ['stage_attempt_id','session_id','stage_id','b
   'bossPatternAlternatingMeleeStarted','bossPatternAlternatingMeleeCompleted','bossPatternAlternatingMeleeInterrupted',
   'bossPatternAlternatingMeleeCancelled','bossPatternAlternatingMeleeMeanDurationSeconds','bossPatternCounteringStarted',
   'bossPatternCounteringCompleted','bossPatternCounteringInterrupted','bossPatternCounteringCancelled',
-  'bossPatternCounteringMeanDurationSeconds','entry_mode','schema_version'];
+  'bossPatternCounteringMeanDurationSeconds','entry_mode','schema_version','anonymous_player_id','attempt_session_id',
+  'retry_index','previous_attempt_session_id','exit_stage_id','exit_stage_attempt_id','exit_location',
+  'exit_occurred_at_kst','game_completed_occurred_at_kst',
+  'guardRepresentativeGuardCount','guardRepresentativePerfectParryCount','guardRepresentativeNoResultCount',
+  'dodgePerfectCount','skillEmpowerActivationCount','skillSwordWaveActivationCount','awarenessHitCount',
+  'awarenessRadiusMetersMean','normalEnemiesNearHitMean','bossesNearHitMean','hostileShurikensNearHitMean',
+  'hostileTotalNearHitMean','game_completed','enemyAttackCount','enemyHitCount','enemyDodgeCount','enemyPerfectDodgeCount',
+  'enemyNormalDodgeCount','enemyGuardCount','enemyNormalParryCount','enemyPerfectParryCount','enemyMissCount','enemyCancelledCount',
+  'enemyInterruptedCount','enemyInvulnerableCount','enemyDestroyedCount','enemyIgnoredCount','enemyFinalOutcomeCount','enemyValidOutcomeCount'];
+const ENEMY_OUTCOME_METRICS = ['enemyAttackCount','enemyHitCount','enemyDodgeCount','enemyPerfectDodgeCount',
+  'enemyNormalDodgeCount','enemyGuardCount','enemyNormalParryCount','enemyPerfectParryCount','enemyMissCount','enemyCancelledCount',
+  'enemyInterruptedCount','enemyInvulnerableCount','enemyDestroyedCount','enemyIgnoredCount','enemyFinalOutcomeCount','enemyValidOutcomeCount'];
 const DASHBOARD_STEP_HEADERS = ['received_kst','run_id','session_id','stage_id','stage_attempt_id','step_index','objective_index',
   'step_key','retry_count','active_seconds','first_input_seconds','attempts','wrong_attempts','movement_attempts',
   'started_inputs','rejected_inputs','buffered_inputs','dropped_inputs','reason'];
@@ -83,7 +110,7 @@ const EVENT_TYPES = new Set(['session_started','session_ended','stage_started','
   'enemy_attack_started','enemy_attack_committed','enemy_attack_contact','enemy_attack_resolved',
   'stage_config','enemy_spawned','enemy_defeated','enemy_despawned','boss_pattern_started',
   'boss_pattern_ended','boss_damage_received','boss_actor_defeated','boss_pair_defeated',
-  'onboarding_attempt','onboarding_step']);
+  'onboarding_attempt','onboarding_step','game_completed','player_skill_activated']);
 
 /** 스프레드시트를 열 때 전투 로그 메뉴를 추가한다. */
 function onOpen() {
@@ -484,9 +511,14 @@ function dashboardRowsPage(sheet, allowedHeaders, offset, limit, rowLimit = null
 
 /** record의 버전·도전 식별자·시계·종류를 검사하여 잘못된 배치를 거부한다. */
 function validateRecord(r) {
-  if (!r || !['0.3.0','0.4.0'].includes(r.schemaVersion) || r.contractVersion !== '0.2.0'
+  const supportedSchema = r && ['0.3.0','0.4.0','0.5.0'].includes(r.schemaVersion);
+  const validAttempt = r && (r.schemaVersion === '0.5.0'
+    ? /^[0-9a-f]{32}$/.test(r.attemptSessionId || '') && r.stageAttemptId === r.attemptSessionId
+      && Number.isSafeInteger(r.retryIndex) && r.retryIndex >= 0
+    : r.stageAttemptId === r.sessionId + ':' + r.stageId);
+  if (!r || !supportedSchema || !validAttempt || r.contractVersion !== '0.2.0'
       || !/^[0-9a-f]{32}$/.test(r.sessionId) || !/^[0-9a-f]{32}$/.test(r.anonymousPlayerId)
-      || !['0-1','0-2','0-3','0-4','0-5','0-6','0-7','1-1','1-2','2-1','2-2','unassigned'].includes(r.stageId) || r.stageAttemptId !== r.sessionId + ':' + r.stageId
+      || !['0-1','0-2','0-3','0-4','0-5','0-6','0-7','1-1','1-2','2-1','2-2','unassigned'].includes(r.stageId)
       || !Number.isSafeInteger(r.eventSequence) || r.eventSequence < 1 || !EVENT_TYPES.has(r.eventType)
       || typeof r.buildVersion !== 'string' || typeof r.configVersion !== 'string'
       || !r.payload || Array.isArray(r.payload) || typeof r.payload !== 'object') throw new Error('invalid_record');
@@ -518,41 +550,156 @@ function eventRow(r,key,received) {
     p.timedWaveInterval,p.meleeSpawnLimit,p.weightBlendStartSpawnCount,p.weightBlendEndSpawnCount,
     p.meleeWeightAtStart,p.beastWeightAtStart,p.meleeWeightAtEnd,p.beastWeightAtEnd,
     p.soundAwarenessEnabled,p.soundAwarenessDistance,p.showMeleeGroundFootprints,p.humanDefeatTime,
-    p.beastDefeatTime,p.stageClearTime,p.timeSinceStageStart].map(safeCell);
+    p.beastDefeatTime,p.stageClearTime,p.timeSinceStageStart,r.attemptSessionId,
+    r.retryIndex,r.previousAttemptSessionId,p.exitStageId,p.exitStageAttemptId,p.exitLocation,
+    r.eventType === 'game_completed' || p.gameCompleted === true,
+    p.awarenessRadius,p.normalEnemyCount,p.bossCount,p.hostileShurikenCount,p.hostileTotalCount,
+    p.awarenessSnapshotCollected,p.skillName,p.skillSource,p.skillExecutionId,p.representativeOutcome,
+    p.exitOccurredAtKst,p.gameCompletedOccurredAtKst].map(safeCell);
 }
 
 /** 최신 도전별 누적 스냅샷의 변경 행만 덮어쓴다. 시트의 기존 열 순서를 이름으로 매핑해 유지한다. */
 function updateSessions(book,records) {
   const snapshots=records.filter(r=>['stage_started','stage_summary','stage_ended'].includes(r.eventType));
-  if (!snapshots.length) return;
+  const sessionEnds=records.filter(r=>r.eventType==='session_ended'
+    && String(r.payload.reason||'').toLowerCase()==='application_quit');
+  const gameCompletions=records.filter(r=>r.eventType==='game_completed');
+  if (!snapshots.length && !sessionEnds.length && !gameCompletions.length) return;
   const sheet=ensureSheet(book,'Sessions',SESSION_HEADERS);
   const lastRow=sheet.getLastRow();
-  const rows=lastRow>1 ? sheet.getRange(2,1,lastRow-1,8).getValues() : [];
-  const index=new Map(rows.map((row,i)=>[String(row[0]),{row:i+2,sequence:Number(row[7])||0}]));
+  const sheetHeaders=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
+  const columnIndexByHeader=new Map(sheetHeaders.map((header,index)=>[header,index]));
+  const currentValue=(entry,header)=>entry.values[columnIndexByHeader.get(header)];
+  const setValue=(entry,header,value)=>{
+    const column=columnIndexByHeader.get(header);
+    if (column!==undefined) entry.values[column]=value;
+  };
+  const rows=lastRow>1 ? sheet.getRange(2,1,lastRow-1,sheetHeaders.length).getValues() : [];
+  const index=new Map(rows.map((values,i)=>{
+    const entry={row:i+2,values:values,lastEventSequence:Number(values[columnIndexByHeader.get('last_event_sequence')])||0,
+      lastSummarySequence:Number(values[columnIndexByHeader.get('last_summary_sequence')])||0,
+      lastExitSequence:Number(values[columnIndexByHeader.get('last_exit_sequence')])||0,
+      lastCompletionSequence:Number(values[columnIndexByHeader.get('last_completion_sequence')])||0,
+      lastStatusSequence:Number(values[columnIndexByHeader.get('status_sequence')])||0};
+    return [String(currentValue(entry,'stage_attempt_id')),entry];
+  }));
   const pending=new Map();
   let nextRow=lastRow+1;
+  const terminalHeaders=new Set(['exit_stage_id','exit_stage_attempt_id','exit_location','exit_occurred_at_kst',
+    'game_completed','game_completed_occurred_at_kst','last_event_sequence','last_summary_sequence',
+    'last_exit_sequence','last_completion_sequence','status','status_sequence','deaths']);
+  const statusPrecedence=status=>{
+    if (['death','final_clear','cleared'].includes(String(status||''))) return 3;
+    if (['scene_unloaded','application_quit'].includes(String(status||''))) return 2;
+    if (['in_progress','started'].includes(String(status||''))) return 1;
+    return 0;
+  };
+  const updateLastEventSequence=entry=>{
+    entry.lastEventSequence=Math.max(entry.lastEventSequence||0,entry.lastSummarySequence,
+      entry.lastExitSequence,entry.lastCompletionSequence);
+    setValue(entry,'last_event_sequence',entry.lastEventSequence);
+  };
+  const applyExitFacts=(entry,values,sequence)=>{
+    if (sequence<entry.lastExitSequence) return;
+    let hasFact=false;
+    Object.entries(values).forEach(([header,value])=>{
+      if (value===undefined || value===null || value==='') return;
+      hasFact=true;
+      setValue(entry,header,value);
+    });
+    if (!hasFact) return;
+    entry.lastExitSequence=sequence;
+    setValue(entry,'last_exit_sequence',sequence);
+    updateLastEventSequence(entry);
+  };
+  const applyCompletionFact=(entry,completedAt,sequence)=>{
+    if (sequence<entry.lastCompletionSequence) return;
+    entry.lastCompletionSequence=sequence;
+    setValue(entry,'game_completed',true);
+    if (completedAt) setValue(entry,'game_completed_occurred_at_kst',completedAt);
+    setValue(entry,'last_completion_sequence',sequence);
+    updateLastEventSequence(entry);
+  };
+  const applyStatusFact=(entry,status,sequence)=>{
+    const currentStatus=currentValue(entry,'status');
+    const currentPrecedence=statusPrecedence(currentStatus);
+    const incomingPrecedence=statusPrecedence(status);
+    if (incomingPrecedence>currentPrecedence
+        || (incomingPrecedence===currentPrecedence && sequence>(entry.lastStatusSequence||0))) {
+      setValue(entry,'status',status);
+      entry.lastStatusSequence=sequence;
+      setValue(entry,'status_sequence',sequence);
+    }
+  };
+  const applyDeaths=(entry,deaths)=>{
+    const existingDeaths=Number(currentValue(entry,'deaths'))||0;
+    const incomingDeaths=Number(deaths)||0;
+    setValue(entry,'deaths',Math.max(existingDeaths,incomingDeaths));
+  };
+  const applySnapshotTerminalFacts=(entry,r)=>{
+    const p=r.payload;
+    if (p.exitStageId||p.exitStageAttemptId||p.exitLocation||p.exitOccurredAtKst) {
+      applyExitFacts(entry,{exit_stage_id:p.exitStageId,exit_stage_attempt_id:p.exitStageAttemptId,
+        exit_location:p.exitLocation,exit_occurred_at_kst:p.exitOccurredAtKst},r.eventSequence);
+    }
+    if (p.gameCompleted===true) applyCompletionFact(entry,p.gameCompletedOccurredAtKst,r.eventSequence);
+  };
   snapshots.forEach(r=>{
     let entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
-    if (entry && entry.sequence>=r.eventSequence) return;
-    if (!entry) entry={row:nextRow++,sequence:0};
+    if (entry && entry.lastSummarySequence>=r.eventSequence) {
+      applyStatusFact(entry,r.payload.reason,r.eventSequence);
+      applyDeaths(entry,r.payload.deaths);
+      applySnapshotTerminalFacts(entry,r);
+      pending.set(r.stageAttemptId,entry);
+      return;
+    }
+    if (!entry) entry={row:nextRow++,values:Array(sheetHeaders.length).fill(''),lastEventSequence:0,
+      lastSummarySequence:0,lastExitSequence:0,lastCompletionSequence:0};
     const p=r.payload;
     const row=[r.stageAttemptId,r.sessionId,r.stageId,r.anonymousPlayerId,r.buildVersion,r.configVersion,
       p.startedKst,r.eventSequence,p.reason,p.realtimeSeconds,p.gameplaySeconds,p.activePlaySeconds,p.currentHealth]
       .concat(BASE_METRICS.map(k=>p[k]===undefined ? (r.stageId.startsWith('0-') || k==='reactionMeanSeconds'||k==='enemyHitRate' ? '' : 0) : p[k]),
         BASE_ATTACK_METRICS.map(k=>p[k]===undefined ? (r.stageId.startsWith('0-') || k.endsWith('HitRate') ? '' : 0) : p[k]),
         [JSON.stringify(p.patterns||{}),r.runId||p.runId,p.exitStepIndex,p.exitObjectiveIndex,p.stepsCompleted,p.attempts,p.retryCount],
-        NEW_METRICS.map(k=>r.schemaVersion!=='0.4.0' || p[k]===undefined ? '' : p[k]),
-        [r.entryMode||p.entryMode,r.schemaVersion]);
-    pending.set(r.stageAttemptId,{row:entry.row,sequence:r.eventSequence,values:row});
+        NEW_METRICS.map(k=>V05_METRICS.includes(k) ? (r.schemaVersion!=='0.5.0' || p[k]===undefined ? '' : p[k])
+          : (r.schemaVersion==='0.3.0' || p[k]===undefined ? '' : p[k])),
+        [r.entryMode||p.entryMode,r.schemaVersion,r.attemptSessionId,r.retryIndex,r.previousAttemptSessionId,
+          p.exitStageId,p.exitStageAttemptId,p.exitLocation,p.gameCompleted === true,
+          p.exitOccurredAtKst,p.gameCompletedOccurredAtKst]);
+    const valuesByHeader=new Map(SESSION_HEADERS.map((header,index)=>[header,row[index]]));
+    valuesByHeader.forEach((value,header)=>{
+      if (terminalHeaders.has(header) || value===undefined) return;
+      setValue(entry,header,value);
+    });
+    applyStatusFact(entry,valuesByHeader.get('status'),r.eventSequence);
+    applyDeaths(entry,valuesByHeader.get('deaths'));
+    entry.lastSummarySequence=r.eventSequence;
+    setValue(entry,'last_summary_sequence',r.eventSequence);
+    updateLastEventSequence(entry);
+    applySnapshotTerminalFacts(entry,r);
+    pending.set(r.stageAttemptId,entry);
+  });
+  sessionEnds.forEach(r=>{
+    const entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
+    if (!entry) return;
+    const p=r.payload;
+    applyExitFacts(entry,{
+      exit_stage_id:p.exitStageId||r.stageId,
+      exit_stage_attempt_id:p.exitStageAttemptId||r.stageAttemptId,
+      exit_location:p.exitLocation||r.stageId,
+      exit_occurred_at_kst:p.exitOccurredAtKst||r.occurredAtKst
+    },r.eventSequence);
+    pending.set(r.stageAttemptId,entry);
+  });
+  gameCompletions.forEach(r=>{
+    const entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
+    if (!entry) return;
+    const completedAt=r.payload.gameCompletedOccurredAtKst||r.occurredAtKst;
+    applyCompletionFact(entry,completedAt,r.eventSequence);
+    pending.set(r.stageAttemptId,entry);
   });
   if (!pending.size) return;
-  const sheetHeaders=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
-  const changes=Array.from(pending.values(),entry=>{
-    const valuesByHeader=new Map(SESSION_HEADERS.map((header,index)=>[header,entry.values[index]]));
-    const values=sheetHeaders.map(header=>valuesByHeader.get(header));
-    return {row:entry.row,values:values};
-  });
-  writeRowGroups(sheet,changes,sheetHeaders.length);
+  writeRowGroups(sheet,Array.from(pending.values(),entry=>({row:entry.row,values:entry.values})),sheetHeaders.length);
 }
 
 /** 목표 완료·이탈 사건만 목표별 한 행으로 저장하며 배치 재시도는 step_key로 중복 제거한다. */

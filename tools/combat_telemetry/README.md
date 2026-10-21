@@ -1,15 +1,16 @@
-# 전투 텔레메트리 로그 v0.4
+# 전투 텔레메트리 로그 v0.5
 
-## 게임 빌드 0.1.3 / 스키마 0.4.0
+## 게임 빌드 0.1.3 / 스키마 0.5.0
 
 - 0.1.3은 기존 1-1·1-2에 2-1 일반 전투와 2-2 쌍둥이 보스전을 추가한다. `run_id`로 실행을 연결하고 `entry_mode`로 새 게임, 이어 하기, 체크포인트 재도전, 에디터 직접 진입 및 자연 전환을 구분한다.
 - 0.4.0은 기존 0.3.0 로그를 보존하며 Apps Script에서 두 스키마를 함께 수신한다. Events·Sessions의 기존 열 순서는 유지하고 새 열은 오른쪽에 추가한다. 0.3.0 행에서 0.4.0 전용 값은 빈 칸이며 0으로 해석하지 않는다.
+- 0.5.0은 stage-attempt 식별자, 종료·최종 클리어 기록, 인지 스냅샷, 스킬 발동 및 상호 배타적 최종 공격 결과를 추가한다. Apps Script와 CSV 변환기는 세 버전을 읽으며, 구버전 전용 값은 빈 칸으로 둔다.
 - 적 생명주기 이벤트는 `enemy_spawned`, `enemy_defeated`, `enemy_despawned`다. Melee·Beast·Thrower 종류, 스폰 순번과 당시 근접/Beast 확률로 실제 Beast 출현 비율을 설정 기대 비율과 비교한다.
 - 일반 Beast 도약 공격은 `DefenseBeastLeap`으로 기록한다. 쌍둥이 보스 부모 패턴은 `Cooperation`, `IaiCharge`, `AlternatingMelee`, `Countering`; 개별 공격은 `TwinBossRanged`, `TwinHumanSlash`, `TwinHumanCounterSlash`, `TwinHumanIai`, `TwinBeastBite`다. 시작·확정·최종 판정은 AttackId 및 부모 패턴 ID로 연결한다.
 - `stage_config`는 스폰 설정과 전장 중심·반경을 도전당 한 번 기록한다. 전장 히트맵은 이 중심을 원점으로 정규화하고 2m 격자를 사용한다. 대나무 벽 근사는 1막에서만 표시하고 2막은 대나무 오버레이 없이 전장 범위를 표시한다.
 - CSV 내보내기는 Events, Sessions, OnboardingSteps, Patterns, Heatmaps, EnemyLifecycle, BossPatterns, Diagnostics를 만든다. Events와 Sessions 외 두 CSV는 원본 Events에서 파생한 로컬 분석 보조 자료이며 게임이 별도 전송하지 않는다.
 - 대시보드는 0.2.0 이상 빌드의 구간·빌드 다중 선택, run_id 스테이지 퍼널, 2-1 적 구성, 패턴별 공격 결과와 입력/결과별 반응 시간 분포를 제공한다. 통합된 쌍둥이 보스는 일반 패턴 결과에 포함하며, 보스 개체별 피해·처치 및 별도 개별 공격 결과 표는 제공하지 않는다. 자료가 없는 구간은 0 대신 `수집 안 됨`으로 표시한다.
-- 봉투 형식은 [0.4.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.4.schema.json), 이전 형식은 [0.3.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.3.schema.json)를 따른다.
+- 신규 봉투 형식은 [0.5.0 JSON Schema](../../docs/contracts/combat-telemetry-v0.5.schema.json)이며, 구버전은 [0.4.0](../../docs/contracts/combat-telemetry-v0.4.schema.json)·[0.3.0](../../docs/contracts/combat-telemetry-v0.3.schema.json) 규약을 따른다.
 
 ## 2026-10-19 거합 역거합 성공 판정 수정
 
@@ -38,6 +39,16 @@
 - Unity Editor 강제 재컴파일 뒤 로컬 JSONL에서 빌드 0.1.3·스키마 0.4.0·stage `2-1`·`stage_config`를 확인했다. 이 세션은 `bamboo-2026-10-14-editor` 설정이라 정식 플레이 표본과 분리한다. Windows Player에서 2-1·2-2를 실제 플레이한 로그와 Google Sheets ACK는 아직 확인하지 않았다.
 - 재컴파일 전에 생성된 스키마 0.3.0·`unassigned` 로컬 실행은 전송 확인 없이 남아 있다. 이 세션은 정식 0.1.3 자료로 사용하지 않는다.
 
+
+## 스키마 0.5.0 핵심 계약
+
+- `attempt_session_id`는 stage별 1회 도전을 식별하며 `stage_attempt_id`와 같은 값이다. 재도전은 새 ID이고 `retry_index`·`previous_attempt_session_id`로 연결한다. 0.3.0·0.4.0 업로드와 CSV 읽기는 유지한다.
+- `session_ended(application_quit)`는 최신 도전 Sessions 행의 `exit_stage_id`, `exit_stage_attempt_id`, `exit_location`, `exit_occurred_at_kst`를 갱신한다. `game_completed`도 `game_completed`와 `game_completed_occurred_at_kst`를 해당 행에 기록한다. 사망 상태와 deaths 값은 그대로 둔다.
+- `enemyFinalOutcomeCount`는 등록된 AttackId의 모든 최종 결과 수이며 commit 전 `Cancelled`·`Interrupted`도 포함한다. 결과 범주 열은 서로 배타적이고 이 합계는 결과 범주 합과 같다. `enemyAttackCount`와 `enemyValidOutcomeCount`는 commit된 공격 기준이며, `enemyResolvedCount`는 Cancelled·Interrupted를 제외하는 기존 의미를 유지한다.
+- 0.5.0의 `enemyDodgeCount`와 `enemyNormalDodgeCount`는 일반 회피만 센다. `enemyPerfectDodgeCount`와 겹치지 않는다. 0.3.0·0.4.0 행에서 신규 전용 열은 빈 값이다.
+- `awarenessRadiusMetersMean`, `normalEnemiesNearHitMean`, `bossesNearHitMean`, `hostileShurikensNearHitMean`, `hostileTotalNearHitMean`은 실제 양수 피해 접촉 직전 수집한 SensoryManager 반경 스냅샷 평균이다. 적대 투사체는 `DefenseShuriken`, `EnemyProjectile`, `TwinBossProjectile`의 비행 중 비반사 객체를 GameObject 기준으로 중복 없이 센다. `skillEmpowerActivationCount`는 수동 거합(`skillSource=manual`)만 세며, 자동 반격 거합은 `skillSource=counter` 사건으로 보존하지만 수동 횟수에서 제외한다. `skillSwordWaveActivationCount`는 일섬 발사 수다.
+- 적 공격의 `PerfectDodge`는 같은 접촉 payload의 `defenseOutcome=DodgeAvoided`로 분류한다. Buffered→Started는 같은 InputId의 시작 레코드·회피 연결을 갱신하되 입력 시도 수를 중복 증가시키지 않는다.
+- Core read API returns player-exit and completion fields in `sheets.Sessions` before Events pagination. Existing legacy views are retained. A bounded 2026-10-21 Unity Editor Play produced schema 0.5.0 JSONL; the first attempt ended in a natural death, and a retry death was forced through the live `PlayerHealth.TakeDamage` path after 30 seconds without a natural death. Exporting that run produced 101 Events rows, 2 stage-attempt rows, and 0 invalid lines. Apps Script live deployment/ACK and hosted Sites synchronization/deployment remain unverified.
 ## 바로 사용하기
 
 1. 새 빌드 또는 갱신된 Unity 프로젝트에서 BambooStage1을 플레이한다. Intro 시작 버튼은 Onboarding을 거쳐 이 씬을 연다.
@@ -164,6 +175,7 @@ Events와 OnboardingSteps는 헤더 순서가 다르면 `header_mismatch`로 거
 ## 분석 대시보드
 
 - 분석 대시보드: https://blindblade-combat-analysis.wan1k.chatgpt.site
+- 현재 Sites v23은 선택한 구간에 속한 모든 도전의 합계·통계를 전체요약 기본 화면에 표시한다. 도전별·피격별 세부 내역은 접힌 영역에서 확인하고 플레이어별 누적 시간 표는 기본 화면에 유지한다. 버전·배포 검증 정보는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에 기록한다.
 - 사이트 프로젝트 소스는 `tools/combat_telemetry/dashboard_site`에 있다. Sites 프로젝트 접근은 `public`이다. Google Spreadsheet 자체는 비공개이며 Worker 서버가 Apps Script의 읽기 전용 API를 호출한다. 최신 페이지 버전과 스프레드시트 연결 상태는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에서 확인한다.
 - Google Sheets에서 Events, Sessions, OnboardingSteps 탭을 각각 CSV로 다운로드하고, 사이트에서 파일을 한 번에 선택한다. Patterns, Heatmaps, Diagnostics 탭도 선택 입력할 수 있다.
 - CSV 파일은 브라우저 안에서만 처리되며 사이트 서버로 업로드되지 않는다. 한 파일만 가져와도 보이지만 전체 분석에는 Events·Sessions·OnboardingSteps를 함께 불러온다.
@@ -211,7 +223,7 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 | --- | --- |
 | `event_key` | `session_id:event_sequence` 형식의 중복 방지 키 |
 | `received_kst` | Apps Script 요청 처리 시작 한국 시각. 잠금·인덱싱 전에 기록한다. 인덱스 개선 전 행은 기존 키 조회가 끝난 뒤의 시각이다. |
-| `schema_version` | JSON 로그 자료 구조 버전(현재 `0.4.0`; `0.3.0`도 호환) |
+| `schema_version` | JSON 로그 자료 구조 버전(현재 `0.5.0`; `0.3.0`·`0.4.0`도 호환) |
 | `build_version` | Unity `Application.version` |
 | `config_version` | 기록 설정 버전. Editor 기록은 끝에 `-editor`가 붙음 |
 | `session_id` | 씬 세션을 식별하는 임의 ID |
@@ -412,5 +424,10 @@ Apps Script `Code.gs`의 헤더 배열 기준이다. 비어 있는 기본 탭 `�
 - Stage1의 이동 표본 0.5→1초, 진행 요약 5→15초. 5분 동안 계속 이동했다면 정기 표본 약 600→300건, 요약 약 60→20건이다. 실제 건수는 플레이 행동에 따라 달라진다.
 - 반복된 전체 Inspector 설정 덤프, 위치 표본의 체력과 Y 좌표, 중복 반응 후보·회피 종료·상태 변경 사건은 새 로그에서 보내지 않는다. 반응 시간은 실제 적 공격 접촉 결과에서 확인한다.
 - Apps Script의 `setupSheets`는 기존 Events·Sessions 행을 보존하면서 새 열을 추가하고 OnboardingSteps를 생성한다. `resetTelemetrySheets`는 세 탭 데이터를 비우므로 초기화가 필요할 때만 실행한다. 현재 대시보드는 서버 공유 캐시를 사용하며, 스냅샷 계약과 `getValues()` 읽기는 Apps Script에 배포됐다. 사이트와 Apps Script의 기존 URL·토큰 및 업로드 형식은 유지한다.
-- CSV 전처리는 Events.csv, Sessions.csv, OnboardingSteps.csv, Patterns.csv, Heatmaps.csv, EnemyLifecycle.csv, BossPatterns.csv, Diagnostics.csv를 만든다. 기존 0.3.0 JSONL도 같은 변환기가 수신하며 신규 빌드 봉투는 0.4.0이다.
+- CSV 전처리는 Events.csv, Sessions.csv, OnboardingSteps.csv, Patterns.csv, Heatmaps.csv, EnemyLifecycle.csv, BossPatterns.csv, Diagnostics.csv를 만든다. 기존 0.3.0 JSONL도 같은 변환기가 수신하며 신규 빌드 봉투는 0.5.0이다.
 - 구간 ID가 Google Sheets에서 날짜로 바뀐 과거 Events·Sessions 행은 stage_attempt_id에서 복원했으며, 세 탭의 stage_id 열은 텍스트 형식이다. 
+
+
+## Out-of-order session facts
+
+The exporter keeps `session_ended(application_quit)` and `game_completed` facts separate while it reads JSONL files. After collecting the newest stage summary, it merges the latest terminal facts into that row and writes independent `last_summary_sequence`, `last_exit_sequence`, `last_completion_sequence`, and `status_sequence` columns. Status precedence is death/final_clear/cleared, then scene_unloaded/application_quit, then in_progress/started; event sequence breaks ties. Apps Script uses the same rules, keeps deaths nondecreasing, and maintains monotonic `last_event_sequence`. The onboarding death callback also writes and flushes its death summary immediately.
