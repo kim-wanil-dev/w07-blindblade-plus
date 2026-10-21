@@ -106,7 +106,7 @@ public sealed class OnboardingHud : MonoBehaviour
     {
         new Prompt("이동 - WASD\n회피 - Space\n공격 - 마우스 왼쪽 버튼 클릭", "이동 - 왼쪽 스틱\n회피 - A 버튼\n공격 - RB", null,
             "발도로 적 3명 처치"),
-        new Prompt("극한 회피 - Space", "극한 회피 - A 버튼", null, "수리검 극한 회피 1회"),
+        new Prompt("극한 회피 - 적의 공격에 맞춰 Space로 회피", "극한 회피 - 적의 공격에 맞춰 A 버튼으로 회피", null, "수리검 극한 회피 1회"),
         new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
             new[] { "막기 1회", "공격 쳐내기 0/1" }),
         new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
@@ -114,7 +114,7 @@ public sealed class OnboardingHud : MonoBehaviour
             "일섬 - 마우스 왼쪽 버튼 클릭",
             "일섬 - RB 버튼", null, 2),
         new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
-            new[] { "정확한 시점에 공격을 막아 쳐내기 0/3", "정확한 시점에 공격을 막아 쳐내기 1/3", "정확한 시점에 공격을 막아 쳐내기 2/3", "거합으로 적 8명 처치" },
+            new[] { "거합 게이지 채우기 0/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 1/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 2/3\n(극한 회피, 쳐내기로 획득)", "거합으로 적 8명 처치" },
             "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.",
             "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.", null, 3)
     };
@@ -122,18 +122,20 @@ public sealed class OnboardingHud : MonoBehaviour
     [Header("집중 안내")]
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\n마우스 좌클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialText = "극한 회피에 성공하면\n파동이 발생해 주위를 잠시 밝힙니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialGamepadText = "극한 회피에 성공하면\n파동이 발생해 주위를 잠시 밝힙니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialGamepadText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialText = "극한 회피는 거합 게이지를 한 칸 채웁니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialGamepadText = "극한 회피는 거합 게이지를 한 칸 채웁니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialText = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
     [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialGamepadText = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
     [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검에 달린 구슬도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\n마우스 왼쪽 버튼 클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "집중 상태에 돌입했을 때, 거합 게이지가 3개가 되면 RB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\n좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\nRB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
 
@@ -179,6 +181,8 @@ public sealed class OnboardingHud : MonoBehaviour
     public string MovementWaveTutorialGamepadText => _movementWaveTutorialGamepadText;
     public string PerfectDodgeTutorialText => _perfectDodgeTutorialText;
     public string PerfectDodgeTutorialGamepadText => _perfectDodgeTutorialGamepadText;
+    public string PerfectDodgeMeterTutorialText => _perfectDodgeMeterTutorialText;
+    public string PerfectDodgeMeterTutorialGamepadText => _perfectDodgeMeterTutorialGamepadText;
     public string TargetThreadTutorialText => _targetThreadTutorialText;
     public string TargetThreadTutorialGamepadText => _targetThreadTutorialGamepadText;
     public string ParryHudTutorialText => _parryHudTutorialText;
@@ -303,6 +307,13 @@ public sealed class OnboardingHud : MonoBehaviour
         Vector2 center = (screenBottomLeft + screenTopRight) * 0.5f;
         Vector2 size = (screenTopRight - screenBottomLeft) / Mathf.Max(0.01f, _canvas.scaleFactor);
         SetTutorialTargetScreen(center, size + new Vector2(32f, 24f));
+    }
+
+    /// <summary>현재 튜토리얼 대상 프레임과 연결선을 숨긴다.</summary>
+    public void ClearTutorialTarget()
+    {
+        _tutorialTargetFrame.gameObject.SetActive(false);
+        _tutorialConnector.gameObject.SetActive(false);
     }
 
     /// <summary>worldPosition의 카메라 화면 지점에 금색 프레임과 안내판 연결선을 배치한다.</summary>

@@ -193,6 +193,7 @@ public sealed class BossController : MonoBehaviour
     private float _hitDeflectUntil;
     private float _pendingDefenseAt;
     private bool _counterSlashing;
+    private bool _chargeDamageActive;
     private IPlayerDefenseResolver _playerDefense;
     private PlayerBulletTimeAudio _playerBulletTimeAudio;
     private PlayerPerfectPulse _playerPerfectPulse;
@@ -213,6 +214,21 @@ public sealed class BossController : MonoBehaviour
     private readonly Collider[] _placementContacts = new Collider[16];
 
     public BossState State => _state;
+
+    /// <summary>보스 돌진의 실제 피해 캡슐이 cylinder에 닿으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        float damage = _counterSlashing ? _counterSlashDamage : _chargeDamage;
+        if (!isActiveAndEnabled || !_chargeDamageActive || _telemetryAttackId == 0 || damage <= 0f)
+            return false;
+        float radius = Mathf.Max(_agent.radius, _chargeHitRadius);
+        Vector3 bottom = transform.position + Vector3.up * radius;
+        Vector3 top = transform.position + Vector3.up * Mathf.Max(radius, _agent.height - radius);
+        if (!cylinder.OverlapsCapsule(bottom, top, radius)) return false;
+        attackId = _telemetryAttackId;
+        return true;
+    }
     public bool IsDefending => _hitDeflectUntil > 0f;
     public event Action<BossState> StateChanged;
 
@@ -617,6 +633,7 @@ public sealed class BossController : MonoBehaviour
         RestoreAfterDisappearance(true);
         BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_telemetryAttackId, transform.position);
         ChargeStarted?.Invoke();
+        _chargeDamageActive = true;
         while (Time.time < until && remaining > 0.01f)
         {
             Vector3 previous = transform.position;
@@ -643,6 +660,7 @@ public sealed class BossController : MonoBehaviour
                 _playerHealth.TakeDamage(new DamageContext(_chargeDamage, gameObject, point, direction, "BossCharge", _telemetryAttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Charge));
                 if (_playerHealth.IsAlive)
                     _playerMotor.ApplyCombatPush(direction, _chargePushDistance, _chargePushDuration);
+                _chargeDamageActive = false;
                 yield break;
             }
             _agent.Move(destination - previous);
@@ -652,6 +670,7 @@ public sealed class BossController : MonoBehaviour
         }
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Miss", transform.position);
         _telemetryAttackId = 0;
+        _chargeDamageActive = false;
         _motor.Stop();
     }
 
@@ -1146,6 +1165,7 @@ public sealed class BossController : MonoBehaviour
         bool contacted = false;
         BlindBlade.Telemetry.CombatTelemetrySignals.Commit(_telemetryAttackId, transform.position);
         ChargeStarted?.Invoke();
+        _chargeDamageActive = true;
         // 관통 베기는 보스 기합에 플레이어 대시 소리를 겹쳐 순간 돌진을 알린다.
         Managers.Sound.PlayCue(CombatSoundCue.Dodge, transform.position, gameObject, true);
         while (remaining > 0.01f)
@@ -1179,6 +1199,7 @@ public sealed class BossController : MonoBehaviour
                 DefenseResolution resolution = _playerDefense.ResolveIncomingAttack(new DamageContext(_counterSlashDamage,
                     gameObject, point, direction, "BossCounterSlash", _telemetryAttackId, 1, IncomingAttackKind.Charge));
                 _telemetryAttackId = 0;
+                _chargeDamageActive = false;
                 if (resolution.Outcome == DefenseOutcome.PerfectParry)
                 {
                     _agent.Move(direction * Mathf.Max(0f, contactDistance - 0.05f));
@@ -1194,6 +1215,7 @@ public sealed class BossController : MonoBehaviour
         if (!contacted)
             BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Miss", transform.position);
         _telemetryAttackId = 0;
+        _chargeDamageActive = false;
         _motor.Stop();
     }
 
@@ -1286,6 +1308,7 @@ public sealed class BossController : MonoBehaviour
         if (_state == state) return;
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Cancelled", transform.position);
         _telemetryAttackId = 0;
+        _chargeDamageActive = false;
         _state = state;
         StateChanged?.Invoke(state);
     }

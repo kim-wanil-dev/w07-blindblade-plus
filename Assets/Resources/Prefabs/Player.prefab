@@ -482,9 +482,10 @@ MonoBehaviour:
   _view: {fileID: 658615258030587121}
   _frontArc: 120
   _perfectDodgeStart: 0
-  _perfectDodgeEnd: 0.1
+  _perfectDodgeEnd: 0.18
   _dodgeInvulnerabilityEnd: 0.18
   _afterimageMinimumMoveRatio: 0.5
+  _afterimageLifetime: 0.18
 --- !u!114 &7354578201373670101
 MonoBehaviour:
   m_ObjectHideFlags: 0

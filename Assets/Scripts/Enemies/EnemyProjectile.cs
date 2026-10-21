@@ -48,6 +48,16 @@ public class EnemyProjectile : MonoBehaviour
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int ProjectileId => _projectileId;
 
+    /// <summary>적대 투사체의 현재 피해 구가 cylinder에 닿으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !IsHostileFlying || _damage.Amount <= 0f
+            || !cylinder.OverlapsSphere(transform.position, _hitRadius)) return false;
+        attackId = _damage.AttackId;
+        return true;
+    }
+
     void Update()
     {
         if (!_isFlying)

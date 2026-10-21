@@ -18,6 +18,18 @@ public sealed class EnemyChargeHitbox : MonoBehaviour
     private EnemyAttackContext _context;
     private Vector3 _previousCenter;
 
+    /// <summary>현재 돌진 타격 구가 cylinder에 닿고 아직 피해를 줄 수 있으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || _activeAttack == null || _activeAttack.Phase != EnemyAttackPhase.Active
+            || (_context.Target != null && _damaged.Contains(_context.Target.GetComponent<IDamageable>()))
+            || _damage <= 0f || !cylinder.OverlapsSphere(transform.position + Vector3.up * _height, _radius))
+            return false;
+        attackId = _context.AttackId;
+        return true;
+    }
+
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
     [SerializeField, Min(0.1f)] private float _gizmoDuration = 2f;

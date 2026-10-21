@@ -184,6 +184,20 @@ public sealed class BeastBossAttack : MonoBehaviour
     public bool IsEscaping => _escape != null;
     public float EdgeRunTraveledAngle { get; private set; }
     public bool IsBiting => _biting;
+
+    /// <summary>짐승의 실제 덮치기 피해 캡슐이 cylinder에 닿으면 현재 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !_biting || _attackResolved || _biteDamage <= 0f)
+            return false;
+        float radius = Mathf.Max(_contactRadius, _agent.radius);
+        Vector3 bottom = transform.position + Vector3.up * radius;
+        Vector3 top = transform.position + Vector3.up * Mathf.Max(radius, _agent.height - radius);
+        if (!cylinder.OverlapsCapsule(bottom, top, radius)) return false;
+        attackId = _telemetryAttackId;
+        return true;
+    }
     public float ContactRadius => _contactRadius;
     public BeastBurrowMotion BurrowMotion { get; private set; }
     public float BurrowDepth { get; private set; }

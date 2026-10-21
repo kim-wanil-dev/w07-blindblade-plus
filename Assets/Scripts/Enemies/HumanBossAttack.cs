@@ -132,6 +132,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     private bool _dashParried;
     private bool _dashPassedThrough;
     private float _strikeDamage;
+    private bool _slashDamageActive;
 
     [Header("반격 관통 베기")]
     [SerializeField, Min(0.1f), Tooltip("받아치기 관통 베기 속도(미터/초). 스테이지1 보스 관통 베기(90)의 4배다.")]
@@ -156,6 +157,20 @@ public sealed class HumanBossAttack : MonoBehaviour
     /// 전조부터 돌진 후퇴 또는 패링 반동이 끝날 때까지 참을 유지해 발소리 억제에 사용한다.
     /// </summary>
     public bool IsSlashing => _slashing;
+
+    /// <summary>인간의 실제 돌진 베기 피해 캡슐이 cylinder에 닿으면 현재 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !_slashDamageActive || _telemetryAttackId == 0 || _strikeDamage <= 0f
+            || _dashPassedThrough) return false;
+        float radius = _slashContactRadius;
+        Vector3 bottom = transform.position + Vector3.up * radius;
+        Vector3 top = transform.position + Vector3.up * Mathf.Max(radius, _agent.height - radius);
+        if (!cylinder.OverlapsCapsule(bottom, top, radius)) return false;
+        attackId = _telemetryAttackId;
+        return true;
+    }
     public int Charges => _charges;
     public int MaxCharges => _maxCharges;
     public bool IsChargeFull => _charges >= _maxCharges;
@@ -343,6 +358,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         _player = player;
         _playerMotor = player.GetComponent<PlayerMotor>();
         if (!CanSlash()) yield break;
+        _dashPassedThrough = false;
         _slashing = true;
         _telemetryAttackId = CombatTelemetrySignals.BeginBossAttack("TwinHumanCounterSlash", "Melee",
             transform.position, target, _telemetryParentPatternId, _telemetryPatternInstanceId, "Human");
@@ -375,6 +391,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     private IEnumerator ArcSlash(float damage, Vector3 target, Vector3 bulgeSide)
     {
         _dashParried = false;
+        _strikeDamage = damage;
         Vector3 start = transform.position;
         Vector3 chord = Vector3.ProjectOnPlane(target - start, Vector3.up);
         float span = chord.magnitude;
@@ -402,6 +419,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         bool contacted = false;
         if (_slashSound != SoundId.None)
             Managers.Sound.Play(_slashSound, transform.position, 1f, gameObject, true);
+        _slashDamageActive = true;
         while (traveled < total && CanSlash())
         {
             // 일시정지 프레임은 이동 없이 넘겨 관통 베기가 중간에 끊기지 않게 한다.
@@ -443,6 +461,7 @@ public sealed class HumanBossAttack : MonoBehaviour
                         _telemetryAttackId = 0;
                         _agent.Move(direction * Mathf.Max(0f, contact - 0.05f));
                         _dashParried = true;
+                        _slashDamageActive = false;
                         yield break;
                     }
                 }
@@ -458,6 +477,7 @@ public sealed class HumanBossAttack : MonoBehaviour
             yield return null;
         }
         _motor.Stop();
+        _slashDamageActive = false;
     }
 
     /// <summary>플레이어 반대쪽으로 _parryRecoilDistance만큼 _parryRecoilDuration 동안 떨며 밀려난다.</summary>
@@ -540,6 +560,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     private IEnumerator Dash(float damage)
     {
         _strikeDamage = damage;
+        _slashDamageActive = true;
         Vector3 start = transform.position;
         Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
         Vector3 forward = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
@@ -550,6 +571,7 @@ public sealed class HumanBossAttack : MonoBehaviour
         Vector3[] points = BuildCurvePoints(start, forward * toPlayer.magnitude);
         points[points.Length - 1] = GetOvershootPoint(points[points.Length - 2]);
         yield return FollowCurve(points, _dashSpeed, true);
+        _slashDamageActive = false;
         _motor.Stop();
     }
 
@@ -793,6 +815,7 @@ public sealed class HumanBossAttack : MonoBehaviour
     {
         if (_telemetryAttackId != 0) EndTelemetryAttack("Cancelled");
         _slashing = false;
+        _slashDamageActive = false;
         _warning.EndWarning();
     }
 

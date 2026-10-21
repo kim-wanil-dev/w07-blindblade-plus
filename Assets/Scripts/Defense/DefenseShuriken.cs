@@ -30,6 +30,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     private PlayerMotor _targetMotor;
     private BambooDefenseDirector _director;
     private float _damage;
+    private bool _onboardingHarmless;
     private Vector3 _direction;
     private float _elapsed;
     private bool _flying;
@@ -75,6 +76,16 @@ public sealed class DefenseShuriken : MonoBehaviour
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int AttackId => _attackId;
     public int ProjectileId => _projectileId;
+
+    /// <summary>적대 수리검의 현재 피해 구가 cylinder에 닿으면 비행 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !_flying || _reflected || _onboardingHarmless || _damage <= 0f
+            || !cylinder.OverlapsSphere(transform.position, _hitRadius)) return false;
+        attackId = _attackId;
+        return true;
+    }
 
     void Update()
     {
@@ -138,6 +149,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     /// <summary>start부터 end까지 적대 수리검의 피해 궤적을 잔상에 조회하고 접촉 후보를 기록한다.</summary>
     private void ReportAfterimage(Vector3 start, Vector3 end)
     {
+        if (_onboardingHarmless) return;
         DodgeAfterimage.ReportSphereSweep(start, end, _hitRadius,
             new DamageContext(_damage, _instigator, end, _direction, PATTERN_ID, _attackId, 1,
                 IncomingAttackKind.Projectile));
@@ -163,6 +175,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         _targetMotor = target.GetComponent<PlayerMotor>();
         _director = director;
         _damage = damage;
+        _onboardingHarmless = false;
         _direction = direction.normalized;
         CombatSessionRuntime session = CombatSessionRuntime.Active;
         _attackId = attackId != 0 ? attackId : BlindBlade.Telemetry.CombatTelemetrySignals.Begin(PATTERN_ID, "Projectile", transform.position, target.transform.position);
@@ -176,6 +189,12 @@ public sealed class DefenseShuriken : MonoBehaviour
         // 소멸하면 소유자 파괴로 SoundManager가 정지하고, 반사는 TryReflect에서 직접 멈춘다.
         if (_flightSound != SoundId.None)
             Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
+    }
+
+    /// <summary>온보딩에서 완료한 회피 목표의 남은 수리검을 비행시킨 채 플레이어 피해와 잔상 위협을 끈다.</summary>
+    public void MakeHarmlessForOnboarding()
+    {
+        _onboardingHarmless = true;
     }
 
     /// <summary>
@@ -329,6 +348,11 @@ private void ApplyVisualPitch()
         PlayerHealth player = collider.GetComponentInParent<PlayerHealth>();
         if (player != null)
         {
+            if (_onboardingHarmless)
+            {
+                Release();
+                return;
+            }
             DamageContext context = new DamageContext(_damage, _instigator, point, _direction, PATTERN_ID,
                 _attackId, 1, IncomingAttackKind.Projectile);
             IPlayerDefenseResolver resolver = player.GetComponent<IPlayerDefenseResolver>();

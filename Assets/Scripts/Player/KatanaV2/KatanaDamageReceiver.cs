@@ -9,6 +9,7 @@ using BlindBlade.Combat.Contracts;
 public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 {
     private const string TWIN_HUMAN_IAI_PATTERN = "TwinHumanIai";
+    private const float DODGE_THREAT_RADIUS = 2f;
 
     [Header("Katana connection")]
     [SerializeField] private KatanaCombatCoordinator _combat;
@@ -23,16 +24,19 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     [Header("회피 판정")]
     [SerializeField, Min(0f), InspectorName("극한 회피 시작 (초)")]
-    [Tooltip("회피 시작부터 잽니다. 이 구간에 닿은 공격은 극한 회피이며 보상은 회피 1회에 한 번입니다.")]
+    [Tooltip("회피 시작부터 잽니다. 회피 무적 전체 구간 안에 닿은 공격은 극한 회피이며 보상은 회피 1회에 한 번입니다.")]
     private float _perfectDodgeStart = 0f;
     [SerializeField, Min(0f), InspectorName("극한 회피 끝 (초)")]
-    private float _perfectDodgeEnd = 0.1f;
+    private float _perfectDodgeEnd = 0.18f;
     [SerializeField, Min(0f), InspectorName("회피 무적 끝 (초)")]
     [Tooltip("회피 시작부터 잽니다. 극한 회피 구간 밖에서 이 시각 전에 닿은 공격은 피해만 없고 보상이 없습니다.")]
     private float _dodgeInvulnerabilityEnd = 0.18f;
     [SerializeField, Range(0f, 2f), InspectorName("잔상 인정 최소 이동 / 몸 반지름")]
     [Tooltip("잔상에 공격이 닿을 때 회피 시작 위치에서 이 거리만큼 벗어나야 회피 후보로 인정합니다.")]
     private float _afterimageMinimumMoveRatio = 0.5f;
+    [SerializeField, Min(0f), InspectorName("회피 잔상 수명 (초)")]
+    [Tooltip("회피 시작부터 플레이어 시계 기준으로 잔상 감지를 유지하는 시간입니다. 기본값은 회피 무적 시간과 같습니다.")]
+    private float _afterimageLifetime = 0.18f;
     private int _dodgeId;
     private bool _dodgeActive;
     private bool _perfectDodgeRewarded;
@@ -42,6 +46,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     private DamageContext _afterimageContact;
     private bool _afterimageContacted;
     private bool _dodgeTookDamage;
+    private Vector3 _afterimageOrigin;
 
     public bool IsDodgeInvulnerable => TryGetDodgeOutcome(out _);
     public bool IsDodgeAvoiding => !_dodgeTookDamage && !_empower.IsBulletTimeActive
@@ -82,9 +87,10 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
 
     void Update()
     {
-        if (_afterimage != null && (!_motor.IsDodging || !IsAlive
-            || _playerClock.Now - _motor.DodgeStartedAt >= _dodgeInvulnerabilityEnd))
-            SettleAfterimage();
+        if (_afterimage != null && !IsAlive)
+            ClearAfterimage();
+        else if (_afterimage != null && _playerClock.Now - _motor.DodgeStartedAt >= _afterimageLifetime)
+            RemoveAfterimage();
         if (_dodgeActive && _playerClock.Now - _motor.DodgeStartedAt >= Mathf.Max(_perfectDodgeEnd, _dodgeInvulnerabilityEnd))
             EndDodge();
     }
@@ -268,9 +274,9 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// <summary>context가 회피 중 원점 잔상에 닿은 피해 공격이면 이번 DodgeId의 보상 후보로 기록한다. 쌍둥이 보스 거합은 제외한다.</summary>
     public void RecordAfterimageContact(DamageContext context)
     {
-        if (_afterimage == null || !_dodgeActive || !_motor.IsDodging || _perfectDodgeRewarded
+        if (_afterimage == null || !_dodgeActive || _perfectDodgeRewarded
             || _afterimageContacted
-            || _dodgeTookDamage || _playerClock.Now - _motor.DodgeStartedAt >= _dodgeInvulnerabilityEnd
+            || _dodgeTookDamage || _playerClock.Now - _motor.DodgeStartedAt >= _afterimageLifetime
             || context.Amount <= 0f || context.PatternId == TWIN_HUMAN_IAI_PATTERN
             || !IsAlive || Time.timeScale <= 0f) return;
         float displacement = Vector3.ProjectOnPlane(transform.position - _afterimage.Origin, Vector3.up).magnitude;
@@ -283,12 +289,12 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     private void SettleAfterimage()
     {
         if (_afterimageContacted && !_dodgeTookDamage && IsAlive && !_perfectDodgeRewarded)
-            AwardPerfectDodge(_afterimageContact.AttackId, _afterimage.Origin, true);
+            AwardPerfectDodge(_afterimageContact.AttackId, _afterimageOrigin, true);
         ClearAfterimage();
     }
 
-    /// <summary>잔상 캡슐을 제거하고 이번 회피의 접촉 후보를 지운다.</summary>
-    private void ClearAfterimage()
+    /// <summary>잔상 캡슐만 제거하고 이미 기록한 접촉 후보는 회피 종료까지 유지한다.</summary>
+    private void RemoveAfterimage()
     {
         if (_afterimage != null)
         {
@@ -296,6 +302,12 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
             Destroy(_afterimage.gameObject);
         }
         _afterimage = null;
+    }
+
+    /// <summary>잔상 캡슐을 제거하고 이번 회피의 접촉 후보도 지운다.</summary>
+    private void ClearAfterimage()
+    {
+        RemoveAfterimage();
         _afterimageContacted = false;
     }
 
@@ -337,14 +349,44 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         _normalDodgeVignetteShown = false;
         _dodgeTookDamage = false;
         _afterimageContacted = false;
+        _afterimageOrigin = transform.position;
         _afterimage = DodgeAfterimage.Create(this, _controller);
         PublishDodge(PlayerDodgeStage.Started, 0);
+        if (!_empower.IsBulletTimeActive && TryGetNearbyThreat(out int attackId))
+            AwardPerfectDodge(attackId, transform.position, false);
+    }
+
+    /// <summary>회피 시작 위치의 반경 2m·플레이어 높이 원통과 실제 활성 피해 판정이 겹치면 attackId를 출력하고 참을 반환한다.</summary>
+    private bool TryGetNearbyThreat(out int attackId)
+    {
+        attackId = 0;
+        Vector3 center = transform.TransformPoint(_controller.center);
+        DodgeThreatCylinder cylinder = new DodgeThreatCylinder(center, _controller.height, DODGE_THREAT_RADIUS);
+        foreach (EnemyMeleeAttack attack in FindObjectsByType<EnemyMeleeAttack>(FindObjectsSortMode.None))
+            if (attack.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (EnemyChargeHitbox attack in FindObjectsByType<EnemyChargeHitbox>(FindObjectsSortMode.None))
+            if (attack.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (DefenseBeastLeapAttack attack in FindObjectsByType<DefenseBeastLeapAttack>(FindObjectsSortMode.None))
+            if (attack.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (DefenseShuriken projectile in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
+            if (projectile.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (EnemyProjectile projectile in FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None))
+            if (projectile.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (TwinBossProjectile projectile in FindObjectsByType<TwinBossProjectile>(FindObjectsSortMode.None))
+            if (projectile.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (BeastBossAttack attack in FindObjectsByType<BeastBossAttack>(FindObjectsSortMode.None))
+            if (attack.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (HumanBossAttack attack in FindObjectsByType<HumanBossAttack>(FindObjectsSortMode.None))
+            if (attack.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        foreach (BossController attack in FindObjectsByType<BossController>(FindObjectsSortMode.None))
+            if (attack.TryGetDodgeThreat(cylinder, out attackId)) return true;
+        return false;
     }
 
     /// <summary>현재 회피의 판정 구간을 끝내고 _dodgeActive를 거짓으로 바꾼 뒤 Ended 사건을 발행한다.</summary>
     private void EndDodge()
     {
-        if (_afterimage != null) SettleAfterimage();
+        if (_afterimage != null || _afterimageContacted) SettleAfterimage();
         _dodgeActive = false;
         PublishDodge(PlayerDodgeStage.Ended, 0);
     }
@@ -399,5 +441,61 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     protected override bool CanBlockDamage(DamageContext context)
     {
         return false;
+    }
+}
+
+/// <summary>회피 입력 순간 플레이어 몸 높이와 수평 반경 2m로 정의한 원통 판정이다.</summary>
+public readonly struct DodgeThreatCylinder
+{
+    private readonly Vector3 _center;
+    private readonly float _bottom;
+    private readonly float _top;
+    private readonly float _radius;
+
+    /// <summary>center와 height, radius를 받아 원통의 위아래 및 수평 반경을 저장한다.</summary>
+    public DodgeThreatCylinder(Vector3 center, float height, float radius)
+    {
+        _center = center;
+        _bottom = center.y - height * 0.5f;
+        _top = center.y + height * 0.5f;
+        _radius = radius;
+    }
+
+    /// <summary>center와 attackRadius의 피해 구가 원통에 닿는지 수평·수직 거리를 함께 계산해 반환한다.</summary>
+    public bool OverlapsSphere(Vector3 center, float attackRadius)
+    {
+        float dx = center.x - _center.x;
+        float dz = center.z - _center.z;
+        float horizontalGap = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - _radius);
+        float verticalGap = Mathf.Max(0f, _bottom - center.y, center.y - _top);
+        return horizontalGap * horizontalGap + verticalGap * verticalGap <= attackRadius * attackRadius;
+    }
+
+    /// <summary>start부터 end까지의 공격 캡슐이 원통과 겹치면 참을 반환한다. 선분 위 최근접점을 찾아 높이와 수평 거리를 함께 검사한다.</summary>
+    public bool OverlapsCapsule(Vector3 start, Vector3 end, float attackRadius)
+    {
+        float left = 0f;
+        float right = 1f;
+        for (int index = 0; index < 16; index++)
+        {
+            float first = (left * 2f + right) / 3f;
+            float second = (left + right * 2f) / 3f;
+            if (DistanceSquaredToCylinder(Vector3.Lerp(start, end, first))
+                < DistanceSquaredToCylinder(Vector3.Lerp(start, end, second))) right = second;
+            else left = first;
+        }
+        return Mathf.Min(DistanceSquaredToCylinder(start), DistanceSquaredToCylinder(end),
+            DistanceSquaredToCylinder(Vector3.Lerp(start, end, (left + right) * 0.5f)))
+            <= attackRadius * attackRadius;
+    }
+
+    /// <summary>point에서 원통 내부까지의 최단 거리 제곱을 반환한다.</summary>
+    private float DistanceSquaredToCylinder(Vector3 point)
+    {
+        float dx = point.x - _center.x;
+        float dz = point.z - _center.z;
+        float horizontalGap = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - _radius);
+        float verticalGap = Mathf.Max(0f, _bottom - point.y, point.y - _top);
+        return horizontalGap * horizontalGap + verticalGap * verticalGap;
     }
 }
