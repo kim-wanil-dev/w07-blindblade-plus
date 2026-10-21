@@ -32,7 +32,6 @@ namespace BlindBlade.Telemetry
         [SerializeField, Min(5f)] private float _uploadIntervalSeconds = 20f;
         [SerializeField, Range(1, 100)] private int _batchEventLimit = 100;
         [SerializeField, Range(5, 120)] private int _requestTimeoutSeconds = 30;
-        [SerializeField, Min(30f)] private float _maximumRetrySeconds = 300f;
 
         private readonly Dictionary<int, JObject> _pendingEnds = new Dictionary<int, JObject>();
         private bool _completePending;
@@ -88,7 +87,7 @@ namespace BlindBlade.Telemetry
             _combat = _health.GetComponent<KatanaCombatCoordinator>();
             _state = Game.Instance.GameStateManager;
             _service = CombatTelemetryService.GetOrCreate(_bufferLimit, _flushIntervalSeconds, _maximumStorageMegabytes,
-                _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds, _maximumRetrySeconds);
+                _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds);
             _service.QuitRequested += HandleQuitRequested;
             _health.Died += HandleDeath;
             _combat.Events.InputResolved += HandleInput;

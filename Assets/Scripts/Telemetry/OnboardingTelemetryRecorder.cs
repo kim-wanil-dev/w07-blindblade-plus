@@ -31,7 +31,6 @@ namespace BlindBlade.Telemetry
         [SerializeField, Min(5f)] private float _uploadIntervalSeconds = 20f;
         [SerializeField, Range(1, 100)] private int _batchEventLimit = 100;
         [SerializeField, Range(5, 120)] private int _requestTimeoutSeconds = 30;
-        [SerializeField, Min(30f)] private float _maximumRetrySeconds = 300f;
 
         private readonly Dictionary<int, JObject> _attempts = new Dictionary<int, JObject>();
         private OnboardingFlowController _flow;
@@ -163,7 +162,7 @@ namespace BlindBlade.Telemetry
             if (string.IsNullOrEmpty(_runId)) BeginNewRun();
             _sessionId = _runtime.Session.SessionId;
             _service = CombatTelemetryService.GetOrCreate(_bufferLimit, _flushIntervalSeconds, _maximumStorageMegabytes,
-                _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds, _maximumRetrySeconds);
+                _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds);
             _service.QuitRequested += HandleQuitRequested;
             _health = Game.Player.GetComponent<PlayerHealth>();
             _health.Died += HandleDeath;
