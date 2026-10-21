@@ -134,3 +134,6 @@ fmod_editor.log
 /FMODProject/**/.unsaved/
 /FMODProject/**/.restore/
 /Assets/TextMesh Pro
+
+# Sites publishes this source from its own repository; keep the local checkout out of the Unity repository.
+/tools/combat_telemetry/dashboard_site/

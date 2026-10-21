@@ -370,6 +370,8 @@ public sealed class PlayerEmpower : MonoBehaviour
         _player.CancelActionForEmpowerStrike();
         Publish(PlayerEmpowerStage.Started, PlayerEmpowerEndReason.None);
         _strike.Play(HandleStrikeFinished);
+        BlindBlade.Telemetry.CombatTelemetrySignals.SkillActivated("Empower", "manual",
+            Guid.NewGuid().ToString("N"), transform.position);
         return true;
     }
 
@@ -397,6 +399,8 @@ public sealed class PlayerEmpower : MonoBehaviour
         _player.CancelActionForEmpowerStrike();
         Publish(PlayerEmpowerStage.Started, PlayerEmpowerEndReason.None);
         _strike.PlayCounter(HandleStrikeFinished, enemyCutColor);
+        BlindBlade.Telemetry.CombatTelemetrySignals.SkillActivated("Empower", "counter",
+            Guid.NewGuid().ToString("N"), transform.position);
         return true;
     }
 

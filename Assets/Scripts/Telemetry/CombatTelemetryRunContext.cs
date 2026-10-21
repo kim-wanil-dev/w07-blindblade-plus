@@ -6,6 +6,7 @@ using UnityEngine;
 public static class CombatTelemetryRunContext
 {
     private const string RUN_ID_KEY = "combatTelemetryRunId";
+    private const string ATTEMPT_PREFIX = "combatTelemetryAttempt:";
 
     public static string CurrentRunId { get; private set; }
     public static string EntryMode { get; private set; } = "fresh";
@@ -35,5 +36,22 @@ public static class CombatTelemetryRunContext
     public static string EnsureRunId()
     {
         return string.IsNullOrEmpty(CurrentRunId) ? ResumeRun() : CurrentRunId;
+    }
+
+    /// <summary>
+    /// Opens a distinct stage attempt for runId and stageId.
+    /// retryIndex starts at zero and increases for each repeated attempt; previousAttemptSessionId identifies the prior attempt.
+    /// </summary>
+    public static string BeginStageAttempt(string runId, string stageId, out int retryIndex,
+        out string previousAttemptSessionId)
+    {
+        string key = ATTEMPT_PREFIX + runId + ":" + stageId;
+        retryIndex = PlayerPrefs.GetInt(key + ":retryIndex", -1) + 1;
+        previousAttemptSessionId = PlayerPrefs.GetString(key + ":attemptSessionId", string.Empty);
+        string attemptSessionId = Guid.NewGuid().ToString("N");
+        PlayerPrefs.SetInt(key + ":retryIndex", retryIndex);
+        PlayerPrefs.SetString(key + ":attemptSessionId", attemptSessionId);
+        PlayerPrefs.Save();
+        return attemptSessionId;
     }
 }
