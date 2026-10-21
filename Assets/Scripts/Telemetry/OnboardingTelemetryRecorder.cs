@@ -36,6 +36,7 @@ namespace BlindBlade.Telemetry
         private OnboardingFlowController _flow;
         private CombatSessionRuntime _runtime;
         private CombatTelemetryService _service;
+        private GameStateManager _state;
         private PlayerHealth _health;
         private PlayerMotor _motor;
         private KatanaCombatCoordinator _combat;
@@ -164,6 +165,8 @@ namespace BlindBlade.Telemetry
             _service = CombatTelemetryService.GetOrCreate(_bufferLimit, _flushIntervalSeconds, _maximumStorageMegabytes,
                 _allowAutomaticUpload, _uploadIntervalSeconds, _batchEventLimit, _requestTimeoutSeconds);
             _service.QuitRequested += HandleQuitRequested;
+            _state = Game.Instance.GameStateManager;
+            _state.StateChanged += HandleGameStateChanged;
             _health = Game.Player.GetComponent<PlayerHealth>();
             _health.Died += HandleDeath;
             _motor = Game.Player.GetComponent<PlayerMotor>();
@@ -171,6 +174,12 @@ namespace BlindBlade.Telemetry
             _combat.Events.InputResolved += HandleInput;
             _bound = true;
             return true;
+        }
+
+        /// <summary>게임이 일시정지되면 온보딩 로그의 로컬 저장과 전송을 즉시 요청한다.</summary>
+        private void HandleGameStateChanged(GameplayState state)
+        {
+            if (state == GameplayState.Paused) _service.RequestFlush();
         }
 
         /// <summary>stageId의 새 도전을 열고 해당 씬 방문의 누적 카운터를 초기화한다.</summary>
@@ -354,6 +363,7 @@ namespace BlindBlade.Telemetry
             }
             if (!_bound) return;
             _service.QuitRequested -= HandleQuitRequested;
+            _state.StateChanged -= HandleGameStateChanged;
             _health.Died -= HandleDeath;
             _combat.Events.InputResolved -= HandleInput;
             _bound = false;

@@ -9,6 +9,10 @@ using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -24,6 +28,7 @@ namespace BlindBlade.Telemetry
 
         private readonly List<string> _buffer = new List<string>();
         private TelemetryDiskStore _store;
+        private Task<string> _startupRecovery;
         private Task _write;
         private string[] _writing;
         private UnityWebRequest _request;
@@ -35,6 +40,7 @@ namespace BlindBlade.Telemetry
         private double _nextFlush;
         private double _nextUpload;
         private double _retryNotBefore;
+        private double _writeRetryNotBefore;
         private long _recordVersion;
         private bool _flushRequested;
         private bool _diskDrained;
@@ -44,6 +50,7 @@ namespace BlindBlade.Telemetry
         private bool _uploading;
         private bool _quitting;
         private bool _quitRequested;
+        private bool _quitNotified;
         private bool _reportedUploadSuccess;
         private string _lastError;
         private string _lastWarnedError;
@@ -75,6 +82,7 @@ namespace BlindBlade.Telemetry
             _active = host.AddComponent<CombatTelemetryService>();
             _active._store = new TelemetryDiskStore(Path.Combine(Application.persistentDataPath, "CombatTelemetry"),
                 Math.Max(1, maximumMegabytes) * 1024L * 1024L);
+            _active._startupRecovery = _active._store.RecoverInterruptedSessionsAsync();
             _active._bufferLimit = Math.Max(64, bufferLimit);
             _active._flushInterval = Mathf.Max(0.2f, flushInterval);
             _active._uploadInterval = Mathf.Max(5f, uploadInterval);
@@ -82,6 +90,9 @@ namespace BlindBlade.Telemetry
             _active._timeout = Mathf.Clamp(timeout, 5, 120);
             _active._allowUpload = allowUpload;
             if (!Application.isEditor) Application.wantsToQuit += _active.HandleWantsToQuit;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged += _active.HandleEditorPlayModeChanged;
+#endif
             _active._anonymousPlayerId = Guid.NewGuid().ToString("N");
             try
             {
@@ -95,11 +106,14 @@ namespace BlindBlade.Telemetry
             return _active;
         }
 
-        /// <summary>record를 즉시 문자열 스냅샷으로 버퍼에 넣는다. 한도 초과면 거부하고 누락 수를 증가시킨다.</summary>
+        /// <summary>record를 즉시 문자열 스냅샷으로 버퍼에 넣는다. 한도 초과 시 일반 사건은 거부하고 종료 사건은 보존한다.</summary>
         internal void Enqueue(JObject record)
         {
             if (_quitting) return;
-            if (BufferedEvents >= _bufferLimit)
+            string eventType = record.Value<string>("eventType");
+            bool terminal = eventType == "player_died" || eventType == "stage_ended"
+                || eventType == "session_ended" || eventType == "game_completed";
+            if (BufferedEvents >= _bufferLimit && !terminal)
             {
                 _dropped++;
                 ReportError("로그 메모리 한도를 넘어 사건이 누락되었습니다.");
@@ -120,16 +134,30 @@ namespace BlindBlade.Telemetry
 
         void Update()
         {
+            if (_startupRecovery != null)
+            {
+                if (!_startupRecovery.IsCompleted) return;
+                if (_startupRecovery.IsFaulted)
+                    ReportError("이전 세션 복구 실패: " + _startupRecovery.Exception.GetBaseException().Message);
+                else if (_startupRecovery.IsCanceled)
+                    ReportError("이전 세션 복구 작업이 취소되었습니다. 원본 로그를 보존하고 전송을 계속합니다.");
+                else if (!string.IsNullOrEmpty(_startupRecovery.Result))
+                    ReportError(_startupRecovery.Result);
+                _startupRecovery = null;
+            }
+
             ObserveWrite();
             double now = Time.realtimeSinceStartupAsDouble;
-            if (_write == null && _buffer.Count > 0 && (_flushRequested || now >= _nextFlush))
+            if (_write == null && _buffer.Count > 0 && now >= _writeRetryNotBefore
+                && (_flushRequested || now >= _nextFlush))
             {
                 _writing = _buffer.ToArray();
                 _buffer.Clear();
                 _write = _store.AppendAsync(_writing);
                 _nextFlush = now + _flushInterval;
             }
-            if (_allowUpload && !_uploading && _write == null && now >= _retryNotBefore
+            if (_allowUpload && !_uploading && _write == null && _writing == null && _buffer.Count == 0
+                && now >= _retryNotBefore
                 && (_flushRequested || now >= _nextUpload))
             {
                 _flushRequested = false;
@@ -137,14 +165,26 @@ namespace BlindBlade.Telemetry
             }
         }
 
-        /// <summary>완료된 저장 작업의 오류를 격리한다. 부분 저장 실패는 중복 가능성을 알리고 해당 버퍼를 누락 집계한다.</summary>
+        /// <summary>완료된 저장 작업의 오류를 확인한다. 실패한 사건을 버퍼 앞에 복구하고 20초 뒤 원본 저장을 재시도한다.</summary>
         private void ObserveWrite()
         {
             if (_write == null || !_write.IsCompleted) return;
             if (_write.IsFaulted)
             {
-                _dropped += _writing.Length;
-                ReportError("로컬 저장 실패(일부 저장 가능): " + _write.Exception.GetBaseException().Message);
+                if (_writing != null && _writing.Length > 0)
+                {
+                    _buffer.InsertRange(0, _writing);
+                    _flushRequested = true;
+                }
+                _writeRetryNotBefore = Time.realtimeSinceStartupAsDouble + RETRY_INTERVAL_SECONDS;
+                _diskDrained = false;
+                ReportError("로컬 저장 실패(일부 저장 가능): " + _write.Exception.GetBaseException().Message
+                    + "; 원본 저장을 20초 뒤 다시 시도합니다.");
+            }
+            else
+            {
+                _writeRetryNotBefore = 0d;
+                if (!string.IsNullOrEmpty(_store.MetadataError)) ReportError(_store.MetadataError);
             }
             _write = null;
             _writing = null;
@@ -291,10 +331,24 @@ namespace BlindBlade.Telemetry
             if (_quitRequested) return false;
             _quitRequested = true;
             Application.runInBackground = true;
-            QuitRequested?.Invoke();
+            NotifyQuitRequested();
             RequestFlush();
             StartCoroutine(DrainBeforeQuit());
             return false;
+        }
+
+        /// <summary>등록된 기록자를 각각 종료 알림한다. 한 기록자 오류가 다른 기록자의 종료 로그를 막지 않게 한다.</summary>
+        private void NotifyQuitRequested()
+        {
+            if (_quitNotified) return;
+            _quitNotified = true;
+            Action handlers = QuitRequested;
+            if (handlers == null) return;
+            foreach (Delegate subscriber in handlers.GetInvocationList())
+            {
+                try { ((Action)subscriber)(); }
+                catch (Exception exception) { ReportError("종료 기록자 처리 실패: " + exception.Message); }
+            }
         }
 
         /// <summary>종료 요청으로 저장된 사건과 디스크의 ACK 상태를 최대 35초 확인한다. 전송 완료 또는 제한 시간 뒤 종료를 허용하고 미확인 원본은 보존한다.</summary>
@@ -304,7 +358,7 @@ namespace BlindBlade.Telemetry
             yield return null;
             while (Time.realtimeSinceStartupAsDouble < deadline)
             {
-                if (_write == null && _buffer.Count == 0 && !_uploading
+                if (_write == null && _writing == null && _buffer.Count == 0 && !_uploading
                     && (_diskDrained || !_allowUpload || _uploadDisabled))
                     break;
                 yield return null;
@@ -318,27 +372,60 @@ namespace BlindBlade.Telemetry
         /// <summary>진행 중인 파일 저장 뒤 메모리 버퍼의 마지막 사건을 JSONL에 추가하고 최대 1.5초 기다린다. 저장 작업이 제한 시간 안에 끝나지 않으면 진단 오류를 남긴다.</summary>
         private void PersistPendingEventsOnShutdown()
         {
-            Task finalWrite = _write;
-            if (_buffer.Count > 0)
+            DateTime deadline = DateTime.UtcNow.AddMilliseconds(1500);
+            if (_write != null)
             {
-                string[] pending = _buffer.ToArray();
-                _buffer.Clear();
-                finalWrite = finalWrite == null
-                    ? _store.AppendAsync(pending)
-                    : finalWrite.ContinueWith(
-                        _ => _store.AppendAsync(pending),
-                        TaskScheduler.Default).Unwrap();
+                Task activeWrite = _write;
+                if (!WaitForTaskUntil(activeWrite, deadline))
+                {
+                    ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
+                    return;
+                }
+                if (activeWrite.IsFaulted && _writing != null)
+                {
+                    _buffer.InsertRange(0, _writing);
+                    ReportError("종료 중 로컬 저장 실패: " + activeWrite.Exception.GetBaseException().Message);
+                }
+                _write = null;
+                _writing = null;
             }
 
-            if (finalWrite == null) return;
-            if (!finalWrite.Wait(1500))
+            if (_buffer.Count == 0) return;
+            string[] pending = _buffer.ToArray();
+            _buffer.Clear();
+            Task finalWrite = _store.AppendAsync(pending);
+            if (!WaitForTaskUntil(finalWrite, deadline))
             {
+                _buffer.InsertRange(0, pending);
                 ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
                 return;
             }
-
-            ObserveWrite();
+            if (finalWrite.IsFaulted)
+            {
+                _buffer.InsertRange(0, pending);
+                ReportError("종료 중 로컬 저장 실패: " + finalWrite.Exception.GetBaseException().Message);
+                return;
+            }
+            if (!string.IsNullOrEmpty(_store.MetadataError)) ReportError(_store.MetadataError);
         }
+
+        /// <summary>task가 deadline 안에 끝났는지 반환한다. 종료 저장 제한을 초과하지 않도록 기다린다.</summary>
+        private static bool WaitForTaskUntil(Task task, DateTime deadline)
+        {
+            int timeoutMilliseconds = (int)Math.Max(0, (deadline - DateTime.UtcNow).TotalMilliseconds);
+            return Task.WaitAny(new[] { task }, timeoutMilliseconds) == 0;
+        }
+
+#if UNITY_EDITOR
+        /// <summary>Editor Play Mode 종료 직전에 기록자를 닫고 마지막 메모리 사건을 로컬 파일에 보존한다.</summary>
+        private void HandleEditorPlayModeChanged(PlayModeStateChange state)
+        {
+            if (state != PlayModeStateChange.ExitingPlayMode) return;
+            NotifyQuitRequested();
+            RequestFlush();
+            PersistPendingEventsOnShutdown();
+        }
+#endif
 
         void OnApplicationPause(bool paused)
         {
@@ -347,12 +434,18 @@ namespace BlindBlade.Telemetry
 
         void OnApplicationQuit()
         {
+            NotifyQuitRequested();
+            if (!_quitRequested) RequestFlush();
             _request?.Abort();
         }
 
         void OnDestroy()
         {
             if (!Application.isEditor) Application.wantsToQuit -= HandleWantsToQuit;
+#if UNITY_EDITOR
+            EditorApplication.playModeStateChanged -= HandleEditorPlayModeChanged;
+#endif
+            NotifyQuitRequested();
             _quitting = true;
             _request?.Abort();
             try

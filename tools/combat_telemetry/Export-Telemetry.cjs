@@ -10,8 +10,19 @@ const mapping = vm.runInNewContext(code + '\n({eventRow,stepRow,EVENT_HEADERS,SE
 const events=[], sessions=new Map(), terminalFacts=new Map(), statusFacts=new Map(), deathFacts=new Map(), steps=new Map(), seen=new Set(), heat=new Map(), diagnostics=[];
 const lifecycle=new Map(), arenaCenters=new Map();
 const statusRank=status=>['death','final_clear','cleared'].includes(String(status||''))?3
-  :['scene_unloaded','application_quit'].includes(String(status||''))?2
+  :['scene_unloaded','application_quit','unclean_exit'].includes(String(status||''))?2
   :['in_progress','started'].includes(String(status||''))?1:0;
+const recordStatus=(r,status)=>{
+  const previous=statusFacts.get(r.stageAttemptId);
+  if (!previous || statusRank(status)>statusRank(previous.status)
+      || (statusRank(status)===statusRank(previous.status)&&r.eventSequence>previous.eventSequence))
+    statusFacts.set(r.stageAttemptId,{status,eventSequence:r.eventSequence});
+};
+const ensureTerminalSummary=r=>{
+  if (sessions.has(r.stageAttemptId)) return;
+  sessions.set(r.stageAttemptId,{...r,eventSequence:0,eventType:'stage_ended',terminalOnly:true,
+    payload:{reason:'in_progress'}});
+};
 for (const file of fs.readdirSync(source).filter(f=>f.endsWith('.jsonl')).sort()) {
   let lineNumber=0;
   for (const line of fs.readFileSync(path.join(source,file),'utf8').split(/\r?\n/)) {
@@ -42,18 +53,26 @@ for (const file of fs.readdirSync(source).filter(f=>f.endsWith('.jsonl')).sort()
         const previous=sessions.get(r.stageAttemptId);
         if (!previous || previous.eventSequence<r.eventSequence) sessions.set(r.stageAttemptId,r);
         deathFacts.set(r.stageAttemptId,Math.max(deathFacts.get(r.stageAttemptId)||0,Number(p.deaths)||0));
-        const status=p.reason||'';
-        const previousStatus=statusFacts.get(r.stageAttemptId);
-        if (!previousStatus || statusRank(status)>statusRank(previousStatus.status)
-            || (statusRank(status)===statusRank(previousStatus.status)&&r.eventSequence>previousStatus.eventSequence))
-          statusFacts.set(r.stageAttemptId,{status,eventSequence:r.eventSequence});
+        recordStatus(r,p.reason||'');
       }
-      if (r.eventType==='session_ended'&&String(p.reason||'').toLowerCase()==='application_quit') {
+      if (r.eventType==='player_died') {
+        ensureTerminalSummary(r);
+        deathFacts.set(r.stageAttemptId,Math.max(deathFacts.get(r.stageAttemptId)||0,1));
+        recordStatus(r,'death');
+      }
+      if (r.eventType==='session_ended') {
+        ensureTerminalSummary(r);
+        recordStatus(r,String(p.reason||'application_quit').toLowerCase());
+      }
+      if (r.eventType==='session_ended'
+          && ['application_quit','scene_unloaded','unclean_exit'].includes(String(p.reason||'').toLowerCase())) {
         const facts=terminalFacts.get(r.stageAttemptId)||{};
         if(!facts.exit||facts.exit.eventSequence<r.eventSequence) facts.exit=r;
         terminalFacts.set(r.stageAttemptId,facts);
       }
       if (r.eventType==='game_completed') {
+        ensureTerminalSummary(r);
+        recordStatus(r,'final_clear');
         const facts=terminalFacts.get(r.stageAttemptId)||{};
         if(!facts.completion||facts.completion.eventSequence<r.eventSequence) facts.completion=r;
         terminalFacts.set(r.stageAttemptId,facts);
@@ -93,7 +112,9 @@ for (const [attemptId,summary] of sessions) {
       payload.exitStageId=p.exitStageId||r.stageId;
       payload.exitStageAttemptId=p.exitStageAttemptId||r.stageAttemptId;
       payload.exitLocation=p.exitLocation||r.stageId;
-      payload.exitOccurredAtKst=p.exitOccurredAtKst||r.occurredAtKst;
+      if (p.exitOccurredAtKst) payload.exitOccurredAtKst=p.exitOccurredAtKst;
+      else if (['application_quit','scene_unloaded'].includes(String(p.reason||'').toLowerCase()))
+        payload.exitOccurredAtKst=r.occurredAtKst;
     }
   }
   if (facts.completion) {
@@ -105,7 +126,10 @@ for (const [attemptId,summary] of sessions) {
       payload.gameCompletedOccurredAtKst=p.gameCompletedOccurredAtKst||r.occurredAtKst;
     }
   }
-  if (statusFact) payload.reason=statusFact.status;
+  if (statusFact) {
+    payload.reason=statusFact.status;
+    lastEventSequence=Math.max(lastEventSequence,statusFact.eventSequence);
+  }
   sessions.set(attemptId,{...summary,payload,lastEventSequence,lastExitSequence,lastCompletionSequence,
     lastStatusSequence:statusFact?.eventSequence||summary.eventSequence});
 }
@@ -119,8 +143,8 @@ for (const r of sessions.values()) {
   const p=r.payload;
   sessionRows.push([r.stageAttemptId,r.sessionId,r.stageId,r.anonymousPlayerId,r.buildVersion,r.configVersion,
     p.startedKst,r.lastEventSequence,p.reason,p.realtimeSeconds,p.gameplaySeconds,p.activePlaySeconds,p.currentHealth,
-    ...mapping.BASE_METRICS.map(k=>p[k]??(r.stageId.startsWith('0-')||k==='reactionMeanSeconds'||k==='enemyHitRate'?'':0)),
-    ...mapping.BASE_ATTACK_METRICS.map(k=>p[k]??(r.stageId.startsWith('0-')||k.endsWith('HitRate')?'':0)),
+    ...mapping.BASE_METRICS.map(k=>p[k]??(r.terminalOnly||r.stageId.startsWith('0-')||k==='reactionMeanSeconds'||k==='enemyHitRate'?'':0)),
+    ...mapping.BASE_ATTACK_METRICS.map(k=>p[k]??(r.terminalOnly||r.stageId.startsWith('0-')||k.endsWith('HitRate')?'':0)),
     JSON.stringify(p.patterns||{}),r.runId||p.runId,p.exitStepIndex,p.exitObjectiveIndex,p.stepsCompleted,p.attempts,p.retryCount,
     ...mapping.NEW_METRICS.map(k=>mapping.V05_METRICS.includes(k)
       ?(r.schemaVersion!=='0.5.0'?'':(p[k]??'')):(r.schemaVersion==='0.3.0'?'':(p[k]??''))),

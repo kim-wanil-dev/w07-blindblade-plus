@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -20,15 +21,62 @@ namespace BlindBlade.Telemetry
         private long _writtenBytes;
         private bool _initialized;
         private string _readError;
+        private string _metadataError;
 
         internal string Root => _root;
         internal string ReadError => _readError;
+        internal string MetadataError => _metadataError;
 
         /// <summary>root와 maximumBytes를 보관한다. 실제 디렉터리 접근은 백그라운드 작업에서 수행한다.</summary>
         internal TelemetryDiskStore(string root, long maximumBytes)
         {
             _root = root;
             _maximumBytes = maximumBytes;
+        }
+
+        /// <summary>이전 실행에서 종료 사건이 없는 지원 스키마 로그를 찾아 unclean_exit 사건을 추가한다. 실패한 원본은 다음 실행까지 보존한다.</summary>
+        internal Task<string> RecoverInterruptedSessionsAsync()
+        {
+            return Task.Run(() =>
+            {
+                lock (_gate)
+                {
+                    Initialize();
+                    List<string> errors = new List<string>();
+                    foreach (string path in Directory.GetFiles(_root, "*.jsonl"))
+                    {
+                        string sessionId = Path.GetFileNameWithoutExtension(path);
+                        if (!Guid.TryParseExact(sessionId, "N", out _)) continue;
+                        try
+                        {
+                            JObject last = ReadLastRecordAndRepairTail(path);
+                            if (last == null) continue;
+                            string schema = (string)last["schemaVersion"];
+                            if (!new[] { "0.3.0", "0.4.0", TelemetryJson.SCHEMA_VERSION }.Contains(schema)
+                                || (string)last["sessionId"] != sessionId)
+                                continue;
+                            if ((string)last["eventType"] == "session_ended") continue;
+
+                            _activeSessions.Add(sessionId);
+                            try
+                            {
+                                AppendRecordsLocked(new[] { CreateRecoveryRecord(last).ToString(Formatting.None) });
+                            }
+                            catch (Exception exception)
+                            {
+                                errors.Add("이전 세션 종료 복구 실패: " + sessionId + " / " + exception.Message);
+                            }
+                        }
+                        catch (Exception exception) when (exception is IOException || exception is JsonException
+                            || exception is UnauthorizedAccessException || exception is FormatException)
+                        {
+                            _activeSessions.Add(sessionId);
+                            errors.Add("이전 세션 원본 보존: " + Path.GetFileName(path) + " / " + exception.Message);
+                        }
+                    }
+                    return string.Join(" | ", errors);
+                }
+            });
         }
 
         /// <summary>records를 세션별 JSONL에 추가하고 최초 메타데이터를 JSON으로 저장한다. 실패는 Task 오류로 반환한다.</summary>
@@ -39,32 +87,114 @@ namespace BlindBlade.Telemetry
                 lock (_gate)
                 {
                     Initialize();
-                    foreach (IGrouping<string, string> group in records.GroupBy(line => (string)JObject.Parse(line)["sessionId"]))
-                    {
-                        _activeSessions.Add(group.Key);
-                        string content = string.Join("\n", group) + "\n";
-                        long bytes = Encoding.UTF8.GetByteCount(content);
-                        if (_writtenBytes + bytes > _maximumBytes)
-                            throw new IOException("현재 스키마의 로컬 로그 용량 한도에 도달했습니다. 원본을 백업한 뒤 공간을 확보하세요.");
-                        string path = Path.Combine(_root, group.Key + ".jsonl");
-                        using (FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read))
-                        {
-                            byte[] data = Encoding.UTF8.GetBytes(content);
-                            stream.Write(data, 0, data.Length);
-                            stream.Flush(true);
-                        }
-                        _writtenBytes += bytes;
-                        string metadataPath = Path.Combine(_root, group.Key + ".json");
-                        if (!File.Exists(metadataPath))
-                        {
-                            JObject first = JObject.Parse(group.First());
-                            File.WriteAllText(metadataPath, first.ToString(Formatting.Indented), new UTF8Encoding(false));
-                        }
-                        if ((string)JObject.Parse(group.Last())["eventType"] == "session_ended")
-                            _activeSessions.Remove(group.Key);
-                    }
+                    AppendRecordsLocked(records);
                 }
             });
+        }
+
+        /// <summary>sessionId별 records를 원본에 내구성 있게 추가하고 닫힌 세션을 활성 집합에서 제거한다. metadata 실패는 원본 로그 저장을 실패 처리하지 않는다.</summary>
+        private void AppendRecordsLocked(string[] records)
+        {
+            foreach (IGrouping<string, string> group in records.GroupBy(line => (string)JObject.Parse(line)["sessionId"]))
+            {
+                _activeSessions.Add(group.Key);
+                string content = string.Join("\n", group) + "\n";
+                string path = Path.Combine(_root, group.Key + ".jsonl");
+                if (File.Exists(path)) ReadLastRecordAndRepairTail(path);
+                long bytes = Encoding.UTF8.GetByteCount(content);
+                if (_writtenBytes + bytes > _maximumBytes)
+                    throw new IOException("현재 스키마의 로컬 로그 용량 한도에 도달했습니다. 원본을 백업한 뒤 공간을 확보하세요.");
+                using (FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read))
+                {
+                    byte[] data = Encoding.UTF8.GetBytes(content);
+                    stream.Write(data, 0, data.Length);
+                    stream.Flush(true);
+                }
+                _writtenBytes += bytes;
+                string metadataPath = Path.Combine(_root, group.Key + ".json");
+                if (!File.Exists(metadataPath))
+                {
+                    try
+                    {
+                        JObject first = JObject.Parse(group.First());
+                        File.WriteAllText(metadataPath, first.ToString(Formatting.Indented), new UTF8Encoding(false));
+                    }
+                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                    {
+                        _metadataError = "로그 메타데이터 저장 실패: " + exception.Message;
+                    }
+                }
+                if ((string)JObject.Parse(group.Last())["eventType"] == "session_ended")
+                    _activeSessions.Remove(group.Key);
+            }
+        }
+
+        /// <summary>path의 마지막 완전한 JSONL 사건을 읽고 잘린 끝부분만 제거한다. 파일 끝 사건을 반환한다.</summary>
+        private JObject ReadLastRecordAndRepairTail(string path)
+        {
+            using (FileStream stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+            {
+                long originalLength = stream.Length;
+                if (originalLength == 0) return null;
+                stream.Position = originalLength - 1;
+                if (stream.ReadByte() != '\n')
+                {
+                    long newline = FindPreviousNewline(stream, originalLength - 1);
+                    long repairedLength = newline + 1;
+                    stream.SetLength(repairedLength);
+                    _writtenBytes = Directory.GetFiles(_root, "*.jsonl").Sum(GetStorageBudgetBytes);
+                    if (repairedLength == 0) return null;
+                }
+
+                long lineEnd = stream.Length - 1;
+                long previousNewline = FindPreviousNewline(stream, lineEnd - 1);
+                long lineStart = previousNewline + 1;
+                int lineLength = checked((int)(lineEnd - lineStart));
+                if (lineLength <= 0) return null;
+                byte[] line = new byte[lineLength];
+                stream.Position = lineStart;
+                int read = 0;
+                while (read < line.Length)
+                {
+                    int count = stream.Read(line, read, line.Length - read);
+                    if (count <= 0) throw new EndOfStreamException("마지막 JSONL 사건을 끝까지 읽지 못했습니다.");
+                    read += count;
+                }
+                return JObject.Parse(Encoding.UTF8.GetString(line));
+            }
+        }
+
+        /// <summary>stream에서 startAt 이전의 가장 가까운 줄바꿈 위치를 반환한다. 없으면 -1을 반환한다.</summary>
+        private static long FindPreviousNewline(FileStream stream, long startAt)
+        {
+            for (long index = startAt; index >= 0; index--)
+            {
+                stream.Position = index;
+                if (stream.ReadByte() == '\n') return index;
+            }
+            return -1;
+        }
+
+        /// <summary>last의 세션 식별과 순번을 이어받아 복구 감지 시각의 unclean_exit 사건을 반환한다.</summary>
+        private static JObject CreateRecoveryRecord(JObject last)
+        {
+            JObject recovered = (JObject)last.DeepClone();
+            long sequence = (long)last["eventSequence"] + 1;
+            string now = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(9))
+                .ToString("yyyy-MM-dd'T'HH:mm:ss.fffzzz", CultureInfo.InvariantCulture);
+            recovered["eventSequence"] = sequence;
+            recovered["sourceId"] = "telemetry.recovery";
+            recovered["sourceSequence"] = sequence;
+            recovered["eventType"] = "session_ended";
+            recovered["occurredAtKst"] = now;
+            recovered["recordedAtKst"] = now;
+            recovered["correlation"] = new JObject { ["inputId"] = 0, ["actionId"] = 0,
+                ["attackId"] = 0, ["hitId"] = 0, ["projectileId"] = 0, ["dodgeId"] = 0 };
+            recovered["payload"] = new JObject { ["reason"] = "unclean_exit",
+                ["exitStageId"] = (string)last["stageId"],
+                ["exitStageAttemptId"] = (string)last["stageAttemptId"],
+                ["exitLocation"] = (string)last["stageId"] };
+            return recovered;
         }
 
         /// <summary>destination에서 전송 완료된 비활성 세션을 정리하고 커서 뒤의 완전한 줄을 limit·byteLimit 안에서 읽어 배치를 반환한다. 미확인 원본은 보존한다.</summary>

@@ -128,7 +128,7 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `build_version`, `config_version` | 빌드·설정 버전 |
 | `started_kst` | 구간 시작 한국시간 |
 | `last_event_sequence` | 요약에 반영된 마지막 이벤트 순번 |
-| `status` | 상태: `started`, `in_progress`, `cleared`, `death`, `application_quit`, `scene_unloaded` 등 |
+| `status` | 상태: `started`, `in_progress`, `cleared`, `death`, `final_clear`, `application_quit`, `scene_unloaded`, `unclean_exit` 등. 강제 종료 상태는 다음 실행에서 `unclean_exit`로 복구될 수 있음 |
 | `realtime_seconds` | 구간의 실제 경과 시간 |
 | `gameplay_seconds` | 구간의 게임 시간 경과 |
 | `active_play_seconds` | 구간의 활성 플레이 시간 |
@@ -310,4 +310,4 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 
 ## Session event sequence fields
 
-`Sessions.csv` ends with four ordering fields: `last_summary_sequence`, `last_exit_sequence`, `last_completion_sequence`, and `status_sequence`. The first three track the newest stage snapshot, application quit fact, and game completion fact independently. `status_sequence` tracks the event that supplied the selected status. Status precedence is death/final_clear/cleared, then scene_unloaded/application_quit, then in_progress/started; event sequence breaks ties within a level. The existing `last_event_sequence` remains a monotonic maximum for compatibility. An out-of-order quit cannot cause a later-arriving death summary to be discarded, and terminal facts do not change the summary event's own sequence.
+`Sessions.csv` ends with four ordering fields: `last_summary_sequence`, `last_exit_sequence`, `last_completion_sequence`, and `status_sequence`. The first three track the newest stage snapshot, session exit fact, and game completion fact independently. `status_sequence` tracks the event that supplied the selected status. Status precedence is death/final_clear/cleared, then scene_unloaded/application_quit/unclean_exit, then in_progress/started; event sequence breaks ties within a level. `player_died` can set death status before a stage summary arrives, and `game_completed` can set final_clear independently. The existing `last_event_sequence` remains a monotonic maximum for compatibility. An out-of-order quit cannot cause a later-arriving death summary to be discarded, and terminal facts do not change the summary event's own sequence.
