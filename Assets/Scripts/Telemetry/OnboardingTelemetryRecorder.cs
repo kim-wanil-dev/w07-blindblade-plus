@@ -42,9 +42,12 @@ namespace BlindBlade.Telemetry
         private KatanaCombatCoordinator _combat;
         private string _sessionId;
         private string _sectionId;
+        private string _attemptSessionId;
+        private string _previousAttemptSessionId;
         private string _sectionStartedKst;
         private int _stage = -1;
         private int _objective = -1;
+        private int _retryIndex;
         private int _sectionCompleted;
         private int _sectionAttempts;
         private int _sectionDeaths;
@@ -67,7 +70,7 @@ namespace BlindBlade.Telemetry
         /// <summary>Intro의 새 실행 요청에서 실행 ID와 단계별 사망 재시도 횟수를 초기화한다.</summary>
         public static void BeginNewRun()
         {
-            _runId = Guid.NewGuid().ToString("N");
+            _runId = CombatTelemetryRunContext.StartNewRun("fresh");
             _completed = false;
             Array.Clear(_retryCounts, 0, _retryCounts.Length);
         }
@@ -140,7 +143,6 @@ namespace BlindBlade.Telemetry
             if (_sectionOpen)
             {
                 _sectionDeaths = 1;
-                CloseStep("death");
                 CloseSection("death");
             }
             if (stepIndex >= 0 && stepIndex < STAGE_COUNT) _retryCounts[stepIndex]++;
@@ -176,6 +178,8 @@ namespace BlindBlade.Telemetry
         private void OpenSection(string stageId)
         {
             _sectionId = stageId;
+            _attemptSessionId = CombatTelemetryRunContext.BeginStageAttempt(_runId, _sectionId,
+                out _retryIndex, out _previousAttemptSessionId);
             _sectionStartedKst = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
             _sectionActive = 0d;
             _sectionCompleted = 0;
@@ -276,10 +280,16 @@ namespace BlindBlade.Telemetry
                 input["defenseOutcome"] = resolution.Outcome.ToString();
         }
 
-        /// <summary>플레이어 사망 사건에서 현재 온보딩 구간의 사망 횟수를 한 번 표시한다.</summary>
+        /// <summary>
+        /// 플레이어 사망을 현재 온보딩 도전의 최종 사건으로 기록하고 즉시 요약을 저장한다.
+        /// health의 위치를 player_died에 담으며 사망 횟수와 구간 상태를 갱신한다.
+        /// </summary>
         private void HandleDeath(PlayerHealth health)
         {
-            if (_sectionOpen) _sectionDeaths = 1;
+            if (!_sectionOpen || _sectionDeaths > 0) return;
+            _sectionDeaths = 1;
+            Record("player_died", new JObject { ["position"] = TelemetryJson.Position(health.transform.position) });
+            CloseSection("death");
         }
 
         /// <summary>목표가 입력을 받기 시작한 뒤 최초 유효 입력까지의 활성 시간을 한 번 저장한다.</summary>
@@ -299,7 +309,11 @@ namespace BlindBlade.Telemetry
                 ["contractVersion"] = "0.2.0", ["configVersion"] = Application.isEditor ? _configVersion + "-editor" : _configVersion,
                 ["buildVersion"] = Application.version, ["sessionId"] = _sessionId,
                 ["anonymousPlayerId"] = _service.AnonymousPlayerId, ["sessionGeneration"] = _runtime.Session.Generation,
-                ["stageId"] = _sectionId, ["stageAttemptId"] = _sessionId + ":" + _sectionId,
+                ["stageId"] = _sectionId, ["stageAttemptId"] = _attemptSessionId,
+                ["attemptSessionId"] = _attemptSessionId, ["retryIndex"] = _retryIndex,
+                ["previousAttemptSessionId"] = string.IsNullOrEmpty(_previousAttemptSessionId)
+                    ? JValue.CreateNull() : new JValue(_previousAttemptSessionId),
+                ["runId"] = _runId,
                 ["eventSequence"] = sequence, ["sourceId"] = "onboarding.telemetry", ["sourceSequence"] = sequence,
                 ["eventType"] = type, ["occurredAt"] = TelemetryJson.Timestamp(stamp),
                 ["recordedAt"] = TelemetryJson.Timestamp(stamp), ["occurredAtKst"] = kst, ["recordedAtKst"] = kst,

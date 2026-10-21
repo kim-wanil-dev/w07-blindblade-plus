@@ -167,6 +167,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         Vector3 origin = _camera.transform.position + direction * _spawnDistance + Vector3.up * _spawnHeightOffset;
         DefenseSwordWave wave = Instantiate(_wavePrefab);
         wave.Launch(gameObject, origin, direction, _struck, _blocked);
+        BlindBlade.Telemetry.CombatTelemetrySignals.SkillActivated("SwordWave", "manual",
+            Guid.NewGuid().ToString("N"), transform.position);
         // 초승달 메시는 볼록한 쪽이 위를 향하므로 앞으로 눕혀야 진행 방향으로 날을 세워 날아간다.
         // 진행 방향 축의 양수 회전은 화면에서 반시계 방향이라 궁극기 사선 UI 회전과 같은 쪽으로 기운다.
         // 검기는 위치만 직선 이동하므로 발사 뒤 바꾼 회전이 그대로 유지된다.

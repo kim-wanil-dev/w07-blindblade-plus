@@ -6,9 +6,12 @@ const [source, destination] = process.argv.slice(2);
 if (!source || !destination) throw new Error('Usage: node Export-Telemetry.cjs <log directory> <output directory>');
 if (path.resolve(source) === path.resolve(destination)) throw new Error('Use a separate output directory.');
 const code = fs.readFileSync(path.join(__dirname, 'google_apps_script/Code.gs'), 'utf8');
-const mapping = vm.runInNewContext(code + '\n({eventRow,stepRow,EVENT_HEADERS,SESSION_HEADERS,STEP_HEADERS,BASE_METRICS,BASE_ATTACK_METRICS,NEW_METRICS,METRICS,validateRecord})');
-const events=[], sessions=new Map(), steps=new Map(), seen=new Set(), heat=new Map(), diagnostics=[];
+const mapping = vm.runInNewContext(code + '\n({eventRow,stepRow,EVENT_HEADERS,SESSION_HEADERS,STEP_HEADERS,BASE_METRICS,BASE_ATTACK_METRICS,NEW_METRICS,V05_METRICS,METRICS,validateRecord})');
+const events=[], sessions=new Map(), terminalFacts=new Map(), statusFacts=new Map(), deathFacts=new Map(), steps=new Map(), seen=new Set(), heat=new Map(), diagnostics=[];
 const lifecycle=new Map(), arenaCenters=new Map();
+const statusRank=status=>['death','final_clear','cleared'].includes(String(status||''))?3
+  :['scene_unloaded','application_quit'].includes(String(status||''))?2
+  :['in_progress','started'].includes(String(status||''))?1:0;
 for (const file of fs.readdirSync(source).filter(f=>f.endsWith('.jsonl')).sort()) {
   let lineNumber=0;
   for (const line of fs.readFileSync(path.join(source,file),'utf8').split(/\r?\n/)) {
@@ -38,6 +41,22 @@ for (const file of fs.readdirSync(source).filter(f=>f.endsWith('.jsonl')).sort()
       if (['stage_started','stage_summary','stage_ended'].includes(r.eventType)) {
         const previous=sessions.get(r.stageAttemptId);
         if (!previous || previous.eventSequence<r.eventSequence) sessions.set(r.stageAttemptId,r);
+        deathFacts.set(r.stageAttemptId,Math.max(deathFacts.get(r.stageAttemptId)||0,Number(p.deaths)||0));
+        const status=p.reason||'';
+        const previousStatus=statusFacts.get(r.stageAttemptId);
+        if (!previousStatus || statusRank(status)>statusRank(previousStatus.status)
+            || (statusRank(status)===statusRank(previousStatus.status)&&r.eventSequence>previousStatus.eventSequence))
+          statusFacts.set(r.stageAttemptId,{status,eventSequence:r.eventSequence});
+      }
+      if (r.eventType==='session_ended'&&String(p.reason||'').toLowerCase()==='application_quit') {
+        const facts=terminalFacts.get(r.stageAttemptId)||{};
+        if(!facts.exit||facts.exit.eventSequence<r.eventSequence) facts.exit=r;
+        terminalFacts.set(r.stageAttemptId,facts);
+      }
+      if (r.eventType==='game_completed') {
+        const facts=terminalFacts.get(r.stageAttemptId)||{};
+        if(!facts.completion||facts.completion.eventSequence<r.eventSequence) facts.completion=r;
+        terminalFacts.set(r.stageAttemptId,facts);
       }
       if (r.eventType==='onboarding_step') {
         const stepKey=r.sessionId+':'+p.stepIndex+':'+p.objectiveIndex;
@@ -58,6 +77,38 @@ for (const file of fs.readdirSync(source).filter(f=>f.endsWith('.jsonl')).sort()
     } catch (error) { diagnostics.push([file,lineNumber,error.message]); }
   }
 }
+for (const [attemptId,summary] of sessions) {
+  const facts=terminalFacts.get(attemptId)||{};
+  const payload={...summary.payload};
+  const statusFact=statusFacts.get(attemptId);
+  payload.deaths=Math.max(Number(payload.deaths)||0,deathFacts.get(attemptId)||0);
+  let lastEventSequence=summary.eventSequence;
+  let lastExitSequence=payload.exitOccurredAtKst||payload.exitStageAttemptId||payload.exitLocation?summary.eventSequence:0;
+  let lastCompletionSequence=payload.gameCompleted===true?summary.eventSequence:0;
+  if (facts.exit) {
+    const r=facts.exit, p=r.payload;
+    lastEventSequence=Math.max(lastEventSequence,r.eventSequence);
+    lastExitSequence=Math.max(lastExitSequence,r.eventSequence);
+    if (r.eventSequence>summary.eventSequence || !(payload.exitOccurredAtKst||payload.exitStageAttemptId||payload.exitLocation)) {
+      payload.exitStageId=p.exitStageId||r.stageId;
+      payload.exitStageAttemptId=p.exitStageAttemptId||r.stageAttemptId;
+      payload.exitLocation=p.exitLocation||r.stageId;
+      payload.exitOccurredAtKst=p.exitOccurredAtKst||r.occurredAtKst;
+    }
+  }
+  if (facts.completion) {
+    const r=facts.completion, p=r.payload;
+    lastEventSequence=Math.max(lastEventSequence,r.eventSequence);
+    lastCompletionSequence=Math.max(lastCompletionSequence,r.eventSequence);
+    if (r.eventSequence>summary.eventSequence || payload.gameCompleted!==true) {
+      payload.gameCompleted=true;
+      payload.gameCompletedOccurredAtKst=p.gameCompletedOccurredAtKst||r.occurredAtKst;
+    }
+  }
+  if (statusFact) payload.reason=statusFact.status;
+  sessions.set(attemptId,{...summary,payload,lastEventSequence,lastExitSequence,lastCompletionSequence,
+    lastStatusSequence:statusFact?.eventSequence||summary.eventSequence});
+}
 fs.mkdirSync(destination,{recursive:true});
 function csv(name,headers,rows) {
   const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"';
@@ -67,11 +118,16 @@ const sessionRows=[], patterns=[], bossPatterns=[];
 for (const r of sessions.values()) {
   const p=r.payload;
   sessionRows.push([r.stageAttemptId,r.sessionId,r.stageId,r.anonymousPlayerId,r.buildVersion,r.configVersion,
-    p.startedKst,r.eventSequence,p.reason,p.realtimeSeconds,p.gameplaySeconds,p.activePlaySeconds,p.currentHealth,
+    p.startedKst,r.lastEventSequence,p.reason,p.realtimeSeconds,p.gameplaySeconds,p.activePlaySeconds,p.currentHealth,
     ...mapping.BASE_METRICS.map(k=>p[k]??(r.stageId.startsWith('0-')||k==='reactionMeanSeconds'||k==='enemyHitRate'?'':0)),
     ...mapping.BASE_ATTACK_METRICS.map(k=>p[k]??(r.stageId.startsWith('0-')||k.endsWith('HitRate')?'':0)),
     JSON.stringify(p.patterns||{}),r.runId||p.runId,p.exitStepIndex,p.exitObjectiveIndex,p.stepsCompleted,p.attempts,p.retryCount,
-    ...mapping.NEW_METRICS.map(k=>r.schemaVersion!=='0.4.0'?'':(p[k]??'')),r.entryMode||p.entryMode,r.schemaVersion]);
+    ...mapping.NEW_METRICS.map(k=>mapping.V05_METRICS.includes(k)
+      ?(r.schemaVersion!=='0.5.0'?'':(p[k]??'')):(r.schemaVersion==='0.3.0'?'':(p[k]??''))),
+    r.entryMode||p.entryMode,r.schemaVersion,r.attemptSessionId||'',r.retryIndex??'',r.previousAttemptSessionId||'',
+    p.exitStageId||'',p.exitStageAttemptId||'',p.exitLocation||'',p.gameCompleted===true,
+    p.exitOccurredAtKst||'',p.gameCompletedOccurredAtKst||'',r.eventSequence,r.lastExitSequence,
+    r.lastCompletionSequence,r.lastStatusSequence]);
   for (const v of Object.values(p.patterns||{})) {
     const ratio=(a,b)=>b>0?(a||0)/b:'';
     patterns.push([r.stageAttemptId,r.stageId,v.kind,v.patternId,v.parentPatternId||'',v.attackerActor||'',v.attempts||0,v.resolved||0,v.Hit||0,v.Dodge||0,

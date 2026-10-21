@@ -184,6 +184,16 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         return !string.IsNullOrEmpty(targetId) && _targets.TryGetValue(targetId, out health) && health.IsAlive;
     }
 
+    /// <summary>등록 목록에서 현재 활성 상태이고 생존한 적을 중복 없이 반환한다.</summary>
+    public static List<EnemyHealth> GetActiveTargets()
+    {
+        List<EnemyHealth> activeTargets = new List<EnemyHealth>(_targets.Count);
+        foreach (EnemyHealth target in _targets.Values)
+            if (target != null && target.IsAlive)
+                activeTargets.Add(target);
+        return activeTargets;
+    }
+
     /// <summary>
     /// 플레이 시작 시 입력 없이 이전 활성 적 레지스트리를 비운다.
     /// Domain Reload를 끈 경우에도 이전 실행의 적 참조를 유지하지 않는다.

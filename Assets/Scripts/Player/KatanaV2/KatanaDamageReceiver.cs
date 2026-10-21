@@ -1,5 +1,7 @@
 using UnityEngine;
 
+using Newtonsoft.Json.Linq;
+
 using BlindBlade.Combat.Contracts;
 
 
@@ -108,8 +110,11 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
             return PublishGuardResolution(context, guardOutcome);
 
         float healthBefore = CurrentHealth;
+        JObject awarenessSnapshot = BlindBlade.Telemetry.CombatTelemetrySignals.CaptureAwarenessSnapshot(transform.position);
         base.TakeDamage(context);
-        return PublishResolution(context, DefenseOutcome.Hit, healthBefore - CurrentHealth);
+        float appliedDamage = healthBefore - CurrentHealth;
+        return PublishResolution(context, DefenseOutcome.Hit, appliedDamage,
+            appliedDamage > 0f ? awarenessSnapshot : null);
     }
 
     /// <summary>
@@ -279,7 +284,8 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
     /// context의 AttackId·HitId·Point와 현재 게임 시간·실시간으로 outcome 판정 결과를 만들고 DefenseResolved로 발행한 뒤 반환한다.
     /// 가드·패링 결과에는 Coordinator의 GuardInputId를 넣으며 appliedDamage는 이번 판정에서 실제로 줄어든 체력이다.
     /// </summary>
-    private DefenseResolution PublishResolution(DamageContext context, DefenseOutcome outcome, float appliedDamage)
+    private DefenseResolution PublishResolution(DamageContext context, DefenseOutcome outcome, float appliedDamage,
+        JObject awarenessSnapshot = null)
     {
         bool defended = outcome == DefenseOutcome.Guard || outcome == DefenseOutcome.NormalParry
             || outcome == DefenseOutcome.PerfectParry;
@@ -289,7 +295,7 @@ public sealed class KatanaDamageReceiver : PlayerHealth, IPlayerDefenseResolver
         _combat.Events.RaiseDefenseResolved(resolution);
         BlindBlade.Telemetry.CombatTelemetrySignals.Contact(context, resolution,
             _dodgeActive && (outcome == DefenseOutcome.DodgeAvoided ||
-                (outcome == DefenseOutcome.Invulnerable && TryGetDodgeOutcome(out _))));
+                (outcome == DefenseOutcome.Invulnerable && TryGetDodgeOutcome(out _))), awarenessSnapshot);
         return resolution;
     }
 

@@ -36,11 +36,15 @@ namespace BlindBlade.Telemetry
 
         private readonly Dictionary<int, JObject> _pendingEnds = new Dictionary<int, JObject>();
         private bool _completePending;
+        private bool _deathPending;
         private readonly Dictionary<int, JObject> _attacks = new Dictionary<int, JObject>();
         private readonly Dictionary<int, double> _reactionStartTimes = new Dictionary<int, double>();
         private readonly Dictionary<int, PlayerInputRecord> _inputs = new Dictionary<int, PlayerInputRecord>();
         private readonly HashSet<int> _attempts = new HashSet<int>();
         private readonly HashSet<int> _guardContacts = new HashSet<int>();
+        private readonly Dictionary<int, string> _guardRepresentativeOutcomes = new Dictionary<int, string>();
+        private readonly HashSet<int> _startedDodgeIds = new HashSet<int>();
+        private readonly HashSet<int> _perfectDodgeIds = new HashSet<int>();
         private JObject _counts;
         private JObject _patterns;
         private JObject _bossPatterns;
@@ -53,6 +57,9 @@ namespace BlindBlade.Telemetry
         private string _sessionId;
         private string _runId;
         private string _stageId;
+        private string _attemptSessionId;
+        private string _previousAttemptSessionId;
+        private int _retryIndex;
         private string _entryMode;
         private string _stageStartedKst;
         private long _sequence;
@@ -136,12 +143,19 @@ namespace BlindBlade.Telemetry
         {
             if (!_bound || _closed || _stageClosed) return;
             DrainAttackEnds();
-            if (_completePending) { FinishStage("cleared"); return; }
-            if (_state.State == GameplayState.GameOver)
+            if (_deathPending || _state.State == GameplayState.GameOver)
             {
+                _counts["deaths"] = 1;
+                _counts["gameCompleted"] = false;
                 FinishStage("death");
                 return;
             }
+            if (_state.State == GameplayState.Cleared)
+            {
+                FinishStage("final_clear");
+                return;
+            }
+            if (_completePending) { FinishStage("cleared"); return; }
             if (_state.State != GameplayState.Playing) return;
             double now = Time.realtimeSinceStartupAsDouble;
             if (now >= _nextMovement)
@@ -156,10 +170,12 @@ namespace BlindBlade.Telemetry
             }
         }
 
-        /// <summary>stage의 새 도전 구간을 열고 카운터와 시작 시각을 초기화한다. 세션 안에서 stageAttemptId는 stage별로 유일하다.</summary>
+        /// <summary>stage의 새 도전 구간과 고유 attemptSessionId를 열고 카운터와 시작 시각을 초기화한다.</summary>
         private void BeginStage(string stage)
         {
             _stageId = stage;
+            _attemptSessionId = CombatTelemetryRunContext.BeginStageAttempt(_runId, _stageId,
+                out _retryIndex, out _previousAttemptSessionId);
             _stageClosed = false;
             _stageStartedKst = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
             _stageRealtime = Time.realtimeSinceStartupAsDouble;
@@ -167,6 +183,14 @@ namespace BlindBlade.Telemetry
             _stageActive = _activeSeconds;
             _lastMovementActive = _activeSeconds;
             _counts = new JObject();
+            _counts["gameCompleted"] = false;
+            _counts["enemyPerfectDodgeCount"] = 0;
+            _counts["enemyFinalOutcomeCount"] = 0;
+            _counts["enemyValidOutcomeCount"] = 0;
+            _counts["dodgePerfectCount"] = 0;
+            _counts["skillEmpowerActivationCount"] = 0;
+            _counts["skillSwordWaveActivationCount"] = 0;
+            _counts["awarenessHitCount"] = 0;
             if (_stageId.StartsWith("1-") || _stageId.StartsWith("2-"))
             {
                 foreach (string key in new[]
@@ -184,9 +208,13 @@ namespace BlindBlade.Telemetry
             _reactionStartTimes.Clear();
             _pendingEnds.Clear();
             _completePending = false;
+            _deathPending = false;
             _inputs.Clear();
             _attempts.Clear();
             _guardContacts.Clear();
+            _guardRepresentativeOutcomes.Clear();
+            _startedDodgeIds.Clear();
+            _perfectDodgeIds.Clear();
             _guardInputId = _dodgeInputId = 0;
             _reactionTotal = 0;
             _reactionCount = 0;
@@ -253,7 +281,10 @@ namespace BlindBlade.Telemetry
                 ["buildVersion"] = Application.version, ["sessionId"] = _sessionId,
                 ["runId"] = _runId,
                 ["anonymousPlayerId"] = _service.AnonymousPlayerId, ["sessionGeneration"] = _runtime.Session.Generation,
-                ["stageId"] = _stageId, ["stageAttemptId"] = _sessionId + ":" + _stageId,
+                ["stageId"] = _stageId, ["stageAttemptId"] = _attemptSessionId,
+                ["attemptSessionId"] = _attemptSessionId, ["retryIndex"] = _retryIndex,
+                ["previousAttemptSessionId"] = string.IsNullOrEmpty(_previousAttemptSessionId)
+                    ? JValue.CreateNull() : new JValue(_previousAttemptSessionId),
                 ["entryMode"] = _entryMode,
                 ["eventSequence"] = sequence, ["sourceId"] = "combat.telemetry", ["sourceSequence"] = sequence,
                 ["eventType"] = type, ["occurredAt"] = TelemetryJson.Timestamp(time), ["recordedAt"] = TelemetryJson.Timestamp(time),
@@ -276,7 +307,7 @@ namespace BlindBlade.Telemetry
             }
             if (type == "stage_complete") { _completePending = true; return; }
             if (type == "stage_config" || type == "enemy_spawned" || type == "enemy_defeated"
-                || type == "enemy_despawned" || type.StartsWith("boss_"))
+                || type == "enemy_despawned" || type == "player_skill_activated" || type.StartsWith("boss_"))
             {
                 if (_stageClosed) return;
                 if (type == "enemy_spawned")
@@ -330,6 +361,15 @@ namespace BlindBlade.Telemetry
                     _counts["twinBossBeastDefeatTime"] = data["beastDefeatTime"]?.DeepClone();
                     _counts["twinBossStageClearTime"] = data["stageClearTime"]?.DeepClone();
                 }
+                else if (type == "player_skill_activated")
+                {
+                    string skillName = (string)data["skillName"] ?? "Unknown";
+                    string skillSource = (string)data["skillSource"] ?? "Unknown";
+                    if (skillName == "Empower" && skillSource == "manual")
+                        Add(_counts, "skillEmpowerActivationCount");
+                    else if (skillName == "SwordWave")
+                        Add(_counts, "skillSwordWaveActivationCount");
+                }
                 Record(type, data, id);
                 return;
             }
@@ -374,14 +414,24 @@ namespace BlindBlade.Telemetry
             if (!_attacks.TryGetValue(id, out JObject attack) || (bool?)attack["resolved"] == true) return;
             attack["resolved"] = true;
             string outcome = (string)data["outcome"];
+            if (outcome == "Dodge" || outcome == "DodgeAvoided")
+            {
+                bool perfectDodge = (string)data["defenseOutcome"] == "DodgeAvoided" || outcome == "DodgeAvoided";
+                outcome = perfectDodge ? "PerfectDodge" : "Dodge";
+            }
             JObject payload = (JObject)attack.DeepClone();
             payload.Merge(data, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Replace });
             payload["playerPosition"] = TelemetryJson.Position(_health.transform.position);
             payload["contact"] = contact;
+            payload["outcome"] = outcome;
+            Add(_counts, "enemy" + outcome + "Count");
+            Add(_counts, "enemyFinalOutcomeCount");
             if ((bool)attack["committed"])
             {
-                Add(_counts, "enemy" + outcome + "Count");
                 Add(Pattern(attack), outcome);
+                if (outcome == "Hit" || outcome == "Dodge" || outcome == "PerfectDodge" || outcome == "Guard"
+                    || outcome == "NormalParry" || outcome == "PerfectParry" || outcome == "Miss")
+                    Add(_counts, "enemyValidOutcomeCount");
                 if (outcome != "Interrupted" && outcome != "Cancelled")
                 {
                     Add(_counts, "enemyResolvedCount");
@@ -405,6 +455,8 @@ namespace BlindBlade.Telemetry
                     {
                         _guardContacts.Add(inputId);
                         Add(_counts, "guard" + outcome + "Count");
+                        UpdateGuardRepresentativeOutcome(inputId, outcome);
+                        payload["representativeOutcome"] = _guardRepresentativeOutcomes[inputId];
                     }
                     double reactionStartRealtime = _reactionStartTimes.TryGetValue(id, out double startRealtime)
                         ? startRealtime : (double)attack["telegraphRealtime"];
@@ -414,6 +466,13 @@ namespace BlindBlade.Telemetry
                     payload["reactionSeconds"] = reaction >= 0 ? (JToken)reaction : JValue.CreateNull();
                     payload["reactionAssociation"] = outcome == "Hit" ? "held_guard_intent" : "resolved_contact";
                     if (reaction >= 0) { _reactionTotal += reaction; _reactionCount++; }
+                }
+                if ((bool?)payload["awarenessSnapshotCollected"] == true)
+                {
+                    Add(_counts, "awarenessHitCount");
+                    foreach (string key in new[] { "awarenessRadius", "normalEnemyCount", "bossCount",
+                        "hostileShurikenCount", "hostileTotalCount" })
+                        Add(_counts, key + "Total", (double?)payload[key] ?? 0d);
                 }
             }
             Record("enemy_attack_resolved", payload, id, inputId);
@@ -432,20 +491,27 @@ namespace BlindBlade.Telemetry
                 ["position"] = TelemetryJson.Position(_health.transform.position),
                 ["deviceTime"] = input.DeviceTime, ["frameRealtime"] = input.FrameRealTime };
             Record("player_input", payload, inputId: input.InputId, actionId: input.ActionId);
+            bool knownAttempt = _attempts.Contains(input.InputId);
+            if (attempt || knownAttempt) _inputs[input.InputId] = input;
+            if (knownAttempt && input.Kind == PlayerInputKind.Dodge && input.Status == PlayerInputStatus.Started)
+                _dodgeInputId = input.InputId;
             if (!attempt) return;
-            _inputs[input.InputId] = input;
             string kind = input.Kind == PlayerInputKind.GuardPress ? "guard" : input.Kind == PlayerInputKind.Dodge ? "dodge" : "attack";
             Add(_counts, kind + "Attempts");
             if (input.Status == PlayerInputStatus.Rejected) Add(_counts, kind + "Rejected");
             if (input.Kind == PlayerInputKind.GuardPress) _guardInputId = input.InputId;
-            if (input.Kind == PlayerInputKind.Dodge && input.Status == PlayerInputStatus.Started) _dodgeInputId = input.InputId;
+            if (input.Kind == PlayerInputKind.GuardPress && !_guardRepresentativeOutcomes.ContainsKey(input.InputId))
+                _guardRepresentativeOutcomes[input.InputId] = "NoResult";
         }
 
         /// <summary>value의 실제 회피 시작과 퍼펙트 회피만 기록한다. 종료 사건은 전송하지 않는다.</summary>
         private void HandleDodge(PlayerDodgeEvent value)
         {
             if (_stageClosed) return;
-            if (value.Stage == PlayerDodgeStage.Started) Add(_counts, "dodgeStarted");
+            if (value.DodgeId > 0 && value.Stage == PlayerDodgeStage.Started && _startedDodgeIds.Add(value.DodgeId))
+                Add(_counts, "dodgeStarted");
+            if (value.DodgeId > 0 && value.Stage == PlayerDodgeStage.PerfectDodge && _perfectDodgeIds.Add(value.DodgeId))
+                Add(_counts, "dodgePerfectCount");
             if (value.Stage != PlayerDodgeStage.Started && value.Stage != PlayerDodgeStage.PerfectDodge) return;
             Record("dodge_changed", new JObject { ["stage"] = value.Stage.ToString(),
                 ["position"] = TelemetryJson.Position(value.Position) }, value.AttackId, dodgeId: value.DodgeId);
@@ -456,6 +522,8 @@ namespace BlindBlade.Telemetry
         {
             if (_stageClosed) return;
             _counts["deaths"] = 1;
+            _deathPending = true;
+            _completePending = false;
             Record("player_died", new JObject { ["position"] = TelemetryJson.Position(health.transform.position) });
         }
 
@@ -464,6 +532,14 @@ namespace BlindBlade.Telemetry
         {
             if (_stageClosed) return;
             RecordMovement();
+            if (state == GameplayState.Cleared)
+            {
+                _counts["gameCompleted"] = true;
+                _counts["gameCompletedOccurredAtKst"] = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
+                Record("game_completed", new JObject { ["stageId"] = _stageId,
+                    ["stageAttemptId"] = _attemptSessionId, ["runId"] = _runId,
+                    ["gameCompletedOccurredAtKst"] = _counts["gameCompletedOccurredAtKst"] });
+            }
         }
 
         /// <summary>일반 적 처치 사건을 현재 구간의 kills에 더한다.</summary>
@@ -534,6 +610,17 @@ namespace BlindBlade.Telemetry
             target[key] = ((double?)target[key] ?? 0) + amount;
         }
 
+        /// <summary>입력별 방어 결과를 갱신하며 PerfectParry를 Guard보다 우선하여 하나만 집계한다.</summary>
+        private void UpdateGuardRepresentativeOutcome(int inputId, string outcome)
+        {
+            if (outcome != "Guard" && outcome != "PerfectParry") return;
+            int candidateRank = outcome == "PerfectParry" ? 2 : 1;
+            int currentRank = _guardRepresentativeOutcomes.TryGetValue(inputId, out string current)
+                ? current == "PerfectParry" ? 2 : current == "Guard" ? 1 : 0 : 0;
+            if (candidateRank > currentRank)
+                _guardRepresentativeOutcomes[inputId] = outcome;
+        }
+
         /// <summary>reason과 현재 구간의 누적 값을 복사한다. 비율의 분모가 0이면 null을 반환한다.</summary>
         private JObject Summary(string reason)
         {
@@ -556,6 +643,18 @@ namespace BlindBlade.Telemetry
                 : JValue.CreateNull();
             summary["guardAttemptsWithContact"] = _guardContacts.Count;
             summary["guardAttemptsWithoutContact"] = Math.Max(0, ((double?)_counts["guardAttempts"] ?? 0) - _guardContacts.Count);
+            int representativeGuard = 0;
+            int representativePerfectParry = 0;
+            foreach (string outcome in _guardRepresentativeOutcomes.Values)
+            {
+                if (outcome == "Guard") representativeGuard++;
+                else if (outcome == "PerfectParry") representativePerfectParry++;
+            }
+            summary["guardRepresentativeGuardCount"] = representativeGuard;
+            summary["guardRepresentativePerfectParryCount"] = representativePerfectParry;
+            summary["guardRepresentativeNoResultCount"] = Math.Max(0,
+                (int)((double?)_counts["guardAttempts"] ?? 0) - representativeGuard - representativePerfectParry);
+            summary["enemyNormalDodgeCount"] = _counts["enemyDodgeCount"]?.DeepClone() ?? new JValue(0);
             summary["reactionCount"] = _reactionCount;
             summary["reactionMeanSeconds"] = _reactionCount > 0 ? (JToken)(_reactionTotal / _reactionCount) : JValue.CreateNull();
             double resolved = (double?)_counts["enemyResolvedCount"] ?? 0;
@@ -586,7 +685,7 @@ namespace BlindBlade.Telemetry
                     hits += (double?)pattern["Hit"] ?? 0;
                     attempts += (double?)pattern["attempts"] ?? 0;
                     count += (double?)pattern["resolved"] ?? 0;
-                    dodges += (double?)pattern["Dodge"] ?? 0;
+                    dodges += ((double?)pattern["Dodge"] ?? 0) + ((double?)pattern["PerfectDodge"] ?? 0);
                     parries += (double?)pattern["NormalParry"] ?? 0;
                     perfects += (double?)pattern["PerfectParry"] ?? 0;
                 }
@@ -623,6 +722,24 @@ namespace BlindBlade.Telemetry
                     ? (JToken)(((double?)pattern["durationTotalSeconds"] ?? 0d) / ended) : JValue.CreateNull();
             }
             summary["serviceDroppedEventsTotal"] = _service.DroppedEvents;
+            summary["dodgePerfectCount"] = (int?)_counts["dodgePerfectCount"] ?? 0;
+            string[][] awarenessMetrics =
+            {
+                new[] { "awarenessRadius", "awarenessRadiusMetersMean" },
+                new[] { "normalEnemyCount", "normalEnemiesNearHitMean" },
+                new[] { "bossCount", "bossesNearHitMean" },
+                new[] { "hostileShurikenCount", "hostileShurikensNearHitMean" },
+                new[] { "hostileTotalCount", "hostileTotalNearHitMean" }
+            };
+            foreach (string[] metric in awarenessMetrics)
+                summary[metric[1]] = (int?)_counts["awarenessHitCount"] > 0
+                    ? (JToken)(((double?)_counts[metric[0] + "Total"] ?? 0d) / (double)_counts["awarenessHitCount"])
+                    : JValue.CreateNull();
+            summary["gameCompleted"] = (bool?)_counts["gameCompleted"] ?? false;
+            summary["attemptSessionId"] = _attemptSessionId;
+            summary["retryIndex"] = _retryIndex;
+            summary["previousAttemptSessionId"] = string.IsNullOrEmpty(_previousAttemptSessionId)
+                ? JValue.CreateNull() : new JValue(_previousAttemptSessionId);
             return summary;
         }
 
@@ -630,8 +747,19 @@ namespace BlindBlade.Telemetry
         private void Close(string reason)
         {
             if (!_bound || _closed) return;
+            if (_state != null && _state.State == GameplayState.GameOver)
+                _counts["deaths"] = 1;
+            if (reason == "application_quit")
+            {
+                _counts["exitStageId"] = _stageId;
+                _counts["exitStageAttemptId"] = _attemptSessionId;
+                _counts["exitLocation"] = _stageId;
+                _counts["exitOccurredAtKst"] = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
+            }
             FinishStage((_counts.Value<int?>("deaths") ?? 0) > 0 ? "death" : reason);
-            Record("session_ended", new JObject { ["reason"] = reason });
+            Record("session_ended", new JObject { ["reason"] = reason,
+                ["exitStageId"] = _stageId, ["exitStageAttemptId"] = _attemptSessionId,
+                ["exitLocation"] = _stageId, ["exitOccurredAtKst"] = _counts["exitOccurredAtKst"] });
             _service.RequestFlush();
             _closed = true;
         }
