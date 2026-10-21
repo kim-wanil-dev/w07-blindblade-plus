@@ -264,7 +264,7 @@ namespace BlindBlade.Telemetry
             if (_stage == 3) return (_objective == 2 && kind == PlayerInputKind.Attack)
                 || (_objective < 2 && kind == PlayerInputKind.GuardPress);
             if (_stage == 4) return (_objective == 3 && kind == PlayerInputKind.Attack)
-                || (_objective < 3 && kind == PlayerInputKind.GuardPress);
+                || kind == PlayerInputKind.GuardPress || kind == PlayerInputKind.Dodge;
             return false;
         }
 

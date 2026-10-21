@@ -8,6 +8,9 @@ using UnityEngine.InputSystem;
 [DefaultExecutionOrder(-40)]
 public sealed class InputManager : MonoBehaviour
 {
+    private const string DODGE_STAMINA_SOUND_PATH = "UI/StaminaInsufficient.wav";
+    private const float DODGE_STAMINA_SOUND_VOLUME = 1.42f;
+
     [Header("커서")]
     [SerializeField] private bool _lockCursorOnClick = true;
 
@@ -26,6 +29,7 @@ public sealed class InputManager : MonoBehaviour
     private PlayerMotor _motor;
     private PlayerEmpower _empower;
     private PlayerClock _playerClock;
+    private PlayerDodgeStaminaHint _dodgeStaminaHint;
     private InputSystem_Actions _actions;
     private InputAction _guard;
     private InputAction _dodge;
@@ -152,7 +156,7 @@ public sealed class InputManager : MonoBehaviour
 
     /// <summary>
     /// 새 InputId로 공격을 요청한다. 토큰이 가득 찬 강화 준비 중이면 궁극기 차징을 시작해 예약 입력으로 기록하고,
-    /// 그 외에는 RequestNormalAttack으로 일반 공격(강화 준비 중이면 검기 공격)을 요청한다.
+    /// 그 외에는 RequestNormalAttack으로 공격을 요청한다. 쳐내기 준비면 일섬, 회피 준비면 기존 일반·돌진 공격 판정을 사용한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
@@ -196,14 +200,16 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// 강화 준비 중에는 검기가 대상 돌진보다 우선하도록 제자리 공격을 요청하고, 받아들여지면 준비를 끝내고 그 공격의 베기 시작에 검기를 예약한다.
+    /// 쳐내기 준비 중에는 제자리 공격에 일섬을 예약한다. 회피 준비 중에는 기존 대상 판정으로 일반·돌진 공격을 요청하고 수락 시 감속을 끝낸다.
     /// </summary>
     private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
     {
         int previousActionId = player.CurrentActionId;
-        bool swordWave = _empower.IsReady;
+        bool swordWave = _empower.IsSwordWaveReady;
+        bool dodgeReady = _empower.IsDodgeReady;
         bool accepted = swordWave ? _combat.RequestInPlaceAttack() : _combat.RequestAttack();
         if (accepted && swordWave) _empower.CompleteWithSwordWave(previousActionId);
+        if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
         bool started = accepted && player.CurrentActionId != previousActionId;
         PlayerInputStatus status = started ? PlayerInputStatus.Started
             : accepted ? PlayerInputStatus.Buffered : PlayerInputStatus.Rejected;
@@ -220,7 +226,7 @@ public sealed class InputManager : MonoBehaviour
 
     /// <summary>
     /// 진행 중인 궁극기 차징 입력 _chargeInputId를 처리한다. 차징이 다 차면 궁극기를 시작해 Started 또는 Rejected로 기록한다.
-    /// 다 차기 전에 좌클릭을 떼면 차징을 멈추고 같은 입력으로 검기 공격을 요청하며, 준비가 먼저 끝났으면 BufferDropped로 기록한다.
+    /// 다 차기 전에 버튼을 떼면 차징을 멈추고 같은 입력으로 공격을 요청한다. 회피 준비에서는 감속 종료 후 일반·돌진 공격을 쓴다.
     /// </summary>
     private void ResolveUltimateCharge(PlayerController player)
     {
@@ -284,13 +290,19 @@ public sealed class InputManager : MonoBehaviour
         _bufferedAttackInputId = 0;
     }
 
-    /// <summary>새 InputId로 player의 회피를 요청하고 시작 또는 거부 결과와 거부 이유를 입력 기록으로 발행한다.</summary>
+    /// <summary>새 InputId로 player의 회피를 요청하고 결과를 기록한다. 기력 부족으로 거부된 입력에는 효과음과 하단 경고를 표시한다.</summary>
     private void RequestDodge(PlayerController player)
     {
         int inputId = ++_nextInputId;
         bool accepted = player.RequestDodge(out PlayerInputRejectReason reason);
         PublishInput(inputId, PlayerInputKind.Dodge,
             accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected, reason, 0, _dodgePressTime);
+        if (!accepted && reason == PlayerInputRejectReason.NotEnoughStamina)
+        {
+            Managers.Sound.PlayStreamingEffect(DODGE_STAMINA_SOUND_PATH, DODGE_STAMINA_SOUND_VOLUME,
+                owner: player.gameObject);
+            _dodgeStaminaHint.Show();
+        }
     }
 
     /// <summary>
@@ -345,6 +357,7 @@ public sealed class InputManager : MonoBehaviour
         _motor = Game.Player.GetComponent<PlayerMotor>();
         _empower = Game.Player.GetComponent<PlayerEmpower>();
         _playerClock = Game.Player.GetComponent<PlayerClock>();
+        _dodgeStaminaHint = Game.Player.GetComponent<PlayerDodgeStaminaHint>();
         _viewResetPending = true;
         _state.StateChanged += HandleState;
         _actions.Player.Enable();
@@ -440,6 +453,8 @@ public sealed class InputManager : MonoBehaviour
         _motor = null;
         _empower = null;
         _playerClock = null;
+        if (_dodgeStaminaHint != null) _dodgeStaminaHint.Hide();
+        _dodgeStaminaHint = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
         _chargeInputId = 0;

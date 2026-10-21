@@ -43,6 +43,16 @@ public sealed class TwinBossProjectile : MonoBehaviour
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int ProjectileId => _projectileId;
 
+    /// <summary>적대 보스 투사체의 현재 피해 구가 cylinder에 닿으면 attackId를 출력한다.</summary>
+    public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
+    {
+        attackId = 0;
+        if (!isActiveAndEnabled || !IsHostileFlying || _damage.Amount <= 0f
+            || !cylinder.OverlapsSphere(transform.position, _hitRadius)) return false;
+        attackId = _damage.AttackId;
+        return true;
+    }
+
     /// <summary>
     /// start에서 end까지 radius 반경으로 쓸고 지나간 공간에 닿은 적대 비행 수리검을 가드 소리와 함께 없앤다.
     /// 반사된 수리검은 유지한다.
@@ -129,6 +139,8 @@ public sealed class TwinBossProjectile : MonoBehaviour
         for (int i = 0; i < overlaps; i++)
         {
             if (!CanHit(_contacts[i])) continue;
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position, transform.position,
+                _hitRadius, _damage);
             ProcessHit(_contacts[i], _contacts[i].ClosestPoint(transform.position));
             return;
         }
@@ -145,10 +157,14 @@ public sealed class TwinBossProjectile : MonoBehaviour
         }
         if (closest >= 0)
         {
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+                transform.position + _direction * closestDistance, _hitRadius, _damage);
             transform.position += _direction * closestDistance;
             ProcessHit(_hits[closest].collider, _hits[closest].point);
             return;
         }
+        if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+            transform.position + _direction * distance, _hitRadius, _damage);
         transform.position += _direction * distance;
         UpdatePassedPlayer();
     }

@@ -80,7 +80,7 @@ public sealed class PlayerMotor : MonoBehaviour
     private PlayerClock _playerClock;
 
     [Header("짧은 회피")]
-    [SerializeField, Min(0.1f)] private float _dodgeDistance = 2.4f;
+    [SerializeField, Min(0.1f)] private float _dodgeDistance = 4.8f;
     [SerializeField, Min(0.05f)] private float _dodgeDuration = 0.18f;
     [SerializeField, Min(0f)] private float _dodgeCooldown = 0.6f;
     [SerializeField, Min(0f), Tooltip("계단 하강 중 접지 판정이 잠깐 끊겨도 회피를 허용하는 시간")] private float _dodgeGroundGraceDuration = 0.12f;

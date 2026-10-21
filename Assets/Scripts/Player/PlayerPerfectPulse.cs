@@ -141,7 +141,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     void Update()
     {
         // 강화 공격 중의 비네트는 연출이 직접 정하고, 궁극기 차징 비네트는 따로 겹쳐 진행도만큼 안쪽으로 번진다.
-        if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsReady ? _readyVignette : 0f);
+        if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsSwordWaveReady ? _readyVignette : 0f);
         _overlay.SetChargeVignette(_empower.ChargeProgress, _chargeVignette);
         if (!_startPulsePlayed) TryPlayStartPulse();
         PublishThreatSilhouette();
@@ -244,6 +244,16 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     {
         if (_running && _perfectRunning) return false;
         StartPulse(_dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration, _dodgeRingColor, false);
+        _dodgeRunning = true;
+        return true;
+    }
+
+    /// <summary>회피 시작 지점 origin의 바닥에서 잔상 접촉 파동을 시작하고 시작 여부를 반환한다.</summary>
+    public bool BeginPerfectDodgeAt(Vector3 origin)
+    {
+        if (_running && _perfectRunning) return false;
+        StartPulse(origin, Vector3.up, _dodgeRadius, _dodgeExpandDuration, _dodgeFadeDuration,
+            _dodgeRingColor, false);
         _dodgeRunning = true;
         return true;
     }

@@ -12,6 +12,7 @@ using UnityEngine;
 public sealed class PlayerCombatAudio : MonoBehaviour
 {
     private const float ENEMY_AUDIO_SCAN_INTERVAL = 0.25f;
+    private const float DODGE_ECHO_WAIT = 0.4f;
 
     [Header("전투 효과음")]
     [SerializeField] private SoundId _swingSound = SoundId.SwordSwing;
@@ -49,6 +50,7 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     private float _lastDodgeCooldown;
     private float _nextEnemyAudioScan;
     private int _lastDashAction = -1;
+    private float _dodgeEchoUntil;
 
     void Awake()
     {
@@ -78,9 +80,12 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         _cueClock = 0f;
         _lastDodgeCooldown = _motor.DodgeCooldownRemaining;
         _lastDashAction = -1;
+        _dodgeEchoUntil = 0f;
         _nextEnemyAudioScan = 0f;
         _health.DamageReceived += HandleDamage;
         _empower.UltimateReadyParry += HandleUltimateReadyParry;
+        _empower.UltimateReadyDodge += HandleUltimateReadyParry;
+        _katana.Events.DodgeChanged += HandleDodgeChanged;
         if (_contactService != null)
             _contactService.AttackContactResolved += HandleContact;
         if (_katana != null && _katana.isActiveAndEnabled)
@@ -105,6 +110,8 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         _player.ActionEvent -= HandleAction;
         _health.DamageReceived -= HandleDamage;
         _empower.UltimateReadyParry -= HandleUltimateReadyParry;
+        _empower.UltimateReadyDodge -= HandleUltimateReadyParry;
+        _katana.Events.DodgeChanged -= HandleDodgeChanged;
         _pendingSwingAction = -1;
         _pendingCues.Clear();
         if (_contactService != null)
@@ -132,6 +139,8 @@ public sealed class PlayerCombatAudio : MonoBehaviour
             _lastDodgeCooldown = cooldown;
             _cueClock += _playerClock.DeltaTime;
             UpdatePendingCues();
+            if (_dodgeEchoUntil > Time.unscaledTime && Managers.Sound.EmphasizeDodgeSound(gameObject))
+                _dodgeEchoUntil = 0f;
         }
         if (_pendingSwingAction < 0 || _player.IsPaused || Time.deltaTime <= 0f) return;
         if (_pendingSwingAction != _player.CurrentActionId
@@ -217,11 +226,18 @@ public sealed class PlayerCombatAudio : MonoBehaviour
         Managers.Sound.Play(result.IsParry ? SoundId.ParryClash : _hitSound, result.Point, _volume, gameObject);
     }
 
-    /// <summary>거합 토큰이 가득 찬 알림을 플레이어에 붙여 재생한다.</summary>
+    /// <summary>쳐내기·극한 회피로 거합 토큰이 가득 찬 알림을 플레이어에 붙여 재생한다.</summary>
     private void HandleUltimateReadyParry()
     {
         if (_ultimateReadySound == SoundId.None) return;
         Managers.Sound.PlayAttached(_ultimateReadySound, gameObject, _volume);
+    }
+
+    /// <summary>일반 극한 회피 또는 쌍둥이 거합 회피 사건을 받으면 방금 시작한 회피음에 에코를 붙이도록 짧게 재생을 기다린다.</summary>
+    private void HandleDodgeChanged(PlayerDodgeEvent dodgeEvent)
+    {
+        if (dodgeEvent.Stage == PlayerDodgeStage.PerfectDodge || dodgeEvent.Stage == PlayerDodgeStage.IaiDodge)
+            _dodgeEchoUntil = Time.unscaledTime + DODGE_ECHO_WAIT;
     }
 
     /// <summary>

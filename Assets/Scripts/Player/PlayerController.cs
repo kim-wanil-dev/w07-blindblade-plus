@@ -659,7 +659,7 @@ public sealed class PlayerController : MonoBehaviour
         if (_state != PlayerActionState.Free && _state != PlayerActionState.Guarding)
             return false;
 
-        return TrySelectIaidoTarget(out target, out _);
+        return TrySelectIaidoTarget(out target, out _, targetedAttack: true);
     }
 
     /// <summary>targetId의 생존 적에게 기존 대상 대시를 시작한다. 거리·벽 제한을 검사하고 반격 대시의 수락 여부를 반환한다.</summary>
