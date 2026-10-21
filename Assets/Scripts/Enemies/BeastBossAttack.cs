@@ -929,6 +929,9 @@ public sealed class BeastBossAttack : MonoBehaviour
         float radius = Mathf.Max(_contactRadius, _agent.radius);
         Vector3 bottom = start + Vector3.up * radius;
         Vector3 top = start + Vector3.up * Mathf.Max(radius, _agent.height - radius);
+        DodgeAfterimage.ReportCapsuleSweep(bottom, top, radius, direction * distance,
+            new DamageContext(damage, gameObject, DodgeAfterimage.ActiveOrigin, direction,
+                pattern, _telemetryAttackId, 1, IncomingAttackKind.Charge));
         int count = Physics.CapsuleCastNonAlloc(bottom, top, radius, direction, _hits,
             distance, ~0, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < count; i++)

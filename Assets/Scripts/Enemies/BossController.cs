@@ -635,6 +635,7 @@ public sealed class BossController : MonoBehaviour
                 destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
             destination = LimitToArena(destination);
             float travelDistance = Mathf.Max(0f, Vector3.Dot(destination - previous, direction));
+            ReportChargeAfterimage(previous, direction, travelDistance, _chargeDamage, "BossCharge");
             if (TryGetChargePlayerContact(direction, travelDistance, out float contactDistance, out Vector3 point))
             {
                 _agent.Move(direction * Mathf.Max(0f, contactDistance - 0.05f));
@@ -652,6 +653,17 @@ public sealed class BossController : MonoBehaviour
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_telemetryAttackId, "Miss", transform.position);
         _telemetryAttackId = 0;
         _motor.Stop();
+    }
+
+    /// <summary>previous에서 direction·distance로 움직이는 보스 캡슐과 잔상 접촉을 damage·pattern 후보로 기록한다.</summary>
+    private void ReportChargeAfterimage(Vector3 previous, Vector3 direction, float distance, float damage, string pattern)
+    {
+        float radius = Mathf.Max(_agent.radius, _chargeHitRadius);
+        Vector3 bottom = previous + Vector3.up * radius;
+        Vector3 top = previous + Vector3.up * Mathf.Max(radius, _agent.height - radius);
+        DodgeAfterimage.ReportCapsuleSweep(bottom, top, radius, direction * distance,
+            new DamageContext(damage, gameObject, DodgeAfterimage.ActiveOrigin, direction,
+                pattern, _telemetryAttackId, 1, IncomingAttackKind.Charge));
     }
 
     /// <summary>
@@ -1159,6 +1171,8 @@ public sealed class BossController : MonoBehaviour
                 destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
             destination = LimitToArena(destination);
             float travelDistance = Mathf.Max(0f, Vector3.Dot(destination - previous, direction));
+            if (!contacted)
+                ReportChargeAfterimage(previous, direction, travelDistance, _counterSlashDamage, "BossCounterSlash");
             if (!contacted && TryGetChargePlayerContact(direction, travelDistance, out float contactDistance, out Vector3 point))
             {
                 contacted = true;

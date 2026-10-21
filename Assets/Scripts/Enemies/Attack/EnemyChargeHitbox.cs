@@ -120,6 +120,11 @@ public sealed class EnemyChargeHitbox : MonoBehaviour
         _debugCenters.Add(center);
         _debugUntil = Time.time + _gizmoDuration;
 #endif
+        if (DodgeAfterimage.IsActive && !IsAfterimageBlocked())
+            DodgeAfterimage.ReportSphereSweep(_previousCenter, center, _radius,
+                new DamageContext(_damage, gameObject, DodgeAfterimage.ActiveOrigin, _context.Direction,
+                    _context.PatternId, _context.AttackId, 1,
+                    BlindBlade.Combat.Contracts.IncomingAttackKind.Charge));
         foreach (Collider overlap in Physics.OverlapSphere(_previousCenter, _radius, _hitMask, QueryTriggerInteraction.Ignore))
             TryApplyDamage(overlap, overlap.ClosestPoint(_previousCenter));
         Vector3 delta = center - _previousCenter;
@@ -131,6 +136,20 @@ public sealed class EnemyChargeHitbox : MonoBehaviour
         }
         foreach (Collider overlap in Physics.OverlapSphere(center, _radius, _hitMask, QueryTriggerInteraction.Ignore))
             TryApplyDamage(overlap, overlap.ClosestPoint(center));
+    }
+
+    /// <summary>이전 돌진 중심과 잔상 사이에 자신·대상을 제외한 _obstacleMask 차폐물이 있으면 참을 반환한다.</summary>
+    private bool IsAfterimageBlocked()
+    {
+        Vector3 delta = DodgeAfterimage.ActiveOrigin + Vector3.up * _height - _previousCenter;
+        if (delta.sqrMagnitude < 0.000001f) return false;
+        foreach (RaycastHit hit in Physics.RaycastAll(_previousCenter, delta.normalized, delta.magnitude,
+            _obstacleMask, QueryTriggerInteraction.Ignore))
+        {
+            if (!hit.transform.IsChildOf(transform)
+                && (_context.Target == null || !hit.transform.IsChildOf(_context.Target))) return true;
+        }
+        return false;
     }
 
     /// <summary>

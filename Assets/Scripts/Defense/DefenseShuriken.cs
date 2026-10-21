@@ -103,6 +103,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         {
             if (!CanHit(_contacts[i]))
                 continue;
+            ReportAfterimage(transform.position, transform.position);
             ProcessHit(_contacts[i], _contacts[i].ClosestPoint(transform.position));
             return;
         }
@@ -121,6 +122,7 @@ public sealed class DefenseShuriken : MonoBehaviour
 
         if (closest >= 0)
         {
+            ReportAfterimage(transform.position, transform.position + _direction * closestDistance);
             transform.position += _direction * closestDistance;
             ProcessHit(_hits[closest].collider, _hits[closest].point);
             return;
@@ -128,8 +130,17 @@ public sealed class DefenseShuriken : MonoBehaviour
 
         Vector3 start = transform.position;
         Vector3 end = start + _direction * distance;
+        ReportAfterimage(start, end);
         UpdateFlightPhase(start, end, playerPoint);
         transform.position = end;
+    }
+
+    /// <summary>start부터 end까지 적대 수리검의 피해 궤적을 잔상에 조회하고 접촉 후보를 기록한다.</summary>
+    private void ReportAfterimage(Vector3 start, Vector3 end)
+    {
+        DodgeAfterimage.ReportSphereSweep(start, end, _hitRadius,
+            new DamageContext(_damage, _instigator, end, _direction, PATTERN_ID, _attackId, 1,
+                IncomingAttackKind.Projectile));
     }
 
     void OnDisable()

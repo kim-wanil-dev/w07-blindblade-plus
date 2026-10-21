@@ -59,6 +59,7 @@ public class SoundManager
     [Header("Time Warp")]
     private readonly FMOD.DSP[] _warpFilters = new FMOD.DSP[3];
     private readonly bool[] _hasWarpFilters = new bool[3];
+    private float _effectWarpPitch = 1f;
 
     /// <summary>
     /// library의 사운드 ID와 FMOD 이벤트 연결을 보관한다.
@@ -682,8 +683,29 @@ public class SoundManager
     {
         if (!RuntimeManager.IsInitialized || !TryInitializeBuses())
             return;
+        _effectWarpPitch = Mathf.Clamp(pitch, 0.25f, 1f);
         ApplyTimeWarp(_effectBus, 0, pitch, lowpassCutoff);
         ApplyTimeWarp(_bgmBus, 1, pitch, lowpassCutoff);
+    }
+
+    /// <summary>
+    /// owner가 방금 낸 Dodge 음원의 채널에 짧은 에코를 붙인다.
+    /// 원음이 이미 끝났으면 같은 Dodge 이벤트를 한 번 다시 재생한다. 연결 요청을 수락하면 true를 반환한다.
+    /// </summary>
+    public bool EmphasizeDodgeSound(GameObject owner)
+    {
+        for (int i = _effects.Count - 1; i >= 0; i--)
+        {
+            ActiveEffect effect = _effects[i];
+            if (effect.Id != SoundId.Dodge || effect.Owner != owner || !effect.Instance.isValid()
+                || effect.Instance.getPlaybackState(out FMOD.Studio.PLAYBACK_STATE state) != FMOD.RESULT.OK
+                || state == FMOD.Studio.PLAYBACK_STATE.STOPPED) continue;
+            effect.RequestDodgeEcho();
+            return true;
+        }
+        if (!PlayAttached(SoundId.Dodge, owner, 0.8f)) return false;
+        _effects[_effects.Count - 1].RequestDodgeEcho();
+        return true;
     }
 
     /// <summary>
@@ -926,7 +948,7 @@ public class SoundManager
                 _combatFocusUntil = Time.unscaledTime + _library.CombatFocusDuration;
             var effect = new ActiveEffect(instance, source, soundId, playDuringMovement, position, attach,
                 volume, spatialize2D && !is3D, minimumDistance, maximumDistance,
-                enemySound, lowpassCutoff);
+                enemySound, lowpassCutoff, Mathf.Clamp(pitch, 0.25f, 4f));
             _effects.Add(effect);
 #if UNITY_EDITOR
             _recentPlayback.Add($"{Time.time:F2}s | {cueName ?? soundId.ToString()} | {eventReference.Path} | {source?.name ?? "world"} | {label} | volume={volume:F2}");
@@ -973,8 +995,12 @@ public class SoundManager
                 group.setPan(pan);
         }
         effect.Instance.setVolume(volume);
+        if (effect.Id == SoundId.Dodge && effect.Owner != null && effect.Owner.GetComponent<PlayerController>() != null)
+            effect.Instance.setPitch(Mathf.Clamp(effect.BasePitch * Mathf.Lerp(1f, _effectWarpPitch, 0.15f)
+                / _effectWarpPitch, 0.25f, 4f));
         effect.ApplyRainFilter(_enemyRainMuffleEnabled, _enemyRainLowpassCutoff);
         effect.ApplyConfiguredLowpassFilter();
+        effect.ApplyDodgeEcho();
     }
 
     /// <summary>
@@ -1213,8 +1239,11 @@ public class SoundManager
         private readonly float _maximumDistance;
         private readonly bool _muffleInRain;
         private readonly float _lowpassCutoff;
+        private readonly float _basePitch;
         private FMOD.DSP _rainFilter;
         private FMOD.DSP _configuredLowpassFilter;
+        private FMOD.DSP _dodgeEcho;
+        private bool _dodgeEchoRequested;
 
         internal FMOD.Studio.EventInstance Instance => _instance;
         internal GameObject Owner => _owner;
@@ -1228,14 +1257,15 @@ public class SoundManager
         internal float MinimumDistance => _minimumDistance;
         internal float MaximumDistance => _maximumDistance;
         internal bool MuffleInRain => _muffleInRain;
+        internal float BasePitch => _basePitch;
 
         /// <summary>
-        /// instance·owner·soundId·playDuringMovement와 위치·부착·음량·거리 입력을 보관한다.
+        /// instance·owner·soundId·playDuringMovement와 위치·부착·음량·거리·basePitch 입력을 보관한다.
         /// 공간 보정, 비 속 필터 대상 여부와 고정 저역 통과 주파수를 기록해 매 프레임 믹싱에 사용한다.
         /// </summary>
         internal ActiveEffect(FMOD.Studio.EventInstance instance, GameObject owner, SoundId soundId, bool playDuringMovement,
             Vector3 position, bool attach, float volume, bool spatialize2D, float minimumDistance, float maximumDistance,
-            bool muffleInRain, float lowpassCutoff)
+            bool muffleInRain, float lowpassCutoff, float basePitch)
         {
             _instance = instance;
             _owner = owner;
@@ -1250,6 +1280,46 @@ public class SoundManager
             _maximumDistance = maximumDistance;
             _muffleInRain = muffleInRain;
             _lowpassCutoff = lowpassCutoff;
+            _basePitch = basePitch;
+        }
+
+        /// <summary>현재 Dodge 음원에 에코 연결을 예약하고, 채널이 준비됐으면 즉시 적용한다.</summary>
+        internal void RequestDodgeEcho()
+        {
+            _dodgeEchoRequested = true;
+            ApplyDodgeEcho();
+        }
+
+        /// <summary>예약된 회피 에코를 이벤트 채널에 연결한다. 아직 채널이 없으면 다음 음향 갱신을 기다린다.</summary>
+        internal void ApplyDodgeEcho()
+        {
+            if (!_dodgeEchoRequested || _dodgeEcho.hasHandle()) return;
+            if (Instance.getChannelGroup(out FMOD.ChannelGroup group) != FMOD.RESULT.OK
+                || RuntimeManager.CoreSystem.createDSPByType(FMOD.DSP_TYPE.ECHO, out FMOD.DSP echo) != FMOD.RESULT.OK)
+                return;
+            echo.setParameterFloat((int)FMOD.DSP_ECHO.DELAY, 180f);
+            echo.setParameterFloat((int)FMOD.DSP_ECHO.FEEDBACK, 38f);
+            echo.setParameterFloat((int)FMOD.DSP_ECHO.DRYLEVEL, 0f);
+            echo.setParameterFloat((int)FMOD.DSP_ECHO.WETLEVEL, -8f);
+            if (group.addDSP(FMOD.CHANNELCONTROL_DSP_INDEX.HEAD, echo) != FMOD.RESULT.OK)
+            {
+                echo.release();
+                return;
+            }
+            _dodgeEcho = echo;
+        }
+
+        /// <summary>이벤트 채널에서 회피 에코를 떼고 해당 DSP 자원을 해제한다.</summary>
+        private void ReleaseDodgeEcho()
+        {
+            if (!_dodgeEcho.hasHandle()) return;
+            if (RuntimeManager.IsInitialized)
+            {
+                if (Instance.isValid() && Instance.getChannelGroup(out FMOD.ChannelGroup group) == FMOD.RESULT.OK)
+                    group.removeDSP(_dodgeEcho);
+                _dodgeEcho.release();
+            }
+            _dodgeEcho.clearHandle();
         }
 
         /// <summary>
@@ -1351,6 +1421,7 @@ public class SoundManager
         {
             ReleaseRainFilter();
             ReleaseConfiguredLowpassFilter();
+            ReleaseDodgeEcho();
         }
     }
 

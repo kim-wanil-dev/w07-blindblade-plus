@@ -262,6 +262,7 @@ GameObject:
   - component: {fileID: 7719342256018403925}
   - component: {fileID: 7719342256018403926}
   - component: {fileID: 7719342256018403927}
+  - component: {fileID: 7719342256018403928}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -350,7 +351,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   _dashSlowMotionScale: 0.35
   _dashSlowMotionDuration: 0.12
-  _dodgeDistance: 2.4
+  _dodgeDistance: 4.8
   _dodgeDuration: 0.18
   _dodgeCooldown: 0.6
   _dodgeGroundGraceDuration: 0.12
@@ -483,6 +484,7 @@ MonoBehaviour:
   _perfectDodgeStart: 0
   _perfectDodgeEnd: 0.1
   _dodgeInvulnerabilityEnd: 0.18
+  _afterimageMinimumMoveRatio: 0.5
 --- !u!114 &7354578201373670101
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -733,6 +735,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _readyDuration: 5
+  _dodgeReadyDuration: 1
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
   _perfectParryInvulnerableDuration: 1.5
@@ -1140,6 +1143,21 @@ MonoBehaviour:
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
   _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
   _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
+  _fadeDuration: 0.15
+--- !u!114 &7719342256018403928
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8cd628426df4ade91a49cecc8579b5a, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerDodgeStaminaHint
+  _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
+  _visibleDuration: 1.2
   _fadeDuration: 0.15
 --- !u!1001 &2095931565275930154
 PrefabInstance:

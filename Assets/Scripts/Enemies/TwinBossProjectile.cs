@@ -129,6 +129,8 @@ public sealed class TwinBossProjectile : MonoBehaviour
         for (int i = 0; i < overlaps; i++)
         {
             if (!CanHit(_contacts[i])) continue;
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position, transform.position,
+                _hitRadius, _damage);
             ProcessHit(_contacts[i], _contacts[i].ClosestPoint(transform.position));
             return;
         }
@@ -145,10 +147,14 @@ public sealed class TwinBossProjectile : MonoBehaviour
         }
         if (closest >= 0)
         {
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+                transform.position + _direction * closestDistance, _hitRadius, _damage);
             transform.position += _direction * closestDistance;
             ProcessHit(_hits[closest].collider, _hits[closest].point);
             return;
         }
+        if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+            transform.position + _direction * distance, _hitRadius, _damage);
         transform.position += _direction * distance;
         UpdatePassedPlayer();
     }

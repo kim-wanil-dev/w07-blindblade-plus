@@ -97,6 +97,17 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         }
         UpdateHitboxPose(Mathf.Clamp01((Time.time - _startedAt) / _swingDuration));
         if (!_useBuiltInHitDetection) return;
+        Vector3 ghostPoint = DodgeAfterimage.ActiveOrigin;
+        if (DodgeAfterimage.IsActive
+            && !IsBlocked(Context, ghostPoint + Vector3.up * _hitHeight,
+                Context.Target != null ? Context.Target.GetComponent<IDamageable>() : null))
+        {
+            Vector3 sweepDirection = (BladeTip - _previousTip).normalized;
+            if (sweepDirection.sqrMagnitude < 0.001f) sweepDirection = _swingForward;
+            DodgeAfterimage.ReportBladeSweep(_previousBase, _previousTip, BladeBase, BladeTip, _hitRadius,
+                new DamageContext(_damage, gameObject, ghostPoint, sweepDirection,
+                    Context.PatternId, Context.AttackId, 1, BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
+        }
         Collider contact = EnemyCombatService.FindBladeContact(transform, Context.Target,
             _previousBase, _previousTip, BladeBase, BladeTip, _hitRadius,
             _hitMask.value | _obstacleMask.value, out Vector3 point);

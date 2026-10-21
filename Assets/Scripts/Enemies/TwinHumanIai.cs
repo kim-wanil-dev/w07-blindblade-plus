@@ -393,13 +393,13 @@ public sealed class TwinHumanIai : MonoBehaviour
     }
 
     /// <summary>
-    /// 플레이어가 지금 퍼펙트 패링 구간이고 forward로 들어오는 거합이 시점 정면 _parryFrontArc 안이면 플레이어 칼의 막기 판정에 넘겨 막혔는지 반환한다.
+    /// 플레이어가 회피 중이거나 회피 무적 시간 안이 아니고 퍼펙트 패링 구간이며 forward로 들어오는 거합이 시점 정면 _parryFrontArc 안이면 플레이어 칼의 막기 판정에 넘겨 막혔는지 반환한다.
     /// 가드만 열려 있으면 판정을 넘기지 않아 거합은 기존처럼 막을 수 없다. 막기 동작·소리만 나고 실제 퍼펙트 패링 불릿 타임·토큰·파동은 시작하지 않는다.
     /// 방어 처리 전에 읽은 성공 판정을 보관해 패링 창이 닫힌 뒤에도 텔레메트리에 PerfectParry로 전달한다.
     /// </summary>
     private bool TryPerfectParry(Vector3 forward)
     {
-        if (_playerCombat == null) return false;
+        if (_playerCombat == null || _playerMotor.IsDodging || _player.IsDodgeInvulnerable) return false;
         DefenseOutcome outcome = _playerCombat.GuardContactOutcome;
         if (outcome != DefenseOutcome.PerfectParry) return false;
         Vector3 incoming = Vector3.ProjectOnPlane(-forward, Vector3.up);

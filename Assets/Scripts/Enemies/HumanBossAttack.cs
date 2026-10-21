@@ -429,6 +429,8 @@ public sealed class HumanBossAttack : MonoBehaviour
                 destination = Vector3.MoveTowards(boundary.position, previous, 0.05f);
             float travel = Vector3.Distance(previous, destination);
             transform.rotation = Quaternion.LookRotation(direction);
+            if (!contacted)
+                ReportSlashAfterimage(previous, direction, travel, damage, "TwinHumanCounterSlash");
             if (!contacted && TryCastPlayer(previous, direction, travel, out float contact, out Vector3 point))
             {
                 contacted = true;
@@ -702,6 +704,8 @@ public sealed class HumanBossAttack : MonoBehaviour
     private bool TryHitSlash(Vector3 start, Vector3 direction, float travel, out float contact)
     {
         contact = 0f;
+        if (!_dashPassedThrough)
+            ReportSlashAfterimage(start, direction, travel, _strikeDamage, "TwinHumanSlash");
         if (_dashPassedThrough || !TryCastPlayer(start, direction, travel, out contact, out Vector3 point)) return false;
         // 휘어 들어오는 돌진도 플레이어가 인간을 바라보면 막을 수 있도록 실제 진입 방향을 쓴다.
         Vector3 toPlayer = Vector3.ProjectOnPlane(_player.transform.position - start, Vector3.up);
@@ -723,6 +727,17 @@ public sealed class HumanBossAttack : MonoBehaviour
         }
         if (_player.IsAlive) _playerMotor.ApplyCombatPush(direction, _dashPushDistance, _dashPushDuration);
         return true;
+    }
+
+    /// <summary>start에서 direction·travel로 이동하는 베기 캡슐을 잔상에 조회해 damage·pattern 후보를 기록한다.</summary>
+    private void ReportSlashAfterimage(Vector3 start, Vector3 direction, float travel, float damage, string pattern)
+    {
+        float radius = _slashContactRadius;
+        Vector3 bottom = start + Vector3.up * radius;
+        Vector3 top = start + Vector3.up * Mathf.Max(radius, _agent.height - radius);
+        DodgeAfterimage.ReportCapsuleSweep(bottom, top, radius, direction * travel,
+            new DamageContext(damage, gameObject, DodgeAfterimage.ActiveOrigin, direction,
+                pattern, _telemetryAttackId, 1, IncomingAttackKind.Melee));
     }
 
     /// <summary>

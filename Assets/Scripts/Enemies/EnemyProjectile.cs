@@ -74,6 +74,9 @@ public class EnemyProjectile : MonoBehaviour
             if (!CanHit(overlap))
                 continue;
 
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position, transform.position,
+                _hitRadius, _damage);
+
 #if UNITY_EDITOR
             _debugEnd = _debugStart;
 #endif
@@ -98,6 +101,8 @@ public class EnemyProjectile : MonoBehaviour
         if (closestIndex >= 0)
         {
             RaycastHit hit = hits[closestIndex];
+            if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+                transform.position + _direction * hit.distance, _hitRadius, _damage);
             transform.position += _direction * hit.distance;
 #if UNITY_EDITOR
             _debugEnd = transform.position;
@@ -106,6 +111,8 @@ public class EnemyProjectile : MonoBehaviour
             return;
         }
 
+        if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
+            transform.position + _direction * distance, _hitRadius, _damage);
         transform.position += _direction * distance;
         UpdatePassedPlayer();
     }

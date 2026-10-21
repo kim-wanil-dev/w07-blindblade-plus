@@ -395,6 +395,9 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         float verticalOffset = Mathf.Max(0.1f, _agent.height * 0.5f);
         Vector3 start = from + Vector3.up * verticalOffset;
         Vector3 end = to + Vector3.up * verticalOffset;
+        DodgeAfterimage.ReportCapsuleSweep(start, end, _biteRadius, Vector3.zero,
+            new DamageContext(_biteDamage, gameObject, DodgeAfterimage.ActiveOrigin, _leapDirection,
+                PatternId, context.AttackId, 1, IncomingAttackKind.Melee));
         int contactCount = Physics.OverlapCapsuleNonAlloc(start, end, _biteRadius, _landingContacts,
             _landingMask, QueryTriggerInteraction.Ignore);
         for (int i = 0; i < contactCount; i++)

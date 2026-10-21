@@ -1,5 +1,10 @@
 ### 전투 HUD
 
+#### 회피 기력 부족 안내 (2026-10-21)
+
+- `InputManager.RequestDodge`가 실제 회피 입력을 `NotEnoughStamina`로 거부하면 `PlayerDodgeStaminaHint.Show`가 화면 하단 중앙에 "기력이 부족합니다."를 표시한다. 경고는 실시간 1.2초 동안 유지하고 0.15초에 걸쳐 나타나고 사라진다. 연속 입력은 표시 시간을 다시 시작한다.
+- Player 프리팹에 붙인 전용 Canvas는 온보딩 안내와 같은 공용 조선100년체 글꼴, 어두운 패널·밝은 글자, 760×104·하단 62px(좁은 화면 640×104·42px)을 사용한다. 정렬 순서 103으로 온보딩 안내와 거합 안내 위에 나타나며 입력을 막지 않는다. 관련 코드: `Assets/Scripts/Player/PlayerDodgeStaminaHint.cs` / `BuildCanvas`, `ApplyResponsiveLayout`, `Show`, `Update`, `Hide`; `Assets/Scripts/GameManagers/InputManager.cs` / `RequestDodge`; `Assets/Resources/Prefabs/Player.prefab`. Roslyn 런타임 컴파일 오류 0개·기존 경고 4개, Unity Play에서 위치·전환 확인은 미확인이다.
+
 #### 1·2막 보스 수리검 방향 표시 (2026-10-19)
 
 - 1막 보스의 `EnemyProjectile`과 2막 보스의 `TwinBossProjectile`도 일반 `DefenseShuriken`과 같은 방향 인디케이터 판정을 사용한다. 보스 수리검이 적대 비행 중이고, 현재 씬에 속하며, 세션 투사체 ID가 있고, 플레이어를 지나지 않았을 때 기존 `CombatThreatPresentationProvider.CreateSnapshot` 경로에 등록한다.
