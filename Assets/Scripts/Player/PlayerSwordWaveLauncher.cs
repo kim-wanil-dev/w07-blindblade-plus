@@ -45,9 +45,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     [SerializeField, Tooltip("돌진 중 몸 판정이 검사하는 레이어. 적이 아닌 접촉은 무시한다. 반경과 피해는 검기 프리팹 값을 쓴다.")]
     private LayerMask _dashHitMask = ~(1 << BambooGrove.DEBRIS_LAYER);
     private readonly RaycastHit[] _dashHits = new RaycastHit[32];
-    // 같은 검기 공격의 돌진과 검기가 함께 쓰는 맞은 적 목록이다.
-    private readonly HashSet<EnemyHealth> _struck = new HashSet<EnemyHealth>();
-    private readonly HashSet<EnemyHealth> _blocked = new HashSet<EnemyHealth>();
+    private SharedDamageHitTracker _hitTracker;
     private CharacterController _controller;
     private bool _dashing;
     private Vector3 _dashLastCenter;
@@ -99,6 +97,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     void OnDisable()
     {
+        _hitTracker = null;
         _armed = false;
         _dashing = false;
         StopLaunchEffect();
@@ -166,7 +165,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         Vector3 direction = _motor.ViewForward;
         Vector3 origin = _camera.transform.position + direction * _spawnDistance + Vector3.up * _spawnHeightOffset;
         DefenseSwordWave wave = Instantiate(_wavePrefab);
-        wave.Launch(gameObject, origin, direction, _struck, _blocked);
+        wave.Launch(gameObject, origin, direction, _hitTracker);
+        _hitTracker = null;
         // 초승달 메시는 볼록한 쪽이 위를 향하므로 앞으로 눕혀야 진행 방향으로 날을 세워 날아간다.
         // 진행 방향 축의 양수 회전은 화면에서 반시계 방향이라 궁극기 사선 UI 회전과 같은 쪽으로 기운다.
         // 검기는 위치만 직선 이동하므로 발사 뒤 바꾼 회전이 그대로 유지된다.
@@ -177,13 +177,12 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     }
 
     /// <summary>
-    /// 이번 검기 공격의 맞은 적 목록을 비우고 시선 수평 방향으로 _dashDistance 돌진과 발사 연출을 함께 시작한다.
+    /// 이번 검기 공격의 공유 피격 추적기를 새로 만들고 시선 수평 방향으로 _dashDistance 돌진과 발사 연출을 함께 시작한다.
     /// 돌진 거리가 0이면 돌진과 몸 판정 없이 검기만 쓰며, 시작 위치를 _dashLastCenter에 저장하고 곧바로 몸 판정을 한 번 한다.
     /// </summary>
     private void BeginDash()
     {
-        _struck.Clear();
-        _blocked.Clear();
+        _hitTracker = new SharedDamageHitTracker(new HashSet<EnemyHealth>(), new HashSet<EnemyHealth>());
         _dashing = false;
         if (_dashDistance <= 0f) return;
         _motor.ApplyCombatPush(_motor.ViewForward, _dashDistance, _dashDuration);
@@ -214,13 +213,10 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             EnemyHealth enemy = _dashHits[i].collider.GetComponentInParent<EnemyHealth>();
-            if (enemy == null || !enemy.IsAlive || _blocked.Contains(enemy)
-                || _struck.Contains(enemy.SharedDamageKey)) continue;
-            if (enemy.IsInvulnerable) _blocked.Add(enemy);
-            else _struck.Add(enemy.SharedDamageKey);
+            if (enemy == null || !enemy.IsAlive) continue;
             Vector3 point = _dashHits[i].distance > 0f ? _dashHits[i].point : _dashHits[i].collider.ClosestPoint(center);
             float amount = _wavePrefab.Damage > 0f ? _wavePrefab.Damage : Mathf.Max(enemy.CurrentHealth, 1f);
-            enemy.TakeDamage(new DamageContext(amount, gameObject, point, direction, DASH_PATTERN_ID));
+            _hitTracker.ProcessHit(enemy, new DamageContext(amount, gameObject, point, direction, DASH_PATTERN_ID));
         }
         _dashLastCenter = center;
         if (_motor.IsCombatPushing) return;

@@ -43,6 +43,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public EnemyHealth SharedDamageKey => _sharedHealth != null && _sharedHealth.GetInstanceID() < GetInstanceID()
         ? _sharedHealth : this;
     public bool HasSharedDamagePriority => _sharedDamagePriority;
+    /// <summary>공유 체력 상대가 우선 피격 대상이고 자신은 후순위이면 true를 반환한다.</summary>
+    public bool DefersSharedDamage => _sharedHealth != null && _sharedHealth.HasSharedDamagePriority && !_sharedDamagePriority;
     public string TargetId => "Enemy_" + GetInstanceID();
     public int SpawnGeneration => _spawnGeneration;
     public event Action<DamageContext> Damaged;
