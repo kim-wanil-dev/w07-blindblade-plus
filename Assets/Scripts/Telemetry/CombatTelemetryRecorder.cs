@@ -538,6 +538,7 @@ namespace BlindBlade.Telemetry
                 Record("game_completed", new JObject { ["stageId"] = _stageId,
                     ["stageAttemptId"] = _attemptSessionId, ["runId"] = _runId,
                     ["gameCompletedOccurredAtKst"] = _counts["gameCompletedOccurredAtKst"] });
+                FinishStage("final_clear");
             }
         }
 
