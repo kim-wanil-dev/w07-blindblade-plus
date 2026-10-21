@@ -524,13 +524,19 @@ namespace BlindBlade.Telemetry
             _deathPending = true;
             _completePending = false;
             Record("player_died", new JObject { ["position"] = TelemetryJson.Position(health.transform.position) });
+            _service.RequestFlush();
         }
 
-        /// <summary>게임 상태가 바뀌면 마지막 위치 표본을 닫아 일시정지 시간을 제외한다.</summary>
+        /// <summary>게임 상태 변경 때 마지막 위치 표본을 닫고 일시정지 진입 시 로그 저장·전송을 앞당긴다.</summary>
         private void HandleState(GameplayState state)
         {
             if (_stageClosed) return;
             RecordMovement();
+            if (state == GameplayState.Paused)
+            {
+                _service.RequestFlush();
+                return;
+            }
             if (state == GameplayState.Cleared)
             {
                 _counts["gameCompleted"] = true;

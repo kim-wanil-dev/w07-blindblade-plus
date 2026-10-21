@@ -2,8 +2,8 @@
 
 ## 계획 문서
 
-- [핵심 전투 로그 개편 실행 계획](plans/핵심_전투로그_개편_실행계획.md): 구간별 도전 세션·입력별 방어 결과·극한 회피·적 공격 결과·피격 반경 내 적대 개체·스킬·사망·플레이어 이탈을 전체요약에 통합한다. 선택 구간 전체 합계와 공격 패턴별 결과를 기본 표시하고 세션·플레이어별 상세는 선택적으로 연다. Sites v26 운영 배포를 완료했으며 Apps Script 실전 저장/ACK는 미확인이다.
-- [전투 텔레메트리 분석 대시보드](features/전투_텔레메트리_분석_대시보드.md): Sites v26과 기존 공개 URL·접근 범위를 유지한다. 구간별 합산 지표·공격 패턴별 결과·플레이어 누적 시간 및 이탈 통계를 운영 배포하고, 세션·플레이어별 상세를 접었다. Code.gs core API에는 익명 ID와 도전 이탈·최종 클리어 필드가 포함되며 소유자 계정의 실전 배포/ACK는 미확인이다.
+- [핵심 전투 로그 개편 실행 계획](plans/핵심_전투로그_개편_실행계획.md): 구간별 도전 세션·입력별 방어 결과·극한 회피·적 공격 결과·피격 반경 내 적대 개체·스킬·사망·플레이어 이탈을 전체요약에 통합한다. 선택 구간 전체 합계와 공격 패턴별 결과를 기본 표시하고 세션·플레이어별 상세는 선택적으로 연다. Sites v26과 Apps Script 웹 앱 v17 운영 배포를 완료했으며 실제 시트 저장/ACK는 미확인이다.
+- [전투 텔레메트리 분석 대시보드](features/전투_텔레메트리_분석_대시보드.md): Sites v26과 기존 공개 URL·접근 범위를 유지한다. 구간별 합산 지표·공격 패턴별 결과·플레이어 누적 시간 및 이탈 통계를 운영 배포하고, 세션·플레이어별 상세를 접었다. Code.gs core API에는 익명 ID와 도전 이탈·최종 클리어 필드가 포함되며 웹 앱 v17 배포는 완료, 실제 시트 저장/ACK는 미확인이다.
 - [전투 로그 대시보드 정확성 검토 및 수정 계획](plans/전투_로그_대시보드_정확성_검토_및_수정계획.md): 빌드 0.2.0 이상 범위의 집계와 스냅샷 계약을 수정했다. Sites v15는 Google 리다이렉트와 페이지 실패 복구를 처리한다. Chrome에서 Events 61,631행·Sessions 362행·OnboardingSteps 218행의 전체 자동 수신 및 빌드 복수 선택에 따른 패턴/반응 표 갱신을 확인했다.
 - [전투 텔레메트리 0.1.3 업데이트 계획](plans/전투_텔레메트리_0.1.3_업데이트_계획.md): 0.1.2 대비 2-1·2-2, 일반 Beast, Twin Boss 부모 패턴 및 개별 공격, Google Sheets와 분석 사이트 확장. S0–S7, Apps Script와 Sites v10 배포를 확인했다. Apps Script 범위 읽기 최적화 배포 후 Events 54,087건·Sessions 543건·OnboardingSteps 335건이 자동 연결됐고, 0.1.3 빌드와 2-1·2-2 세션 집계를 확인했다.
 
@@ -141,7 +141,7 @@
 
 | Feature | Specification | Current behavior |
 | --- | --- | --- |
-| Combat attempt telemetry and overview contract | [Execution plan](plans/핵심_전투로그_개편_실행계획.md), [Local telemetry](features/전투_로컬로그_자동전송.md), [Dashboard](features/전투_텔레메트리_분석_대시보드.md) | Unity producer, v0.5 schema, Apps Script core Sessions fields, CSV mapping, and local overview implementation are complete. Attack PerfectDodge uses contact `defenseOutcome=DodgeAvoided`; manual Empower alone increments the manual skill metric; Buffered→Started refreshes the current input link without increasing unique attempts. A bounded Unity Editor Play produced v0.5 JSONL and passed local JSONL→CSV conversion; the first death was natural and the retry's death was forced through PlayerHealth.TakeDamage after no natural death within 30 seconds. Apps Script live deployment/ACK and hosted Sites synchronization/deployment remain unverified. |
+| Combat attempt telemetry and overview contract | [Execution plan](plans/핵심_전투로그_개편_실행계획.md), [Local telemetry](features/전투_로컬로그_자동전송.md), [Dashboard](features/전투_텔레메트리_분석_대시보드.md) | Unity producer, v0.5 schema, Apps Script core Sessions fields, CSV mapping, and local overview implementation are complete. Attack PerfectDodge uses contact `defenseOutcome=DodgeAvoided`; manual Empower alone increments the manual skill metric; Buffered→Started refreshes the current input link without increasing unique attempts. Death and clear events update Sessions status independently of their summaries; pause requests an immediate nonblocking flush, local write failures retain events for retry, and a later launch reconciles open JSONL sessions as `unclean_exit`. Apps Script v17 was deployed to the existing web app URL with owner execution and all-user access retained; actual Sheets ACK, Player build, and force-termination scenarios remain unverified. |
 
 
 #### 2026-10-21 telemetry follow-up review
@@ -151,3 +151,11 @@
 - The local CSV exporter retains terminal events until all input files have been read, then merges the newest quit and completion facts into the newest stage summary without changing its summary sequence.
 - Combat telemetry upload retry delay is fixed at 20 seconds for retry-path errors; retry eligibility remains code-defined rather than an Inspector setting.
 - Final bounded validation after the status-ordering correction: Unity C# build passed with 0 errors and 0 warnings; `node --check`, Apps Script syntax parsing, and v0.5 schema JSON parsing passed. Synthetic Apps Script and JSONL-to-CSV checks covered summary 29, quit 30, completion 32, status precedence/tie-breaking, monotonic deaths, timestamps, and CSV header alignment. No test files were added.
+
+#### 2026-10-22 end-of-session reliability review
+
+- `CombatTelemetryRecorder.HandleDeath` requests a nonblocking flush for `player_died`; the normal LateUpdate still closes the final stage summary after contact callbacks. The Apps Script receiver also updates Sessions directly from `player_died` and `game_completed`, so a terminal fact survives a missing or delayed summary.
+- In-game pause transitions request a flush in both combat and onboarding recorders. A Player quit waits asynchronously for local drain and exact ACK; Editor Play exit closes recorders and persists the local buffer before teardown.
+- `TelemetryDiskStore` recovers unclosed supported JSONL sessions at the next launch, repairs only an incomplete tail, and appends `session_ended(unclean_exit)`. Failed local appends are requeued in order and retried; terminal events pass the normal buffer cap.
+- Apps Script and local CSV status reducers now merge every `session_ended` reason and preserve death/final-clear precedence. `last_event_sequence` includes the selected status event.
+- Verification: `dotnet build Assembly-CSharp.csproj --no-restore --verbosity quiet` passed with 0 errors and 4 warnings; `node --check Export-Telemetry.cjs` and Apps Script syntax parsing passed. Apps Script web app version 17 was deployed on 2026-10-22 to the existing URL; real Sheets ACK and Unity Player/Editor force-termination scenarios remain unverified. An unclean exit cannot be sent while the process is already killed and is reconciled only on a later launch.

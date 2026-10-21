@@ -561,10 +561,10 @@ function eventRow(r,key,received) {
 /** 최신 도전별 누적 스냅샷의 변경 행만 덮어쓴다. 시트의 기존 열 순서를 이름으로 매핑해 유지한다. */
 function updateSessions(book,records) {
   const snapshots=records.filter(r=>['stage_started','stage_summary','stage_ended'].includes(r.eventType));
-  const sessionEnds=records.filter(r=>r.eventType==='session_ended'
-    && String(r.payload.reason||'').toLowerCase()==='application_quit');
+  const sessionEnds=records.filter(r=>r.eventType==='session_ended');
+  const playerDeaths=records.filter(r=>r.eventType==='player_died');
   const gameCompletions=records.filter(r=>r.eventType==='game_completed');
-  if (!snapshots.length && !sessionEnds.length && !gameCompletions.length) return;
+  if (!snapshots.length && !sessionEnds.length && !playerDeaths.length && !gameCompletions.length) return;
   const sheet=ensureSheet(book,'Sessions',SESSION_HEADERS);
   const lastRow=sheet.getLastRow();
   const sheetHeaders=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
@@ -590,13 +590,13 @@ function updateSessions(book,records) {
     'last_exit_sequence','last_completion_sequence','status','status_sequence','deaths']);
   const statusPrecedence=status=>{
     if (['death','final_clear','cleared'].includes(String(status||''))) return 3;
-    if (['scene_unloaded','application_quit'].includes(String(status||''))) return 2;
+    if (['scene_unloaded','application_quit','unclean_exit'].includes(String(status||''))) return 2;
     if (['in_progress','started'].includes(String(status||''))) return 1;
     return 0;
   };
   const updateLastEventSequence=entry=>{
     entry.lastEventSequence=Math.max(entry.lastEventSequence||0,entry.lastSummarySequence,
-      entry.lastExitSequence,entry.lastCompletionSequence);
+      entry.lastExitSequence,entry.lastCompletionSequence,entry.lastStatusSequence||0);
     setValue(entry,'last_event_sequence',entry.lastEventSequence);
   };
   const applyExitFacts=(entry,values,sequence)=>{
@@ -644,6 +644,25 @@ function updateSessions(book,records) {
     }
     if (p.gameCompleted===true) applyCompletionFact(entry,p.gameCompletedOccurredAtKst,r.eventSequence);
   };
+  const entryForRecord=r=>{
+    let entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
+    if (entry) return entry;
+    entry={row:nextRow++,values:Array(sheetHeaders.length).fill(''),lastEventSequence:0,
+      lastSummarySequence:0,lastExitSequence:0,lastCompletionSequence:0,lastStatusSequence:0};
+    setValue(entry,'stage_attempt_id',r.stageAttemptId);
+    setValue(entry,'session_id',r.sessionId);
+    setValue(entry,'stage_id',r.stageId);
+    setValue(entry,'anonymous_player_id',r.anonymousPlayerId);
+    setValue(entry,'build_version',r.buildVersion);
+    setValue(entry,'config_version',r.configVersion);
+    setValue(entry,'schema_version',r.schemaVersion);
+    setValue(entry,'attempt_session_id',r.attemptSessionId||'');
+    setValue(entry,'retry_index',r.retryIndex===undefined?'':r.retryIndex);
+    setValue(entry,'previous_attempt_session_id',r.previousAttemptSessionId||'');
+    setValue(entry,'run_id',r.runId||r.payload.runId||'');
+    pending.set(r.stageAttemptId,entry);
+    return entry;
+  };
   snapshots.forEach(r=>{
     let entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
     if (entry && entry.lastSummarySequence>=r.eventSequence) {
@@ -653,8 +672,7 @@ function updateSessions(book,records) {
       pending.set(r.stageAttemptId,entry);
       return;
     }
-    if (!entry) entry={row:nextRow++,values:Array(sheetHeaders.length).fill(''),lastEventSequence:0,
-      lastSummarySequence:0,lastExitSequence:0,lastCompletionSequence:0};
+    if (!entry) entry=entryForRecord(r);
     const p=r.payload;
     const row=[r.stageAttemptId,r.sessionId,r.stageId,r.anonymousPlayerId,r.buildVersion,r.configVersion,
       p.startedKst,r.eventSequence,p.reason,p.realtimeSeconds,p.gameplaySeconds,p.activePlaySeconds,p.currentHealth]
@@ -680,22 +698,33 @@ function updateSessions(book,records) {
     pending.set(r.stageAttemptId,entry);
   });
   sessionEnds.forEach(r=>{
-    const entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
-    if (!entry) return;
+    const entry=entryForRecord(r);
     const p=r.payload;
+    const reason=String(p.reason||'application_quit').toLowerCase();
+    applyStatusFact(entry,reason,r.eventSequence);
     applyExitFacts(entry,{
       exit_stage_id:p.exitStageId||r.stageId,
       exit_stage_attempt_id:p.exitStageAttemptId||r.stageAttemptId,
       exit_location:p.exitLocation||r.stageId,
-      exit_occurred_at_kst:p.exitOccurredAtKst||r.occurredAtKst
+      exit_occurred_at_kst:p.exitOccurredAtKst
+        || (['application_quit','scene_unloaded'].includes(reason) ? r.occurredAtKst : undefined)
     },r.eventSequence);
+    updateLastEventSequence(entry);
+    pending.set(r.stageAttemptId,entry);
+  });
+  playerDeaths.forEach(r=>{
+    const entry=entryForRecord(r);
+    applyStatusFact(entry,'death',r.eventSequence);
+    applyDeaths(entry,1);
+    updateLastEventSequence(entry);
     pending.set(r.stageAttemptId,entry);
   });
   gameCompletions.forEach(r=>{
-    const entry=pending.get(r.stageAttemptId)||index.get(r.stageAttemptId);
-    if (!entry) return;
+    const entry=entryForRecord(r);
     const completedAt=r.payload.gameCompletedOccurredAtKst||r.occurredAtKst;
     applyCompletionFact(entry,completedAt,r.eventSequence);
+    applyStatusFact(entry,'final_clear',r.eventSequence);
+    updateLastEventSequence(entry);
     pending.set(r.stageAttemptId,entry);
   });
   if (!pending.size) return;
