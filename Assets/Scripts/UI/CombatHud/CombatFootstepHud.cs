@@ -59,6 +59,13 @@ namespace BlindBlade.UI.CombatHud
 
         void LateUpdate()
         {
+            if (_provider != null && !_provider.ShowEnemyIndicators)
+            {
+                if (_slots.Count > 0 || _revisions.Count > 0 || _hasSession)
+                    ClearMarkers();
+                return;
+            }
+
             CombatSessionRuntime runtime = CombatSessionRuntime.Active;
             if (_hasSession && (runtime == null || !runtime.IsInitialized
                 || !IsSameSession(_session, runtime.Session)))
@@ -76,6 +83,13 @@ namespace BlindBlade.UI.CombatHud
         /// <summary>snapshot의 발행자·걸음 순번·revision으로 최신 사건만 받아 적별 마커를 갱신하거나 반환한다. 빈 슬롯이 없으면 생략한다.</summary>
         private void HandleFootstep(FootstepPresentationSnapshot snapshot)
         {
+            if (_provider != null && !_provider.ShowEnemyIndicators)
+            {
+                if (_slots.Count > 0 || _revisions.Count > 0 || _hasSession)
+                    ClearMarkers();
+                return;
+            }
+
             ThreatPresentationSnapshot presentation = snapshot.Presentation;
             CombatSessionRuntime runtime = CombatSessionRuntime.Active;
             if (runtime == null || !runtime.IsInitialized

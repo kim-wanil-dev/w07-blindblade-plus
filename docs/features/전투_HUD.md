@@ -1,5 +1,14 @@
 ### 전투 HUD
 
+#### 수리검·적 방향 인디케이터 Inspector 토글 (2026-10-22)
+
+- 두 토글은 `CombatThreatPresentationProvider` 한 컴포넌트에서 관리한다. 기본값은 켜짐이며, 끄면 해당 방향 UI만 숨기고 수리검 투척·위협 판정과 적 발소리·인지 처리는 유지한다.
+- 정식 플레이 씬(`Assets/Scenes/Onboarding/Onboarding.unity`, `Assets/Scenes/Defense/BambooStage1.unity`, `Assets/Scenes/Defense/RainyTwinBoss.unity`)의 Hierarchy에서 `DefenseDirector`를 선택하고 `CombatThreatPresentationProvider` 컴포넌트의 `방향 인디케이터 표시` 그룹에서 두 값을 설정한다. 이 씬의 기본값을 바꾸면 해당 씬에 저장된다.
+- 같은 Inspector 설정은 `BambooDefense`, `RainyStage_JH`, `TestStage`, `(Legacy) RainyStage` 씬의 `DefenseDirector` 오브젝트에도 있다.
+- 플레이 중 토글도 지원한다. 수리검은 숨긴 동안 전조·비행 상태와 수명을 계속 갱신하며, 적 마커는 다시 켠 뒤 공급자가 갱신하는 발소리 스냅샷부터 표시한다.
+- 관련 코드: `Assets/Scripts/Defense/CombatThreatPresentationProvider.cs` / `ShowShurikenIndicators`, `ShowEnemyIndicators`; `Assets/Scripts/Defense/ShurikenDirectionIndicator.cs` / `HandleTelegraph`, `HandleThreatChanged`, `UpdateMarker`; `Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs` / `LateUpdate`, `HandleFootstep`, `ClearMarkers`.
+- Unity Inspector 및 Play 화면에서 개별 토글 동작은 미확인이다.
+
 #### 회피 기력 부족 안내 (2026-10-21)
 
 - `InputManager.RequestDodge`가 실제 회피 입력을 `NotEnoughStamina`로 거부하면 `PlayerDodgeStaminaHint.Show`가 화면 하단 중앙에 "기력이 부족합니다."를 표시한다. 경고는 실시간 1.2초 동안 유지하고 0.15초에 걸쳐 나타나고 사라진다. 연속 입력은 표시 시간을 다시 시작한다.
@@ -33,7 +42,7 @@
 | Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs | Show, Hide | 교체 가능한 Image와 그 아래 방향 원호에 C 표시 결과 적용 |
 | Assets/Scripts/Defense/DefenseDirectionMarker.cs | Configure, OnPopulateMesh | 기존 수리검/원호 도형 재사용, 발소리에서는 아이콘 없이 원호만 그리기 |
 | Assets/Scripts/UI/CombatHud/CombatHudReferences.cs | RecordText, DirectionMarkers, PlayerHud, FootstepHud | HUD 내부의 명시적 직렬화 참조 |
-| Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | PublishThreatSnapshots, AddProjectileThreat, ExpireFootsteps, PublishEndedFootsteps | 일반·보스 수리검 공통 위협 스냅샷, C의 감쇠·만료·발행자 종료 사건 |
+| Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | ShowShurikenIndicators, ShowEnemyIndicators, PublishThreatSnapshots, AddProjectileThreat, ExpireFootsteps, PublishEndedFootsteps | 수리검·적 방향 표시의 공통 Inspector 설정, 일반·보스 수리검 공통 위협 스냅샷, C의 감쇠·만료·발행자 종료 사건 |
 | Assets/Scripts/Enemies/EnemyProjectile.cs, TwinBossProjectile.cs | IsHostileFlying, HasPassedPlayer, ProjectileId | 보스 수리검의 적대 비행·통과 상태와 세션 고유 식별자 제공 |
 | Assets/Scripts/UI/PlayerLowHealthVignette.cs | HandleDamageReceived, ApplyVignette, ResetPulse | 실제 피해 구독, 고정 두께·강도의 짧은 피격 펄스 |
 | Assets/Scripts/UI/CombatHud/CombatPerfectParryTokenHud.cs | ApplyTokens, Update, CreateOrbitThreads, UpdateOrbitThreads | 퍼펙트 패링 토큰 3칸 표시(2026-10-15). 2026-10-16 찬 토큰을 실 두 가닥이 감싸는 구체로 표시, 토큰 크기 2배, 빈 토큰 이미지 추가. 규칙과 이미지 교체는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
