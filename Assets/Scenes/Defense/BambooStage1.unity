@@ -6752,7 +6752,6 @@ MonoBehaviour:
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100
   _requestTimeoutSeconds: 30
-  _maximumRetrySeconds: 300
 --- !u!1 &231236738
 GameObject:
   m_ObjectHideFlags: 0
@@ -55254,7 +55253,7 @@ MonoBehaviour:
   _boss: {fileID: 350192290}
   _warning: {fileID: 132706044}
   _startBossImmediately: 0
-  _requiredKills: 20
+  _requiredKills: 100
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
@@ -56509,7 +56508,6 @@ MonoBehaviour:
   _startDelay: 2
   _limitSoundPerceptionDistance: 1
   _soundPerceptionDistance: 20
-  _playerVelocitySmoothing: 8
   _maximumConcurrentShurikens: 3
   _minimumThrowGap: 0.25
   _deferDuringMeleeTelegraph: 1
@@ -56596,15 +56594,15 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 18
-  _meleeSpawnGrowthPerMinute: 4.5
-  _firstMeleeKillThreshold: 10
-  _firstMeleeSpawnsPerMinute: 30
-  _secondMeleeKillThreshold: 20
-  _secondMeleeSpawnsPerMinute: 36
+  _meleeSpawnsPerMinute: 150
+  _meleeSpawnGrowthPerMinute: 0
+  _firstMeleeKillThreshold: 0
+  _firstMeleeSpawnsPerMinute: 0
+  _secondMeleeKillThreshold: 0
+  _secondMeleeSpawnsPerMinute: 0
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
-  _maximumMelee: 20
+  _maximumMelee: 100
   _beastPrefab: {fileID: 0}
   _beastDeathSound: 0
   _weightBlendStartSpawnCount: 0

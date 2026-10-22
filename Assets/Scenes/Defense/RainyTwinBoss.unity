@@ -6752,7 +6752,6 @@ MonoBehaviour:
   _uploadIntervalSeconds: 20
   _batchEventLimit: 100
   _requestTimeoutSeconds: 30
-  _maximumRetrySeconds: 300
 --- !u!1 &231236738
 GameObject:
   m_ObjectHideFlags: 0
@@ -55281,7 +55280,7 @@ MonoBehaviour:
   _weather: {fileID: 2200000003}
   _rainAudio: {fileID: 2200000100}
   _startBossImmediately: 0
-  _requiredKills: 25
+  _requiredKills: 100
   _bossDropletCount: 2662
   _warningDuration: 2
   _edgeInset: 2
@@ -56538,7 +56537,6 @@ MonoBehaviour:
   _startDelay: 2
   _limitSoundPerceptionDistance: 1
   _soundPerceptionDistance: 15
-  _playerVelocitySmoothing: 8
   _maximumConcurrentShurikens: 2
   _minimumThrowGap: 0.25
   _deferDuringMeleeTelegraph: 1
@@ -56633,11 +56631,11 @@ MonoBehaviour:
   _secondMeleeSpawnsPerMinute: 0
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
-  _maximumMelee: 20
+  _maximumMelee: 100
   _beastPrefab: {fileID: 338732699294267485, guid: a9a7067fcf07e7b419232bda780c8248, type: 3}
   _beastDeathSound: 47
   _weightBlendStartSpawnCount: 0
-  _weightBlendEndSpawnCount: 25
+  _weightBlendEndSpawnCount: 100
   _meleeWeightAtStart: 0.7
   _beastWeightAtStart: 0.3
   _meleeWeightAtEnd: 0.3
