@@ -9,6 +9,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     [Header("근접 공격 설정")]
     [SerializeField, Min(0.1f)] private float _attackRange = 2f;
     [SerializeField, Min(0f)] private float _damage = 10f;
+    [SerializeField] private bool _upperLeftOnly;
 
     [Header("근접 타격 설정")]
     [SerializeField] private bool _useBuiltInHitDetection = true;
@@ -49,7 +50,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
 
     public override float Range => _attackRange;
     public float BladeRadius => _hitRadius;
-    public bool IsLeftToRightSlash => _diagonalSign > 0;
+    public bool IsLeftToRightSlash => _upperLeftOnly || _diagonalSign > 0;
     public Vector3 BladeBase { get; private set; }
     public Vector3 BladeTip { get; private set; }
 
@@ -67,10 +68,10 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     protected override float ActiveDuration => _swingDuration;
     protected override EnemySoundAction SoundAction => EnemySoundAction.Melee;
 
-    /// <summary>context의 전조 시작마다 두 대각선 내려치기 중 하나를 같은 확률로 선택하고 베기 종료까지 유지한다.</summary>
+    /// <summary>context의 전조 시작에 _upperLeftOnly 설정 또는 무작위 선택으로 베기 방향을 정하고 공격 종료까지 유지한다.</summary>
     protected override void PrepareTelegraph(EnemyAttackContext context)
     {
-        _diagonalSign = UnityEngine.Random.value < 0.5f ? 1 : -1;
+        _diagonalSign = _upperLeftOnly ? 1 : UnityEngine.Random.value < 0.5f ? 1 : -1;
     }
 
     /// <summary>context의 수평 방향과 현재 몸 위치로 칼날을 준비하고 베기 시간 및 접촉 기록을 초기화한다.</summary>
@@ -151,12 +152,12 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     }
 
     /// <summary>
-    /// progress와 사거리·각도·몸 높이로 월드 칼날의 밑점과 끝점을 반환한다.
-    /// 전조 미리보기와 실제 판정 및 EnemySlash가 동일한 좌표를 사용한다.
+    /// progress와 사거리·각도·몸 높이로 애니메이션과 독립된 월드 칼날의 밑점과 끝점을 반환한다.
+    /// 계산한 판정 좌표를 bladeBase와 bladeTip에 저장한다.
     /// </summary>
     public void GetBladePose(float progress, out Vector3 bladeBase, out Vector3 bladeTip)
     {
-        GetDiagonalBladePose(progress, _diagonalSign, out bladeBase, out bladeTip);
+        GetDiagonalBladePose(progress, _upperLeftOnly ? 1 : _diagonalSign, out bladeBase, out bladeTip);
     }
 
     /// <summary>progress와 diagonalSign으로 대상이 보는 좌상단→우하단 또는 우상단→좌하단 칼날 좌표를 반환한다.</summary>
@@ -287,6 +288,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         {
             GetDiagonalBladePose(i / 12f, 1, out Vector3 bladeBase, out Vector3 bladeTip);
             DrawHitboxGizmo(bladeBase, bladeTip, Color.yellow);
+            if (_upperLeftOnly) continue;
             GetDiagonalBladePose(i / 12f, -1, out bladeBase, out bladeTip);
             DrawHitboxGizmo(bladeBase, bladeTip, Color.cyan);
         }

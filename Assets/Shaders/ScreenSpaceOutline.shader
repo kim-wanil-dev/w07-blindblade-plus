@@ -64,6 +64,7 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             TEXTURE2D_X(_OutlineSceneryMask);
             TEXTURE2D_X(_OutlineThreatMask);
             TEXTURE2D_X(_OutlineMeleeWarningMask);
+            TEXTURE2D_X(_OutlineSwordMask);
             TEXTURE2D_X(_OutlineBeastOutlineExclusionMask);
             TEXTURE2D_X(_OutlineForcedReveal);
             TEXTURE2D_X(_ThreatPresentationColor);
@@ -386,6 +387,19 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     PerceptionColor(secondUv, secondDepth, second, 0.0, 0.0, 0.0));
             }
 
+            // 검 메시만의 마스크 경계를 몸체 연기와 독립적으로 검출한다.
+            float3 SwordEdgeBetween(float2 firstUv, float2 secondUv)
+            {
+                float first = SAMPLE_TEXTURE2D_X(_OutlineSwordMask, sampler_PointClamp, firstUv).r;
+                float second = SAMPLE_TEXTURE2D_X(_OutlineSwordMask, sampler_PointClamp, secondUv).r;
+                float firstDepth = SAMPLE_TEXTURE2D_X(_OutlineTransparentDepth, sampler_PointClamp, firstUv).r;
+                float secondDepth = SAMPLE_TEXTURE2D_X(_OutlineTransparentDepth, sampler_PointClamp, secondUv).r;
+                float border = saturate(abs(first - second) * 1.5);
+                return border * max(
+                    PerceptionColor(firstUv, firstDepth, first, 0.0, 0.0, 0.0),
+                    PerceptionColor(secondUv, secondDepth, second, 0.0, 0.0, 0.0));
+            }
+
             // 인지 예외 VFX만 별도로 검출하여 일반 VFX의 색상과 깊이가 섞이지 않게 한다.
             float AlwaysVisibleCoverage(float2 uv)
             {
@@ -560,6 +574,9 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                     warningCenterMask.r,
                     max(max(warningFirstMask.r, warningSecondMask.r),
                         max(warningThirdMask.r, warningFourthMask.r))));
+                float warningShapeEdge = saturate(max(
+                    abs(warningFirstMask.r - warningSecondMask.r),
+                    abs(warningThirdMask.r - warningFourthMask.r)) * 1.5);
                 // G 채널 대상(쌍둥이 늑대 덮치기)은 파동과 상관없이 모양의 경계를 붉은 테두리로 그린다.
                 float alwaysWarningEdge = saturate(max(
                     abs(warningFirstMask.g - warningSecondMask.g),
@@ -570,7 +587,8 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
             // 연기에서 검출된 테두리 픽셀에만 전조 색을 적용한다.
                 edge = max(edge, transparentEdge);
                 float edgeBrightness = max(edge.r, max(edge.g, edge.b));
-                float outlineTint = warningAmount * step(0.0001, transparentBrightness);
+                float outlineTint = max(warningAmount * step(0.0001, transparentBrightness),
+                    warningShapeEdge * step(0.0001, edgeBrightness));
                 edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a * edgeBrightness, outlineTint);
                 edge *= 1.0 - AlwaysVisibleCoverage(uv);
                 float foregroundEdge = saturate(max(
@@ -621,6 +639,12 @@ Shader "Hidden/BlindBlade/ScreenSpaceOutline"
                 float threat = saturate(max(threatEdge, threatFill * fillOpacity));
                 edge = lerp(edge, _ThreatColor.rgb * _ThreatColor.a, threat);
                 edge = ApplyPresentation(edge, uv, firstUv, secondUv, thirdUv, fourthUv);
+                float3 swordEdge = max(SwordEdgeBetween(firstUv, secondUv),
+                    SwordEdgeBetween(thirdUv, fourthUv));
+                float swordBrightness = max(swordEdge.r, max(swordEdge.g, swordEdge.b));
+                edge = max(edge, swordEdge);
+                edge = lerp(edge, _MeleeWarningColor.rgb * _MeleeWarningColor.a * swordBrightness,
+                    warningAmount * step(0.0001, swordBrightness));
                 return half4(edge, 1.0);
             }
             ENDHLSL

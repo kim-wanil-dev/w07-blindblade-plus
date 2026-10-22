@@ -60,6 +60,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     private Material _threatMaskMaterial;
     private Material _forcedRevealMaterial;
     private Material _meleeWarningMaskMaterial;
+    private Material _swordOutlineMaskMaterial;
     private Material _beastOutlineExclusionMaskMaterial;
     private readonly OutlineVFXRouting _routing = new OutlineVFXRouting();
     private CapturePass _capture;
@@ -71,6 +72,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     private ThreatPresentationRouting _threatRouting;
     private ThreatPresentationPass _presentation;
     private MeleeWarningMaskPass _meleeWarningMask;
+    private SwordOutlineMaskPass _swordOutlineMask;
     private BeastOutlineExclusionPass _beastOutlineExclusion;
     private OutlinePass _outline;
 
@@ -133,11 +135,14 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _presentation = new ThreatPresentationPass(_threatRouting);
         _meleeWarningMaskMaterial = CoreUtils.CreateEngineMaterial(_meleeWarningMaskShader);
         _meleeWarningMask = new MeleeWarningMaskPass(_meleeWarningMaskMaterial);
+        _swordOutlineMaskMaterial = CoreUtils.CreateEngineMaterial(_meleeWarningMaskShader);
+        _swordOutlineMaskMaterial.SetFloat("_SwordOutlineMask", 1f);
+        _swordOutlineMask = new SwordOutlineMaskPass(_swordOutlineMaskMaterial);
         _beastOutlineExclusionMaskMaterial = CoreUtils.CreateEngineMaterial(_layerMaskShader);
         _beastOutlineExclusionMaskMaterial.SetFloat("_MaskZTest", (float)CompareFunction.LessEqual);
         _beastOutlineExclusion = new BeastOutlineExclusionPass(_beastOutlineExclusionMaskMaterial);
         _outline = new OutlinePass(_material, _capture, _depth, _alwaysVisibleCapture, _sceneryMask, _threatMask,
-            _forcedReveal, _presentation, _meleeWarningMask, _beastOutlineExclusion);
+            _forcedReveal, _presentation, _meleeWarningMask, _swordOutlineMask, _beastOutlineExclusion);
         RenderPipelineManager.beginCameraRendering += BeginCamera;
         RenderPipelineManager.endCameraRendering += EndCamera;
     }
@@ -184,6 +189,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _material.SetFloat(_normalSensitivityId, _normalSensitivity);
         _material.SetFloat(_transparentThresholdId, _transparentThreshold);
         _meleeWarningMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
+        _swordOutlineMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
         _sceneryMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
         _threatMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
         _material.SetFloat(_usePerceptionMaskId, Application.isPlaying ? 1f : 0f);
@@ -201,6 +207,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         renderer.EnqueuePass(_presentation);
         renderer.EnqueuePass(_beastOutlineExclusion);
         renderer.EnqueuePass(_meleeWarningMask);
+        renderer.EnqueuePass(_swordOutlineMask);
         renderer.EnqueuePass(_outline);
     }
 
@@ -226,6 +233,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         CoreUtils.Destroy(_threatMaskMaterial);
         CoreUtils.Destroy(_forcedRevealMaterial);
         CoreUtils.Destroy(_meleeWarningMaskMaterial);
+        CoreUtils.Destroy(_swordOutlineMaskMaterial);
         CoreUtils.Destroy(_beastOutlineExclusionMaskMaterial);
         _capture?.Release();
         _alwaysVisibleCapture?.Release();
@@ -235,6 +243,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _forcedReveal?.Release();
         _presentation?.Release();
         _meleeWarningMask?.Release();
+        _swordOutlineMask?.Release();
         _beastOutlineExclusion?.Release();
         _outline?.Release();
         _material = null;
@@ -253,6 +262,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _threatRouting = null;
         _presentation = null;
         _meleeWarningMask = null;
+        _swordOutlineMask = null;
         _beastOutlineExclusion = null;
         _outline = null;
     }
@@ -268,6 +278,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         public TextureHandle PresentationColor { get; set; }
         public TextureHandle PresentationData { get; set; }
         public TextureHandle MeleeWarningMask { get; set; }
+        public TextureHandle SwordOutlineMask { get; set; }
         public TextureHandle BeastOutlineExclusion { get; set; }
 
         /// <summary>
@@ -284,6 +295,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             PresentationColor = TextureHandle.nullHandle;
             PresentationData = TextureHandle.nullHandle;
             MeleeWarningMask = TextureHandle.nullHandle;
+            SwordOutlineMask = TextureHandle.nullHandle;
             BeastOutlineExclusion = TextureHandle.nullHandle;
         }
     }
@@ -899,7 +911,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 전조 중인 입자와 몸체 및 별도 눈 섬광을 경고 마스크에 기록한다.
+        /// 전조 중인 입자·몸체·검의 모든 서브메시 및 별도 눈 섬광을 경고 마스크에 기록한다.
         /// 원본 머티리얼과 GameObject 상태는 변경하지 않는다.
         /// </summary>
         private static void DrawMask(
@@ -908,7 +920,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             foreach (Renderer renderer in data.WarningRenderers)
             {
                 if (renderer != null)
-                    context.cmd.DrawRenderer(renderer, data.WarningMaterial, 0, 0);
+                    for (int submesh = 0; submesh < renderer.sharedMaterials.Length; submesh++)
+                        context.cmd.DrawRenderer(renderer, data.WarningMaterial, submesh, 0);
             }
         }
 
@@ -923,7 +936,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 
 #pragma warning disable CS0618, CS0672
         /// <summary>
-        /// 호환 모드에서 전조 파티클과 몸체 및 별도 눈 섬광을 경고 마스크에 기록한다.
+        /// 호환 모드에서 전조 파티클·몸체·검의 모든 서브메시 및 별도 눈 섬광을 경고 마스크에 기록한다.
         /// 카메라 깊이를 읽어 가려진 표면은 마스크에서 제외한다.
         /// </summary>
         public override void Execute(
@@ -950,7 +963,125 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             foreach (Renderer renderer in CollectRenderers())
             {
                 if (renderer != null)
-                    cmd.DrawRenderer(renderer, _material, 0, 0);
+                    for (int submesh = 0; submesh < renderer.sharedMaterials.Length; submesh++)
+                        cmd.DrawRenderer(renderer, _material, submesh, 0);
+            }
+            context.ExecuteCommandBuffer(cmd);
+            CommandBufferPool.Release(cmd);
+        }
+#pragma warning restore CS0618, CS0672
+    }
+
+    private sealed class SwordOutlineMaskPass : ScriptableRenderPass
+    {
+        private readonly Material _material;
+        private RTHandle _legacyMask;
+
+        public RTHandle LegacyMask => _legacyMask;
+
+        private sealed class MaskData
+        {
+            public Renderer[] Renderers { get; set; }
+            public Material Material { get; set; }
+        }
+
+        /// <summary>
+        /// material로 검 메시를 몸체 연기와 분리해 기록하는 마스크 패스를 만든다.
+        /// 마스크는 화면 윤곽선 합성 직전에 그린다.
+        /// </summary>
+        public SwordOutlineMaskPass(Material material)
+        {
+            _material = material;
+            renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
+        }
+
+        /// <summary>
+        /// 활성 근접 적에 연결된 검 메시만 모아 반환한다.
+        /// 몸체 연기와 검 연기 파티클은 결과에서 제외한다.
+        /// </summary>
+        private static Renderer[] CollectRenderers()
+        {
+            var collected = new HashSet<Renderer>();
+            foreach (EnemyMeleeWarningVisual warning in EnemyMeleeWarningVisual.ActiveInstances)
+            {
+                if (warning == null || !warning.isActiveAndEnabled)
+                    continue;
+                foreach (Renderer renderer in warning.SwordOutlineRenderers)
+                {
+                    if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy)
+                        collected.Add(renderer);
+                }
+            }
+            var result = new Renderer[collected.Count];
+            collected.CopyTo(result);
+            return result;
+        }
+
+        /// <summary>
+        /// 현재 카메라 깊이를 검사하며 검 메시를 독립 R8 마스크에 기록한다.
+        /// 결과를 현재 프레임의 검 윤곽선 입력으로 저장한다.
+        /// </summary>
+        public override void RecordRenderGraph(RenderGraph graph, ContextContainer frameData)
+        {
+            var resources = frameData.Get<UniversalResourceData>();
+            var desc = resources.activeColorTexture.GetDescriptor(graph);
+            desc.name = "Sword Outline Mask";
+            desc.depthBufferBits = DepthBits.None;
+            desc.colorFormat = GraphicsFormat.R8_UNorm;
+            desc.msaaSamples = MSAASamples.None;
+            desc.filterMode = FilterMode.Point;
+            desc.clearBuffer = true;
+            desc.clearColor = Color.clear;
+            var mask = graph.CreateTexture(desc);
+            using var builder = graph.AddRasterRenderPass<MaskData>("Sword Outline Mask", out var data);
+            data.Renderers = CollectRenderers();
+            data.Material = _material;
+            builder.SetRenderAttachment(mask, 0, AccessFlags.Write);
+            builder.SetRenderAttachmentDepth(resources.activeDepthTexture, AccessFlags.Read);
+            builder.AllowPassCulling(false);
+            builder.SetRenderFunc<MaskData>(DrawMask);
+            frameData.GetOrCreate<FrameTextures>().SwordOutlineMask = mask;
+        }
+
+        /// <summary>
+        /// 검 메시의 모든 서브메시를 별도 마스크에 그린다.
+        /// renderer의 원본 머티리얼과 활성 상태는 유지한다.
+        /// </summary>
+        private static void DrawMask(MaskData data, RasterGraphContext context)
+        {
+            foreach (Renderer renderer in data.Renderers)
+            {
+                for (int submesh = 0; submesh < renderer.sharedMaterials.Length; submesh++)
+                    context.cmd.DrawRenderer(renderer, data.Material, submesh, 0);
+            }
+        }
+
+        /// <summary>
+        /// 호환 모드에서 사용한 검 마스크 타깃을 해제한다.
+        /// 이후 프레임의 임시 타깃 참조를 남기지 않는다.
+        /// </summary>
+        public void Release() { _legacyMask?.Release(); }
+
+#pragma warning disable CS0618, CS0672
+        /// <summary>
+        /// 호환 모드에서 검 메시를 독립 마스크에 그린다.
+        /// 현재 카메라 깊이로 가려진 검 표면은 제외한다.
+        /// </summary>
+        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+        {
+            var desc = renderingData.cameraData.cameraTargetDescriptor;
+            desc.depthBufferBits = 0;
+            desc.msaaSamples = 1;
+            desc.graphicsFormat = GraphicsFormat.R8_UNorm;
+            RenderingUtils.ReAllocateHandleIfNeeded(ref _legacyMask, desc, FilterMode.Point,
+                name: "Sword Outline Mask");
+            var cmd = CommandBufferPool.Get("Sword Outline Mask");
+            CoreUtils.SetRenderTarget(cmd, _legacyMask,
+                renderingData.cameraData.renderer.cameraDepthTargetHandle, ClearFlag.Color, Color.clear);
+            foreach (Renderer renderer in CollectRenderers())
+            {
+                for (int submesh = 0; submesh < renderer.sharedMaterials.Length; submesh++)
+                    cmd.DrawRenderer(renderer, _material, submesh, 0);
             }
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
@@ -1106,6 +1237,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         private readonly ForcedRevealPass _forcedReveal;
         private readonly ThreatPresentationPass _presentation;
         private readonly MeleeWarningMaskPass _meleeWarningMask;
+        private readonly SwordOutlineMaskPass _swordOutlineMask;
         private readonly BeastOutlineExclusionPass _beastOutlineExclusion;
         private RTHandle _legacyResult;
 
@@ -1122,6 +1254,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             public TextureHandle PresentationColor { get; set; }
             public TextureHandle PresentationData { get; set; }
             public TextureHandle MeleeWarningMask { get; set; }
+            public TextureHandle SwordOutlineMask { get; set; }
             public TextureHandle BeastOutlineExclusion { get; set; }
             public TextureHandle SceneDepth { get; set; }
             public TextureHandle Normals { get; set; }
@@ -1134,7 +1267,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         public OutlinePass(Material material, CapturePass capture, TransparentDepthPass depth,
             CapturePass alwaysVisibleCapture, LayerMaskPass sceneryMask, LayerMaskPass threatMask,
             ForcedRevealPass forcedReveal, ThreatPresentationPass presentation,
-            MeleeWarningMaskPass meleeWarningMask, BeastOutlineExclusionPass beastOutlineExclusion)
+            MeleeWarningMaskPass meleeWarningMask, SwordOutlineMaskPass swordOutlineMask,
+            BeastOutlineExclusionPass beastOutlineExclusion)
         {
             _material = material;
             _capture = capture;
@@ -1145,6 +1279,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             _forcedReveal = forcedReveal;
             _presentation = presentation;
             _meleeWarningMask = meleeWarningMask;
+            _swordOutlineMask = swordOutlineMask;
             _beastOutlineExclusion = beastOutlineExclusion;
             renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
             requiresIntermediateTexture = true;
@@ -1177,6 +1312,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 data.PresentationColor = frame.PresentationColor;
                 data.PresentationData = frame.PresentationData;
                 data.MeleeWarningMask = frame.MeleeWarningMask;
+                data.SwordOutlineMask = frame.SwordOutlineMask;
                 data.BeastOutlineExclusion = frame.BeastOutlineExclusion;
                 data.SceneDepth = resources.cameraDepthTexture;
                 data.Normals = resources.cameraNormalsTexture;
@@ -1190,6 +1326,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                 builder.UseTexture(data.PresentationColor, AccessFlags.Read);
                 builder.UseTexture(data.PresentationData, AccessFlags.Read);
                 builder.UseTexture(data.MeleeWarningMask, AccessFlags.Read);
+                builder.UseTexture(data.SwordOutlineMask, AccessFlags.Read);
                 builder.UseTexture(data.BeastOutlineExclusion, AccessFlags.Read);
                 builder.UseTexture(data.SceneDepth, AccessFlags.Read);
                 builder.UseTexture(data.Normals, AccessFlags.Read);
@@ -1216,6 +1353,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             properties.SetTexture("_ThreatPresentationColor", data.PresentationColor);
             properties.SetTexture("_ThreatPresentationData", data.PresentationData);
             properties.SetTexture("_OutlineMeleeWarningMask", data.MeleeWarningMask);
+            properties.SetTexture("_OutlineSwordMask", data.SwordOutlineMask);
             properties.SetTexture(_beastOutlineExclusionMaskId, data.BeastOutlineExclusion);
             properties.SetTexture("_CameraDepthTexture", data.SceneDepth);
             properties.SetTexture("_CameraNormalsTexture", data.Normals);
@@ -1246,6 +1384,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             _material.SetTexture("_ThreatPresentationColor", _presentation.ColorTexture);
             _material.SetTexture("_ThreatPresentationData", _presentation.DataTexture);
             _material.SetTexture("_OutlineMeleeWarningMask", _meleeWarningMask.LegacyMask);
+            _material.SetTexture("_OutlineSwordMask", _swordOutlineMask.LegacyMask);
             _material.SetTexture(_beastOutlineExclusionMaskId, _beastOutlineExclusion.LegacyMask);
             var cmd = CommandBufferPool.Get("Screen Space Outline");
             Blitter.BlitCameraTexture(cmd, renderingData.cameraData.renderer.cameraColorTargetHandle,
