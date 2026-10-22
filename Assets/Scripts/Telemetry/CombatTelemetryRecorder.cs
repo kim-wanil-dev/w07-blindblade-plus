@@ -225,6 +225,7 @@ namespace BlindBlade.Telemetry
             _reactionCount = 0;
             Record("stage_started", Summary("started"));
             RecordStageConfiguration();
+            _service.RequestFlush();
         }
 
         /// <summary>현재 stage와 연결된 Inspector 값을 stage_config 사건으로 저장한다.</summary>

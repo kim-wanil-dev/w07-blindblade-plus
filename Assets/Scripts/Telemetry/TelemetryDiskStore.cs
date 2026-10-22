@@ -14,6 +14,7 @@ namespace BlindBlade.Telemetry
     /// <summary>원본 JSONL과 전송 커서를 직렬화된 파일 작업으로 관리한다. Unity API를 호출하지 않는다.</summary>
     internal sealed class TelemetryDiskStore
     {
+        private const string PROCESS_MARKER_FILE_NAME = "active-process.json";
         private readonly object _gate = new object();
         private readonly HashSet<string> _activeSessions = new HashSet<string>();
         private readonly string _root;
@@ -22,6 +23,7 @@ namespace BlindBlade.Telemetry
         private bool _initialized;
         private string _readError;
         private string _metadataError;
+        private string _processActiveSessionId;
 
         internal string Root => _root;
         internal string ReadError => _readError;
@@ -34,7 +36,7 @@ namespace BlindBlade.Telemetry
             _maximumBytes = maximumBytes;
         }
 
-        /// <summary>이전 실행에서 종료 사건이 없는 지원 스키마 로그를 찾아 unclean_exit 사건을 추가한다. 실패한 원본은 다음 실행까지 보존한다.</summary>
+        /// <summary>이전 process marker와 종료 사건이 없는 지원 스키마 로그를 검사해 unclean_exit를 추가한다. 실패한 원본은 보존한다.</summary>
         internal Task<string> RecoverInterruptedSessionsAsync()
         {
             return Task.Run(() =>
@@ -43,6 +45,7 @@ namespace BlindBlade.Telemetry
                 {
                     Initialize();
                     List<string> errors = new List<string>();
+                    RecoverProcessMarkerLocked(errors);
                     foreach (string path in Directory.GetFiles(_root, "*.jsonl"))
                     {
                         string sessionId = Path.GetFileNameWithoutExtension(path);
@@ -92,7 +95,7 @@ namespace BlindBlade.Telemetry
             });
         }
 
-        /// <summary>sessionId별 records를 원본에 내구성 있게 추가하고 닫힌 세션을 활성 집합에서 제거한다. metadata 실패는 원본 로그 저장을 실패 처리하지 않는다.</summary>
+        /// <summary>sessionId별 records를 원본에 내구성 있게 추가하고 process marker가 없는 종료 세션을 활성 집합에서 제거한다. 보조 메타데이터 실패는 원본 저장을 실패 처리하지 않는다.</summary>
         private void AppendRecordsLocked(string[] records)
         {
             foreach (IGrouping<string, string> group in records.GroupBy(line => (string)JObject.Parse(line)["sessionId"]))
@@ -111,6 +114,14 @@ namespace BlindBlade.Telemetry
                     stream.Flush(true);
                 }
                 _writtenBytes += bytes;
+                foreach (string line in group)
+                {
+                    try { UpdateProcessMarkerLocked(group.Key, JObject.Parse(line)); }
+                    catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException)
+                    {
+                        _metadataError = "강제 종료 복구 표시 저장 실패: " + exception.Message;
+                    }
+                }
                 string metadataPath = Path.Combine(_root, group.Key + ".json");
                 if (!File.Exists(metadataPath))
                 {
@@ -124,8 +135,79 @@ namespace BlindBlade.Telemetry
                         _metadataError = "로그 메타데이터 저장 실패: " + exception.Message;
                     }
                 }
-                if ((string)JObject.Parse(group.Last())["eventType"] == "session_ended")
+                if ((string)JObject.Parse(group.Last())["eventType"] == "session_ended"
+                    && _processActiveSessionId != group.Key)
                     _activeSessions.Remove(group.Key);
+            }
+        }
+
+        /// <summary>marker가 가리키는 마지막 도전을 다음 실행에서 unclean_exit로 복구한다. 실제 종료 시각은 만들지 않는다.</summary>
+        private void RecoverProcessMarkerLocked(List<string> errors)
+        {
+            string markerPath = Path.Combine(_root, PROCESS_MARKER_FILE_NAME);
+            if (!File.Exists(markerPath)) return;
+            try
+            {
+                JObject marker = JObject.Parse(File.ReadAllText(markerPath, Encoding.UTF8));
+                string sessionId = marker.Value<string>("sessionId");
+                if (!Guid.TryParseExact(sessionId, "N", out _))
+                {
+                    errors.Add("강제 종료 복구 표시의 세션 ID가 올바르지 않아 원본 표시를 보존했습니다.");
+                    return;
+                }
+                _processActiveSessionId = sessionId;
+                _activeSessions.Add(sessionId);
+                string sessionPath = Path.Combine(_root, sessionId + ".jsonl");
+                if (!File.Exists(sessionPath))
+                {
+                    errors.Add("강제 종료 복구 표시가 있지만 연결된 JSONL 원본이 없습니다: "+sessionId);
+                    return;
+                }
+                JObject last = ReadLastRecordAndRepairTail(sessionPath);
+                if (last == null || (string)last["sessionId"] != sessionId) return;
+                string reason = (string)last["payload"]?["reason"];
+                if ((string)last["eventType"] == "session_ended" && (reason == "application_quit" || reason == "unclean_exit"))
+                {
+                    File.Delete(markerPath);
+                    _processActiveSessionId = null;
+                    _activeSessions.Remove(sessionId);
+                    return;
+                }
+                string schema = (string)last["schemaVersion"];
+                if (!new[] { "0.3.0", "0.4.0", TelemetryJson.SCHEMA_VERSION }.Contains(schema)) return;
+                try { AppendRecordsLocked(new[] { CreateRecoveryRecord(last).ToString(Formatting.None) }); }
+                catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException
+                    || exception is JsonException || exception is FormatException)
+                { errors.Add("강제 종료 복구 사건 저장 실패: " + sessionId + " / " + exception.Message); }
+            }
+            catch (Exception exception) when (exception is IOException || exception is JsonException
+                || exception is UnauthorizedAccessException || exception is FormatException)
+            { errors.Add("강제 종료 복구 표시를 읽지 못해 원본을 보존했습니다: " + exception.Message); }
+        }
+
+        /// <summary>durable stage_started에서 복구 표시를 만들고 정상 종료 또는 복구 종료가 저장되면 표시를 지운다.</summary>
+        private void UpdateProcessMarkerLocked(string sessionId,JObject record)
+        {
+            string eventType = (string)record["eventType"], markerPath = Path.Combine(_root, PROCESS_MARKER_FILE_NAME);
+            if (eventType == "stage_started")
+            {
+                string temporary = markerPath + ".tmp";
+                byte[] content = Encoding.UTF8.GetBytes(record.ToString(Formatting.None));
+                using (FileStream stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
+                { stream.Write(content, 0, content.Length); stream.Flush(true); }
+                if (File.Exists(markerPath)) File.Replace(temporary, markerPath, null);
+                else File.Move(temporary, markerPath);
+                _processActiveSessionId = sessionId;
+                _activeSessions.Add(sessionId);
+                return;
+            }
+            if (eventType != "session_ended") return;
+            string reason = (string)record["payload"]?["reason"];
+            if ((reason == "application_quit" || reason == "unclean_exit") && _processActiveSessionId == sessionId)
+            {
+                if (File.Exists(markerPath)) File.Delete(markerPath);
+                _processActiveSessionId = null;
+                _activeSessions.Remove(sessionId);
             }
         }
 

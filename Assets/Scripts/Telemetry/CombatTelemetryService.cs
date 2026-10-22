@@ -16,6 +16,8 @@ using UnityEditor;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using BlindBlade.Combat.Contracts;
+
 namespace BlindBlade.Telemetry
 {
     /// <summary>씬을 넘어 원본 저장·디스크 기반 재전송을 유지한다. 전투 시스템에는 결과를 돌려주지 않는다.</summary>
@@ -54,6 +56,8 @@ namespace BlindBlade.Telemetry
         private bool _reportedUploadSuccess;
         private string _lastError;
         private string _lastWarnedError;
+        private JObject _latestAttemptRecord;
+        private double _latestAttemptObservedRealtime;
         private int _dropped;
         private int _uploaded;
         private string _anonymousPlayerId;
@@ -120,6 +124,14 @@ namespace BlindBlade.Telemetry
                 return;
             }
             _buffer.Add(record.ToString(Formatting.None));
+            string attemptId=record.Value<string>("stageAttemptId");
+            string currentAttemptId=_latestAttemptRecord?.Value<string>("stageAttemptId");
+            if(eventType=="stage_started"||(!string.IsNullOrEmpty(attemptId)&&attemptId==currentAttemptId
+                &&record.Value<string>("sessionId")==_latestAttemptRecord?.Value<string>("sessionId")))
+            {
+                _latestAttemptRecord=(JObject)record.DeepClone();
+                _latestAttemptObservedRealtime=Time.realtimeSinceStartupAsDouble;
+            }
             _recordVersion++;
             _diskDrained = false;
         }
@@ -337,18 +349,57 @@ namespace BlindBlade.Telemetry
             return false;
         }
 
-        /// <summary>등록된 기록자를 각각 종료 알림한다. 한 기록자 오류가 다른 기록자의 종료 로그를 막지 않게 한다.</summary>
+        /// <summary>등록된 기록자를 각각 종료 알림하고 누락된 정상 종료 사건을 보충한다. 한 기록자 오류가 다른 기록자의 종료 기록을 막지 않는다.</summary>
         private void NotifyQuitRequested()
         {
             if (_quitNotified) return;
             _quitNotified = true;
             Action handlers = QuitRequested;
-            if (handlers == null) return;
-            foreach (Delegate subscriber in handlers.GetInvocationList())
+            if (handlers != null)
             {
-                try { ((Action)subscriber)(); }
-                catch (Exception exception) { ReportError("종료 기록자 처리 실패: " + exception.Message); }
+                foreach (Delegate subscriber in handlers.GetInvocationList())
+                {
+                    try { ((Action)subscriber)(); }
+                    catch (Exception exception) { ReportError("종료 기록자 처리 실패: " + exception.Message); }
+                }
             }
+            EnsureApplicationQuitRecord();
+        }
+
+        /// <summary>현재 도전의 마지막 사건을 바탕으로 정상 종료 사건을 추가한다. 종료 콜백 시각과 다음 순번을 기록한다.</summary>
+        private void EnsureApplicationQuitRecord()
+        {
+            if (_latestAttemptRecord == null) return;
+            JObject previousPayload=_latestAttemptRecord.Value<JObject>("payload");
+            if(_latestAttemptRecord.Value<string>("eventType")=="session_ended"
+                &&previousPayload?.Value<string>("reason")=="application_quit")return;
+
+            long sequence=(_latestAttemptRecord.Value<long?>("eventSequence")??0)+1;
+            string now=TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
+            JObject record=(JObject)_latestAttemptRecord.DeepClone();
+            record["eventSequence"]=sequence;
+            record["sourceId"]="telemetry.lifecycle";
+            record["sourceSequence"]=sequence;
+            record["eventType"]="session_ended";
+            record["occurredAtKst"]=now;
+            record["recordedAtKst"]=now;
+            JObject previousTime=_latestAttemptRecord.Value<JObject>("occurredAt");
+            double elapsed=Math.Max(0d,Time.realtimeSinceStartupAsDouble-_latestAttemptObservedRealtime);
+            record["occurredAt"]=new JObject
+            {
+                ["realtimeSeconds"]=(double?)previousTime?["realtimeSeconds"]+elapsed,
+                ["gameplaySeconds"]=previousTime?["gameplaySeconds"]?.DeepClone()??new JValue(0d),
+                ["activeUnscaledSeconds"]=previousTime?["activeUnscaledSeconds"]?.DeepClone()??new JValue(0d)
+            };
+            record["recordedAt"]=(JObject)record["occurredAt"].DeepClone();
+            record["correlation"]=new JObject { ["inputId"]=0,["actionId"]=0,["attackId"]=0,
+                ["hitId"]=0,["projectileId"]=0,["dodgeId"]=0 };
+            string stageId=record.Value<string>("stageId");
+            string attemptId=record.Value<string>("stageAttemptId");
+            record["payload"]=new JObject { ["reason"]="application_quit",["exitStageId"]=stageId,
+                ["exitStageAttemptId"]=attemptId,["exitLocation"]=stageId,["exitOccurredAtKst"]=now };
+            Enqueue(record);
+            RequestFlush();
         }
 
         /// <summary>종료 요청으로 저장된 사건과 디스크의 ACK 상태를 최대 35초 확인한다. 전송 완료 또는 제한 시간 뒤 종료를 허용하고 미확인 원본은 보존한다.</summary>

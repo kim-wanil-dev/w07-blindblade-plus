@@ -144,9 +144,10 @@ function repairStageIds(book) {
     cells.setNumberFormat('@');
     if (count<=0) return;
     const ids=sheet.getRange(2,keyColumn,count,1).getValues();
-    const stages=ids.map(([id])=>{
+    const existingStages=cells.offset(0,0,count,1).getValues();
+    const stages=ids.map(([id],index)=>{
       const match=String(id).match(/:(0-[1-7]|1-1|1-2|2-1|2-2|unassigned)$/);
-      return [match ? match[1] : ''];
+      return [match ? match[1] : existingStages[index][0]];
     });
     sheet.getRange(2,stageColumn,count,1).setValues(stages);
   });
