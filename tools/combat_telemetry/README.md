@@ -176,7 +176,7 @@ Events와 OnboardingSteps는 헤더 순서가 다르면 `header_mismatch`로 거
 ## 분석 대시보드
 
 - 분석 대시보드: https://blindblade-combat-analysis.wan1k.chatgpt.site
-- 현재 Sites v23은 선택한 구간에 속한 모든 도전의 합계·통계를 전체요약 기본 화면에 표시한다. 도전별·피격별 세부 내역은 접힌 영역에서 확인하고 플레이어별 누적 시간 표는 기본 화면에 유지한다. 버전·배포 검증 정보는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에 기록한다.
+- 현재 운영 Sites v26은 선택한 구간에 속한 모든 도전의 합계·통계를 전체요약 기본 화면에 표시한다. 도전별·피격별 세부 내역은 접힌 영역에서 확인하고 플레이어별 누적 시간 표는 기본 화면에 유지한다. 이번 로그 정합성 개선은 로컬 소스에 반영했으며 Sites에 아직 배포하지 않았다. 버전·배포 검증 정보는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에 기록한다.
 - 사이트 프로젝트 소스는 `tools/combat_telemetry/dashboard_site`에 있다. Sites 프로젝트 접근은 `public`이다. Google Spreadsheet 자체는 비공개이며 Worker 서버가 Apps Script의 읽기 전용 API를 호출한다. 최신 페이지 버전과 스프레드시트 연결 상태는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에서 확인한다.
 - Google Sheets에서 Events, Sessions, OnboardingSteps 탭을 각각 CSV로 다운로드하고, 사이트에서 파일을 한 번에 선택한다. Patterns, Heatmaps, Diagnostics 탭도 선택 입력할 수 있다.
 - CSV 파일은 브라우저 안에서만 처리되며 사이트 서버로 업로드되지 않는다. 한 파일만 가져와도 보이지만 전체 분석에는 Events·Sessions·OnboardingSteps를 함께 불러온다.
