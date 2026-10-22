@@ -788,6 +788,7 @@ MonoBehaviour:
   _sheatheSound: 35
   _strikeAngle: 180
   _strikeRadius: 50
+  _nearbyStrikeRadius: 20
   _bambooViewMargin: 0.1
 --- !u!114 &505307292897056262
 MonoBehaviour:

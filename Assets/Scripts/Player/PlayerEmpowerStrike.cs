@@ -9,8 +9,8 @@ using BlindBlade.Combat.Contracts;
 /// <summary>
 /// 강화 공격을 암전 속 일섬 한 장면으로 실행한다.
 /// 화면이 암흑으로 덮인 채 사선을 따라 큰 곡선 검격과 갈라진 선이 그어지고, 적이 아직 서 있는 동안 머문 뒤
-/// 납도와 함께 화면이 돌아오며 대상이 동시에 쓰러지고 선이 먹 조각으로 흩어진다.
-/// 비행 중인 투사체는 암흑이 걷히는 납도 순간 가드 소리를 내며 사라진다. 카메라 출력은 바꾸지 않으며 화면 표현은 EmpowerOverlay가 그린다.
+/// 납도와 함께 화면이 돌아오며 범위 안의 적이 동시에 쓰러지고 선이 먹 조각으로 흩어진다.
+/// 범위 안의 적대 투사체는 납도 순간 가드 소리를 내며 사라진다. 카메라 출력은 바꾸지 않으며 화면 표현은 EmpowerOverlay가 그린다.
 /// 연출 시간은 일시정지를 제외한 실시간이다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -54,11 +54,13 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     [SerializeField, Tooltip("암흑이 걷히며 납도하는 순간의 효과음.")]
     private SoundId _sheatheSound = SoundId.EmpowerBlackoutSheathe;
 
-    [Header("전방 베기")]
-    [SerializeField, Range(1f, 360f), Tooltip("수락 순간 시선 기준 베는 전방 각도.")]
+    [Header("공격 범위")]
+    [SerializeField, Range(1f, 360f), Tooltip("납도 순간 시선 기준 베는 전방 각도.")]
     private float _strikeAngle = 180f;
-    [SerializeField, Min(0f), Tooltip("수락 순간 위치 기준 베는 수평 반경(미터).")]
+    [SerializeField, Min(0f), Tooltip("전방 베기 범위의 수평 반경(미터).")]
     private float _strikeRadius = 50f;
+    [SerializeField, Min(0f), Tooltip("방향과 관계없이 베는 플레이어 주변 수평 반경(미터).")]
+    private float _nearbyStrikeRadius = 20f;
 
     [Header("대나무 베기")]
     [SerializeField, Range(0f, 0.5f), Tooltip("갈라진 선(_cutAngle, 화면 중심)이 대나무를 가로지르는 점이 화면 가장자리 밖이어도 베는 여유 범위(화면 크기 비율). 선에 걸치지 않은 대나무는 베지 않는다.")]
@@ -141,14 +143,13 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
 
     /// <summary>
     /// _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
-    /// 납도 순간 암흑을 걷어 화면을 되돌리며 대상 적을 동시에 처치하고 비행 중인 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
-    /// 처치 대상은 수락 순간 시선 기준 전방 범위의 적이다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다. 같은 선을 따라 땅에 흰 흔적을 남긴다.
+    /// 납도 순간 암흑을 걷어 화면을 되돌리며 범위 안의 적을 공격하고 적대 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
+    /// 적과 투사체는 납도 순간 위치·시선 기준 전방 반경 및 주변 반경의 합집합으로 판정한다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다. 같은 선을 따라 땅에 흰 흔적을 남긴다.
     /// RainyStage에서는 암전이 걷히고 _rainBurstDelay 뒤에 같은 사선 평면 주변 빗방울이 카메라 옆·조금 뒤까지 평면 바깥쪽으로 터진다.
     /// counter이면 보스 거합 받아치기로, enemyCutColor의 적 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자를 _counterLayerDelay 간격으로 긋고 세계도 두 사선으로 벤다.
     /// </summary>
     private IEnumerator RunSequence(Action onFinished, bool counter, Color enemyCutColor)
     {
-        List<EnemyHealth> targets = CollectFrontEnemies();
         Vector3 bambooOrigin = transform.position;
         Matrix4x4 bambooView = _camera.projectionMatrix * _camera.worldToCameraMatrix;
         Vector3 bambooCutPoint = _camera.transform.position;
@@ -183,10 +184,14 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         _overlay.Flash(_cutFlash, 0.2f);
         yield return WaitReal(Mathf.Max(0f, _blackoutDuration - layered));
 
-        // 납도: 암흑이 걷히는 순간 선이 흩어지고 대상 적이 동시에 쓰러진다.
+        // 납도: 암흑이 걷히는 순간 현재 위치·시선의 범위로 적과 투사체를 판정한다.
         _overlay.SetVoid(0f);
         PlaySound(_sheatheSound);
-        StrikeEnemies(targets);
+        Vector3 strikeOrigin = transform.position;
+        Vector3 strikeForward = _motor.ViewForward;
+        List<EnemyHealth> targets = CollectStrikeTargets(strikeOrigin, strikeForward);
+        StrikeEnemies(targets, strikeOrigin, strikeForward);
+        ReleaseProjectiles(strikeOrigin, strikeForward);
         BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
         _groundMark.Show(bambooCutPoint, bambooCutNormal, bambooView);
         if (counter)
@@ -194,8 +199,6 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, mirrorCutNormal);
             _groundMark.Show(bambooCutPoint, mirrorCutNormal, bambooView);
         }
-        // 암전 동안은 강화 공격 무적이라 투사체를 그대로 두고, 화면이 돌아오는 순간 한꺼번에 막아 낸다.
-        ReleaseProjectiles();
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
         _overlay.Flash(_sheatheFlash, 0.2f);
         PunchFov();
@@ -241,18 +244,14 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 적대 비행 중인 DefenseShuriken, 제거 가능 EnemyProjectile, TwinBossProjectile을 그 위치에서 가드 성공 소리와 함께 없앤다.
-    /// 반사된 수리검은 그대로 둔다.
+    /// origin과 forward를 사용하는 공통 범위 판정 함수를 세 투사체 형식에 전달해 범위 안의 적대 투사체만 가드 성공 소리와 함께 없앤다.
     /// </summary>
-    private static void ReleaseProjectiles()
+    private void ReleaseProjectiles(Vector3 origin, Vector3 forward)
     {
-        foreach (DefenseShuriken projectile in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
-        {
-            if (!projectile.IsFlying) continue;
-            projectile.ReleaseBlocked();
-        }
-        EnemyProjectile.ReleaseAllClearable();
-        TwinBossProjectile.ReleaseAllHostile();
+        Predicate<Vector3> isInRange = position => IsWithinStrikeRange(origin, forward, position);
+        DefenseShuriken.ReleaseInRange(isInRange);
+        EnemyProjectile.ReleaseInRange(isInRange);
+        TwinBossProjectile.ReleaseInRange(isInRange);
     }
 
     /// <summary>
@@ -269,32 +268,36 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         return Vector3.Cross(left, right).normalized;
     }
 
-    /// <summary>살아 있는 적 중 지금 위치와 시선 기준 전방 각도·수평 반경 안에 있는 적을 모아 반환한다.</summary>
-    private List<EnemyHealth> CollectFrontEnemies()
+    /// <summary>origin과 forward 기준 두 범위 중 하나에 있는 살아 있는 적을 모아 반환한다.</summary>
+    private List<EnemyHealth> CollectStrikeTargets(Vector3 origin, Vector3 forward)
     {
         List<EnemyHealth> result = new List<EnemyHealth>();
-        Vector3 origin = transform.position;
-        Vector3 forward = _motor.ViewForward;
-        float halfAngle = _strikeAngle * 0.5f;
         foreach (EnemyHealth enemy in FindObjectsByType<EnemyHealth>(FindObjectsSortMode.None))
         {
             if (!enemy.IsAlive) continue;
-            Vector3 toEnemy = Vector3.ProjectOnPlane(enemy.transform.position - origin, Vector3.up);
-            if (toEnemy.sqrMagnitude > _strikeRadius * _strikeRadius) continue;
-            if (toEnemy.sqrMagnitude > 0.0001f && Vector3.Angle(forward, toEnemy) > halfAngle) continue;
+            if (!IsWithinStrikeRange(origin, forward, enemy.transform.position)) continue;
             result.Add(enemy);
         }
         return result;
     }
 
+    /// <summary>origin, forward, targetPosition을 사용해 대상이 전방 각도·반경 또는 주변 수평 반경 안에 있는지 반환한다.</summary>
+    private bool IsWithinStrikeRange(Vector3 origin, Vector3 forward, Vector3 targetPosition)
+    {
+        Vector3 offset = Vector3.ProjectOnPlane(targetPosition - origin, Vector3.up);
+        float distanceSquared = offset.sqrMagnitude;
+        if (distanceSquared <= _nearbyStrikeRadius * _nearbyStrikeRadius) return true;
+        if (distanceSquared > _strikeRadius * _strikeRadius) return false;
+        return distanceSquared <= 0.0001f || Vector3.Angle(forward, offset) <= _strikeAngle * 0.5f;
+    }
+
     /// <summary>
-    /// targets 중 아직 살아 있는 적에게 _damage만큼 피해를 주되 공유 체력 묶음에는 한 번만 적용한다.
+    /// targets, origin, forward를 사용해 살아 있는 적에게 _damage만큼 피해를 주되 공유 체력 묶음에는 한 번만 적용한다.
     /// 공유 피해 우선(HasSharedDamagePriority) 적을 먼저 처리하고, 무적인 적은 개별적으로 막고 같은 묶음의 다른 적은 계속 검사한다.
     /// 실제 피해는 EnemyHealth.TakeDamage에 전달하며, 묶음 상대가 이미 맞아 피해를 건너뛴 적은 혈흔만 재생한다.
     /// </summary>
-    private void StrikeEnemies(List<EnemyHealth> targets)
+    private void StrikeEnemies(List<EnemyHealth> targets, Vector3 origin, Vector3 forward)
     {
-        Vector3 origin = transform.position;
         HashSet<EnemyHealth> struck = new HashSet<EnemyHealth>();
         // 같은 묶음이 함께 걸리면 우선 적이 피격 반응을 받도록 앞에 둔다.
         targets.Sort((a, b) => (b != null && b.HasSharedDamagePriority).CompareTo(a != null && a.HasSharedDamagePriority));
@@ -308,7 +311,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             }
             if (!enemy.IsInvulnerable) struck.Add(enemy.SharedDamageKey);
             Vector3 toEnemy = Vector3.ProjectOnPlane(enemy.transform.position - origin, Vector3.up);
-            Vector3 direction = toEnemy.sqrMagnitude > 0.0001f ? toEnemy.normalized : _motor.ViewForward;
+            Vector3 direction = toEnemy.sqrMagnitude > 0.0001f ? toEnemy.normalized : forward;
             enemy.TakeDamage(new DamageContext(_damage, gameObject, enemy.transform.position + Vector3.up,
                 direction, PATTERN_ID, 0, 0, IncomingAttackKind.PlayerOwned));
         }

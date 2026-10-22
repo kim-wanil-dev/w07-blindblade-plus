@@ -292,12 +292,25 @@ public class EnemyProjectile : MonoBehaviour
 
     /// <summary>
     /// 현재 적대 비행 중인 제거 가능 투사체를 모두 그 위치에서 가드 성공 소리와 함께 없앤다.
-    /// 궁극기가 사용하며 반사된 투사체와 제거 설정이 꺼진 투사체는 유지한다.
+    /// 반사된 투사체와 제거 설정이 꺼진 투사체는 유지한다.
     /// </summary>
     public static void ReleaseAllClearable()
     {
         foreach (EnemyProjectile projectile in FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None))
             if (projectile.IsClearable) projectile.ReleaseBlocked();
+    }
+
+    /// <summary>
+    /// isInRange가 true를 반환하는 위치의 플레이어 공격 제거 허용 투사체를 가드 성공 소리와 함께 없앤다.
+    /// 반사된 투사체와 제거 설정이 꺼진 투사체는 유지한다.
+    /// </summary>
+    public static void ReleaseInRange(Predicate<Vector3> isInRange)
+    {
+        foreach (EnemyProjectile projectile in FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None))
+        {
+            if (!projectile.IsClearable || !isInRange(projectile.transform.position)) continue;
+            projectile.ReleaseBlocked();
+        }
     }
 
     /// <summary>_clearedByPlayerAttacks가 켜져 있고 반사되지 않은 채 비행 중인지 반환한다.</summary>
