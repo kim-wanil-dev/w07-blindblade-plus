@@ -93,9 +93,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 7000000000000000011}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: -0.4617486, w: 0.8870108}
-  m_LocalPosition: {x: 0.55, y: 1.12, z: 0.35}
-  m_LocalScale: {x: 1.422764, y: 1.422764, z: 1.422764}
+  m_LocalRotation: {x: 0.4304593, y: -0.5609855, z: -0.4304593, w: 0.5609855}
+  m_LocalPosition: {x: -0.06, y: 0.9646696, z: 0.6093889}
+  m_LocalScale: {x: 0.9959348, y: 0.9959348, z: 0.9959348}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 7000000000000000022}
@@ -104,7 +104,7 @@ Transform:
   - {fileID: 7000000000000000052}
   - {fileID: 7000000000000000062}
   m_Father: {fileID: 7000000000000000002}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 305}
+  m_LocalEulerAnglesHint: {x: 0, y: -90, z: -75}
 --- !u!1 &7000000000000000021
 GameObject:
   m_ObjectHideFlags: 0
@@ -435,7 +435,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.7, y: 0.7, z: 0.7}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7000000000000000012}
@@ -5259,6 +5259,10 @@ PrefabInstance:
       propertyPath: _acceleration
       value: 12
       objectReference: {fileID: 0}
+    - target: {fileID: 2677635689661560472, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _angularSpeed
+      value: 180
+      objectReference: {fileID: 0}
     - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _attackRange
       value: 3
@@ -5279,6 +5283,538 @@ PrefabInstance:
       propertyPath: _postHeartbeatAttackDelay
       value: 0.2
       objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _recoveryDuration
+      value: 0.75
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _stepInDistance
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _stepInDuration
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.size
+      value: 16
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].time
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].value
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].inSlope
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].outSlope
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].tangentMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[0].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].time
+      value: 0.0922963
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].value
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].inSlope
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].outSlope
+      value: 6.4953477
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[1].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].time
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].value
+      value: 0.0513422
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].inSlope
+      value: 6.8202647
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].outSlope
+      value: 6.8533837
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[2].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].time
+      value: 0.125
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].value
+      value: 0.2295841
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].inSlope
+      value: 7.2217769
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].outSlope
+      value: 7.2140643
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[3].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].time
+      value: 0.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].value
+      value: 0.402344
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].inSlope
+      value: 6.5316864
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].outSlope
+      value: 6.5155584
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[4].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].time
+      value: 0.175
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].value
+      value: 0.558092
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].inSlope
+      value: 5.8975104
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].outSlope
+      value: 5.8710144
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[5].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].time
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].value
+      value: 0.693968
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].inSlope
+      value: 4.9522944
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].outSlope
+      value: 4.9154304
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[6].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].time
+      value: 0.225
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].value
+      value: 0.802196
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].inSlope
+      value: 3.6960384
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].outSlope
+      value: 3.6488064
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[7].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].time
+      value: 0.25
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].value
+      value: 0.875
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].inSlope
+      value: 2.1287424
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].outSlope
+      value: 2.0874262
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[8].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].time
+      value: 0.2916667
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].value
+      value: 0.9389815
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].inSlope
+      value: 1.0453596
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].outSlope
+      value: 1.0280262
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[9].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].time
+      value: 0.3333333
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].value
+      value: 0.9668519
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].inSlope
+      value: 0.3714262
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].outSlope
+      value: 0.3619596
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].tangentMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[10].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].time
+      value: 0.375
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].value
+      value: 0.975
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].inSlope
+      value: 0.0908262
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].outSlope
+      value: 0.08992
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].tangentMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[11].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].time
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].value
+      value: 0.9848
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].inSlope
+      value: 0.067272
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].outSlope
+      value: 0.067128
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].tangentMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[12].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].time
+      value: 0.6666667
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].value
+      value: 0.9937185
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].inSlope
+      value: 0.0405947
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].outSlope
+      value: 0.040472
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].tangentMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[13].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].time
+      value: 0.8333333
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].value
+      value: 0.9985481
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].inSlope
+      value: 0.018184
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].outSlope
+      value: 0.0180827
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].tangentMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[14].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].time
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].value
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].inSlope
+      value: 0.00004
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].outSlope
+      value: 0.00004
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].tangentMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].weightedMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].inWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _swingProgress.m_Curve.Array.data[15].outWeight
+      value: 0.33333334
+      objectReference: {fileID: 0}
+    - target: {fileID: 7986838944596479255, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _meleeSlashDuration
+      value: 0.08
+      objectReference: {fileID: 0}
     - target: {fileID: 3589661639432246125, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: InitialModule.startSizeY.minMaxState
       value: 3
@@ -5298,6 +5834,14 @@ PrefabInstance:
     - target: {fileID: 4518619140307379922, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _meleeAttackStoppingDistance
       value: 2.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4518619140307379922, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _turnWaitMinimumRadius
+      value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 4518619140307379922, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _turnWaitMaximumRadius
+      value: 5
       objectReference: {fileID: 0}
     - target: {fileID: 5135211428147630035, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: m_LocalPosition.x
@@ -5460,6 +6004,9 @@ MonoBehaviour:
   - {fileID: 7000000000000000024}
   - {fileID: 7000000000000000034}
   - {fileID: 7000000000000000044}
+  _bodyClipRadius: 0.5
+  _bodyClipBottom: 0.5
+  _bodyClipTop: 1.5
   _whiteReturnDuration: 0.12
 --- !u!114 &7000000000000000090
 MonoBehaviour:
@@ -5477,6 +6024,8 @@ MonoBehaviour:
   _prepareUpperLeft: {fileID: 7400000, guid: a4f5f5e9f69d4de488e86a02cf9d8003, type: 2}
   _swingUpperLeft: {fileID: 7400000, guid: a4f5f5e9f69d4de488e86a02cf9d8005, type: 2}
   _returnUpperLeft: {fileID: 7400000, guid: a4f5f5e9f69d4de488e86a02cf9d8007, type: 2}
+  _deflectGuardUpperLeft: {fileID: 7400000, guid: 7fee319fcb1a42b9acee3be45c1c7451, type: 2}
+  _deflectParryUpperLeft: {fileID: 7400000, guid: d9c8b9b1629a47668612f89a57c69c69, type: 2}
   _swordTip: {fileID: 7000000000000000052}
   _glintMaterial: {fileID: 2100000, guid: 8639c0db553e86f4d9e2a426a72139ff, type: 2}
   _glintSize: 0.19

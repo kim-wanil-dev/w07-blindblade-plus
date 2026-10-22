@@ -13,6 +13,8 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
         _FlowSpeed ("Sword Smoke Flow Speed", Float) = 0
         _WobbleFrequency ("Sword Wobble Frequency", Float) = 0
         _WobbleStrength ("Sword Wobble Strength", Float) = 0
+        _SwordBodyClipStart ("Sword Body Clip Start (xyz, radius)", Vector) = (0, 0, 0, 0)
+        _SwordBodyClipEnd ("Sword Body Clip End", Vector) = (0, 0, 0, 0)
         _TransparentThreshold ("Transparent Threshold", Float) = 0.015
 
     }
@@ -53,6 +55,8 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 float _FlowSpeed;
                 float _WobbleFrequency;
                 float _WobbleStrength;
+                float4 _SwordBodyClipStart;
+                float4 _SwordBodyClipEnd;
                 float _TransparentThreshold;
             CBUFFER_END
 
@@ -69,6 +73,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
                 half4 color : COLOR;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -88,6 +93,7 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                     positionOS += normalize(input.normalOS) * wobble;
                 }
                 output.positionCS = TransformObjectToHClip(positionOS);
+                output.positionWS = TransformObjectToWorld(positionOS);
                 output.uv = input.uv;
                 output.color = input.color;
                 return output;
@@ -109,7 +115,17 @@ Shader "Hidden/BlindBlade/OutlineMeleeWarningMask"
                 half shape = smoothstep(0.0, max(_TransparentThreshold, 0.0001), brightness);
 
                 if (_SwordOutlineMask > 0.5)
+                {
+                    // 몸통 캡슐 안에 묻힌 검 픽셀은 기록하지 않아 몸 밖으로 나온 부분에만 윤곽선이 생긴다.
+                    if (_SwordBodyClipStart.w > 0.0)
+                    {
+                        float3 axis = _SwordBodyClipEnd.xyz - _SwordBodyClipStart.xyz;
+                        float along = saturate(dot(input.positionWS - _SwordBodyClipStart.xyz, axis) / max(dot(axis, axis), 0.0001));
+                        if (distance(input.positionWS, _SwordBodyClipStart.xyz + axis * along) < _SwordBodyClipStart.w)
+                            return half4(0, 0, 0, 0);
+                    }
                     return half4(shape, 0, 0, 0);
+                }
 
                 // R은 붉은 전조, G는 항상 보이는 붉은 테두리, B는 몸통과 분리해 그릴 눈 섬광, A는 두껍게 그릴 눈 섬광이다.
                 half warning = shape * saturate(_MeleeWarningIntensity);

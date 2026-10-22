@@ -16,6 +16,8 @@ public sealed class EnemyMeleeWarningVisual : MonoBehaviour
     private static readonly int _flowSpeedId = Shader.PropertyToID("_FlowSpeed");
     private static readonly int _wobbleFrequencyId = Shader.PropertyToID("_WobbleFrequency");
     private static readonly int _wobbleStrengthId = Shader.PropertyToID("_WobbleStrength");
+    private static readonly int _bodyClipStartId = Shader.PropertyToID("_SwordBodyClipStart");
+    private static readonly int _bodyClipEndId = Shader.PropertyToID("_SwordBodyClipEnd");
 
     private enum VisualPhase
     {
@@ -30,6 +32,12 @@ public sealed class EnemyMeleeWarningVisual : MonoBehaviour
 
     [Header("검 윤곽선")]
     [SerializeField] private Renderer[] _swordOutlineRenderers;
+    [SerializeField, Min(0f), Tooltip("몸 안에 묻힌 검의 윤곽선을 숨길 몸통 캡슐의 반지름(m)입니다. 0이면 숨기지 않습니다.")]
+    private float _bodyClipRadius = 0.5f;
+    [SerializeField, Tooltip("몸통 캡슐 중심선 아래 끝의 높이(m)입니다. 적 위치를 기준으로 합니다.")]
+    private float _bodyClipBottom = 0.5f;
+    [SerializeField, Tooltip("몸통 캡슐 중심선 위 끝의 높이(m)입니다. 적 위치를 기준으로 합니다.")]
+    private float _bodyClipTop = 1.5f;
 
     [Header("흰색 복귀")]
     [SerializeField, Min(0.01f)]
@@ -218,6 +226,7 @@ public sealed class EnemyMeleeWarningVisual : MonoBehaviour
     /// <summary>
     /// 연결된 몸체 파티클과 검 렌더러의 모양·기본색 및 RedIntensity를 경고 마스크에 전달한다.
     /// 검 메시는 표면과 같은 정점 흔들림으로 전체 칼날을 표시하고 파티클은 연기 텍스처 모양을 유지한다.
+    /// 검 윤곽선 렌더러에는 현재 위치와 _bodyClipRadius·_bodyClipBottom·_bodyClipTop으로 만든 몸통 캡슐을 전달한다.
     /// </summary>
     private void PublishWarningMaskInputs()
     {
@@ -239,6 +248,18 @@ public sealed class EnemyMeleeWarningVisual : MonoBehaviour
             _maskProperties.SetFloat(_flowSpeedId, swordMesh ? source.GetFloat(_flowSpeedId) : 0f);
             _maskProperties.SetFloat(_wobbleFrequencyId, swordMesh ? source.GetFloat(_wobbleFrequencyId) : 0f);
             _maskProperties.SetFloat(_wobbleStrengthId, swordMesh ? source.GetFloat(_wobbleStrengthId) : 0f);
+            renderer.SetPropertyBlock(_maskProperties);
+        }
+
+        // 검 윤곽선 마스크는 이 캡슐 안의 검 픽셀을 버려 몸 밖으로 나온 부분만 선으로 그린다.
+        Vector4 clipStart = transform.position + transform.up * _bodyClipBottom;
+        clipStart.w = _bodyClipRadius;
+        Vector4 clipEnd = transform.position + transform.up * _bodyClipTop;
+        foreach (Renderer renderer in _swordOutlineRenderers)
+        {
+            renderer.GetPropertyBlock(_maskProperties);
+            _maskProperties.SetVector(_bodyClipStartId, clipStart);
+            _maskProperties.SetVector(_bodyClipEndId, clipEnd);
             renderer.SetPropertyBlock(_maskProperties);
         }
     }

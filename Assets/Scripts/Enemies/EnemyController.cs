@@ -15,6 +15,8 @@ public enum EnemyState
 [RequireComponent(typeof(EnemySensor), typeof(EnemyMotor), typeof(EnemyAttackSelector))]
 public class EnemyController : MonoBehaviour
 {
+    private const float TURN_WAIT_FACING_MARGIN = 1f;
+
     [Header("추적 설정")]
     [SerializeField, Min(0.02f)] private float _perceptionInterval = 0.1f;
     [SerializeField, Min(0.02f)] private float _repathInterval = 0.2f;
@@ -327,6 +329,7 @@ public class EnemyController : MonoBehaviour
     /// <summary>
     /// 공격 차례를 기다리는 동안 target 주변 대기 원 위에서 구간마다 왼쪽·오른쪽 이동 또는 멈춤을 고른다.
     /// target과의 수평 거리를 대기 최소·최대 반지름으로 제한한 위치로 EnemyMotor 경로를 갱신하며 막히면 _turnWaitSign을 뒤집는다.
+    /// 대기 원 근처에서는 이동 방향 대신 target을 바라본 채 옆걸음하고, 멀리서 다가올 때는 이동 방향을 바라본다.
     /// </summary>
     private void UpdateTurnWaiting(Transform target)
     {
@@ -356,7 +359,10 @@ public class EnemyController : MonoBehaviour
                 _turnWaitSign = -_turnWaitSign;
         }
 
-        if (_motor.HasArrived)
+        float targetDistance = Vector3.ProjectOnPlane(target.position - transform.position, Vector3.up).magnitude;
+        if (targetDistance <= Mathf.Max(_turnWaitMinimumRadius, _turnWaitMaximumRadius) + TURN_WAIT_FACING_MARGIN)
+            _motor.FaceTargetWhileMoving(target.position);
+        else if (_motor.HasArrived)
             _motor.FaceTarget(target.position);
     }
 

@@ -6,6 +6,8 @@ using UnityEngine;
 /// <summary>EnemySlash 베기 구간에 플레이어와 같은 칼날 접촉 조회로 근접 피해를 한 번 적용한다.</summary>
 public class EnemyMeleeAttack : EnemyAttackBehaviour
 {
+    private const float MAX_SWEEP_STEP_ANGLE = 15f;
+
     [Header("근접 공격 설정")]
     [SerializeField, Min(0.1f)] private float _attackRange = 2f;
     [SerializeField, Min(0f)] private float _damage = 10f;
@@ -23,6 +25,8 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     [SerializeField, Min(0.05f)] private float _swingDuration = 0.24f;
     [SerializeField] private float _startAngle = -70f;
     [SerializeField] private float _endAngle = 70f;
+    [SerializeField, Tooltip("베기 시간(0~1)에 따른 칼날 진행도(0~1)입니다. 검 애니메이션의 빠르기에 판정을 맞출 때 사용합니다.")]
+    private AnimationCurve _swingProgress = AnimationCurve.Linear(0f, 0f, 1f, 1f);
     [SerializeField, Min(0f)] private float _bladeBaseOffset = 0.25f;
     [SerializeField, Min(0f)] private float _blockRecovery = 0.55f;
     [SerializeField, Min(0f)] private float _parryRecovery = 0.9f;
@@ -33,6 +37,14 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     private float _startedAt;
     private bool _contactConsumed;
     private int _diagonalSign = 1;
+    private float _sweptProgress;
+
+    [Header("내딛기")]
+    [SerializeField, Min(0f), Tooltip("베기 시작과 함께 앞으로 미끄러져 들어가는 거리(m)입니다. 0이면 내딛지 않습니다.")]
+    private float _stepInDistance;
+    [SerializeField, Min(0.01f), Tooltip("내딛기에 걸리는 시간(초)입니다.")]
+    private float _stepInDuration = 0.1f;
+    private EnemyMotor _motor;
 
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
@@ -65,6 +77,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         return true;
     }
     public event Action<EnemyAttackContext> MeleeAttack;
+    public event Action<bool> Deflected;
     protected override float ActiveDuration => _swingDuration;
     protected override EnemySoundAction SoundAction => EnemySoundAction.Melee;
 
@@ -74,14 +87,20 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         _diagonalSign = _upperLeftOnly ? 1 : UnityEngine.Random.value < 0.5f ? 1 : -1;
     }
 
-    /// <summary>context의 수평 방향과 현재 몸 위치로 칼날을 준비하고 베기 시간 및 접촉 기록을 초기화한다.</summary>
+    /// <summary>
+    /// context의 수평 방향과 현재 몸 위치로 칼날을 준비하고 베기 시간·진행도 및 접촉 기록을 초기화한다.
+    /// _stepInDistance가 있으면 같은 방향으로 내딛기 이동을 시작한다.
+    /// </summary>
     protected override void PerformAttack(EnemyAttackContext context)
     {
         _swingOrigin = transform.position + Vector3.up * _hitHeight;
         _swingForward = Vector3.ProjectOnPlane(context.Direction, Vector3.up).normalized;
         if (_swingForward.sqrMagnitude < 0.001f) _swingForward = transform.forward;
         _startedAt = Time.time;
+        _sweptProgress = 0f;
         _contactConsumed = false;
+        if (_stepInDistance > 0f)
+            _motor.ApplyHitPush(_swingForward, _stepInDistance, _stepInDuration);
 #if UNITY_EDITOR
         _debugBlades.Clear();
         _debugHadContact = false;
@@ -96,6 +115,7 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
     protected override void Awake()
     {
         base.Awake();
+        _motor = GetComponent<EnemyMotor>();
         _bladeHitbox.enabled = false;
     }
 
@@ -107,8 +127,30 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
             BeginRecovery();
             return;
         }
-        UpdateHitboxPose(Mathf.Clamp01((Time.time - _startedAt) / _swingDuration));
-        if (!_useBuiltInHitDetection) return;
+        // 내딛는 동안에는 칼날 원점이 몸을 따라 앞으로 나간다.
+        if (_stepInDistance > 0f)
+            _swingOrigin = transform.position + Vector3.up * _hitHeight;
+        float progress = _swingProgress.Evaluate(Mathf.Clamp01((Time.time - _startedAt) / _swingDuration));
+        // 한 물리 프레임에 크게 도는 빠른 베기는 호를 작은 구간으로 나눠 칼끝 쪽 접촉을 놓치지 않는다.
+        int steps = Mathf.Max(1, Mathf.CeilToInt(Mathf.Abs(progress - _sweptProgress)
+            * Mathf.Abs(_endAngle - _startAngle) / MAX_SWEEP_STEP_ANGLE));
+        float sweptFrom = _sweptProgress;
+        _sweptProgress = progress;
+        for (int step = 1; step <= steps; step++)
+        {
+            UpdateHitboxPose(Mathf.Lerp(sweptFrom, progress, (float)step / steps));
+            if (!_useBuiltInHitDetection) continue;
+            SweepBladeContact();
+            if (Phase != EnemyAttackPhase.Active || _contactConsumed) return;
+        }
+    }
+
+    /// <summary>
+    /// 직전·현재 칼날 좌표로 회피 잔상 보고와 대상 접촉 조회를 한 번 수행한다.
+    /// 접촉한 Collider가 있으면 TryHit으로 피해 또는 회복을 확정한다.
+    /// </summary>
+    private void SweepBladeContact()
+    {
         Vector3 ghostPoint = DodgeAfterimage.ActiveOrigin;
         if (DodgeAfterimage.IsActive
             && !IsBlocked(Context, ghostPoint + Vector3.up * _hitHeight,
@@ -219,12 +261,16 @@ public class EnemyMeleeAttack : EnemyAttackBehaviour
         _bladeHitbox.enabled = false;
     }
 
-    /// <summary>perfect에 따라 방어당한 공격을 중단하고 반격 가능한 최소 회복 시간을 적용한다. point는 방어 접촉 위치다.</summary>
+    /// <summary>
+    /// perfect에 따라 방어당한 공격을 중단하고 반격 가능한 최소 회복 시간을 적용한다. point는 방어 접촉 위치다.
+    /// 회복 시작 전에 Deflected로 막기(false)·쳐내기(true)를 알려 연출이 공격 종료보다 먼저 반응하게 한다.
+    /// </summary>
     public void Deflect(bool perfect, Vector3 point)
     {
         if (Phase != EnemyAttackPhase.Active) return;
         _contactConsumed = true;
         BladeTip = point;
+        Deflected?.Invoke(perfect);
         BeginRecovery(perfect ? _parryRecovery : _blockRecovery);
 #if UNITY_EDITOR
         _debugContactPoint = point;

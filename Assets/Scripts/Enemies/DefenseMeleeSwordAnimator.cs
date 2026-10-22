@@ -5,10 +5,15 @@ using UnityEngine;
 [RequireComponent(typeof(EnemyMeleeAttack), typeof(EnemyCombatEffects))]
 public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
 {
+    private const float DEFLECT_BLEND_DURATION = 0.04f;
+
     private static readonly int _idleState = Animator.StringToHash("Idle");
     private static readonly int _prepareLeftState = Animator.StringToHash("PrepareUpperLeft");
+    private static readonly int _turnEdgeLeftState = Animator.StringToHash("TurnEdgeUpperLeft");
     private static readonly int _swingLeftState = Animator.StringToHash("SwingUpperLeft");
     private static readonly int _returnLeftState = Animator.StringToHash("ReturnUpperLeft");
+    private static readonly int _deflectGuardLeftState = Animator.StringToHash("DeflectGuardUpperLeft");
+    private static readonly int _deflectParryLeftState = Animator.StringToHash("DeflectParryUpperLeft");
     private static readonly int _baseMapId = Shader.PropertyToID("_BaseMap");
     private static readonly int _baseColorId = Shader.PropertyToID("_BaseColor");
     private static Texture2D _sharedGlintShape;
@@ -18,6 +23,8 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
     [SerializeField] private AnimationClip _prepareUpperLeft;
     [SerializeField] private AnimationClip _swingUpperLeft;
     [SerializeField] private AnimationClip _returnUpperLeft;
+    [SerializeField] private AnimationClip _deflectGuardUpperLeft;
+    [SerializeField] private AnimationClip _deflectParryUpperLeft;
 
     [Header("검 끝 섬광")]
     [SerializeField] private Transform _swordTip;
@@ -30,6 +37,7 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
     private ParticleSystem _glint;
     private bool _attackEnded;
     private bool _returning;
+    private bool _deflected;
     private float _returnEndAt;
 
     void Awake()
@@ -46,6 +54,7 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
         _attack.AttackCommitted += HandleAttackCommitted;
         _attack.AttackEnded += HandleAttackEnded;
         _attack.AttackCancelled += HandleAttackCancelled;
+        _attack.Deflected += HandleDeflected;
         _effects.SlashVisualFinished += HandleSlashVisualFinished;
         ResetToIdle();
     }
@@ -57,9 +66,11 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
         _attack.AttackCommitted -= HandleAttackCommitted;
         _attack.AttackEnded -= HandleAttackEnded;
         _attack.AttackCancelled -= HandleAttackCancelled;
+        _attack.Deflected -= HandleDeflected;
         _effects.SlashVisualFinished -= HandleSlashVisualFinished;
         _attackEnded = false;
         _returning = false;
+        _deflected = false;
         if (_glint != null)
             _glint.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
     }
@@ -72,20 +83,24 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
             ResetToIdle();
     }
 
-    /// <summary>전조 시작 시 UpperLeft 준비 클립을 첫 박동까지 재생하고 복귀 상태를 초기화한다.</summary>
+    /// <summary>
+    /// 전조 시작 시 UpperLeft 준비 클립을 원래 속도로 재생하고 첫 박동까지 남은 시간은 마지막 자세로 대기한다.
+    /// FirstHeartbeatAt까지의 시간이 클립보다 짧으면 그 시간에 맞춰 빠르게 재생하며 복귀 상태를 초기화한다.
+    /// </summary>
     private void HandleTelegraphStarted(EnemyAttackContext context)
     {
         _attackEnded = false;
         _returning = false;
+        _deflected = false;
         _glint.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
         float duration = Mathf.Max(0.01f, _attack.FirstHeartbeatAt - Time.time);
-        Play(_prepareLeftState, _prepareUpperLeft.length / duration, 0f);
+        Play(_prepareLeftState, Mathf.Max(1f, _prepareUpperLeft.length / duration), 0f);
     }
 
-    /// <summary>첫 박동에서 준비 클립의 마지막 검 자세를 고정하고 swordTip 위치의 십자 섬광을 한 번 재생한다.</summary>
+    /// <summary>첫 박동에서 날 돌리기 클립을 원래 속도로 재생해 날을 대상 쪽으로 돌린 뒤 마지막 자세를 유지하고, swordTip 위치의 십자 섬광을 한 번 재생한다.</summary>
     private void HandleFirstHeartbeatPlayed(EnemyAttackContext context)
     {
-        Play(_prepareLeftState, 0f, 1f);
+        Play(_turnEdgeLeftState, 1f, 0f);
         _glint.Clear(false);
         _glint.Play(false);
     }
@@ -97,9 +112,10 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
             _swingUpperLeft.length / Mathf.Max(0.01f, context.ActiveDuration), 0f);
     }
 
-    /// <summary>공격 종료 시 휘두르기 마지막 자세를 유지하고 검격 이펙트 종료를 기다린다.</summary>
+    /// <summary>공격 종료 시 휘두르기 마지막 자세를 유지하고 검격 이펙트 종료를 기다린다. 튕겨나감 중이면 그 동작을 유지한다.</summary>
     private void HandleAttackEnded(EnemyAttackContext context)
     {
+        if (_deflected) return;
         _attackEnded = true;
         Play(_swingLeftState, 0f, 1f);
         if (!_effects.HasSlashVisual)
@@ -113,10 +129,27 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
             BeginReturn();
     }
 
-    /// <summary>취소된 공격의 애니메이션과 섬광을 초기 대기 자세로 돌린다.</summary>
+    /// <summary>취소된 공격의 애니메이션과 섬광을 초기 대기 자세로 돌린다. 쳐내기 경직으로 취소된 튕겨나감은 끝까지 재생한다.</summary>
     private void HandleAttackCancelled(EnemyAttackContext context)
     {
+        if (_deflected) return;
         ResetToIdle();
+    }
+
+    /// <summary>
+    /// 막기(parried false)·쳐내기(parried true)로 베기가 끊기면 현재 검 자세에서 해당 튕겨나감 클립으로 짧게 섞어 넘긴다.
+    /// 잔심·치부리 복귀를 건너뛰고, 클립 길이 뒤에 대기 자세로 돌아가도록 _returnEndAt을 예약한다.
+    /// </summary>
+    private void HandleDeflected(bool parried)
+    {
+        AnimationClip clip = parried ? _deflectParryUpperLeft : _deflectGuardUpperLeft;
+        _deflected = true;
+        _attackEnded = false;
+        _returning = true;
+        _returnEndAt = Time.time + clip.length;
+        _swordAnimator.speed = 1f;
+        _swordAnimator.CrossFadeInFixedTime(parried ? _deflectParryLeftState : _deflectGuardLeftState,
+            DEFLECT_BLEND_DURATION, 0, 0f);
     }
 
     /// <summary>UpperLeft 복귀 클립을 시작하고 종료 시각을 _returnEndAt에 기록한다.</summary>
@@ -136,11 +169,12 @@ public sealed class DefenseMeleeSwordAnimator : MonoBehaviour
         _swordAnimator.Update(0f);
     }
 
-    /// <summary>현재 검을 대기 클립으로 되돌리고 복귀·섬광 상태를 지운다.</summary>
+    /// <summary>현재 검을 대기 클립으로 되돌리고 복귀·튕겨나감·섬광 상태를 지운다.</summary>
     private void ResetToIdle()
     {
         _attackEnded = false;
         _returning = false;
+        _deflected = false;
         if (_glint != null)
             _glint.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
         Play(_idleState, 1f, 0f);

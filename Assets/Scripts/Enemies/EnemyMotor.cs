@@ -14,6 +14,8 @@ public sealed class EnemyMotor : MonoBehaviour
     private NavMeshAgent _agent;
     private Vector3 _destination;
     private bool _hasDestination;
+    private int _facingLockFrame = -1;
+    private bool _rotationBeforeFacingLock;
 
     [Header("피격 이동 상태")]
     private Vector3 _pushDirection;
@@ -41,6 +43,9 @@ public sealed class EnemyMotor : MonoBehaviour
 
     void LateUpdate()
     {
+        // 대상 주시 이동 요청이 끊긴 다음 프레임부터 이동 방향 회전을 되돌린다.
+        if (_facingLockFrame >= 0 && _facingLockFrame != Time.frameCount)
+            RestoreMovementRotation();
         if (!_isPushed || Time.deltaTime <= 0f) return;
         if (!IsReady) { _isPushed = false; return; }
         _pushElapsed += Time.deltaTime;
@@ -69,9 +74,31 @@ public sealed class EnemyMotor : MonoBehaviour
             Quaternion.LookRotation(direction), _angularSpeed * Time.deltaTime);
     }
 
+    /// <summary>
+    /// 이번 프레임 동안 NavMeshAgent의 이동 방향 회전을 끄고 position의 수평 방향으로 설정된 각속도만큼 회전한다.
+    /// 이동 경로는 유지하므로 옆이나 뒤로 이동하면서 대상을 바라본다. 호출이 끊기면 LateUpdate에서 원래 회전 설정을 복원한다.
+    /// </summary>
+    public void FaceTargetWhileMoving(Vector3 position)
+    {
+        if (_facingLockFrame < 0)
+            _rotationBeforeFacingLock = _agent.updateRotation;
+        _facingLockFrame = Time.frameCount;
+        _agent.updateRotation = false;
+        FaceTarget(position);
+    }
+
+    /// <summary>FaceTargetWhileMoving 전에 저장한 _rotationBeforeFacingLock으로 NavMeshAgent 회전 설정을 되돌리고 _facingLockFrame을 초기화한다.</summary>
+    private void RestoreMovementRotation()
+    {
+        _agent.updateRotation = _rotationBeforeFacingLock;
+        _facingLockFrame = -1;
+    }
+
     void OnDisable()
     {
         _isPushed = false;
+        if (_facingLockFrame >= 0)
+            RestoreMovementRotation();
     }
 
     /// <summary>direction·distance·duration으로 수평 피격 밀림을 예약한다. NavMesh 위에서만 이동하며 중복 밀림은 새 요청으로 교체한다.</summary>
