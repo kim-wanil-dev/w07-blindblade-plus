@@ -726,7 +726,7 @@ MonoBehaviour:
   _dodgeCost: 20
   _guardCost: 0
   _regenPerSecond: 20
-  _regenDelay: 1
+  _regenDelay: 0.5
   _guardRegenMultiplier: 0.5
 --- !u!114 &306701406696307642
 MonoBehaviour:
