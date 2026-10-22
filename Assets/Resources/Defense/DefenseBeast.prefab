@@ -4620,13 +4620,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2e234bad0674426c804e1f0600918a34, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DefenseBeastProwl
-  _orbitRadiusMin: 4.5
-  _orbitRadiusMax: 6.5
+  _orbitRadiusMin: 2.25
+  _orbitRadiusMax: 4
   _orbitLeadAngle: 40
   _circleDurationMin: 1.6
   _circleDurationMax: 3
   _repathInterval: 0.1
-  _retreatRadius: 8
+  _retreatRadius: 4
   _retreatLeadAngle: 20
   _retreatTimeout: 1.2
   _readyTimeout: 2

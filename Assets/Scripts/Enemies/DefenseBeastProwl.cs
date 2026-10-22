@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 일반 Beast가 공격 범위에 처음 들어오면 바로 물기 돌진을 허용하고, 공격 뒤에는 대상 주변을 달리며 원을 그리다가 거리를 벌린 뒤 다음 물기 돌진을 허용한다.
+/// 일반 Beast가 공격 범위에 들어오면 대상 주변을 달리며 원을 그리다가 거리를 벌린 뒤 물기 돌진을 허용한다.
 /// EnemyController가 공격 중이 아닐 때 UpdateEngagement를 호출하며, 공격이 끝나면 새 원 그리기부터 다시 시작한다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -17,9 +17,9 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
 
     [Header("원 그리기")]
     [SerializeField, Min(0.5f), Tooltip("대상 주변을 도는 원의 최소 반지름(m)")]
-    private float _orbitRadiusMin = 4.5f;
+    private float _orbitRadiusMin = 2.25f;
     [SerializeField, Min(0.5f), Tooltip("대상 주변을 도는 원의 최대 반지름(m). 원마다 최소와 최대 사이에서 고른다.")]
-    private float _orbitRadiusMax = 6.5f;
+    private float _orbitRadiusMax = 4f;
     [SerializeField, Range(5f, 90f), Tooltip("원 위에서 현재 위치보다 앞서 목표로 삼는 각도. 클수록 빠르게 돈다.")]
     private float _orbitLeadAngle = 40f;
     [SerializeField, Min(0.1f), Tooltip("한 번 원을 그리는 최소 시간(초)")]
@@ -39,7 +39,7 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
 
     [Header("거리 벌리기")]
     [SerializeField, Min(0.5f), Tooltip("물기 돌진 전에 물러나는 대상과의 거리(m)")]
-    private float _retreatRadius = 8f;
+    private float _retreatRadius = 4f;
     [SerializeField, Range(0f, 90f), Tooltip("물러나면서도 원을 따라 앞서 나가는 각도")]
     private float _retreatLeadAngle = 20f;
     [SerializeField, Min(0.1f), Tooltip("물러나기에 쓰는 최대 시간(초). 넘으면 그 자리에서 돌진을 준비한다.")]
@@ -48,9 +48,8 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
     private float _readyTimeout = 2f;
 
     [Header("교전 재시작")]
-    [SerializeField, Min(0.05f), Tooltip("이 시간보다 오래 호출이 끊기면 공격이나 추적이 끼어든 것으로 보고, 공격 뒤면 원 그리기부터, 아니면 바로 돌진 대기부터 다시 시작한다(초)")]
+    [SerializeField, Min(0.05f), Tooltip("이 시간보다 오래 호출이 끊기면 공격이나 추적이 끼어든 것으로 보고 원 그리기부터 다시 시작한다(초)")]
     private float _resetGap = 0.25f;
-    private bool _attackedSinceReset;
 
     // 다른 적에 돌진 경로가 막혀 있으면 원을 계속 돌며 길이 열리기를 기다린다.
     public bool IsReadyToAttack => _phase == ProwlPhase.Ready && _attack.HasClearLunge(_target);
@@ -65,18 +64,11 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
     {
         _lastUpdateAt = float.NegativeInfinity;
         _phase = ProwlPhase.Circling;
-        _attackedSinceReset = false;
-        _attack.TelegraphStarted += HandleTelegraphStarted;
-    }
-
-    void OnDisable()
-    {
-        _attack.TelegraphStarted -= HandleTelegraphStarted;
     }
 
     /// <summary>
     /// target 주변의 원 그리기·물러나기·돌진 대기를 한 프레임 진행한다.
-    /// 호출이 _resetGap보다 오래 끊겼으면 _attackedSinceReset에 따라 공격 뒤면 새 원을, 아니면 돌진 대기를 시작하고, 단계 시간이 끝나면 다음 단계로 _phase를 넘긴다.
+    /// 호출이 _resetGap보다 오래 끊겼으면 새 원을 시작하고, 단계 시간이 끝나면 다음 단계로 _phase를 넘긴다.
     /// </summary>
     public void UpdateEngagement(Transform target)
     {
@@ -87,15 +79,9 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
             return;
         }
 
+        // 추적 끝에 처음 교전에 들어와도 공격 뒤처럼 원 그리기부터 시작한다.
         if (Time.time - _lastUpdateAt > _resetGap)
-        {
-            // 추적 끝에 처음 교전에 들어오면 배회 없이 먼저 물기 돌진을 시도한다.
-            if (_attackedSinceReset)
-                BeginCycle();
-            else
-                BeginReady();
-            _attackedSinceReset = false;
-        }
+            BeginCycle();
         _lastUpdateAt = Time.time;
 
         switch (_phase)
@@ -137,27 +123,6 @@ public sealed class DefenseBeastProwl : MonoBehaviour, IEnemyEngagementMovement
         _orbitSign = Random.value < 0.5f ? -1f : 1f;
         _phaseEndsAt = Time.time + Random.Range(_circleDurationMin, Mathf.Max(_circleDurationMin, _circleDurationMax));
         _nextRepathAt = 0f;
-    }
-
-    /// <summary>
-    /// 원 그리기와 물러나기를 건너뛰고 _phase를 Ready로 바꿔 바로 물기 돌진을 허용한다.
-    /// _readyTimeout 안에 공격이 시작되지 않으면 원 그리기로 넘어가도록 _phaseEndsAt을 정한다.
-    /// </summary>
-    private void BeginReady()
-    {
-        _phase = ProwlPhase.Ready;
-        _orbitSign = Random.value < 0.5f ? -1f : 1f;
-        _phaseEndsAt = Time.time + _readyTimeout;
-        _nextRepathAt = 0f;
-    }
-
-    /// <summary>
-    /// 물기 돌진 전조가 시작됐음을 _attackedSinceReset에 기록해 공격이 끝난 뒤 원 그리기부터 다시 시작하게 한다.
-    /// context는 사용하지 않는다.
-    /// </summary>
-    private void HandleTelegraphStarted(EnemyAttackContext context)
-    {
-        _attackedSinceReset = true;
     }
 
     /// <summary>
