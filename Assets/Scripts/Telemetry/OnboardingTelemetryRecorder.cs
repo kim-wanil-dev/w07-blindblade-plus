@@ -179,7 +179,7 @@ namespace BlindBlade.Telemetry
         /// <summary>게임이 일시정지되면 온보딩 로그의 로컬 저장과 전송을 즉시 요청한다.</summary>
         private void HandleGameStateChanged(GameplayState state)
         {
-            if (state == GameplayState.Paused) _service.RequestFlush();
+            if (state == GameplayState.Paused) _service.RequestFlushImmediately();
         }
 
         /// <summary>stageId의 새 도전을 열고 해당 씬 방문의 누적 카운터를 초기화한다.</summary>
@@ -232,7 +232,7 @@ namespace BlindBlade.Telemetry
             CloseStep(reason);
             Record("stage_ended", SectionSummary(reason));
             _sectionOpen = false;
-            _service.RequestFlush();
+            _service.RequestFlushImmediately();
         }
 
         /// <summary>현재 구간의 실행 ID, 완료 목표 수, 입력·사망·이탈 위치를 반환한다.</summary>
@@ -345,7 +345,7 @@ namespace BlindBlade.Telemetry
             if (_bound)
             {
                 Record("session_ended", new JObject { ["reason"] = reason });
-                _service.RequestFlush();
+                _service.RequestFlushImmediately();
             }
             _closing = true;
         }

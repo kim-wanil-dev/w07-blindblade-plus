@@ -262,7 +262,7 @@ namespace BlindBlade.Telemetry
             RecordMovement();
             Record("stage_ended", Summary(reason));
             _stageClosed = true;
-            _service.RequestFlush();
+            _service.RequestFlushImmediately();
         }
 
         /// <summary>현재 위치와 직전 표본 이후 실제 플레이 시간을 기록하고 표본 기준 시각을 갱신한다.</summary>
@@ -555,7 +555,7 @@ namespace BlindBlade.Telemetry
             _deathPending = true;
             _completePending = false;
             Record("player_died", new JObject { ["position"] = TelemetryJson.Position(health.transform.position) });
-            _service.RequestFlush();
+            _service.RequestFlushImmediately();
         }
 
         /// <summary>게임 상태 변경 때 마지막 위치 표본을 닫고 일시정지 진입 시 로그 저장·전송을 앞당긴다.</summary>
@@ -565,7 +565,7 @@ namespace BlindBlade.Telemetry
             RecordMovement();
             if (state == GameplayState.Paused)
             {
-                _service.RequestFlush();
+                _service.RequestFlushImmediately();
                 return;
             }
             if (state == GameplayState.Cleared)
@@ -797,7 +797,7 @@ namespace BlindBlade.Telemetry
             Record("session_ended", new JObject { ["reason"] = reason,
                 ["exitStageId"] = _stageId, ["exitStageAttemptId"] = _attemptSessionId,
                 ["exitLocation"] = _stageId, ["exitOccurredAtKst"] = _counts["exitOccurredAtKst"] });
-            _service.RequestFlush();
+            _service.RequestFlushImmediately();
             _closed = true;
         }
 

@@ -20,498 +20,1235 @@ using BlindBlade.Combat.Contracts;
 
 namespace BlindBlade.Telemetry
 {
-    /// <summary>씬을 넘어 원본 저장·디스크 기반 재전송을 유지한다. 전투 시스템에는 결과를 돌려주지 않는다.</summary>
-    public sealed class CombatTelemetryService : MonoBehaviour
-    {
-        private const int MAXIMUM_BATCH_BYTES = 196608;
-        private const double RETRY_INTERVAL_SECONDS = 20d;
-        private const double QUIT_UPLOAD_TIMEOUT_SECONDS = 35d;
-        private static CombatTelemetryService _active;
+public sealed class CombatTelemetryService : MonoBehaviour
+{
+	private const int MAXIMUM_BATCH_BYTES = 196608;
 
-        private readonly List<string> _buffer = new List<string>();
-        private TelemetryDiskStore _store;
-        private Task<string> _startupRecovery;
-        private Task _write;
-        private string[] _writing;
-        private UnityWebRequest _request;
-        private int _bufferLimit;
-        private int _batchLimit;
-        private int _timeout;
-        private float _flushInterval;
-        private float _uploadInterval;
-        private double _nextFlush;
-        private double _nextUpload;
-        private double _retryNotBefore;
-        private double _writeRetryNotBefore;
-        private long _recordVersion;
-        private bool _flushRequested;
-        private bool _diskDrained;
-        private bool _uploadDisabled;
-        private bool _quitAllowed;
-        private bool _allowUpload;
-        private bool _uploading;
-        private bool _quitting;
-        private bool _quitRequested;
-        private bool _quitNotified;
-        private bool _reportedUploadSuccess;
-        private string _lastError;
-        private string _lastWarnedError;
-        private JObject _latestAttemptRecord;
-        private double _latestAttemptObservedRealtime;
-        private int _dropped;
-        private int _uploaded;
-        private string _anonymousPlayerId;
-        private string _configurationSource;
+	private const double RETRY_INTERVAL_SECONDS = 20.0;
 
-        public static CombatTelemetryService Active => _active;
-        public string LogDirectory => _store?.Root;
-        public string LastError => _lastError;
-        public int DroppedEvents => _dropped;
-        public int AcknowledgedEvents => _uploaded;
-        public int BufferedEvents => _buffer.Count + (_writing?.Length ?? 0);
-        public string AnonymousPlayerId => _anonymousPlayerId;
-        public string ConfigurationSource => _configurationSource;
-        public event Action QuitRequested;
+	private const double QUIT_UPLOAD_TIMEOUT_SECONDS = 35.0;
 
-        /// <summary>
-        /// 저장 한도, 전송 간격, 배치 크기와 제한 시간 설정을 사용해 영속 서비스를 만들거나 기존 서비스를 반환한다.
-        /// 생성된 서비스 상태는 씬 전환과 재도전 뒤에도 유지된다.
-        /// </summary>
-        public static CombatTelemetryService GetOrCreate(int bufferLimit, float flushInterval, int maximumMegabytes,
-            bool allowUpload, float uploadInterval, int batchLimit, int timeout)
-        {
-            if (_active != null) return _active;
-            GameObject host = new GameObject("CombatTelemetryService");
-            DontDestroyOnLoad(host);
-            _active = host.AddComponent<CombatTelemetryService>();
-            _active._store = new TelemetryDiskStore(Path.Combine(Application.persistentDataPath, "CombatTelemetry"),
-                Math.Max(1, maximumMegabytes) * 1024L * 1024L);
-            _active._startupRecovery = _active._store.RecoverInterruptedSessionsAsync();
-            _active._bufferLimit = Math.Max(64, bufferLimit);
-            _active._flushInterval = Mathf.Max(0.2f, flushInterval);
-            _active._uploadInterval = Mathf.Max(5f, uploadInterval);
-            _active._batchLimit = Mathf.Clamp(batchLimit, 1, 100);
-            _active._timeout = Mathf.Clamp(timeout, 5, 120);
-            _active._allowUpload = allowUpload;
-            if (!Application.isEditor) Application.wantsToQuit += _active.HandleWantsToQuit;
-#if UNITY_EDITOR
-            EditorApplication.playModeStateChanged += _active.HandleEditorPlayModeChanged;
+	private static CombatTelemetryService _active;
+
+	private readonly List<string> _buffer = new List<string>();
+
+	private readonly HashSet<string> _pendingUploadSessionIds = new HashSet<string>();
+
+	private TelemetryDiskStore _store;
+
+	private Task<string> _startupRecovery;
+
+	private Task _write;
+
+	private string[] _writing;
+
+	private UnityWebRequest _request;
+
+	private int _bufferLimit;
+
+	private int _batchLimit;
+
+	private int _timeout;
+
+	private float _flushInterval;
+
+	private float _uploadInterval;
+
+	private double _nextFlush;
+
+	private double _nextUpload;
+
+	private double _retryNotBefore;
+
+	private double _writeRetryNotBefore;
+
+	private long _recordVersion;
+
+	private bool _flushRequested;
+
+	private bool _immediateUploadRequested;
+
+	private bool _diskDrained;
+
+	private bool _uploadDisabled;
+
+	private bool _quitAllowed;
+
+	private bool _allowUpload;
+
+	private bool _uploading;
+
+	private bool _quitting;
+
+	private bool _quitRequested;
+
+	private bool _quitNotified;
+
+	private bool _reportedUploadSuccess;
+
+	private string _lastError;
+
+	private string _lastWarnedError;
+
+	private JObject _latestAttemptRecord;
+
+	private double _latestAttemptObservedRealtime;
+
+	private int _dropped;
+
+	private int _uploaded;
+
+	private string _anonymousPlayerId;
+
+	private string _configurationSource;
+
+	public static CombatTelemetryService Active => _active;
+
+	public string LogDirectory => _store?.Root;
+
+	public string LastError => _lastError;
+
+	public int DroppedEvents => _dropped;
+
+	public int AcknowledgedEvents => _uploaded;
+
+	public int BufferedEvents
+	{
+		get
+		{
+			int count = _buffer.Count;
+			string[] writing = _writing;
+			return count + ((writing != null) ? writing.Length : 0);
+		}
+	}
+
+	public string AnonymousPlayerId => _anonymousPlayerId;
+
+	public string ConfigurationSource => _configurationSource;
+
+	public event Action QuitRequested;
+
+	/// <summary>
+	/// Telemetry 싱글턴을 생성하거나 기존 인스턴스를 반환한다.
+	/// 설정값을 사용해 저장소와 전송 주기를 초기화하고 Active 상태를 반환한다.
+	/// </summary>
+	public static CombatTelemetryService GetOrCreate(int bufferLimit, float flushInterval, int maximumMegabytes, bool allowUpload, float uploadInterval, int batchLimit, int timeout)
+	{
+		if ((UnityEngine.Object)(object)_active != (UnityEngine.Object)null)
+		{
+			return _active;
+		}
+		GameObject host = new GameObject("CombatTelemetryService");
+		UnityEngine.Object.DontDestroyOnLoad((UnityEngine.Object)(object)host);
+		_active = host.AddComponent<CombatTelemetryService>();
+		_active._store = new TelemetryDiskStore(Path.Combine(Application.persistentDataPath, "CombatTelemetry"), (long)Math.Max(1, maximumMegabytes) * 1024L * 1024);
+		_active._startupRecovery = _active._store.RecoverInterruptedSessionsAsync();
+		_active._bufferLimit = Math.Max(64, bufferLimit);
+		_active._flushInterval = Mathf.Max(0.2f, flushInterval);
+		_active._uploadInterval = Mathf.Max(5f, uploadInterval);
+		_active._batchLimit = Mathf.Clamp(batchLimit, 1, 100);
+		_active._timeout = Mathf.Clamp(timeout, 5, 120);
+		_active._allowUpload = allowUpload;
+		if (!Application.isEditor)
+		{
+			Application.wantsToQuit += _active.HandleWantsToQuit;
+		}
+		#if UNITY_EDITOR
+		EditorApplication.playModeStateChanged += _active.HandleEditorPlayModeChanged;
 #endif
-            _active._anonymousPlayerId = Guid.NewGuid().ToString("N");
-            try
-            {
-                Directory.CreateDirectory(_active._store.Root);
-                string identityPath = Path.Combine(_active._store.Root, "anonymous-player-id.txt");
-                if (File.Exists(identityPath) && Guid.TryParseExact(File.ReadAllText(identityPath).Trim(), "N", out Guid identity))
-                    _active._anonymousPlayerId = identity.ToString("N");
-                else File.WriteAllText(identityPath, _active._anonymousPlayerId);
-            }
-            catch (Exception exception) { _active.ReportError("익명 ID 저장 실패: " + exception.Message); }
-            return _active;
-        }
+		_active._anonymousPlayerId = Guid.NewGuid().ToString("N");
+		try
+		{
+			Directory.CreateDirectory(_active._store.Root);
+			string identityPath = Path.Combine(_active._store.Root, "anonymous-player-id.txt");
+			if (File.Exists(identityPath) && Guid.TryParseExact(File.ReadAllText(identityPath).Trim(), "N", out var identity))
+			{
+				_active._anonymousPlayerId = identity.ToString("N");
+			}
+			else
+			{
+				File.WriteAllText(identityPath, _active._anonymousPlayerId);
+			}
+		}
+		catch (Exception ex)
+		{
+			_active.ReportError("익명 ID 저장 실패: " + ex.Message);
+		}
+		return _active;
+	}
 
-        /// <summary>record를 즉시 문자열 스냅샷으로 버퍼에 넣는다. 한도 초과 시 일반 사건은 거부하고 종료 사건은 보존한다.</summary>
-        internal void Enqueue(JObject record)
-        {
-            if (_quitting) return;
-            string eventType = record.Value<string>("eventType");
-            bool terminal = eventType == "player_died" || eventType == "stage_ended"
-                || eventType == "session_ended" || eventType == "game_completed";
-            if (BufferedEvents >= _bufferLimit && !terminal)
-            {
-                _dropped++;
-                ReportError("로그 메모리 한도를 넘어 사건이 누락되었습니다.");
-                return;
-            }
-            _buffer.Add(record.ToString(Formatting.None));
-            string attemptId=record.Value<string>("stageAttemptId");
-            string currentAttemptId=_latestAttemptRecord?.Value<string>("stageAttemptId");
-            if(eventType=="stage_started"||(!string.IsNullOrEmpty(attemptId)&&attemptId==currentAttemptId
-                &&record.Value<string>("sessionId")==_latestAttemptRecord?.Value<string>("sessionId")))
-            {
-                _latestAttemptRecord=(JObject)record.DeepClone();
-                _latestAttemptObservedRealtime=Time.realtimeSinceStartupAsDouble;
-            }
-            _recordVersion++;
-            _diskDrained = false;
-        }
+	/// <summary>
+	/// 이벤트를 메모리 버퍼에 추가하고 해당 세션을 현재 실행의 전송 대상으로 등록한다.
+	/// record를 사용하며 버퍼와 현재 세션 ID 집합을 변경한다.
+	/// </summary>
+	internal void Enqueue(JObject record)
+	{
+		if (_quitting)
+		{
+			return;
+		}
+		string eventType = ((JToken)record).Value<string>((object)"eventType");
+		string sessionId = ((JToken)record).Value<string>((object)"sessionId");
+		if (!string.IsNullOrEmpty(sessionId))
+		{
+			_pendingUploadSessionIds.Add(sessionId);
+		}
+		int num;
+		switch (eventType)
+		{
+		default:
+			num = ((eventType == "game_completed") ? 1 : 0);
+			break;
+		case "player_died":
+		case "stage_ended":
+		case "session_ended":
+			num = 1;
+			break;
+		}
+		bool terminal = (byte)num != 0;
+		if (BufferedEvents >= _bufferLimit && !terminal)
+		{
+			_dropped++;
+			ReportError("로그 메모리 한도를 넘어 사건이 누락되었습니다.");
+			return;
+		}
+		_buffer.Add(((JToken)record).ToString((Formatting)0, Array.Empty<JsonConverter>()));
+		string attemptId = ((JToken)record).Value<string>((object)"stageAttemptId");
+		JObject latestAttemptRecord = _latestAttemptRecord;
+		string currentAttemptId = ((latestAttemptRecord != null) ? ((JToken)latestAttemptRecord).Value<string>((object)"stageAttemptId") : null);
+		if (eventType == "stage_started")
+		{
+			goto IL_0146;
+		}
+		if (!string.IsNullOrEmpty(attemptId) && attemptId == currentAttemptId)
+		{
+			string text = ((JToken)record).Value<string>((object)"sessionId");
+			JObject latestAttemptRecord2 = _latestAttemptRecord;
+			if (text == ((latestAttemptRecord2 != null) ? ((JToken)latestAttemptRecord2).Value<string>((object)"sessionId") : null))
+			{
+				goto IL_0146;
+			}
+		}
+		goto IL_0164;
+		IL_0164:
+		_recordVersion++;
+		_diskDrained = false;
+		return;
+		IL_0146:
+		_latestAttemptRecord = (JObject)((JToken)record).DeepClone();
+		_latestAttemptObservedRealtime = Time.realtimeSinceStartupAsDouble;
+		goto IL_0164;
+	}
 
-        /// <summary>현재 버퍼의 저장과 후속 전송을 요청한다. 진행 중인 전송 중에도 요청을 보존하며 실패 재시도 간격은 유지한다.</summary>
-        public void RequestFlush()
-        {
-            _flushRequested = true;
-            _diskDrained = false;
-            _nextFlush = 0d;
-        }
+	/// <summary>
+	/// 버퍼를 즉시 저장하고 정기 업로드 주기를 앞당긴다.
+	/// 업로드가 실패한 경우에는 설정된 재시도 대기시간을 따른다.
+	/// </summary>
+	public void RequestFlush()
+	{
+		_flushRequested = true;
+		_diskDrained = false;
+		_nextFlush = 0.0;
+	}
 
-        void Update()
-        {
-            if (_startupRecovery != null)
-            {
-                if (!_startupRecovery.IsCompleted) return;
-                if (_startupRecovery.IsFaulted)
-                    ReportError("이전 세션 복구 실패: " + _startupRecovery.Exception.GetBaseException().Message);
-                else if (_startupRecovery.IsCanceled)
-                    ReportError("이전 세션 복구 작업이 취소되었습니다. 원본 로그를 보존하고 전송을 계속합니다.");
-                else if (!string.IsNullOrEmpty(_startupRecovery.Result))
-                    ReportError(_startupRecovery.Result);
-                _startupRecovery = null;
-            }
+	/// <summary>
+	/// 저장과 업로드를 즉시 요청하고 실패 재시도 대기를 건너뛴다.
+	/// 직전 업로드가 진행 중이면 완료 후 우선 업로드하도록 요청 상태를 유지한다.
+	/// </summary>
+	public void RequestFlushImmediately()
+	{
+		RequestFlush();
+		_immediateUploadRequested = true;
+		_retryNotBefore = 0.0;
+	}
 
-            ObserveWrite();
-            double now = Time.realtimeSinceStartupAsDouble;
-            if (_write == null && _buffer.Count > 0 && now >= _writeRetryNotBefore
-                && (_flushRequested || now >= _nextFlush))
-            {
-                _writing = _buffer.ToArray();
-                _buffer.Clear();
-                _write = _store.AppendAsync(_writing);
-                _nextFlush = now + _flushInterval;
-            }
-            if (_allowUpload && !_uploading && _write == null && _writing == null && _buffer.Count == 0
-                && now >= _retryNotBefore
-                && (_flushRequested || now >= _nextUpload))
-            {
-                _flushRequested = false;
-                StartCoroutine(Upload());
-            }
-        }
+	private void Update()
+	{
+		if (_startupRecovery != null)
+		{
+			if (!_startupRecovery.IsCompleted)
+			{
+				return;
+			}
+			if (_startupRecovery.IsFaulted)
+			{
+				ReportError("이전 세션 복구 실패: " + _startupRecovery.Exception.GetBaseException().Message);
+			}
+			else if (_startupRecovery.IsCanceled)
+			{
+				ReportError("이전 세션 복구 작업이 취소되었습니다. 원본 로그를 보존하고 전송을 계속합니다.");
+			}
+			else if (!string.IsNullOrEmpty(_startupRecovery.Result))
+			{
+				ReportError(_startupRecovery.Result);
+			}
+			_startupRecovery = null;
+		}
+		ObserveWrite();
+		double now = Time.realtimeSinceStartupAsDouble;
+		if (_write == null && _buffer.Count > 0 && now >= _writeRetryNotBefore && (_flushRequested || now >= _nextFlush))
+		{
+			_writing = _buffer.ToArray();
+			_buffer.Clear();
+			_write = _store.AppendAsync(_writing);
+			_nextFlush = now + (double)_flushInterval;
+		}
+		if (_allowUpload && !_uploading && _write == null && _writing == null && _buffer.Count == 0
+			&& (_immediateUploadRequested || now >= _retryNotBefore) && (_flushRequested || now >= _nextUpload))
+		{
+			_flushRequested = false;
+			_immediateUploadRequested = false;
+			((MonoBehaviour)this).StartCoroutine(Upload());
+		}
+	}
 
-        /// <summary>완료된 저장 작업의 오류를 확인한다. 실패한 사건을 버퍼 앞에 복구하고 20초 뒤 원본 저장을 재시도한다.</summary>
-        private void ObserveWrite()
-        {
-            if (_write == null || !_write.IsCompleted) return;
-            if (_write.IsFaulted)
-            {
-                if (_writing != null && _writing.Length > 0)
-                {
-                    _buffer.InsertRange(0, _writing);
-                    _flushRequested = true;
-                }
-                _writeRetryNotBefore = Time.realtimeSinceStartupAsDouble + RETRY_INTERVAL_SECONDS;
-                _diskDrained = false;
-                ReportError("로컬 저장 실패(일부 저장 가능): " + _write.Exception.GetBaseException().Message
-                    + "; 원본 저장을 20초 뒤 다시 시도합니다.");
-            }
-            else
-            {
-                _writeRetryNotBefore = 0d;
-                if (!string.IsNullOrEmpty(_store.MetadataError)) ReportError(_store.MetadataError);
-            }
-            _write = null;
-            _writing = null;
-        }
+	/// <summary>
+	/// 비동기 로컬 기록 결과를 확인하고 실패 상태를 갱신한다.
+	/// 쓰기 작업 상태를 사용하며 버퍼, 재시도 시각, 오류 상태를 변경한다.
+	/// </summary>
+	private void ObserveWrite()
+	{
+		if (_write == null || !_write.IsCompleted)
+		{
+			return;
+		}
+		if (_write.IsFaulted)
+		{
+			if (_writing != null && _writing.Length != 0)
+			{
+				_buffer.InsertRange(0, _writing);
+				_flushRequested = true;
+			}
+			_writeRetryNotBefore = Time.realtimeSinceStartupAsDouble + 20.0;
+			_diskDrained = false;
+			ReportError("로컬 저장 실패(일부 저장 가능): " + _write.Exception.GetBaseException().Message + "; 원본 저장을 20초 뒤 다시 시도합니다.");
+		}
+		else
+		{
+			_writeRetryNotBefore = 0.0;
+			if (!string.IsNullOrEmpty(_store.MetadataError))
+			{
+				ReportError(_store.MetadataError);
+			}
+		}
+		_write = null;
+		_writing = null;
+	}
 
-        /// <summary>로컬 재정의 또는 빌드 기본 설정으로 디스크의 미확인 배치를 전송한다. 정확한 사건 키 확인 뒤에만 커서를 이동한다.</summary>
-        private IEnumerator Upload()
-        {
-            _uploading = true;
-            _nextUpload = Time.realtimeSinceStartupAsDouble + _uploadInterval;
-            JObject configuration;
-            try
-            {
-                configuration = ReadUploadConfiguration();
-                _uploadDisabled = configuration.Value<bool?>("enabled") != true;
-                if (_uploadDisabled) { _uploading = false; yield break; }
-                if (!Uri.TryCreate(configuration.Value<string>("endpoint"), UriKind.Absolute, out Uri endpoint)
-                    || endpoint.Scheme != Uri.UriSchemeHttps || (configuration.Value<string>("token")?.Length ?? 0) < 32)
-                    throw new InvalidDataException("전송 설정의 HTTPS endpoint와 32자 이상 token을 설정하세요. 설정 출처: " + _configurationSource);
-            }
-            catch (Exception exception)
-            {
-                FailUpload("전송 설정 오류: " + exception.Message);
-                yield break;
-            }
+	/// <summary>
+	/// 미확인 배치를 서버로 전송하고 응답 ACK를 확인한다.
+	/// 저장소와 현재 설정을 사용하며 업로드 커서와 전송 상태를 변경한다.
+	/// </summary>
+	private IEnumerator Upload()
+	{
+		_uploading = true;
+		_nextUpload = Time.realtimeSinceStartupAsDouble + (double)_uploadInterval;
+		JObject configuration;
+		try
+		{
+			configuration = ReadUploadConfiguration();
+			_uploadDisabled = ((JToken)configuration).Value<bool?>((object)"enabled") != true;
+			if (_uploadDisabled)
+			{
+				_uploading = false;
+				yield break;
+			}
+			if (!Uri.TryCreate(((JToken)configuration).Value<string>((object)"endpoint"), UriKind.Absolute, out Uri endpoint) || endpoint.Scheme != Uri.UriSchemeHttps || (((JToken)configuration).Value<string>((object)"token")?.Length ?? 0) < 32)
+			{
+				throw new InvalidDataException("전송 설정의 HTTPS endpoint와 32자 이상 token을 설정하세요. 설정 출처: " + _configurationSource);
+			}
+		}
+		catch (Exception ex)
+		{
+			Exception exception = ex;
+			FailUpload("전송 설정 오류: " + exception.Message);
+			yield break;
+		}
+		string destination;
+		using (SHA256 algorithm = SHA256.Create())
+		{
+			destination = BitConverter.ToString(algorithm.ComputeHash(Encoding.UTF8.GetBytes(((JToken)configuration).Value<string>((object)"endpoint")))).Replace("-", "").Substring(0, 32);
+		}
+		long readVersion = _recordVersion;
+		Task<UploadBatch> read = _store.ReadBatchAsync(_batchLimit, 196608, destination, new HashSet<string>(_pendingUploadSessionIds));
+		while (!read.IsCompleted)
+		{
+			yield return null;
+		}
+		if (read.IsFaulted)
+		{
+			FailUpload("미전송 로그 읽기 실패: " + read.Exception.GetBaseException().Message);
+			yield break;
+		}
+		if (!string.IsNullOrEmpty(_store.ReadError))
+		{
+			ReportError(_store.ReadError);
+		}
+		UploadBatch batch = read.Result;
+		if (batch == null)
+		{
+			if (!string.IsNullOrEmpty(_store.ReadError))
+			{
+				FailUpload(_store.ReadError);
+				yield break;
+			}
+			_diskDrained = readVersion == _recordVersion && _write == null && _buffer.Count == 0;
+			_uploading = false;
+			yield break;
+		}
+		JObject body = new JObject
+		{
+			["protocolVersion"] = "1",
+			["token"] = ((JToken)configuration).Value<string>((object)"token"),
+			["batchId"] = batch.BatchId,
+			["records"] = (JToken)(object)batch.Records
+		};
+		UnityWebRequest request = new UnityWebRequest(((JToken)configuration).Value<string>((object)"endpoint"), "POST");
+		try
+		{
+			_request = request;
+			request.uploadHandler = (UploadHandler)new UploadHandlerRaw(Encoding.UTF8.GetBytes(((JToken)body).ToString((Formatting)0, Array.Empty<JsonConverter>())));
+			request.downloadHandler = (DownloadHandler)new DownloadHandlerBuffer();
+			request.SetRequestHeader("Content-Type", "application/json");
+			request.timeout = _timeout;
+			request.redirectLimit = 5;
+			yield return request.SendWebRequest();
+			bool accepted = false;
+			string responseError = null;
+			if ((int)request.result == 1)
+			{
+				try
+				{
+					JObject response = JObject.Parse(request.downloadHandler.text);
+					responseError = ((JToken)response).Value<string>((object)"error");
+					JToken obj = response["acknowledgedEventIds"];
+					HashSet<string> acknowledged = new HashSet<string>(((obj != null) ? obj.Values<string>() : null) ?? Array.Empty<string>());
+					accepted = ((JToken)response).Value<bool?>((object)"ok") == true && ((JToken)response).Value<string>((object)"batchId") == batch.BatchId;
+					foreach (JToken record in batch.Records)
+					{
+						accepted &= acknowledged.Contains((string)record[(object)"sessionId"] + ":" + (long)record[(object)"eventSequence"]);
+					}
+				}
+				catch (Exception)
+				{
+					accepted = false;
+				}
+			}
+			_request = null;
+			if (!accepted)
+			{
+				FailUpload("Google Sheets upload was not acknowledged. HTTP " + request.responseCode + ", transport=" + ((object)request.result/*cast due to .constrained prefix*/).ToString() + ", server=" + (responseError ?? "none") + ", client=" + (request.error ?? "none"));
+				yield break;
+			}
+		}
+		finally
+		{
+			((IDisposable)request)?.Dispose();
+		}
+		Task checkpoint = _store.AcknowledgeAsync(batch);
+		while (!checkpoint.IsCompleted)
+		{
+			yield return null;
+		}
+		if (checkpoint.IsFaulted)
+		{
+			FailUpload("전송 커서 저장 실패: " + checkpoint.Exception.GetBaseException().Message);
+			yield break;
+		}
+		_uploaded += ((JContainer)batch.Records).Count;
+		_lastError = null;
+		if (!_reportedUploadSuccess)
+		{
+			_reportedUploadSuccess = true;
+			Debug.Log((object)("CombatTelemetry upload acknowledged. Configuration=" + _configurationSource), (UnityEngine.Object)(object)this);
+		}
+		_uploading = false;
+		_nextUpload = Time.realtimeSinceStartupAsDouble + 0.5;
+	}
 
-            string destination;
-            using (SHA256 algorithm = SHA256.Create())
-                destination = BitConverter.ToString(algorithm.ComputeHash(Encoding.UTF8.GetBytes(configuration.Value<string>("endpoint"))))
-                    .Replace("-", "").Substring(0, 32);
-            long readVersion = _recordVersion;
-            Task<UploadBatch> read = _store.ReadBatchAsync(_batchLimit, MAXIMUM_BATCH_BYTES, destination);
-            while (!read.IsCompleted) yield return null;
-            if (read.IsFaulted)
-            {
-                FailUpload("미전송 로그 읽기 실패: " + read.Exception.GetBaseException().Message);
-                yield break;
-            }
-            if (!string.IsNullOrEmpty(_store.ReadError)) ReportError(_store.ReadError);
-            UploadBatch batch = read.Result;
-            if (batch == null)
-            {
-                if (!string.IsNullOrEmpty(_store.ReadError))
-                {
-                    FailUpload(_store.ReadError);
-                    yield break;
-                }
-                _diskDrained = readVersion == _recordVersion && _write == null && _buffer.Count == 0;
-                _uploading = false;
-                yield break;
-            }
-            JObject body = new JObject { ["protocolVersion"] = "1", ["token"] = configuration.Value<string>("token"),
-                ["batchId"] = batch.BatchId, ["records"] = batch.Records };
-            using (UnityWebRequest request = new UnityWebRequest(configuration.Value<string>("endpoint"), "POST"))
-            {
-                _request = request;
-                request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body.ToString(Formatting.None)));
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.SetRequestHeader("Content-Type", "application/json");
-                request.timeout = _timeout;
-                request.redirectLimit = 5;
-                yield return request.SendWebRequest();
-                bool accepted = false;
-                string responseError = null;
-                if (request.result == UnityWebRequest.Result.Success)
-                {
-                    try
-                    {
-                        JObject response = JObject.Parse(request.downloadHandler.text);
-                        responseError = response.Value<string>("error");
-                        HashSet<string> acknowledged = new HashSet<string>(response["acknowledgedEventIds"]?.Values<string>()
-                            ?? Array.Empty<string>());
-                        accepted = response.Value<bool?>("ok") == true && response.Value<string>("batchId") == batch.BatchId;
-                        foreach (JToken record in batch.Records)
-                            accepted &= acknowledged.Contains((string)record["sessionId"] + ":" + (long)record["eventSequence"]);
-                    }
-                    catch (Exception) { accepted = false; }
-                }
-                _request = null;
-                if (!accepted)
-                {
-                    FailUpload("Google Sheets upload was not acknowledged. HTTP " + request.responseCode
-                        + ", transport=" + request.result + ", server=" + (responseError ?? "none")
-                        + ", client=" + (request.error ?? "none"));
-                    yield break;
-                }
-            }
-            Task checkpoint = _store.AcknowledgeAsync(batch);
-            while (!checkpoint.IsCompleted) yield return null;
-            if (checkpoint.IsFaulted)
-            {
-                FailUpload("전송 커서 저장 실패: " + checkpoint.Exception.GetBaseException().Message);
-                yield break;
-            }
-            _uploaded += batch.Records.Count;
-            _lastError = null;
-            if (!_reportedUploadSuccess)
-            {
-                _reportedUploadSuccess = true;
-                Debug.Log("CombatTelemetry upload acknowledged. Configuration=" + _configurationSource, this);
-            }
-            _uploading = false;
-            _nextUpload = Time.realtimeSinceStartupAsDouble + 0.5d;
-        }
+	/// <summary>
+	/// 로컬 또는 기본 전송 설정을 읽고 검증한다.
+	/// 저장소 경로를 사용하고 검증된 설정 객체를 반환한다.
+	/// </summary>
+	private JObject ReadUploadConfiguration()
+	{
+		string path = Path.Combine(_store.Root, "upload-config.json");
+		if (File.Exists(path))
+		{
+			_configurationSource = "LocalOverride";
+			return JObject.Parse(File.ReadAllText(path));
+		}
+		_configurationSource = "BuiltIn";
+		return CombatTelemetryUploadSettings.LoadConfiguration();
+	}
 
-        /// <summary>로컬 파일이 있으면 그 값을 반환하고 없으면 Resources의 기본값을 반환한다. 출처를 보관하며 CONFIG를 생성하지 않는다.</summary>
-        private JObject ReadUploadConfiguration()
-        {
-            string path = Path.Combine(_store.Root, "upload-config.json");
-            if (File.Exists(path))
-            {
-                _configurationSource = "LocalOverride";
-                return JObject.Parse(File.ReadAllText(path));
-            }
-            _configurationSource = "BuiltIn";
-            return CombatTelemetryUploadSettings.LoadConfiguration();
-        }
+	/// <summary>
+	/// 업로드 실패를 기록하고 재시도 시각을 설정한다.
+	/// 오류 메시지를 사용하며 전송 상태를 변경한다.
+	/// </summary>
+	private void FailUpload(string message)
+	{
+		ReportError(message);
+		_nextUpload = Time.realtimeSinceStartupAsDouble + 20.0;
+		_retryNotBefore = _nextUpload;
+		_uploading = false;
+	}
 
-        /// <summary>
-        /// message를 진단에 남기고 20초 뒤 재시도하도록 설정한다.
-        /// _lastError, _nextUpload, _uploading을 갱신하며 원본과 확인 커서는 유지한다.
-        /// </summary>
-        private void FailUpload(string message)
-        {
-            ReportError(message);
-            _nextUpload = Time.realtimeSinceStartupAsDouble + RETRY_INTERVAL_SECONDS;
-            _retryNotBefore = _nextUpload;
-            _uploading = false;
-        }
+	/// <summary>
+	/// 최근 오류를 저장하고 Unity 로그에 경고를 남긴다.
+	/// 오류 메시지를 사용하며 진단 상태를 변경한다.
+	/// </summary>
+	private void ReportError(string message)
+	{
+		_lastError = message;
+		if (!(_lastWarnedError == message))
+		{
+			_lastWarnedError = message;
+			Debug.LogWarning((object)("전투 로그: " + message), (UnityEngine.Object)(object)this);
+		}
+	}
 
-        /// <summary>message를 최신 진단으로 보관하고 최초 오류만 Console에 알린다. URL·token·본문은 출력하지 않는다.</summary>
-        private void ReportError(string message)
-        {
-            _lastError = message;
-            if (_lastWarnedError == message) return;
-            _lastWarnedError = message;
-            Debug.LogWarning("전투 로그: " + message, this);
-        }
+	/// <summary>
+	/// 종료 전 로그 저장과 재시도 대기를 건너뛴 전송을 요청한다.
+	/// 종료 요청 상태를 확인하고 종료 허용 여부를 반환한다.
+	/// </summary>
+	private bool HandleWantsToQuit()
+	{
+		if (_quitAllowed)
+		{
+			return true;
+		}
+		if (_quitRequested)
+		{
+			return false;
+		}
+		_quitRequested = true;
+		Application.runInBackground = true;
+		NotifyQuitRequested();
+		RequestFlushImmediately();
+		((MonoBehaviour)this).StartCoroutine(DrainBeforeQuit());
+		return false;
+	}
 
-        /// <summary>종료 요청 때 기록자를 한 번 닫고 저장·전송 유예를 시작한다. 유예가 끝나기 전에는 false를 반환해 정상 종료를 보류한다.</summary>
-        private bool HandleWantsToQuit()
-        {
-            if (_quitAllowed) return true;
-            if (_quitRequested) return false;
-            _quitRequested = true;
-            Application.runInBackground = true;
-            NotifyQuitRequested();
-            RequestFlush();
-            StartCoroutine(DrainBeforeQuit());
-            return false;
-        }
+	/// <summary>
+	/// 종료 요청 이벤트를 한 번 발생시킨다.
+	/// 이벤트 구독자와 알림 상태를 사용한다.
+	/// </summary>
+	private void NotifyQuitRequested()
+	{
+		if (_quitNotified)
+		{
+			return;
+		}
+		_quitNotified = true;
+		Action handlers = this.QuitRequested;
+		if (handlers != null)
+		{
+			Delegate[] invocationList = handlers.GetInvocationList();
+			foreach (Delegate subscriber in invocationList)
+			{
+				try
+				{
+					((Action)subscriber)();
+				}
+				catch (Exception ex)
+				{
+					ReportError("종료 기록자 처리 실패: " + ex.Message);
+				}
+			}
+		}
+		EnsureApplicationQuitRecord();
+	}
 
-        /// <summary>등록된 기록자를 각각 종료 알림하고 누락된 정상 종료 사건을 보충한다. 한 기록자 오류가 다른 기록자의 종료 기록을 막지 않는다.</summary>
-        private void NotifyQuitRequested()
-        {
-            if (_quitNotified) return;
-            _quitNotified = true;
-            Action handlers = QuitRequested;
-            if (handlers != null)
-            {
-                foreach (Delegate subscriber in handlers.GetInvocationList())
-                {
-                    try { ((Action)subscriber)(); }
-                    catch (Exception exception) { ReportError("종료 기록자 처리 실패: " + exception.Message); }
-                }
-            }
-            EnsureApplicationQuitRecord();
-        }
+	/// <summary>
+	/// 앱 종료 이벤트가 아직 없으면 종료 기록을 버퍼에 추가한다.
+	/// 최근 시도 기록과 세션 상태를 사용하며 버퍼를 변경한다.
+	/// </summary>
+	private void EnsureApplicationQuitRecord()
+	{
+		if (_latestAttemptRecord == null)
+		{
+			return;
+		}
+		JObject previousPayload = ((JToken)_latestAttemptRecord).Value<JObject>((object)"payload");
+		if (!(((JToken)_latestAttemptRecord).Value<string>((object)"eventType") == "session_ended") || !(((previousPayload != null) ? ((JToken)previousPayload).Value<string>((object)"reason") : null) == "application_quit"))
+		{
+			long sequence = ((JToken)_latestAttemptRecord).Value<long?>((object)"eventSequence").GetValueOrDefault() + 1;
+			string now = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
+			JObject record = (JObject)((JToken)_latestAttemptRecord).DeepClone();
+			record["eventSequence"] = sequence;
+			record["sourceId"] = "telemetry.lifecycle";
+			record["sourceSequence"] = sequence;
+			record["eventType"] = "session_ended";
+			record["occurredAtKst"] = now;
+			record["recordedAtKst"] = now;
+			JObject previousTime = ((JToken)_latestAttemptRecord).Value<JObject>((object)"occurredAt");
+			double elapsed = Math.Max(0.0, Time.realtimeSinceStartupAsDouble - _latestAttemptObservedRealtime);
+			JObject val = new JObject { ["realtimeSeconds"] = (double?)((previousTime != null) ? previousTime["realtimeSeconds"] : null) + elapsed };
+			object obj;
+			if (previousTime == null)
+			{
+				obj = null;
+			}
+			else
+			{
+				JToken obj2 = previousTime["gameplaySeconds"];
+				obj = ((obj2 != null) ? obj2.DeepClone() : null);
+			}
+			if (obj == null)
+			{
+				obj = (object)new JValue(0.0);
+			}
+			val["gameplaySeconds"] = (JToken)obj;
+			object obj3;
+			if (previousTime == null)
+			{
+				obj3 = null;
+			}
+			else
+			{
+				JToken obj4 = previousTime["activeUnscaledSeconds"];
+				obj3 = ((obj4 != null) ? obj4.DeepClone() : null);
+			}
+			if (obj3 == null)
+			{
+				obj3 = (object)new JValue(0.0);
+			}
+			val["activeUnscaledSeconds"] = (JToken)obj3;
+			record["occurredAt"] = (JToken)val;
+			record["recordedAt"] = (JToken)(JObject)record["occurredAt"].DeepClone();
+			record["correlation"] = (JToken)new JObject
+			{
+				["inputId"] = 0,
+				["actionId"] = 0,
+				["attackId"] = 0,
+				["hitId"] = 0,
+				["projectileId"] = 0,
+				["dodgeId"] = 0
+			};
+			string stageId = ((JToken)record).Value<string>((object)"stageId");
+			string attemptId = ((JToken)record).Value<string>((object)"stageAttemptId");
+			record["payload"] = (JToken)new JObject
+			{
+				["reason"] = "application_quit",
+				["exitStageId"] = stageId,
+				["exitStageAttemptId"] = attemptId,
+				["exitLocation"] = stageId,
+				["exitOccurredAtKst"] = now
+			};
+			Enqueue(record);
+			RequestFlush();
+		}
+	}
 
-        /// <summary>현재 도전의 마지막 사건을 바탕으로 정상 종료 사건을 추가한다. 종료 콜백 시각과 다음 순번을 기록한다.</summary>
-        private void EnsureApplicationQuitRecord()
-        {
-            if (_latestAttemptRecord == null) return;
-            JObject previousPayload=_latestAttemptRecord.Value<JObject>("payload");
-            if(_latestAttemptRecord.Value<string>("eventType")=="session_ended"
-                &&previousPayload?.Value<string>("reason")=="application_quit")return;
+	/// <summary>
+	/// 종료 제한 시간 동안 기록 저장과 업로드를 진행한다.
+	/// 종료 마감 시각을 사용하며 업로드 진행 상태를 변경한다.
+	/// </summary>
+	private IEnumerator DrainBeforeQuit()
+	{
+		double deadline = Time.realtimeSinceStartupAsDouble + QUIT_UPLOAD_TIMEOUT_SECONDS;
+		yield return null;
+		while (Time.realtimeSinceStartupAsDouble < deadline && (_write != null || _writing != null || _buffer.Count != 0 || _uploading || (!_diskDrained && _allowUpload && !_uploadDisabled)))
+		{
+			yield return null;
+		}
+		if (!_diskDrained && _allowUpload && !_uploadDisabled)
+		{
+			ReportError("종료 전송 제한 시간 초과: 미확인 로그는 로컬에 보존하며 다음 실행에서 재전송합니다.");
+		}
+		_quitAllowed = true;
+		Application.Quit();
+	}
 
-            long sequence=(_latestAttemptRecord.Value<long?>("eventSequence")??0)+1;
-            string now=TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
-            JObject record=(JObject)_latestAttemptRecord.DeepClone();
-            record["eventSequence"]=sequence;
-            record["sourceId"]="telemetry.lifecycle";
-            record["sourceSequence"]=sequence;
-            record["eventType"]="session_ended";
-            record["occurredAtKst"]=now;
-            record["recordedAtKst"]=now;
-            JObject previousTime=_latestAttemptRecord.Value<JObject>("occurredAt");
-            double elapsed=Math.Max(0d,Time.realtimeSinceStartupAsDouble-_latestAttemptObservedRealtime);
-            record["occurredAt"]=new JObject
-            {
-                ["realtimeSeconds"]=(double?)previousTime?["realtimeSeconds"]+elapsed,
-                ["gameplaySeconds"]=previousTime?["gameplaySeconds"]?.DeepClone()??new JValue(0d),
-                ["activeUnscaledSeconds"]=previousTime?["activeUnscaledSeconds"]?.DeepClone()??new JValue(0d)
-            };
-            record["recordedAt"]=(JObject)record["occurredAt"].DeepClone();
-            record["correlation"]=new JObject { ["inputId"]=0,["actionId"]=0,["attackId"]=0,
-                ["hitId"]=0,["projectileId"]=0,["dodgeId"]=0 };
-            string stageId=record.Value<string>("stageId");
-            string attemptId=record.Value<string>("stageAttemptId");
-            record["payload"]=new JObject { ["reason"]="application_quit",["exitStageId"]=stageId,
-                ["exitStageAttemptId"]=attemptId,["exitLocation"]=stageId,["exitOccurredAtKst"]=now };
-            Enqueue(record);
-            RequestFlush();
-        }
+	/// <summary>
+	/// 종료 전에 메모리의 미저장 이벤트를 로컬 JSONL에 기록한다.
+	/// 현재 버퍼와 쓰기 작업을 사용하며 디스크 저장 상태를 변경한다.
+	/// </summary>
+	private void PersistPendingEventsOnShutdown()
+	{
+		DateTime deadline = DateTime.UtcNow.AddMilliseconds(1500.0);
+		if (_write != null)
+		{
+			Task activeWrite = _write;
+			if (!WaitForTaskUntil(activeWrite, deadline))
+			{
+				ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
+				return;
+			}
+			if (activeWrite.IsFaulted && _writing != null)
+			{
+				_buffer.InsertRange(0, _writing);
+				ReportError("종료 중 로컬 저장 실패: " + activeWrite.Exception.GetBaseException().Message);
+			}
+			_write = null;
+			_writing = null;
+		}
+		if (_buffer.Count != 0)
+		{
+			string[] pending = _buffer.ToArray();
+			_buffer.Clear();
+			Task finalWrite = _store.AppendAsync(pending);
+			if (!WaitForTaskUntil(finalWrite, deadline))
+			{
+				_buffer.InsertRange(0, pending);
+				ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
+			}
+			else if (finalWrite.IsFaulted)
+			{
+				_buffer.InsertRange(0, pending);
+				ReportError("종료 중 로컬 저장 실패: " + finalWrite.Exception.GetBaseException().Message);
+			}
+			else if (!string.IsNullOrEmpty(_store.MetadataError))
+			{
+				ReportError(_store.MetadataError);
+			}
+		}
+	}
 
-        /// <summary>종료 요청으로 저장된 사건과 디스크의 ACK 상태를 최대 35초 확인한다. 전송 완료 또는 제한 시간 뒤 종료를 허용하고 미확인 원본은 보존한다.</summary>
-        private IEnumerator DrainBeforeQuit()
-        {
-            double deadline = Time.realtimeSinceStartupAsDouble + QUIT_UPLOAD_TIMEOUT_SECONDS;
-            yield return null;
-            while (Time.realtimeSinceStartupAsDouble < deadline)
-            {
-                if (_write == null && _writing == null && _buffer.Count == 0 && !_uploading
-                    && (_diskDrained || !_allowUpload || _uploadDisabled))
-                    break;
-                yield return null;
-            }
-            if (!_diskDrained && _allowUpload && !_uploadDisabled)
-                ReportError("종료 전송 제한 시간 초과: 미확인 로그는 로컬에 보존하며 다음 실행에서 재전송합니다.");
-            _quitAllowed = true;
-            Application.Quit();
-        }
-
-        /// <summary>진행 중인 파일 저장 뒤 메모리 버퍼의 마지막 사건을 JSONL에 추가하고 최대 1.5초 기다린다. 저장 작업이 제한 시간 안에 끝나지 않으면 진단 오류를 남긴다.</summary>
-        private void PersistPendingEventsOnShutdown()
-        {
-            DateTime deadline = DateTime.UtcNow.AddMilliseconds(1500);
-            if (_write != null)
-            {
-                Task activeWrite = _write;
-                if (!WaitForTaskUntil(activeWrite, deadline))
-                {
-                    ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
-                    return;
-                }
-                if (activeWrite.IsFaulted && _writing != null)
-                {
-                    _buffer.InsertRange(0, _writing);
-                    ReportError("종료 중 로컬 저장 실패: " + activeWrite.Exception.GetBaseException().Message);
-                }
-                _write = null;
-                _writing = null;
-            }
-
-            if (_buffer.Count == 0) return;
-            string[] pending = _buffer.ToArray();
-            _buffer.Clear();
-            Task finalWrite = _store.AppendAsync(pending);
-            if (!WaitForTaskUntil(finalWrite, deadline))
-            {
-                _buffer.InsertRange(0, pending);
-                ReportError("종료 로컬 저장 제한 시간을 넘어 미전송 로그를 다음 실행에 보존하지 못했을 수 있습니다.");
-                return;
-            }
-            if (finalWrite.IsFaulted)
-            {
-                _buffer.InsertRange(0, pending);
-                ReportError("종료 중 로컬 저장 실패: " + finalWrite.Exception.GetBaseException().Message);
-                return;
-            }
-            if (!string.IsNullOrEmpty(_store.MetadataError)) ReportError(_store.MetadataError);
-        }
-
-        /// <summary>task가 deadline 안에 끝났는지 반환한다. 종료 저장 제한을 초과하지 않도록 기다린다.</summary>
-        private static bool WaitForTaskUntil(Task task, DateTime deadline)
-        {
-            int timeoutMilliseconds = (int)Math.Max(0, (deadline - DateTime.UtcNow).TotalMilliseconds);
-            return Task.WaitAny(new[] { task }, timeoutMilliseconds) == 0;
-        }
+	/// <summary>
+	/// 작업이 마감 시각 전에 완료되는지 기다린다.
+	/// 작업과 마감 시각을 사용하고 완료 여부를 반환한다.
+	/// </summary>
+	private static bool WaitForTaskUntil(Task task, DateTime deadline)
+	{
+		int timeoutMilliseconds = (int)Math.Max(0.0, (deadline - DateTime.UtcNow).TotalMilliseconds);
+		return Task.WaitAny(new Task[1] { task }, timeoutMilliseconds) == 0;
+	}
 
 #if UNITY_EDITOR
-        /// <summary>Editor Play Mode 종료 직전에 기록자를 닫고 마지막 메모리 사건을 로컬 파일에 보존한다.</summary>
-        private void HandleEditorPlayModeChanged(PlayModeStateChange state)
-        {
-            if (state != PlayModeStateChange.ExitingPlayMode) return;
-            NotifyQuitRequested();
-            RequestFlush();
-            PersistPendingEventsOnShutdown();
-        }
+	/// <summary>
+	/// 에디터 플레이 모드 종료 시 기록을 저장하고 현재 세션 업로드를 예약한다.
+	/// PlayModeStateChange를 사용하며 종료 기록과 업로드 요청을 변경한다.
+	/// </summary>
+	private void HandleEditorPlayModeChanged(PlayModeStateChange state)
+	{
+		if ((int)state == 3)
+		{
+			NotifyQuitRequested();
+			RequestFlush();
+			PersistPendingEventsOnShutdown();
+			CombatTelemetryEditorUploader.Schedule(_store.Root, _allowUpload, _batchLimit, _timeout, new HashSet<string>(_pendingUploadSessionIds));
+		}
+	}
+
 #endif
 
-        void OnApplicationPause(bool paused)
-        {
-            if (paused) RequestFlush();
-        }
+	private void OnApplicationPause(bool paused)
+	{
+		if (paused)
+		{
+			RequestFlushImmediately();
+		}
+	}
 
-        void OnApplicationQuit()
-        {
-            NotifyQuitRequested();
-            if (!_quitRequested) RequestFlush();
-            _request?.Abort();
-        }
+	private void OnApplicationQuit()
+	{
+		NotifyQuitRequested();
+		if (!_quitRequested)
+		{
+			RequestFlush();
+		}
+		UnityWebRequest request = _request;
+		if (request != null)
+		{
+			request.Abort();
+		}
+	}
 
-        void OnDestroy()
-        {
-            if (!Application.isEditor) Application.wantsToQuit -= HandleWantsToQuit;
+	private void OnDestroy()
+	{
+		if (!Application.isEditor)
+		{
+			Application.wantsToQuit -= HandleWantsToQuit;
+		}
+		#if UNITY_EDITOR
+		EditorApplication.playModeStateChanged -= HandleEditorPlayModeChanged;
+#endif
+		NotifyQuitRequested();
+		_quitting = true;
+		UnityWebRequest request = _request;
+		if (request != null)
+		{
+			request.Abort();
+		}
+		try
+		{
+			PersistPendingEventsOnShutdown();
+		}
+		catch (Exception ex)
+		{
+			_lastError = "종료 저장 실패: " + ex.GetBaseException().Message;
+		}
+		finally
+		{
+			if ((UnityEngine.Object)(object)_active == (UnityEngine.Object)(object)this)
+			{
+				_active = null;
+			}
+		}
+	}
+
+	[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+	private static void ResetStatics()
+	{
+		_active = null;
+	}
+}
+
 #if UNITY_EDITOR
-            EditorApplication.playModeStateChanged -= HandleEditorPlayModeChanged;
-#endif
-            NotifyQuitRequested();
-            _quitting = true;
-            _request?.Abort();
-            try
-            {
-                PersistPendingEventsOnShutdown();
-            }
-            catch (Exception exception) { _lastError = "종료 저장 실패: " + exception.GetBaseException().Message; }
-            finally { if (_active == this) _active = null; }
-        }
+internal static class CombatTelemetryEditorUploader
+{
+	private const int MAXIMUM_BATCH_BYTES = 196608;
 
-        /// <summary>새 Play 도메인에서 이전 서비스 정적 참조를 제거한다.</summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatics()
-        {
-            _active = null;
-        }
-    }
+	private const long EDITOR_STORAGE_BUDGET_BYTES = 104857600L;
+
+	private const double RETRY_INTERVAL_SECONDS = 20.0;
+
+	private const string REQUEST_FILE_NAME = "editor-upload-request.json";
+
+	private static TelemetryDiskStore _store;
+
+	private static JObject _configuration;
+
+	private static Task<UploadBatch> _reading;
+
+	private static Task _checkpoint;
+
+	private static UnityWebRequest _request;
+
+	private static UnityWebRequestAsyncOperation _operation;
+
+	private static UploadBatch _batch;
+
+	private static string _destination;
+
+	private static string _requestPath;
+
+	private static string _lastError;
+
+	private static HashSet<string> _sessionIds;
+
+	private static double _retryNotBefore;
+
+	private static int _batchLimit;
+
+	private static int _timeout;
+
+	private static int _acknowledgedEvents;
+
+	private static bool _running;
+
+	private static bool _reportedSuccess;
+
+	/// <summary>
+	/// 에디터 업로더의 플레이 모드 콜백을 등록하고 기존 요청을 확인한다.
+	/// 에디터 이벤트와 예약된 업로드 요청을 사용하며 콜백 등록 상태를 변경한다.
+	/// </summary>
+	[InitializeOnLoadMethod]
+	private static void Initialize()
+	{
+		EditorApplication.playModeStateChanged -= HandlePlayModeChanged;
+		EditorApplication.playModeStateChanged += HandlePlayModeChanged;
+		EditorApplication.delayCall = (EditorApplication.CallbackFunction)Delegate.Combine((Delegate?)(object)EditorApplication.delayCall, (Delegate?)new EditorApplication.CallbackFunction(StartPendingUpload));
+	}
+
+	/// <summary>
+	/// 완료된 플레이 세션만 대상으로 하는 에디터 업로드 요청을 저장한다.
+	/// 저장 경로, 업로드 설정, 배치 제한, 세션 ID를 사용해 요청 파일을 변경한다.
+	/// </summary>
+	internal static void Schedule(string root, bool allowUpload, int batchLimit, int timeout, HashSet<string> sessionIds)
+	{
+		if (string.IsNullOrEmpty(root) || sessionIds == null || sessionIds.Count == 0)
+		{
+			return;
+		}
+		try
+		{
+			Directory.CreateDirectory(root);
+			string text = Path.Combine(root, "editor-upload-request.json");
+			string text2 = text + ".tmp";
+			JObject val = new JObject
+			{
+				["allowUpload"] = allowUpload,
+				["batchLimit"] = Math.Max(1, Math.Min(100, batchLimit)),
+				["timeout"] = Math.Max(5, Math.Min(120, timeout)),
+				["sessionIds"] = (JToken)new JArray((object)sessionIds)
+			};
+			File.WriteAllText(text2, ((JToken)val).ToString((Formatting)0, Array.Empty<JsonConverter>()), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+			if (File.Exists(text))
+			{
+				File.Replace(text2, text, null);
+			}
+			else
+			{
+				File.Move(text2, text);
+			}
+		}
+		catch (Exception ex)
+		{
+			Debug.LogWarning((object)("CombatTelemetry Editor upload request could not be saved: " + ex.GetBaseException().GetType().Name));
+			return;
+		}
+		EditorApplication.delayCall = (EditorApplication.CallbackFunction)Delegate.Combine((Delegate?)(object)EditorApplication.delayCall, (Delegate?)new EditorApplication.CallbackFunction(StartPendingUpload));
+	}
+
+	/// <summary>
+	/// 저장된 업로드 요청이 있을 때 지정 세션의 전송을 시작한다.
+	/// 요청 파일과 업로드 설정을 사용하며 에디터 업로드 상태를 변경한다.
+	/// </summary>
+	private static void StartPendingUpload()
+	{
+		if (_running || EditorApplication.isPlayingOrWillChangePlaymode)
+		{
+			return;
+		}
+		string text = Path.Combine(Application.persistentDataPath, "CombatTelemetry");
+		if (!Directory.Exists(text))
+		{
+			return;
+		}
+		string text2 = Path.Combine(text, "editor-upload-request.json");
+		if (!File.Exists(text2))
+		{
+			return;
+		}
+		int num = 100;
+		int num2 = 30;
+		HashSet<string> hashSet = new HashSet<string>();
+		bool flag;
+		try
+		{
+			JObject val = JObject.Parse(File.ReadAllText(text2, Encoding.UTF8));
+			flag = ((JToken)val).Value<bool?>((object)"allowUpload") == true;
+			num = Math.Max(1, Math.Min(100, ((JToken)val).Value<int?>((object)"batchLimit") ?? 100));
+			num2 = Math.Max(5, Math.Min(120, ((JToken)val).Value<int?>((object)"timeout") ?? 30));
+			JToken obj = val["sessionIds"];
+			JArray val2 = (JArray)(object)((obj is JArray) ? obj : null);
+			if (val2 != null)
+			{
+				foreach (JToken item in val2)
+				{
+					string text3 = Extensions.Value<string>((IEnumerable<JToken>)item);
+					if (Guid.TryParseExact(text3, "N", out var _))
+					{
+						hashSet.Add(text3);
+					}
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			Debug.LogWarning((object)("CombatTelemetry Editor upload request is unreadable: " + ex.GetBaseException().GetType().Name));
+			return;
+		}
+		if (flag && hashSet.Count != 0)
+		{
+			StartUpload(text, text2, num, num2, hashSet);
+		}
+	}
+
+	/// <summary>
+	/// 에디터 플레이 모드 전환에 맞춰 업로드를 멈추거나 재개한다.
+	/// PlayModeStateChange를 사용하며 에디터 업로드 상태를 변경한다.
+	/// </summary>
+	private static void HandlePlayModeChanged(PlayModeStateChange state)
+	{
+		if ((int)state == 1)
+		{
+			PauseForPlayMode();
+		}
+		else if ((int)state == 0)
+		{
+			StartPendingUpload();
+		}
+	}
+
+	/// <summary>
+	/// 플레이 모드 진입 시 진행 중인 에디터 업로드 요청을 정리한다.
+	/// 현재 요청과 저장 작업을 사용하며 업로더 상태를 초기화한다.
+	/// </summary>
+	private static void PauseForPlayMode()
+	{
+		if (_running)
+		{
+			if (_request != null)
+			{
+				_request.Abort();
+				_request.Dispose();
+			}
+			if (_checkpoint != null && !_checkpoint.IsCompleted)
+			{
+				Task.WaitAny(new Task[1] { _checkpoint }, 1000);
+			}
+			_running = false;
+			EditorApplication.update = (EditorApplication.CallbackFunction)Delegate.Remove((Delegate?)(object)EditorApplication.update, (Delegate?)new EditorApplication.CallbackFunction(Pump));
+			_store = null;
+			_configuration = null;
+			_reading = null;
+			_checkpoint = null;
+			_request = null;
+			_operation = null;
+			_batch = null;
+			_sessionIds = null;
+			_destination = null;
+			_requestPath = null;
+		}
+	}
+
+	/// <summary>
+	/// 검증된 설정과 세션 목록으로 에디터 업로드를 초기화한다.
+	/// 저장 경로, 요청 경로, 배치 제한, 시간 제한, 세션 ID를 사용하며 업로더 상태를 변경한다.
+	/// </summary>
+	private static void StartUpload(string root, string requestPath, int batchLimit, int timeout, HashSet<string> sessionIds)
+	{
+		JObject val;
+		try
+		{
+			string path = Path.Combine(root, "upload-config.json");
+			val = (File.Exists(path) ? JObject.Parse(File.ReadAllText(path, Encoding.UTF8)) : CombatTelemetryUploadSettings.LoadConfiguration());
+			if (((JToken)val).Value<bool?>((object)"enabled") != true)
+			{
+				return;
+			}
+			if (!Uri.TryCreate(((JToken)val).Value<string>((object)"endpoint"), UriKind.Absolute, out Uri result) || result.Scheme != Uri.UriSchemeHttps || (((JToken)val).Value<string>((object)"token")?.Length ?? 0) < 32)
+			{
+				throw new InvalidDataException("invalid_upload_configuration");
+			}
+			using SHA256 sHA = SHA256.Create();
+			_destination = BitConverter.ToString(sHA.ComputeHash(Encoding.UTF8.GetBytes(((JToken)val).Value<string>((object)"endpoint")))).Replace("-", "").Substring(0, 32);
+		}
+		catch (Exception ex)
+		{
+			Debug.LogWarning((object)("CombatTelemetry Editor upload configuration is invalid: " + ex.GetBaseException().GetType().Name));
+			return;
+		}
+		_store = new TelemetryDiskStore(root, 104857600L);
+		_configuration = val;
+		_requestPath = requestPath;
+		_sessionIds = sessionIds;
+		_batchLimit = Math.Max(1, Math.Min(100, batchLimit));
+		_timeout = Math.Max(5, Math.Min(120, timeout));
+		_retryNotBefore = 0.0;
+		_acknowledgedEvents = 0;
+		_reportedSuccess = false;
+		_lastError = null;
+		_running = true;
+		EditorApplication.update = (EditorApplication.CallbackFunction)Delegate.Remove((Delegate?)(object)EditorApplication.update, (Delegate?)new EditorApplication.CallbackFunction(Pump));
+		EditorApplication.update = (EditorApplication.CallbackFunction)Delegate.Combine((Delegate?)(object)EditorApplication.update, (Delegate?)new EditorApplication.CallbackFunction(Pump));
+	}
+
+	/// <summary>
+	/// 에디터 업데이트마다 로컬 배치 읽기, HTTP 응답, ACK 커서를 진행한다.
+	/// 현재 작업 상태를 사용하며 업로드 진행 상태를 변경한다.
+	/// </summary>
+	private static void Pump()
+	{
+		if (!_running)
+		{
+			return;
+		}
+		if (EditorApplication.isPlayingOrWillChangePlaymode)
+		{
+			PauseForPlayMode();
+		}
+		else if (_reading != null)
+		{
+			if (!_reading.IsCompleted)
+			{
+				return;
+			}
+			if (_reading.IsFaulted)
+			{
+				_reading = null;
+				FailUpload("local batch read failed");
+				return;
+			}
+			UploadBatch result = _reading.Result;
+			_reading = null;
+			if (result == null)
+			{
+				if (!string.IsNullOrEmpty(_store.ReadError))
+				{
+					FailUpload("local batch read failed");
+				}
+				else
+				{
+					FinishUpload();
+				}
+			}
+			else
+			{
+				_batch = result;
+				SendBatch();
+			}
+		}
+		else if (_request != null)
+		{
+			if (_operation != null && ((AsyncOperation)_operation).isDone)
+			{
+				if (!IsAcknowledged(_request, _batch, out var responseError))
+				{
+					string message = "HTTP " + _request.responseCode + ", transport=" + ((object)_request.result/*cast due to .constrained prefix*/).ToString() + ", server=" + (responseError ?? "none") + ", client=" + (_request.error ?? "none");
+					DisposeRequest(abort: false);
+					FailUpload(message);
+				}
+				else
+				{
+					DisposeRequest(abort: false);
+					_checkpoint = _store.AcknowledgeAsync(_batch);
+				}
+			}
+		}
+		else if (_checkpoint != null)
+		{
+			if (!_checkpoint.IsCompleted)
+			{
+				return;
+			}
+			if (_checkpoint.IsFaulted)
+			{
+				_checkpoint = null;
+				FailUpload("ACK cursor save failed");
+				return;
+			}
+			_acknowledgedEvents += ((JContainer)_batch.Records).Count;
+			_checkpoint = null;
+			_batch = null;
+			_lastError = null;
+			if (!_reportedSuccess)
+			{
+				_reportedSuccess = true;
+				Debug.Log((object)"CombatTelemetry Editor upload acknowledged.");
+			}
+			_retryNotBefore = EditorApplication.timeSinceStartup + 0.5;
+		}
+		else if (!(EditorApplication.timeSinceStartup < _retryNotBefore))
+		{
+			_reading = _store.ReadBatchAsync(_batchLimit, 196608, _destination, _sessionIds);
+		}
+	}
+
+	/// <summary>
+	/// 현재 로컬 배치를 Apps Script endpoint로 전송한다.
+	/// 설정과 배치 내용을 사용하며 UnityWebRequest 상태를 변경한다.
+	/// </summary>
+	private static void SendBatch()
+	{
+		try
+		{
+			JObject val = new JObject
+			{
+				["protocolVersion"] = "1",
+				["token"] = ((JToken)_configuration).Value<string>((object)"token"),
+				["batchId"] = _batch.BatchId,
+				["records"] = (JToken)(object)_batch.Records
+			};
+			_request = new UnityWebRequest(((JToken)_configuration).Value<string>((object)"endpoint"), "POST")
+			{
+				uploadHandler = (UploadHandler)new UploadHandlerRaw(Encoding.UTF8.GetBytes(((JToken)val).ToString((Formatting)0, Array.Empty<JsonConverter>()))),
+				downloadHandler = (DownloadHandler)new DownloadHandlerBuffer(),
+				timeout = _timeout,
+				redirectLimit = 5
+			};
+			_request.SetRequestHeader("Content-Type", "application/json");
+			_operation = _request.SendWebRequest();
+		}
+		catch (Exception ex)
+		{
+			DisposeRequest(abort: true);
+			FailUpload("HTTP request could not start: " + ex.GetBaseException().GetType().Name);
+		}
+	}
+
+	/// <summary>
+	/// HTTP 응답의 batch ID와 이벤트별 ACK가 배치와 일치하는지 확인한다.
+	/// 요청과 배치를 사용하고 서버 오류와 수락 여부를 반환한다.
+	/// </summary>
+	private static bool IsAcknowledged(UnityWebRequest request, UploadBatch batch, out string responseError)
+	{
+		responseError = null;
+		if ((int)request.result != 1)
+		{
+			return false;
+		}
+		try
+		{
+			JObject val = JObject.Parse(request.downloadHandler.text);
+			responseError = ((JToken)val).Value<string>((object)"error");
+			JToken obj = val["acknowledgedEventIds"];
+			HashSet<string> hashSet = new HashSet<string>(((obj != null) ? obj.Values<string>() : null) ?? Array.Empty<string>());
+			bool flag = ((JToken)val).Value<bool?>((object)"ok") == true && ((JToken)val).Value<string>((object)"batchId") == batch.BatchId;
+			foreach (JToken record in batch.Records)
+			{
+				flag &= hashSet.Contains((string)record[(object)"sessionId"] + ":" + (long)record[(object)"eventSequence"]);
+			}
+			return flag;
+		}
+		catch (Exception)
+		{
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// 에디터 업로드 실패를 기록하고 고정 간격 재시도를 예약한다.
+	/// 오류 메시지를 사용하며 오류와 재시도 상태를 변경한다.
+	/// </summary>
+	private static void FailUpload(string message)
+	{
+		if (_lastError != message)
+		{
+			_lastError = message;
+			Debug.LogWarning((object)("CombatTelemetry Editor upload failed: " + message + "; local events remain queued for retry."));
+		}
+		_retryNotBefore = EditorApplication.timeSinceStartup + 20.0;
+		_batch = null;
+		_checkpoint = null;
+		_reading = null;
+	}
+
+	/// <summary>
+	/// 현재 HTTP 요청을 선택적으로 중단하고 자원을 해제한다.
+	/// abort 여부를 사용하며 요청과 비동기 작업 참조를 초기화한다.
+	/// </summary>
+	private static void DisposeRequest(bool abort)
+	{
+		if (_request != null)
+		{
+			if (abort)
+			{
+				_request.Abort();
+			}
+			_request.Dispose();
+		}
+		_request = null;
+		_operation = null;
+	}
+
+	/// <summary>
+	/// 대상 세션 전송을 마치고 요청 파일과 에디터 상태를 정리한다.
+	/// 업로드 결과를 사용하며 요청 파일과 진행 상태를 변경한다.
+	/// </summary>
+	private static void FinishUpload()
+	{
+		_running = false;
+		EditorApplication.update = (EditorApplication.CallbackFunction)Delegate.Remove((Delegate?)(object)EditorApplication.update, (Delegate?)new EditorApplication.CallbackFunction(Pump));
+		if (File.Exists(_requestPath))
+		{
+			File.Delete(_requestPath);
+		}
+		if (_acknowledgedEvents > 0)
+		{
+			Debug.Log((object)("CombatTelemetry Editor upload drained. Acknowledged events=" + _acknowledgedEvents + "."));
+		}
+		_store = null;
+		_configuration = null;
+		_sessionIds = null;
+		_requestPath = null;
+		_destination = null;
+	}
+}
+#endif
+
 }
