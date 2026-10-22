@@ -353,7 +353,7 @@ MonoBehaviour:
   _dashSlowMotionDuration: 0.12
   _dodgeDistance: 4.8
   _dodgeDuration: 0.18
-  _dodgeCooldown: 0.6
+  _dodgeCooldown: 0.3
   _dodgeGroundGraceDuration: 0.12
   _attackLungeDistance: 0.45
   _attackLungeDuration: 0.22
@@ -380,7 +380,8 @@ MonoBehaviour:
   _mapServiceSource: {fileID: 0}
   _enableChargeAttack: 0
   _minimumChargeTime: 1
-  _normalAttackRange: 1.5
+  _enableTargetedDashAttack: 0
+  _normalAttackRange: 4.5
   _iaidoAttackRange: 2
   _targetStandOff: 0.15
   _attackOriginHeight: 1.1
@@ -409,9 +410,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
   _animationEventRelay: {fileID: 0}
-  _iaidoHitTime: 0.32
+  _iaidoHitTime: 0.16
   _iaidoSlashDuration: 0.6
-  _strikeWindow: 0.2
+  _strikeWindow: 0.12
   _normalHitTime: 0.22
   _normalActionDuration: 0.48
   _normalStrikeWindow: 0.16
@@ -446,6 +447,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
+  _resheatheBeforeOpeningAttack: 0
   _normalSheatheDelay: 0.8
   _firstAttackInputBufferWindow: 0.2
   _comboBufferWindow: 0.2
@@ -629,6 +631,9 @@ MonoBehaviour:
   _useViewModelReach: 1
   _normalAttackAngleScale: 1.5
   _normalAttackViewPull: 0.7
+  _useNormalAttackFan: 1
+  _normalAttackFanAngle: 120
+  _normalAttackNearbyRadius: 1.5
   _showAttackGizmos: 1
   _gizmoDuration: 2
 --- !u!114 &5463530082543962319
@@ -718,7 +723,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _maxStamina: 100
-  _dodgeCost: 34
+  _dodgeCost: 20
   _guardCost: 0
   _regenPerSecond: 20
   _regenDelay: 1
