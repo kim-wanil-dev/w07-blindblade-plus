@@ -10,6 +10,8 @@ public sealed class EnemyCombatEffects : MonoBehaviour
     [SerializeField] private ParticleSystem _upperLeftSlash;
     [SerializeField] private ParticleSystem _upperRightSlash;
     [SerializeField, Min(0f)] private float _trailFade = 0.15f;
+    [SerializeField, Min(0f), Tooltip("근접 검기를 재생할 시간(초)입니다. 0이면 공격 판정 시간에 맞춥니다.")]
+    private float _meleeSlashDuration;
     private ParticleSystem[] _leftSystems;
     private ParticleSystem[] _rightSystems;
     private float[] _leftSpeeds;
@@ -96,7 +98,10 @@ public sealed class EnemyCombatEffects : MonoBehaviour
         slash.gameObject.SetActive(false);
     }
 
-    /// <summary>context의 근접 베기는 방향별 자식 검기를, 돌진은 공용 검기를 재생한다. 원거리 발사는 투사체 표현을 사용한다.</summary>
+    /// <summary>
+    /// context의 근접 베기는 방향별 자식 검기를, 돌진은 공용 검기를 재생한다. 원거리 발사는 투사체 표현을 사용한다.
+    /// 근접 검기는 _meleeSlashDuration이 있으면 그 시간, 없으면 context.ActiveDuration에 맞춰 재생 속도를 바꾼다.
+    /// </summary>
     private void HandleAttack(EnemyAttackContext context)
     {
         if (context.Pattern is EnemyRangedAttack) return;
@@ -122,7 +127,8 @@ public sealed class EnemyCombatEffects : MonoBehaviour
         _currentSystems = left ? _leftSystems : _rightSystems;
         _currentSpeeds = left ? _leftSpeeds : _rightSpeeds;
         float visualDuration = GetVisualDuration(_currentSystems, _currentSpeeds);
-        float multiplier = Mathf.Max(0.01f, visualDuration) / Mathf.Max(0.01f, context.ActiveDuration);
+        float slashDuration = _meleeSlashDuration > 0f ? _meleeSlashDuration : context.ActiveDuration;
+        float multiplier = Mathf.Max(0.01f, visualDuration) / Mathf.Max(0.01f, slashDuration);
         for (int i = 0; i < _currentSystems.Length; i++)
         {
             ParticleSystem.MainModule main = _currentSystems[i].main;
