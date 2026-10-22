@@ -382,6 +382,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             toCenter.sqrMagnitude > 0.0001f ? Quaternion.LookRotation(toCenter) : Quaternion.identity);
         if (unit.Charge != null)
             unit.Charge.enabled = chargeType;
+        unit.Controller.SetAttackGate(_director.AttackTurnGate);
         unit.Root.SetActive(true);
         unit.Controller.SetTarget(Game.Player.transform);
         _activeMelee.Add(unit);
@@ -504,6 +505,19 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
 
         position = hit.position;
         return true;
+    }
+
+    /// <summary>플레이어와 radius 수평 거리 안에 있는 생존 근접 적과 Beast의 수를 반환한다. 적 상태는 변경하지 않는다.</summary>
+    internal int CountMeleeNearPlayer(float radius)
+    {
+        Vector3 player = Game.Player.transform.position;
+        int count = 0;
+        foreach (MeleeUnit unit in _activeMelee)
+        {
+            if (unit.Health.IsAlive && HorizontalDistance(unit.Root.transform.position, player) <= radius)
+                count++;
+        }
+        return count;
     }
 
     /// <summary>플레이어와 radius 수평 거리 안의 활성 근접 적이 공격 전조 중이면 true를 반환한다.</summary>

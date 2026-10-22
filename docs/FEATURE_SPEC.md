@@ -71,6 +71,7 @@
 | 패드 입력 및 장치별 안내 | [명세](features/패드_입력_안내.md) |
 | 적 추적 | [명세](features/적_추적.md) |
 | 적 공격 패턴 | [명세](features/적_공격_패턴.md) |
+| 근접 공격 차례 제한(일반 웨이브 순차 공격) | [명세](features/근접_공격_차례_제한.md) |
 | 일반 Beast 적 | [명세](features/DefenseBeast.md) |
 | 적 전투 및 체력 | [명세](features/적_전투_체력.md) |
 | 감각 표현 | [명세](features/감각_표현.md) |
