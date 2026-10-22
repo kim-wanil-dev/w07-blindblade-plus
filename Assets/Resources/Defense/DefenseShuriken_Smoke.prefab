@@ -163,10 +163,8 @@ MonoBehaviour:
   _maximumVisualPitch: 50
   _flightSound: 36
   _aimDrop: 0.1
-  _leadAccuracy: 0.8
-  _maximumLeadDistance: 3
   _homingTurnRate: 30
-  _homingStopDistance: 6
+  _homingStopDistance: 5
   _reflectDamage: 10
   _reflectSpeedMultiplier: 2
 --- !u!114 &5956031840736666487
