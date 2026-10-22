@@ -1,10 +1,7 @@
+using BlindBlade.Combat.Contracts;
 using System;
 using System.Collections.Generic;
-
 using UnityEngine;
-
-using BlindBlade.Combat.Contracts;
-
 using CFootstepCandidates = BlindBlade.Perception.EnemyFootstepCandidates;
 using CThreatAdapter = BlindBlade.Perception.ThreatPresentationContractAdapter;
 
@@ -20,6 +17,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     [Header("C 발소리 판정 연결")]
     [SerializeField, Tooltip("연결하면 실제 발걸음을 C 최신 후보로 전달하고 청각 범위·게임 시간 수명을 사용한다.")]
     private CFootstepCandidates _footstepCandidateSource;
+
+    [Header("방향 인디케이터 표시")]
+    [SerializeField, InspectorName("수리검 방향 인디케이터 표시"), Tooltip("끄면 수리검의 투척 전조와 비행 방향 UI만 숨긴다. 투척과 위협 판정은 유지한다.")]
+    private bool _showShurikenIndicators = true;
+    [SerializeField, InspectorName("적 방향 인디케이터 표시"), Tooltip("끄면 화면 밖 적의 발소리 방향 UI만 숨긴다. 발소리와 인지 판정은 유지한다.")]
+    private bool _showEnemyIndicators = false;
 
     [Header("위협 표시 정책")]
     [SerializeField, Min(0f)] private float _visibilityThreshold;
@@ -63,6 +66,10 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     public event Action<ThreatPresentationSnapshot> ThreatChanged;
     public event Action<FootstepPresentationSnapshot> FootstepChanged;
     public float VisibilityThreshold => _visibilityThreshold;
+    /// <summary>Inspector의 수리검 표시 설정을 반환한다.</summary>
+    public bool ShowShurikenIndicators => _showShurikenIndicators;
+    /// <summary>Inspector의 적 표시 설정을 반환한다.</summary>
+    public bool ShowEnemyIndicators => _showEnemyIndicators;
 
     private readonly struct ActiveFootstep
     {

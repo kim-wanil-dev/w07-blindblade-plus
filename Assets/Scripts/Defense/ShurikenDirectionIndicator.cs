@@ -133,7 +133,8 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
         marker.StartedAt = Time.time;
         marker.Duration = duration;
         marker.Graphic.color = _telegraphColor;
-        marker.Graphic.enabled = BambooDefenseDirector.IsWithinSoundPerceptionRange(position);
+        marker.Graphic.enabled = _providerComponent.ShowShurikenIndicators
+            && BambooDefenseDirector.IsWithinSoundPerceptionRange(position);
     }
 
     /// <summary>snapshot의 세션·대상·revision과 일반 스테이지 청각 거리를 확인해 C가 허용한 방향·색·크기·투명도를 적용한다.</summary>
@@ -176,7 +177,7 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
         marker.TargetAlpha = snapshot.Alpha;
         marker.CurrentAlpha = snapshot.Alpha;
         marker.Graphic.color = snapshot.Color;
-        marker.Graphic.enabled = true;
+        marker.Graphic.enabled = _providerComponent.ShowShurikenIndicators;
     }
 
     /// <summary>해당 위협의 마지막 위치와 투명도를 저장하고 제거 또는 비표시 상태를 페이드한다.</summary>
@@ -240,7 +241,8 @@ public sealed class ShurikenDirectionIndicator : MonoBehaviour
                 break;
         }
 
-        marker.Graphic.enabled = BambooDefenseDirector.IsWithinSoundPerceptionRange(marker.Position);
+        marker.Graphic.enabled = _providerComponent.ShowShurikenIndicators
+            && BambooDefenseDirector.IsWithinSoundPerceptionRange(marker.Position);
         if (!marker.Graphic.enabled)
         {
             marker.CurrentAlpha = 0f;
