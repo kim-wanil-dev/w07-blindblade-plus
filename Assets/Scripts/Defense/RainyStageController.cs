@@ -17,8 +17,8 @@ public sealed class RainyStageController : MonoBehaviour
     private const float CLEAR_AFTER_DISSOLVE_DELAY = 1.5f;
     private const float FINAL_DISSOLVE_PAIR_DISTANCE = 5f;
     private const float FINAL_DISSOLVE_BEAST_OFFSET = 2.3f;
-    private const float WAVE_DURATION = 100f;
-    private const float SPAWN_RAMP_INTERVAL = 10f;
+    private const float WAVE_DURATION = 40f;
+    private const float SPAWN_RAMP_INTERVAL = 40f;
 
     [Header("스테이지 연결")]
     [SerializeField] private BambooDefenseDirector _director;

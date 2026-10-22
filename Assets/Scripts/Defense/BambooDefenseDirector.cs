@@ -28,13 +28,6 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private float _soundPerceptionDistance = 20f;
     private bool _isOnboardingScene;
 
-    [Header("플레이어 이동 추적")]
-    [SerializeField, Min(0.1f), Tooltip("수평 속도 평활 계수. 클수록 방향 전환에 빨리 반응합니다.")]
-    private float _playerVelocitySmoothing = 8f;
-    private Vector3 _playerVelocity;
-    private Vector3 _lastPlayerPosition;
-    private bool _hasPlayerSample;
-
     [Header("동시 투척 제한")]
     [SerializeField, Min(1), Tooltip("예약과 비행 중인 수리검을 합친 상한")]
     private int _maximumConcurrentShurikens = 3;
@@ -53,7 +46,6 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     public bool IsRecordHidden { get; private set; }
     internal bool TelemetryLimitsSoundPerceptionDistance => _limitSoundPerceptionDistance;
     internal float TelemetrySoundPerceptionDistance => _soundPerceptionDistance;
-    public Vector3 PlayerVelocity => _playerVelocity;
     public event Action<Vector3, float> ThrowTelegraphed;
     public event Action<DefenseShuriken> ShurikenLaunched;
 
@@ -124,7 +116,6 @@ public sealed class BambooDefenseDirector : MonoBehaviour
         if (!Game.IsInitialized || Game.Player == null || Game.Instance.GameStateManager == null
             || Game.Instance.GameStateManager.State != GameplayState.Playing)
             return;
-        TrackPlayerVelocity();
         if (!_started)
         {
             _countdown = Mathf.Max(0f, _countdown - Time.deltaTime);
@@ -142,23 +133,6 @@ public sealed class BambooDefenseDirector : MonoBehaviour
         if (_spawner != null)
             _spawner.EnemyKilled -= HandleEnemyKilled;
         _throwBudget.Clear();
-    }
-
-    /// <summary>
-    /// 현재 플레이어의 프레임 간 수평 이동으로 속도를 구하고 평활 계수로 부드럽게 갱신한다.
-    /// 회피 순간의 급격한 속도는 완화되며 결과는 수리검 예측 조준에 사용한다.
-    /// </summary>
-    private void TrackPlayerVelocity()
-    {
-        Vector3 position = Game.Player.transform.position;
-        if (_hasPlayerSample && Time.deltaTime > 0f)
-        {
-            Vector3 velocity = Vector3.ProjectOnPlane(position - _lastPlayerPosition, Vector3.up) / Time.deltaTime;
-            _playerVelocity = Vector3.Lerp(_playerVelocity, velocity,
-                1f - Mathf.Exp(-_playerVelocitySmoothing * Time.deltaTime));
-        }
-        _lastPlayerPosition = position;
-        _hasPlayerSample = true;
     }
 
     /// <summary>진행 중 세션에서 근접 전조와 투척 한도를 확인하고 예약 성공 여부를 반환한다.</summary>

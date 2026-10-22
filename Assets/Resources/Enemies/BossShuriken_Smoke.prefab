@@ -56,7 +56,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   _homingTurnRate: 20
-  _homingStopDistance: 3
+  _homingStopDistance: 5
   _flightSound: 36
   _clearedByPlayerAttacks: 1
   _showAttackGizmos: 1
