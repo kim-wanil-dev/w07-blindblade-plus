@@ -37,6 +37,25 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     [SerializeField, Min(0f), Tooltip("근접 공격 전조를 우선하는 수평 거리(m)")]
     private float _meleeTelegraphRadius = 4f;
 
+    [Header("근접 공격 차례 제한")]
+    [SerializeField, InspectorName("공격 차례 제한 사용"), Tooltip("일반 웨이브의 근접 적과 Beast가 공격 차례를 받아야 공격한다. 차례가 없는 일반 근접 적은 거리를 두고 좌우로 움직인다.")]
+    private bool _limitAttackTurns = true;
+    [SerializeField, Min(1f), InspectorName("포위 반경 (m)"), Tooltip("플레이어와 이 수평 거리 안의 생존 근접 적을 포위 수로 세고 차례 대기열에 넣는다.")]
+    private float _attackTurnRadius = 10f;
+    [SerializeField, Min(0.01f), InspectorName("동시 공격 계수"), Tooltip("동시 공격 수 = 내림(계수 × 포위 수^지수)를 최소·최대 사이로 제한한다.")]
+    private float _attackTurnScale = 1f;
+    [SerializeField, Range(0.1f, 1f), InspectorName("동시 공격 지수"), Tooltip("1이면 포위 수에 비례하고 작을수록 적이 많아질 때 증가 폭이 줄어든다.")]
+    private float _attackTurnExponent = 0.6f;
+    [SerializeField, Min(1), InspectorName("최소 동시 공격 수")]
+    private int _minimumAttackTurns = 1;
+    [SerializeField, Min(1), InspectorName("최대 동시 공격 수")]
+    private int _maximumAttackTurns = 6;
+    [SerializeField, Min(0f), InspectorName("차례 지급 간격 (초)"), Tooltip("연속한 두 공격 차례 지급 사이의 최소 시간이다. 여러 적이 같은 순간에 공격을 시작하지 않게 한다.")]
+    private float _attackTurnGrantGap = 0.4f;
+    [SerializeField, Min(0.5f), InspectorName("미사용 차례 회수 시간 (초)"), Tooltip("차례를 받은 뒤 이 시간 안에 공격을 시작하지 못하면 차례를 회수해 다음 적에게 넘긴다.")]
+    private float _attackTurnTimeout = 3f;
+    private readonly DefenseAttackTurnPool _attackTurns = new DefenseAttackTurnPool();
+
 
     public bool HasStarted => _started;
     public float Countdown => _countdown;
@@ -46,6 +65,7 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     public bool IsRecordHidden { get; private set; }
     internal bool TelemetryLimitsSoundPerceptionDistance => _limitSoundPerceptionDistance;
     internal float TelemetrySoundPerceptionDistance => _soundPerceptionDistance;
+    internal IEnemyAttackGate AttackTurnGate => _limitAttackTurns ? _attackTurns : null;
     public event Action<Vector3, float> ThrowTelegraphed;
     public event Action<DefenseShuriken> ShurikenLaunched;
 
@@ -125,6 +145,9 @@ public sealed class BambooDefenseDirector : MonoBehaviour
             _spawner.Begin(Time.time);
         }
         _elapsed += Time.deltaTime;
+        if (_limitAttackTurns)
+            _attackTurns.Tick(Time.time, GetAttackTurnCapacity(_spawner.CountMeleeNearPlayer(_attackTurnRadius)),
+                _attackTurnRadius, _attackTurnGrantGap, _attackTurnTimeout);
         _spawner.Tick(_elapsed);
     }
 
@@ -133,6 +156,18 @@ public sealed class BambooDefenseDirector : MonoBehaviour
         if (_spawner != null)
             _spawner.EnemyKilled -= HandleEnemyKilled;
         _throwBudget.Clear();
+        _attackTurns.Clear();
+    }
+
+    /// <summary>
+    /// engaged 포위 수로 내림(계수 × engaged^지수)를 계산해 최소·최대 동시 공격 수 사이로 제한한 값을 반환한다.
+    /// 포위 수가 0이면 1명으로 계산한다.
+    /// </summary>
+    private int GetAttackTurnCapacity(int engaged)
+    {
+        float raw = _attackTurnScale * Mathf.Pow(Mathf.Max(1, engaged), _attackTurnExponent);
+        return Mathf.Clamp(Mathf.FloorToInt(raw + 0.0001f), _minimumAttackTurns,
+            Mathf.Max(_minimumAttackTurns, _maximumAttackTurns));
     }
 
     /// <summary>진행 중 세션에서 근접 전조와 투척 한도를 확인하고 예약 성공 여부를 반환한다.</summary>
@@ -218,6 +253,7 @@ public sealed class BambooDefenseDirector : MonoBehaviour
                 shuriken.Release();
         }
         _throwBudget.Clear();
+        _attackTurns.Clear();
     }
 
     /// <summary>
