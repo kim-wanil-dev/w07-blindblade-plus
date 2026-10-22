@@ -629,6 +629,11 @@ MonoBehaviour:
   _useViewModelReach: 1
   _normalAttackAngleScale: 1.5
   _normalAttackViewPull: 0.7
+  _useDashFanSweep: 1
+  _dashFanRange: 4.5
+  _dashFanAngle: 120
+  _dashFanNearbyRadius: 1.5
+  _dashFanSweepFromRight: 1
   _showAttackGizmos: 1
   _gizmoDuration: 2
 --- !u!114 &5463530082543962319

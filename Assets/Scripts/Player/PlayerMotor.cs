@@ -203,7 +203,9 @@ private Vector3 _attackLungeDirection;
     public float HorizontalSpeed => _lastHorizontalSpeed;
     public float IaidoMaxDistance => _iaidoMaxDistance;
     public Vector3 DashDirection => _dashDirection;
-    
+    // 목표 거리 대비 이동한 비율이다. 대시 예고 감속 동안은 0이고 목표 거리가 없으면 1이다.
+    public float DashProgress => _dashGoalDistance <= 0.001f ? 1f : Mathf.Clamp01(_dashDistanceTravelled / _dashGoalDistance);
+
     public float WalkSpeed => _walkSpeed;
     public float Acceleration => _acceleration;
     public float Deceleration => _deceleration;

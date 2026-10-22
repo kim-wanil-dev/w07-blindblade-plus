@@ -179,6 +179,8 @@ public sealed class PlayerController : MonoBehaviour
         bool movementLocked = IsMovementLocked();
         bool lookLocked = _state == PlayerActionState.Paused || _state == PlayerActionState.Dead;
         _motor?.Tick(mode, movementLocked, lookLocked, deltaTime);
+        if (_state == PlayerActionState.IaidoDash)
+            SweepTargetedDashFan(_motor.DashProgress);
         PublishSenseContext(mode);
     }
 
@@ -701,11 +703,20 @@ public sealed class PlayerController : MonoBehaviour
     /// <summary>
     /// actionId가 현재 발도 행동과 같으면 적 시스템에 한 번의 베기 판정을 요청한다.
     /// 대상 지정 공격은 현재 대상 충돌체 중심 방향을 사용하며 판정 결과를 공격 상태에 저장한다.
+    /// 돌진 부채꼴 베기가 고정 대상을 이미 처리했으면 다시 베지 않고, 고정 대상을 못 맞혀도 부채꼴 적중이 있으면 그 결과를 적중으로 쓴다.
     /// </summary>
     public void NotifyIaidoSlashImpact(int actionId)
     {
         if (_state != PlayerActionState.IaidoSlash || actionId != _currentActionId || _attackImpactResolved)
             return;
+
+        bool hasSweepHit = TryGetDashSweepResolution(out PlayerAttackResolution sweepResolution);
+        EnemyCombatService combat = _combatService as EnemyCombatService;
+        if (hasSweepHit && combat.WasStruckByDashSweep(_currentActionId, _preferredTargetId))
+        {
+            ApplyAttackResolution(sweepResolution);
+            return;
+        }
 
         Vector3 direction = _lockedAttackDirection;
         if (_targetedDashAttack
@@ -723,7 +734,33 @@ public sealed class PlayerController : MonoBehaviour
             _preferredTargetId,
             _iaidoAttackRange,
             direction);
-        ApplyAttackResolution(resolution);
+        ApplyAttackResolution(!resolution.HitConfirmed && hasSweepHit ? sweepResolution : resolution);
+    }
+
+    /// <summary>
+    /// 현재 행동이 좌클릭 대상 돌진이면 진행도 progress까지 펴진 돌진 부채꼴로 적 시스템에 베기를 요청한다.
+    /// 반격 대시와 충전 발도에는 적용하지 않으며 플레이어 행동 상태는 변경하지 않는다.
+    /// </summary>
+    private void SweepTargetedDashFan(float progress)
+    {
+        if (!_targetedDashAttack || _counterDashAttack || !(_combatService is EnemyCombatService combat))
+            return;
+
+        combat.SweepDashFan(_currentActionId, _motor.ViewOrigin, _motor.DashDirection, progress, _preferredTargetId);
+    }
+
+    /// <summary>현재 행동의 돌진 부채꼴 베기 적중을 resolution으로 반환한다. 적중이 없으면 false와 빗나감 결과를 반환한다.</summary>
+    private bool TryGetDashSweepResolution(out PlayerAttackResolution resolution)
+    {
+        if (_combatService is EnemyCombatService combat
+            && combat.TryGetDashSweepHit(_currentActionId, out string targetId, out bool deathConfirmed))
+        {
+            resolution = new PlayerAttackResolution(_currentActionId, true, targetId, deathConfirmed);
+            return true;
+        }
+
+        resolution = new PlayerAttackResolution(_currentActionId, false, null, false);
+        return false;
     }
 
     /// <summary>발도 베기 종료를 처리하고 적중·빗나감 결과에 맞는 회복 시간을 적용합니다.</summary>
@@ -920,6 +957,8 @@ public sealed class PlayerController : MonoBehaviour
             return;
 
         _lockedAttackDirection = _motor.DashDirection;
+        // 대시가 어떤 이유로 끝나도 부채꼴을 끝까지 펴서 남은 범위의 적을 벤 뒤 도착 베기를 판단한다.
+        SweepTargetedDashFan(1f);
 
         if (_counterDashAttack)
         {
@@ -941,10 +980,11 @@ public sealed class PlayerController : MonoBehaviour
         {
             if (_targetedDashAttack
                 && _combatService != null
-                && _combatService.TryGetTarget(_preferredTargetId, out PlayerCombatTarget target)
-                && target.IsAlive
-                && target.HitCollider != null
-                && Vector3.Distance(transform.position, target.HitCollider.ClosestPoint(transform.position)) <= _iaidoAttackRange)
+                && (TryGetDashSweepResolution(out _)
+                    || _combatService.TryGetTarget(_preferredTargetId, out PlayerCombatTarget target)
+                    && target.IsAlive
+                    && target.HitCollider != null
+                    && Vector3.Distance(transform.position, target.HitCollider.ClosestPoint(transform.position)) <= _iaidoAttackRange))
             {
                 SetState(PlayerActionState.IaidoSlash, PlayerActionStage.DashArrived, PlayerAttackOutcome.None, _preferredTargetId, result.Position);
                 Publish(PlayerActionStage.SlashStarted, PlayerAttackOutcome.None, _preferredTargetId, result.Position);

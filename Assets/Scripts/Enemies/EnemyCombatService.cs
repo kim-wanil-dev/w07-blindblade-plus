@@ -33,6 +33,25 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private Vector3 _previousBladeBase;
     private Vector3 _previousBladeTip;
 
+    [Header("돌진 수평 부채꼴 베기")]
+    [SerializeField, InspectorName("돌진 부채꼴 베기 사용")]
+    [Tooltip("좌클릭 대상 돌진 중 돌진 방향의 수평 부채꼴이 돌진 진행도에 맞춰 한쪽 끝에서 반대쪽 끝으로 펴지며 지나간 적을 발도와 같은 판정으로 벱니다.")]
+    private bool _useDashFanSweep = true;
+    [SerializeField, Min(0f), InspectorName("부채꼴 사거리 (m)")]
+    private float _dashFanRange = 4.5f;
+    [SerializeField, Range(1f, 360f), InspectorName("부채꼴 각도")]
+    private float _dashFanAngle = 120f;
+    [SerializeField, Min(0f), InspectorName("근접 판정 반경 (m)")]
+    [Tooltip("이 수평 거리 안의 적은 부채꼴이 펴지는 진행과 관계없이 정면 반원 안에 있으면 바로 맞습니다.")]
+    private float _dashFanNearbyRadius = 1.5f;
+    [SerializeField, InspectorName("오른쪽에서 왼쪽으로 펴기")]
+    [Tooltip("켜면 돌진 방향 오른쪽 끝에서 왼쪽 끝으로, 끄면 반대로 부채꼴이 펴집니다.")]
+    private bool _dashFanSweepFromRight = true;
+    private int _dashSweepActionId = -1;
+    private string _dashSweepHitTargetId;
+    private bool _dashSweepDeathConfirmed;
+    private readonly HashSet<EnemyHealth> _dashSweepStruck = new HashSet<EnemyHealth>();
+
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
     [SerializeField, Min(0.1f)] private float _gizmoDuration = 2f;
@@ -47,6 +66,12 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private bool _debugContact;
     private bool _debugHit;
     private float _debugUntil;
+    private Vector3 _debugDashOrigin;
+    private Vector3 _debugDashDirection;
+    private float _debugDashFromAngle;
+    private float _debugDashToAngle;
+    private bool _debugDashHit;
+    private float _debugDashUntil;
 #endif
 
     /// <summary>
@@ -231,8 +256,10 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
 #if UNITY_EDITOR
     void OnDrawGizmos()
     {
-        if (!_showAttackGizmos || !isActiveAndEnabled || !_hasDebugRequest
-            || !Application.isPlaying || Time.time > _debugUntil) return;
+        if (!_showAttackGizmos || !isActiveAndEnabled || !Application.isPlaying) return;
+        if (Time.time <= _debugDashUntil)
+            DrawDashSweepGizmo();
+        if (!_hasDebugRequest || Time.time > _debugUntil) return;
         Color color = _debugHit ? Color.green : _debugContact ? Color.red : Color.cyan;
         if (_debugBladeSweep)
             DrawBladeHitboxGizmo(_debugPreviousBase, _debugPreviousTip, _debugCurrentBase, _debugCurrentTip, _hitRadius, color);
@@ -278,6 +305,20 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         Gizmos.DrawWireCube((minimum + maximum) * 0.5f, maximum - minimum);
         Gizmos.matrix = previousMatrix;
         Gizmos.color = previousColor;
+    }
+
+    /// <summary>마지막 돌진 부채꼴 베기의 원점·방향과 지금까지 펴진 각도 구간을 그린다. 적중이 있었으면 초록, 아니면 하늘색이다.</summary>
+    private void DrawDashSweepGizmo()
+    {
+        float width = Mathf.Abs(_debugDashToAngle - _debugDashFromAngle);
+        Color color = _debugDashHit ? Color.green : Color.cyan;
+        if (width > 0.01f)
+        {
+            Vector3 center = Quaternion.AngleAxis((_debugDashFromAngle + _debugDashToAngle) * 0.5f, Vector3.up) * _debugDashDirection;
+            DrawAttackFanGizmo(_debugDashOrigin, center, _dashFanRange, width, color);
+        }
+        DrawAttackFanGizmo(_debugDashOrigin, _debugDashDirection, Mathf.Min(_dashFanRange, _dashFanNearbyRadius), 180f, color);
+        UnityEditor.Handles.Label(_debugDashOrigin, _debugDashHit ? "돌진 부채꼴 베기: 적중" : "돌진 부채꼴 베기: 펴지는 중");
     }
 
     /// <summary>origin·direction·range·angle로 color의 수평 부채꼴 범위 요약을 그린다. 물리 판정과 Handles 상태는 변경하지 않는다.</summary>
@@ -379,6 +420,115 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             AttackContactResolved?.Invoke(request, contact, point, hit);
         }
         return result;
+    }
+
+    /// <summary>
+    /// actionId 돌진에서 progress(0~1)까지 펴진 수평 부채꼴로 origin·dashDirection 기준의 적을 검사하고, 새로 들어온 적에게 발도 판정 피해를 한 번씩 준다.
+    /// 근접 반경 안의 적은 정면 반원이면 바로 맞고, 공유 체력 묶음은 한 번만 피해를 받는다.
+    /// 첫 적중 또는 preferredTargetId 적중을 돌진 결과로 기록하고, 첫 적중에서 AttackContactResolved를 한 번 알린다.
+    /// </summary>
+    public void SweepDashFan(int actionId, Vector3 origin, Vector3 dashDirection, float progress, string preferredTargetId)
+    {
+        if (!_useDashFanSweep || !isActiveAndEnabled) return;
+        if (_dashSweepActionId != actionId)
+        {
+            _dashSweepActionId = actionId;
+            _dashSweepHitTargetId = null;
+            _dashSweepDeathConfirmed = false;
+            _dashSweepStruck.Clear();
+        }
+
+        Vector3 forward = Vector3.ProjectOnPlane(dashDirection, Vector3.up);
+        if (forward.sqrMagnitude < 0.0001f) return;
+        forward.Normalize();
+        // 부채꼴은 한쪽 끝에서 시작해 진행도만큼 반대쪽 끝으로 펴진다. 오른쪽이 양의 각도다.
+        float sign = _dashFanSweepFromRight ? 1f : -1f;
+        float fromAngle = sign * _dashFanAngle * 0.5f;
+        float toAngle = fromAngle - sign * _dashFanAngle * Mathf.Clamp01(progress);
+        float minAngle = Mathf.Min(fromAngle, toAngle);
+        float maxAngle = Mathf.Max(fromAngle, toAngle);
+
+        foreach (EnemyHealth enemy in FindObjectsByType<EnemyHealth>(FindObjectsSortMode.None))
+        {
+            if (!enemy.IsAlive || enemy.gameObject.scene != gameObject.scene
+                || _dashSweepStruck.Contains(enemy) || _dashSweepStruck.Contains(enemy.SharedDamageKey)) continue;
+            Collider collider = enemy.CreateCombatTarget().HitCollider;
+            if (collider == null || !collider.enabled) continue;
+
+            // 중심 대신 가장 가까운 점을 써서 몸집이 크거나 바로 붙은 적도 거리·각도 조건에 들어오게 한다.
+            Vector3 point = collider.ClosestPoint(origin);
+            Vector3 offset = Vector3.ProjectOnPlane(point - origin, Vector3.up);
+            float distance = offset.magnitude;
+            if (distance > _dashFanRange) continue;
+            float angle = distance > 0.0001f ? Vector3.SignedAngle(forward, offset, Vector3.up) : 0f;
+            bool covered = distance <= _dashFanNearbyRadius
+                ? Mathf.Abs(angle) <= 90f
+                : angle >= minAngle && angle <= maxAngle;
+            if (!covered || IsDashFanTargetBlocked(origin, point)) continue;
+
+            // 무적인 적도 같은 돌진에서 다시 막힘 처리되지 않도록 개별 기록하고, 공유 체력 묶음은 실제 피해일 때만 묶음 단위로 기록한다.
+            _dashSweepStruck.Add(enemy);
+            if (!enemy.IsInvulnerable) _dashSweepStruck.Add(enemy.SharedDamageKey);
+            Vector3 direction = distance > 0.0001f ? offset / distance : forward;
+            string targetId = enemy.TargetId;
+            enemy.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point, direction,
+                PlayerAttackKind.IaidoFinisher.ToString()));
+
+            bool firstHit = _dashSweepHitTargetId == null;
+            if (firstHit || targetId == preferredTargetId)
+            {
+                _dashSweepHitTargetId = targetId;
+                _dashSweepDeathConfirmed = enemy.CurrentHealth <= 0f;
+            }
+            if (firstHit)
+            {
+                PlayerAttackRequest request = new PlayerAttackRequest(actionId, PlayerAttackKind.IaidoFinisher,
+                    preferredTargetId, origin, direction, _dashFanRange, Time.time);
+                AttackContactResolved?.Invoke(request, collider, point, true);
+            }
+        }
+#if UNITY_EDITOR
+        _debugDashOrigin = origin;
+        _debugDashDirection = forward;
+        _debugDashFromAngle = fromAngle;
+        _debugDashToAngle = toAngle;
+        _debugDashHit = _dashSweepHitTargetId != null;
+        _debugDashUntil = Time.time + _gizmoDuration;
+#endif
+    }
+
+    /// <summary>actionId 돌진의 부채꼴 베기가 적을 맞혔으면 대표 대상 targetId와 그 대상의 사망 여부 deathConfirmed를 반환한다. 다른 행동이거나 적중이 없으면 false다.</summary>
+    public bool TryGetDashSweepHit(int actionId, out string targetId, out bool deathConfirmed)
+    {
+        bool hit = _dashSweepActionId == actionId && _dashSweepHitTargetId != null;
+        targetId = hit ? _dashSweepHitTargetId : null;
+        deathConfirmed = hit && _dashSweepDeathConfirmed;
+        return hit;
+    }
+
+    /// <summary>actionId 돌진의 부채꼴 베기가 targetId 적을 이미 처리했는지 반환한다. 대상 고정 베기의 중복 피해를 막는 데 사용한다.</summary>
+    public bool WasStruckByDashSweep(int actionId, string targetId)
+    {
+        if (_dashSweepActionId != actionId || string.IsNullOrEmpty(targetId)) return false;
+        foreach (EnemyHealth enemy in _dashSweepStruck)
+        {
+            if (enemy != null && enemy.TargetId == targetId) return true;
+        }
+        return false;
+    }
+
+    /// <summary>origin에서 point까지 플레이어와 적을 제외한 _attackMask 장애물이 있는지 검사하여 가려졌으면 true를 반환한다.</summary>
+    private bool IsDashFanTargetBlocked(Vector3 origin, Vector3 point)
+    {
+        Vector3 delta = point - origin;
+        float distance = delta.magnitude;
+        if (distance < 0.0001f) return false;
+        foreach (RaycastHit hit in Physics.RaycastAll(origin, delta / distance, distance, _attackMask, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.transform.IsChildOf(_playerRoot) || hit.collider.GetComponentInParent<EnemyHealth>() != null) continue;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>incomingPoint에서 연결된 플레이어 검의 가장 가까운 지점을 반환하여 방어 섬광 위치로 사용한다.</summary>
