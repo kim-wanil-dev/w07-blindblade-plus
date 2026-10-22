@@ -335,6 +335,19 @@ private void ApplyVisualPitch()
     }
 
     /// <summary>
+    /// isInRange가 true를 반환하는 위치의 적대 비행 수리검을 가드 성공 소리와 함께 없앤다.
+    /// 반사되어 아군이 된 수리검은 유지한다.
+    /// </summary>
+    public static void ReleaseInRange(Predicate<Vector3> isInRange)
+    {
+        foreach (DefenseShuriken shuriken in FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None))
+        {
+            if (!shuriken.IsHostile || !isInRange(shuriken.transform.position)) continue;
+            shuriken.ReleaseBlocked();
+        }
+    }
+
+    /// <summary>
     /// 플레이어 공격에 막힌 수리검을 지금 위치에서 가드 성공 소리를 내며 없앤다.
     /// 궁극기와 검기·돌진이 같은 소리와 해제 경로를 쓰도록 함께 부르며, 비행이 끝나 Released를 알린 뒤 파괴된다.
     /// </summary>

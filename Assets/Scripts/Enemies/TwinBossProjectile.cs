@@ -80,6 +80,19 @@ public sealed class TwinBossProjectile : MonoBehaviour
             if (projectile._flying && !projectile._reflected) projectile.ReleaseBlocked();
     }
 
+    /// <summary>
+    /// isInRange가 true를 반환하는 위치의 적대 비행 보스 투사체를 가드 성공 소리와 함께 없앤다.
+    /// 반사되어 아군이 된 투사체는 유지한다.
+    /// </summary>
+    public static void ReleaseInRange(Predicate<Vector3> isInRange)
+    {
+        foreach (TwinBossProjectile projectile in FindObjectsByType<TwinBossProjectile>(FindObjectsSortMode.None))
+        {
+            if (!projectile.IsHostileFlying || !isInRange(projectile.transform.position)) continue;
+            projectile.ReleaseBlocked();
+        }
+    }
+
     /// <summary>플레이어 공격에 막힌 수리검의 위치에서 가드 소리를 내고 비행을 종료한다.</summary>
     private void ReleaseBlocked()
     {
