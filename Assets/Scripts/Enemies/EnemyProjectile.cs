@@ -13,8 +13,8 @@ public class EnemyProjectile : MonoBehaviour
     [SerializeField] private LayerMask _collisionMask = Physics.DefaultRaycastLayers;
     [SerializeField, Min(0f), Tooltip("비행 중 목표로 꺾는 최대 각도(도/초). 0이면 직진한다.")]
     private float _homingTurnRate;
-    [SerializeField, Min(0f), Tooltip("목표와 이 거리 안에서는 유도를 멈추고 직진한다.")]
-    private float _homingStopDistance = 3f;
+    [SerializeField, Min(0f), Tooltip("목표에 이 거리 이내로 접근하거나 지나치면 유도를 영구히 멈추고 직진한다.")]
+    private float _homingStopDistance = 5f;
     [SerializeField, Tooltip("적대 비행 동안 투사체를 따라 반복하는 비행음. None이면 재생하지 않으며 반사·소멸하면 멈춘다.")]
     private SoundId _flightSound = SoundId.None;
     [SerializeField, Tooltip("켜면 플레이어 검기·검기 돌진·궁극기가 적대 비행 중인 이 투사체를 없앤다.")]
@@ -30,6 +30,7 @@ public class EnemyProjectile : MonoBehaviour
     private bool _reflected;
     private int _projectileId;
     private bool _hasPassedPlayer;
+    private bool _terminalFlight;
 
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
@@ -70,8 +71,11 @@ public class EnemyProjectile : MonoBehaviour
             return;
         }
 
+        Vector3 playerPoint = _target == null
+            ? transform.position
+            : (_targetMotor != null ? _targetMotor.ViewOrigin : _target.position);
+        UpdateHomingPhase(transform.position, transform.position, playerPoint);
         SteerTowardsTarget();
-        UpdatePassedPlayer();
 
 #if UNITY_EDITOR
         _debugStart = transform.position;
@@ -121,10 +125,11 @@ public class EnemyProjectile : MonoBehaviour
             return;
         }
 
-        if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
-            transform.position + _direction * distance, _hitRadius, _damage);
-        transform.position += _direction * distance;
-        UpdatePassedPlayer();
+        Vector3 start = transform.position;
+        Vector3 end = start + _direction * distance;
+        if (!_reflected) DodgeAfterimage.ReportSphereSweep(start, end, _hitRadius, _damage);
+        transform.position = end;
+        UpdateHomingPhase(start, end, playerPoint);
     }
 
     void OnDisable()
@@ -144,6 +149,7 @@ public class EnemyProjectile : MonoBehaviour
         _homingMultiplier = 1f;
         _reflected = false;
         _hasPassedPlayer = false;
+        _terminalFlight = false;
         CombatSessionRuntime session = CombatSessionRuntime.Active;
         _projectileId = session != null && session.IsInitialized ? session.AllocateProjectileId() : 0;
         _target = target;
@@ -185,11 +191,11 @@ public class EnemyProjectile : MonoBehaviour
 
     /// <summary>
     /// 비행 중 target의 시점과 현재 위치를 사용해 설정 각속도만큼 진행 방향을 보정한다.
-    /// 반사 후와 근거리에서는 방향을 유지하며, 유도할 때 _direction과 회전을 갱신한다.
+    /// 반사 후, 종단 비행 시작 후, 근거리에서는 방향을 유지하며 유도할 때 _direction과 회전을 갱신한다.
     /// </summary>
     private void SteerTowardsTarget()
     {
-        if (_reflected || _homingTurnRate <= 0f || _target == null) return;
+        if (_reflected || _terminalFlight || _homingTurnRate <= 0f || _target == null) return;
         Vector3 aim = _targetMotor != null ? _targetMotor.ViewOrigin - Vector3.up * 0.1f : _target.position;
         Vector3 toTarget = aim - transform.position;
         if (toTarget.sqrMagnitude <= _homingStopDistance * _homingStopDistance) return;
@@ -199,17 +205,31 @@ public class EnemyProjectile : MonoBehaviour
     }
 
     /// <summary>
-    /// _targetMotor의 시점과 현재 투사체 방향을 비교해 플레이어를 통과했는지 판정한다.
-    /// 통과 상태는 비행 중 다시 해제하지 않고 HUD가 지나간 수리검을 숨기도록 유지한다.
+    /// 이동 구간이 플레이어 시점의 설정 거리 이내를 지나거나 플레이어를 통과하면 종단 비행을 고정한다.
+    /// 통과 상태도 기록해 HUD가 지나간 수리검을 숨길 수 있게 한다.
     /// </summary>
-    private void UpdatePassedPlayer()
+    private void UpdateHomingPhase(Vector3 start, Vector3 end, Vector3 playerPoint)
     {
-        if (_hasPassedPlayer || _reflected || _target == null)
+        if (_reflected || _target == null)
             return;
 
-        Vector3 playerPoint = _targetMotor != null ? _targetMotor.ViewOrigin : _target.position;
-        if (Vector3.Dot(playerPoint - transform.position, _direction) <= 0f)
+        if (!_terminalFlight)
+        {
+            Vector3 travel = end - start;
+            float travelLengthSquared = travel.sqrMagnitude;
+            float progress = travelLengthSquared > 0f
+                ? Mathf.Clamp01(Vector3.Dot(playerPoint - start, travel) / travelLengthSquared)
+                : 0f;
+            Vector3 nearest = start + travel * progress;
+            if ((playerPoint - nearest).sqrMagnitude <= _homingStopDistance * _homingStopDistance)
+                _terminalFlight = true;
+        }
+
+        if (!_hasPassedPlayer && Vector3.Dot(playerPoint - end, _direction) <= 0f)
+        {
             _hasPassedPlayer = true;
+            _terminalFlight = true;
+        }
     }
 
     /// <summary>
