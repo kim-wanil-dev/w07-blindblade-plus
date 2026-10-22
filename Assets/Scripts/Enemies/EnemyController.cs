@@ -40,6 +40,24 @@ public class EnemyController : MonoBehaviour
     private bool _openingAttackPending;
     private bool _openingAttackPerformed;
 
+    [Header("공격 차례 대기")]
+    [SerializeField, Min(0.5f), Tooltip("공격 차례를 기다리는 동안 대상과 유지하는 최소 수평 거리(m)")]
+    private float _turnWaitMinimumRadius = 3.5f;
+    [SerializeField, Min(0.5f), Tooltip("공격 차례를 기다리는 동안 대상과 유지하는 최대 수평 거리(m). 더 멀면 이 거리까지 다가온다.")]
+    private float _turnWaitMaximumRadius = 5f;
+    [SerializeField, Range(0f, 45f), Tooltip("좌우 이동 때 대기 원 위에서 현재 방향보다 앞서 목표로 삼는 각도")]
+    private float _turnWaitStrafeAngle = 12f;
+    [SerializeField, Min(0.1f), Tooltip("좌우 이동 또는 멈춤 한 구간의 최소 시간(초)")]
+    private float _turnWaitSegmentMinimum = 0.8f;
+    [SerializeField, Min(0.1f), Tooltip("좌우 이동 또는 멈춤 한 구간의 최대 시간(초)")]
+    private float _turnWaitSegmentMaximum = 1.6f;
+    [SerializeField, Range(0f, 1f), Tooltip("구간마다 좌우 이동 대신 제자리에서 대상을 바라보며 멈출 확률")]
+    private float _turnWaitHoldChance = 0.3f;
+    private IEnemyAttackGate _attackGate;
+    private bool _attackTurnSpent;
+    private float _turnWaitSign;
+    private float _turnWaitSegmentEndsAt;
+
 
     public EnemyState State => _state;
     private bool AllowsWalkingChase => _allowWalkingChase || _attackSelector.MeleeOnly;
@@ -74,6 +92,10 @@ public class EnemyController : MonoBehaviour
 
     protected virtual void Update()
     {
+        // 차례로 시작한 공격이 끝나면 차례를 반납해 다음 대기 적에게 넘긴다.
+        if (_attackTurnSpent && !_attackSelector.IsBusy)
+            ReleaseAttackTurn();
+
         if (!_motor.IsReady)
         {
             _attackSelector.CancelCurrentAttack();
@@ -138,6 +160,13 @@ public class EnemyController : MonoBehaviour
 
         if (_state == EnemyState.Attacking)
         {
+            // 교전 이동이 없는 적은 공격 차례가 올 때까지 대기 원으로 물러나 좌우로 움직인다.
+            if (_engagement == null && !HasAttackTurn())
+            {
+                UpdateTurnWaiting(_sensor.Target);
+                return;
+            }
+
             if (_attackSelector.MeleeOnly)
                 UpdateMeleeAttackPursuit();
             else if (_engagement != null)
@@ -145,8 +174,8 @@ public class EnemyController : MonoBehaviour
             else
                 _motor.Stop();
 
-            // 교전 이동이 있는 적은 그 이동을 마친 뒤에만 다음 공격을 시작한다.
-            if (_engagement != null && !_engagement.IsReadyToAttack)
+            // 교전 이동이 있는 적은 그 이동을 마치고 공격 차례를 받은 뒤에만 다음 공격을 시작한다.
+            if (_engagement != null && (!_engagement.IsReadyToAttack || !HasAttackTurn()))
                 return;
 
             // 첫 추격 후 즉시 베기 제외함
@@ -157,7 +186,11 @@ public class EnemyController : MonoBehaviour
             //     _openingAttackPerformed = true;
             // }
 
-            _attackSelector.TryAttack(_sensor.Target);
+            if (_attackSelector.TryAttack(_sensor.Target) && _attackGate != null)
+            {
+                _attackTurnSpent = true;
+                _attackGate.NotifyAttackStarted(this);
+            }
             return;
         }
 
@@ -165,6 +198,12 @@ public class EnemyController : MonoBehaviour
             (Time.time - _lastSeenTime >= _memoryDuration || _motor.HasArrived))
         {
             ChangeState(EnemyState.Idle);
+            return;
+        }
+
+        if (_state == EnemyState.Chasing && _engagement == null && !HasAttackTurn())
+        {
+            UpdateTurnWaiting(_sensor.Target);
             return;
         }
 
@@ -218,8 +257,19 @@ public class EnemyController : MonoBehaviour
     protected virtual void OnDisable()
     {
         _attackSelector.CancelCurrentAttack();
+        ReleaseAttackTurn();
         _motor.Stop();
         ChangeState(EnemyState.Idle);
+    }
+
+    /// <summary>
+    /// 공격 차례를 나눠 줄 gate를 연결한다. 이전 gate의 차례와 대기 요청은 반납한다.
+    /// null이면 차례 제한 없이 기존처럼 공격한다.
+    /// </summary>
+    public void SetAttackGate(IEnemyAttackGate gate)
+    {
+        ReleaseAttackTurn();
+        _attackGate = gate;
     }
 
     /// <summary>
@@ -230,6 +280,7 @@ public class EnemyController : MonoBehaviour
     {
         _sensor.SetTarget(target);
         _attackSelector.CancelCurrentAttack();
+        ReleaseAttackTurn();
         _lastSeenTime = float.NegativeInfinity;
         _nextPerceptionTime = 0f;
         _hasVisibleTarget = false;
@@ -251,6 +302,62 @@ public class EnemyController : MonoBehaviour
         _nextPerceptionTime = 0f;
         if (!_attackSelector.IsBusy)
             ChangeState(EnemyState.Searching);
+    }
+
+    /// <summary>
+    /// 차례 제한이 없거나 _attackGate에서 공격 차례를 받았으면 true를 반환한다.
+    /// 차례가 없으면 gate의 대기 요청 시각을 갱신한다.
+    /// </summary>
+    private bool HasAttackTurn()
+    {
+        return _attackGate == null || _attackGate.RequestTurn(this);
+    }
+
+    /// <summary>
+    /// _attackGate에 현재 차례와 대기 요청을 반납하고 _attackTurnSpent를 초기화한다.
+    /// gate가 없으면 상태만 초기화한다.
+    /// </summary>
+    private void ReleaseAttackTurn()
+    {
+        _attackTurnSpent = false;
+        if (_attackGate != null)
+            _attackGate.ReleaseTurn(this);
+    }
+
+    /// <summary>
+    /// 공격 차례를 기다리는 동안 target 주변 대기 원 위에서 구간마다 왼쪽·오른쪽 이동 또는 멈춤을 고른다.
+    /// target과의 수평 거리를 대기 최소·최대 반지름으로 제한한 위치로 EnemyMotor 경로를 갱신하며 막히면 _turnWaitSign을 뒤집는다.
+    /// </summary>
+    private void UpdateTurnWaiting(Transform target)
+    {
+        if (target == null)
+        {
+            _motor.Stop();
+            return;
+        }
+
+        if (Time.time >= _turnWaitSegmentEndsAt)
+        {
+            _turnWaitSign = UnityEngine.Random.value < _turnWaitHoldChance ? 0f : (UnityEngine.Random.value < 0.5f ? -1f : 1f);
+            _turnWaitSegmentEndsAt = Time.time + UnityEngine.Random.Range(_turnWaitSegmentMinimum,
+                Mathf.Max(_turnWaitSegmentMinimum, _turnWaitSegmentMaximum));
+        }
+
+        if (Time.time >= _nextRepathTime)
+        {
+            _nextRepathTime = Time.time + _repathInterval;
+            Vector3 offset = Vector3.ProjectOnPlane(transform.position - target.position, Vector3.up);
+            float distance = offset.magnitude;
+            Vector3 direction = distance > 0.01f ? offset / distance : -transform.forward;
+            float radius = Mathf.Clamp(distance, _turnWaitMinimumRadius, Mathf.Max(_turnWaitMinimumRadius, _turnWaitMaximumRadius));
+            Vector3 destination = target.position + Quaternion.AngleAxis(_turnWaitSign * _turnWaitStrafeAngle, Vector3.up) * direction * radius;
+            // 숲이나 다른 적에 막힌 쪽이면 반대 방향으로 돌아 좌우 이동을 이어 간다.
+            if (!_motor.MoveTo(destination, 0.1f) && _turnWaitSign != 0f)
+                _turnWaitSign = -_turnWaitSign;
+        }
+
+        if (_motor.HasArrived)
+            _motor.FaceTarget(target.position);
     }
 
     /// <summary>
