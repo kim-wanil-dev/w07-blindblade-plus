@@ -410,8 +410,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _player: {fileID: 6616511219798166873}
   _animationEventRelay: {fileID: 0}
-  _iaidoHitTime: 0.16
-  _iaidoSlashDuration: 0.6
+  _iaidoHitTime: 0.35
+  _iaidoSlashDuration: 0.7
   _strikeWindow: 0.12
   _normalHitTime: 0.22
   _normalActionDuration: 0.48
@@ -1161,7 +1161,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e8cd628426df4ade91a49cecc8579b5a, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDodgeStaminaHint
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
   _visibleDuration: 1.2
