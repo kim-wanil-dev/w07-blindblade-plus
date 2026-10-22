@@ -24,7 +24,7 @@ public sealed class PlayerStamina : MonoBehaviour, IPlayerStaminaReadModel
     [Header("회복")]
     [SerializeField, Min(0f)] private float _regenPerSecond = 20f;
     [SerializeField, Min(0f), Tooltip("소모하거나 피격된 뒤 회복을 다시 시작할 때까지의 게임 시간.")]
-    private float _regenDelay = 1f;
+    private float _regenDelay = 0.5f;
     [SerializeField, Range(0f, 1f), Tooltip("가드 중 회복 속도 배율.")]
     private float _guardRegenMultiplier = 0.5f;
 
