@@ -34,9 +34,11 @@ namespace BlindBlade.Telemetry
         [SerializeField, Range(5, 120)] private int _requestTimeoutSeconds = 30;
 
         private readonly Dictionary<int, JObject> _pendingEnds = new Dictionary<int, JObject>();
+        private readonly Dictionary<int, JObject> _pendingContacts = new Dictionary<int, JObject>();
         private bool _completePending;
         private bool _deathPending;
         private readonly Dictionary<int, JObject> _attacks = new Dictionary<int, JObject>();
+        private readonly Dictionary<int, int> _perfectDodgeAttackDodgeIds = new Dictionary<int, int>();
         private readonly Dictionary<int, double> _reactionStartTimes = new Dictionary<int, double>();
         private readonly Dictionary<int, PlayerInputRecord> _inputs = new Dictionary<int, PlayerInputRecord>();
         private readonly HashSet<int> _attempts = new HashSet<int>();
@@ -44,6 +46,7 @@ namespace BlindBlade.Telemetry
         private readonly Dictionary<int, string> _guardRepresentativeOutcomes = new Dictionary<int, string>();
         private readonly HashSet<int> _startedDodgeIds = new HashSet<int>();
         private readonly HashSet<int> _perfectDodgeIds = new HashSet<int>();
+        private readonly HashSet<int> _activeDodgeIds = new HashSet<int>();
         private JObject _counts;
         private JObject _patterns;
         private JObject _bossPatterns;
@@ -204,8 +207,10 @@ namespace BlindBlade.Telemetry
             _patterns = new JObject();
             _bossPatterns = new JObject();
             _attacks.Clear();
+            _perfectDodgeAttackDodgeIds.Clear();
             _reactionStartTimes.Clear();
             _pendingEnds.Clear();
+            _pendingContacts.Clear();
             _completePending = false;
             _deathPending = false;
             _inputs.Clear();
@@ -214,6 +219,7 @@ namespace BlindBlade.Telemetry
             _guardRepresentativeOutcomes.Clear();
             _startedDodgeIds.Clear();
             _perfectDodgeIds.Clear();
+            _activeDodgeIds.Clear();
             _guardInputId = _dodgeInputId = 0;
             _reactionTotal = 0;
             _reactionCount = 0;
@@ -244,11 +250,11 @@ namespace BlindBlade.Telemetry
             Record("stage_config", payload);
         }
 
-        /// <summary>reason으로 현재 구간을 종료한다. 남은 공격은 Interrupted로 구분하고 최종 요약을 디스크에 요청한다.</summary>
+        /// <summary>reason으로 현재 구간을 종료한다. 연결된 회피 공격을 먼저 확정하고 남은 공격은 Interrupted로 구분해 요약 저장을 요청한다.</summary>
         private void FinishStage(string reason)
         {
             if (_stageClosed) return;
-            DrainAttackEnds();
+            DrainAttackEnds(true);
             foreach (int id in new List<int>(_attacks.Keys))
                 ResolveAttack(id, new JObject { ["outcome"] = "Interrupted",
                     ["position"] = TelemetryJson.Position(_health.transform.position) }, false);
@@ -396,24 +402,38 @@ namespace BlindBlade.Telemetry
                 Add(Pattern(attack), "attempts");
                 Record(type, (JObject)attack.DeepClone(), id);
             }
-            else if (type == "enemy_attack_contact") ResolveAttack(id, data, true);
+            else if (type == "enemy_attack_contact")
+            {
+                if (_activeDodgeIds.Count > 0)
+                {
+                    if (!_pendingContacts.ContainsKey(id)) _pendingContacts[id] = (JObject)data.DeepClone();
+                }
+                else ResolveAttack(id, data, true);
+            }
             else if (type == "enemy_attack_resolved" && !_pendingEnds.ContainsKey(id)) _pendingEnds[id] = data;
         }
 
-        /// <summary>프레임 안의 접촉 처리가 끝난 뒤 비접촉 종료를 반영하고 대기 목록을 비운다.</summary>
-        private void DrainAttackEnds()
+        /// <summary>force가 참이면 활성 회피 종료를 기다리지 않고 대기 접촉·종료를 처리한다. force가 거짓이면 회피 AttackId 연결까지 결과 확정을 미룬다.</summary>
+        private void DrainAttackEnds(bool force = false)
         {
+            if (!force && _activeDodgeIds.Count > 0) return;
+            foreach (KeyValuePair<int, JObject> pair in _pendingContacts)
+                ResolveAttack(pair.Key, pair.Value, true);
+            _pendingContacts.Clear();
             foreach (KeyValuePair<int, JObject> pair in _pendingEnds) ResolveAttack(pair.Key, pair.Value, false);
             _pendingEnds.Clear();
         }
 
-        /// <summary>id와 data, contact 여부로 최초 공격 결과를 확정하고, 연결 입력과 공격별 반응 기준 시각을 사용해 집계를 갱신한다.</summary>
+        /// <summary>id와 data, contact 여부로 공격 결과를 확정하고, 연결된 극한 회피·입력·반응 시각을 사용해 집계를 갱신한다.</summary>
         private void ResolveAttack(int id, JObject data, bool contact)
         {
             if (!_attacks.TryGetValue(id, out JObject attack) || (bool?)attack["resolved"] == true) return;
             attack["resolved"] = true;
             string outcome = (string)data["outcome"];
-            if (outcome == "Dodge" || outcome == "DodgeAvoided")
+            bool linkedPerfectDodge = _perfectDodgeAttackDodgeIds.TryGetValue(id, out int dodgeId);
+            if (linkedPerfectDodge)
+                outcome = "PerfectDodge";
+            else if (outcome == "Dodge" || outcome == "DodgeAvoided")
             {
                 bool perfectDodge = (string)data["defenseOutcome"] == "DodgeAvoided" || outcome == "DodgeAvoided";
                 outcome = perfectDodge ? "PerfectDodge" : "Dodge";
@@ -474,7 +494,7 @@ namespace BlindBlade.Telemetry
                         Add(_counts, key + "Total", (double?)payload[key] ?? 0d);
                 }
             }
-            Record("enemy_attack_resolved", payload, id, inputId);
+            Record("enemy_attack_resolved", payload, id, inputId, dodgeId: linkedPerfectDodge ? dodgeId : 0);
             _reactionStartTimes.Remove(id);
         }
 
@@ -503,14 +523,24 @@ namespace BlindBlade.Telemetry
                 _guardRepresentativeOutcomes[input.InputId] = "NoResult";
         }
 
-        /// <summary>value의 실제 회피 시작과 퍼펙트 회피만 기록한다. 종료 사건은 전송하지 않는다.</summary>
+        /// <summary>value의 회피 수와 성공을 기록하고 성공을 유발한 AttackId를 최종 공격 결과에 연결한다.</summary>
         private void HandleDodge(PlayerDodgeEvent value)
         {
             if (_stageClosed) return;
             if (value.DodgeId > 0 && value.Stage == PlayerDodgeStage.Started && _startedDodgeIds.Add(value.DodgeId))
                 Add(_counts, "dodgeStarted");
+            if (value.DodgeId > 0 && value.Stage == PlayerDodgeStage.Started)
+                _activeDodgeIds.Add(value.DodgeId);
             if (value.DodgeId > 0 && value.Stage == PlayerDodgeStage.PerfectDodge && _perfectDodgeIds.Add(value.DodgeId))
                 Add(_counts, "dodgePerfectCount");
+            if (value.DodgeId > 0 && value.AttackId > 0 && value.Stage == PlayerDodgeStage.PerfectDodge
+                && !_perfectDodgeAttackDodgeIds.ContainsKey(value.AttackId))
+                _perfectDodgeAttackDodgeIds.Add(value.AttackId, value.DodgeId);
+            if (value.DodgeId > 0 && value.Stage == PlayerDodgeStage.Ended)
+            {
+                _activeDodgeIds.Remove(value.DodgeId);
+                return;
+            }
             if (value.Stage != PlayerDodgeStage.Started && value.Stage != PlayerDodgeStage.PerfectDodge) return;
             Record("dodge_changed", new JObject { ["stage"] = value.Stage.ToString(),
                 ["position"] = TelemetryJson.Position(value.Position) }, value.AttackId, dodgeId: value.DodgeId);
