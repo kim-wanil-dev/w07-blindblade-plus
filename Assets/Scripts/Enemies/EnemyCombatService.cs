@@ -33,6 +33,27 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private Vector3 _previousBladeBase;
     private Vector3 _previousBladeTip;
 
+    [Header("일반 공격 수평 부채꼴 판정")]
+    [SerializeField, InspectorName("부채꼴 판정 사용")]
+    [Tooltip("일반 1·2타를 칼날 궤적 대신 시점 수평 정면의 부채꼴로 판정하고 범위 안의 적 전원에게 피해를 줍니다. 사거리는 PlayerController의 일반 공격 사거리입니다.")]
+    private bool _useNormalAttackFan = true;
+    [SerializeField, Range(1f, 360f), InspectorName("부채꼴 각도")]
+    private float _normalAttackFanAngle = 120f;
+    [SerializeField, Min(0f), InspectorName("근접 판정 반경 (m)")]
+    [Tooltip("이 수평 거리 안의 적은 부채꼴 각도와 관계없이 정면 반원 안에 있으면 맞습니다. 바로 옆에 붙은 적을 놓치지 않게 합니다.")]
+    private float _normalAttackNearbyRadius = 1.5f;
+    private readonly List<FanTarget> _fanTargets = new List<FanTarget>();
+    private readonly HashSet<EnemyHealth> _fanStruck = new HashSet<EnemyHealth>();
+
+    /// <summary>부채꼴 판정에 들어온 적과 피격 콜라이더, 시점 원점에서 가장 가까운 접촉 위치와 수평 거리다.</summary>
+    private struct FanTarget
+    {
+        public EnemyHealth Health;
+        public Collider Collider;
+        public Vector3 Point;
+        public float Distance;
+    }
+
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
     [SerializeField, Min(0.1f)] private float _gizmoDuration = 2f;
@@ -46,6 +67,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private bool _hasDebugRequest;
     private bool _debugContact;
     private bool _debugHit;
+    private bool _debugFan;
     private float _debugUntil;
 #endif
 
@@ -175,6 +197,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         }
 #if UNITY_EDITOR
         _debugBladeSweep = false;
+        _debugFan = false;
         _debugRequest = request;
         _debugContact = collider != null;
         _debugHit = result.HitConfirmed;
@@ -234,6 +257,12 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         if (!_showAttackGizmos || !isActiveAndEnabled || !_hasDebugRequest
             || !Application.isPlaying || Time.time > _debugUntil) return;
         Color color = _debugHit ? Color.green : _debugContact ? Color.red : Color.cyan;
+        if (_debugFan)
+        {
+            DrawNormalAttackFanGizmo(_debugRequest.Origin, _debugRequest.Direction, _debugRequest.Range, color);
+            UnityEditor.Handles.Label(_debugRequest.Origin, _debugHit ? "플레이어 공격: 적중" : "플레이어 공격: 부채꼴 범위");
+            return;
+        }
         if (_debugBladeSweep)
             DrawBladeHitboxGizmo(_debugPreviousBase, _debugPreviousTip, _debugCurrentBase, _debugCurrentTip, _hitRadius, color);
         else
@@ -247,6 +276,12 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     internal void DrawAttackPreview(Vector3 origin, Vector3 direction, float range)
     {
         if (!_showAttackGizmos) return;
+        if (_useNormalAttackFan)
+        {
+            DrawNormalAttackFanGizmo(origin, direction, range, Color.yellow);
+            UnityEditor.Handles.Label(origin, "플레이어: 일반 공격 부채꼴 범위");
+            return;
+        }
         Vector3 start = _bladeBase != null && _bladeTip != null ? _bladeBase.position : origin;
         Vector3 end = _bladeBase != null && _bladeTip != null
             ? (_useViewModelReach ? GetWorldBladeTip(origin, start, _bladeTip.position, range) : _bladeTip.position)
@@ -278,6 +313,13 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         Gizmos.DrawWireCube((minimum + maximum) * 0.5f, maximum - minimum);
         Gizmos.matrix = previousMatrix;
         Gizmos.color = previousColor;
+    }
+
+    /// <summary>origin·direction·range와 부채꼴 각도·근접 반경으로 일반 공격 수평 판정 범위를 color로 그린다. 물리 판정은 변경하지 않는다.</summary>
+    private void DrawNormalAttackFanGizmo(Vector3 origin, Vector3 direction, float range, Color color)
+    {
+        DrawAttackFanGizmo(origin, direction, range, _normalAttackFanAngle, color);
+        DrawAttackFanGizmo(origin, direction, Mathf.Min(range, _normalAttackNearbyRadius), 180f, color);
     }
 
     /// <summary>origin·direction·range·angle로 color의 수평 부채꼴 범위 요약을 그린다. 물리 판정과 Handles 상태는 변경하지 않는다.</summary>
@@ -325,12 +367,13 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
 #endif
 
     /// <summary>
-    /// request의 베기 구간에서 칼날 경로를 검사한다. 접촉 또는 finalSample에서 결과를 확정한다.
-    /// 미완료 검사에는 IsComplete=false를 반환하며 완료된 공격은 중복 적용하지 않는다.
+    /// request의 베기 구간에서 칼날 경로를 검사한다. 부채꼴 판정을 켜면 수평 부채꼴 판정으로 대신한다.
+    /// 접촉 또는 finalSample에서 결과를 확정하며, 미완료 검사에는 IsComplete=false를 반환하고 완료된 공격은 중복 적용하지 않는다.
     /// </summary>
     public PlayerAttackResolution ResolvePlayerBladeAttack(PlayerAttackRequest request, bool finalSample)
     {
         if (_hasResolution && _lastResolution.ActionId == request.ActionId) return _lastResolution;
+        if (_useNormalAttackFan) return ResolveFanAttack(request, finalSample);
         if (_unlimitedRange) return ResolveAttack(request, finalSample);
         if (_bladeBase == null || _bladeTip == null) return ResolvePlayerAttack(request);
         Vector3 currentBase = _bladeBase.position;
@@ -379,6 +422,105 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             AttackContactResolved?.Invoke(request, contact, point, hit);
         }
         return result;
+    }
+
+    /// <summary>
+    /// request의 원점·수평 방향·사거리로 부채꼴 안의 적 전원에게 피해를 준다. 공유 체력 묶음은 한 번만 피해를 받는다.
+    /// 적이 있거나 finalSample이면 가장 가까운 적을 대표 대상으로 결과를 확정하고 AttackContactResolved를 한 번 알린다.
+    /// </summary>
+    private PlayerAttackResolution ResolveFanAttack(PlayerAttackRequest request, bool finalSample)
+    {
+        Vector3 forward = Vector3.ProjectOnPlane(request.Direction, Vector3.up);
+        if (forward.sqrMagnitude < 0.0001f) forward = Vector3.ProjectOnPlane(_playerRoot.forward, Vector3.up);
+        forward.Normalize();
+        CollectFanTargets(request.Origin, forward, request.Range);
+
+        bool hit = _fanTargets.Count > 0;
+        FanTarget nearest = default;
+        float nearestDistance = float.PositiveInfinity;
+        _fanStruck.Clear();
+        // 같은 공유 체력 묶음이 함께 걸리면 우선 적이 피격 반응을 받도록 앞에 둔다.
+        _fanTargets.Sort((a, b) => b.Health.HasSharedDamagePriority.CompareTo(a.Health.HasSharedDamagePriority));
+        foreach (FanTarget target in _fanTargets)
+        {
+            if (target.Distance < nearestDistance)
+            {
+                nearestDistance = target.Distance;
+                nearest = target;
+            }
+            if (_fanStruck.Contains(target.Health.SharedDamageKey))
+            {
+                target.Health.PlaySharedHitEffect(target.Point);
+                continue;
+            }
+            if (!target.Health.IsInvulnerable) _fanStruck.Add(target.Health.SharedDamageKey);
+            Vector3 toTarget = Vector3.ProjectOnPlane(target.Point - request.Origin, Vector3.up);
+            Vector3 direction = toTarget.sqrMagnitude > 0.0001f ? toTarget.normalized : forward;
+            target.Health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, target.Point,
+                direction, request.Kind.ToString()));
+        }
+
+        bool complete = hit || finalSample;
+        PlayerAttackResolution result = new PlayerAttackResolution(request.ActionId, hit,
+            hit ? nearest.Health.TargetId : null, hit && nearest.Health.CurrentHealth <= 0f, complete);
+#if UNITY_EDITOR
+        _debugBladeSweep = false;
+        _debugFan = true;
+        _debugRequest = request;
+        _debugContact = hit;
+        _debugHit = hit;
+        _hasDebugRequest = true;
+        _debugUntil = Time.time + _gizmoDuration;
+#endif
+        if (complete)
+        {
+            _hasResolution = true;
+            _lastResolution = result;
+            AttackContactResolved?.Invoke(request, hit ? nearest.Collider : null,
+                hit ? nearest.Point : request.Origin, hit);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// origin·forward·range로 같은 씬의 생존 적 중 부채꼴 각도 또는 정면 근접 반경 안에 있고 벽에 가리지 않은 적을 _fanTargets에 모은다.
+    /// 거리와 각도는 적 피격 콜라이더에서 원점에 가장 가까운 점의 수평 위치로 계산한다.
+    /// </summary>
+    private void CollectFanTargets(Vector3 origin, Vector3 forward, float range)
+    {
+        _fanTargets.Clear();
+        float halfAngle = _normalAttackFanAngle * 0.5f;
+        foreach (EnemyHealth enemy in FindObjectsByType<EnemyHealth>(FindObjectsSortMode.None))
+        {
+            if (!enemy.IsAlive || enemy.gameObject.scene != gameObject.scene) continue;
+            Collider collider = enemy.CreateCombatTarget().HitCollider;
+            if (collider == null || !collider.enabled) continue;
+
+            // 중심 대신 가장 가까운 점을 써서 몸집이 크거나 바로 붙은 적도 거리·각도 조건에 들어오게 한다.
+            Vector3 point = collider.ClosestPoint(origin);
+            Vector3 offset = Vector3.ProjectOnPlane(point - origin, Vector3.up);
+            float distance = offset.magnitude;
+            if (distance > range) continue;
+            float angle = distance > 0.0001f ? Vector3.Angle(forward, offset) : 0f;
+            float allowedAngle = distance <= _normalAttackNearbyRadius ? Mathf.Max(halfAngle, 90f) : halfAngle;
+            if (angle > allowedAngle || IsFanTargetBlocked(origin, point)) continue;
+
+            _fanTargets.Add(new FanTarget { Health = enemy, Collider = collider, Point = point, Distance = distance });
+        }
+    }
+
+    /// <summary>origin에서 point까지 플레이어와 적을 제외한 _attackMask 장애물이 있는지 검사하여 가려졌으면 true를 반환한다.</summary>
+    private bool IsFanTargetBlocked(Vector3 origin, Vector3 point)
+    {
+        Vector3 delta = point - origin;
+        float distance = delta.magnitude;
+        if (distance < 0.0001f) return false;
+        foreach (RaycastHit hit in Physics.RaycastAll(origin, delta / distance, distance, _attackMask, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.transform.IsChildOf(_playerRoot) || hit.collider.GetComponentInParent<EnemyHealth>() != null) continue;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>incomingPoint에서 연결된 플레이어 검의 가장 가까운 지점을 반환하여 방어 섬광 위치로 사용한다.</summary>

@@ -39,6 +39,8 @@ public sealed class PlayerController : MonoBehaviour
     [SerializeField, Min(0f)] private float _minimumChargeTime = 1f;
 
     [Header("Attack")]
+    [SerializeField, Tooltip("좌클릭 시 화면 중앙의 공개된 적에게 대상 돌진(발도)을 사용합니다. 끄면 항상 제자리 일반 공격을 사용하고 대상 실 표시도 숨깁니다.")]
+    private bool _enableTargetedDashAttack = true;
     [SerializeField, Min(0f)] private float _normalAttackRange = 1.5f;
     [SerializeField, Min(0f)] private float _iaidoAttackRange = 2f;
     [SerializeField, Min(0f)] private float _targetStandOff = 0.15f;
@@ -970,6 +972,7 @@ public sealed class PlayerController : MonoBehaviour
     /// <summary>
     /// 현재 후보 중 화면 조건·거리·돌진 경로를 만족하는 가장 가까운 적을 선택한다.
     /// targetedAttack이 참이면 중앙 화면에 걸친 공개 콜라이더와 대상 돌진 거리로 검사하며,
+    /// _enableTargetedDashAttack가 꺼져 있으면 대상 돌진 후보를 찾지 않는다.
     /// 선택 결과를 selected와 perceivedPosition에 담고 성공 여부를 반환한다.
     /// </summary>
     private bool TrySelectIaidoTarget(
@@ -981,6 +984,9 @@ public sealed class PlayerController : MonoBehaviour
         perceivedPosition = Vector3.zero;
 
         if (_combatService == null || _motor == null)
+            return false;
+        // 대상 돌진을 끄면 좌클릭은 제자리 일반 공격으로 이어지고 대상 실 표시도 후보를 잃는다.
+        if (targetedAttack && !_enableTargetedDashAttack)
             return false;
 
         IReadOnlyList<PlayerPerceivedTarget> targets = _perceptionProvider != null

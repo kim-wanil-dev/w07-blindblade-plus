@@ -27002,6 +27002,10 @@ PrefabInstance:
       propertyPath: _attackMask.m_Bits
       value: 55
       objectReference: {fileID: 0}
+    - target: {fileID: 1215301452296053969, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
+      propertyPath: _dodgeDistance
+      value: 8
+      objectReference: {fileID: 0}
     - target: {fileID: 2147414133172360306, guid: 63a8fea6414ce5644b9511f535c40bc1, type: 3}
       propertyPath: m_Name
       value: Player
@@ -56512,6 +56516,14 @@ MonoBehaviour:
   _minimumThrowGap: 0.25
   _deferDuringMeleeTelegraph: 1
   _meleeTelegraphRadius: 4
+  _limitAttackTurns: 1
+  _attackTurnRadius: 10
+  _attackTurnScale: 1
+  _attackTurnExponent: 0.6
+  _minimumAttackTurns: 1
+  _maximumAttackTurns: 6
+  _attackTurnGrantGap: 0.4
+  _attackTurnTimeout: 3
 --- !u!4 &1968806060
 Transform:
   m_ObjectHideFlags: 0

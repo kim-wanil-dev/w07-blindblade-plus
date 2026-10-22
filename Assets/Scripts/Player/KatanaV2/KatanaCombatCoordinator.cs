@@ -60,6 +60,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     [SerializeField] private PlayerController _player;
 
     [Header("Attack / sheathe")]
+    [SerializeField, Tooltip("검을 뽑은 채 연계가 끝난 뒤 공격하면 먼저 납도하고 다시 발도로 1타를 시작합니다. 끄면 뽑힌 상태에서 바로 1타를 시작합니다.")]
+    private bool _resheatheBeforeOpeningAttack = true;
     [SerializeField, Min(0f)] private float _normalSheatheDelay = 0.8f;
 
     [Header("발도 시작 2타 연계")]
@@ -293,6 +295,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     /// <summary>
     /// 반격, 대상 돌진, 일반 1·2타 연계 중 현재 상태에 맞는 공격을 시작하거나 다음 클릭 하나를 예약한다.
     /// 가드 중 입력은 가드를 끝내고, 퍼펙트 패링 모션 중 입력은 모션을 끊고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다. 제자리 공격 요청 중에는 대상 돌진을 건너뛴다.
+    /// _resheatheBeforeOpeningAttack가 꺼져 있으면 연계가 끝난 뒤에도 납도 없이 뽑힌 검으로 1타를 시작한다.
     /// </summary>
     public bool RequestAttack()
     {
@@ -392,8 +395,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         }
         if (!_inPlaceAttackRequested && _player.RequestTargetedIaidoAttack(strike))
             return true;
-        if (strike == 1 && _weaponState == KatanaWeaponState.Drawn && !attackFromGuard && !_attackFromParryMotion
-            && _clock >= _comboExpiresAt)
+        if (_resheatheBeforeOpeningAttack && strike == 1 && _weaponState == KatanaWeaponState.Drawn
+            && !attackFromGuard && !_attackFromParryMotion && _clock >= _comboExpiresAt)
         {
             BeginSheathe();
             _queuedOpeningAttack = true;
