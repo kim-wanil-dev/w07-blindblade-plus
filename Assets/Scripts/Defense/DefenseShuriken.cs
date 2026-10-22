@@ -51,17 +51,13 @@ public sealed class DefenseShuriken : MonoBehaviour
     [SerializeField, Tooltip("적대 비행 동안 수리검을 따라 반복하는 비행음. 반사·소멸하면 멈춘다.")]
     private SoundId _flightSound = SoundId.ShurikenFlight;
 
-    [Header("예측 조준·유도")]
+    [Header("현재 위치 조준·유도")]
     [SerializeField, Min(0f), Tooltip("플레이어 시점보다 낮게 조준하는 높이(미터)")]
     private float _aimDrop = 0.1f;
-    [SerializeField, Range(0f, 1f), Tooltip("1이면 현재 속도 기준 정확한 요격 지점, 0이면 현재 위치를 조준한다.")]
-    private float _leadAccuracy = 0.8f;
-    [SerializeField, Min(0f), Tooltip("예측으로 앞당기는 최대 거리(미터). 회피 순간의 속도로 과하게 앞서지 않게 한다.")]
-    private float _maximumLeadDistance = 4f;
-    [SerializeField, Min(0f), Tooltip("비행 중 예측 지점으로 꺾는 최대 회전 속도(도/초). 0이면 직선 비행한다.")]
+    [SerializeField, Min(0f), Tooltip("비행 중 현재 플레이어 위치로 꺾는 최대 회전 속도(도/초). 0이면 직선 비행한다.")]
     private float _homingTurnRate = 45f;
-    [SerializeField, Min(0f), Tooltip("플레이어와 이 거리 안에서는 유도를 멈추고 직진해 패링·회피 타이밍을 유지한다.")]
-    private float _homingStopDistance = 4f;
+    [SerializeField, Min(0f), Tooltip("플레이어와의 거리 또는 이동 경로의 최근접 거리가 이 값 이내가 되면 유도를 영구히 멈춘다.")]
+    private float _homingStopDistance = 5f;
 
     [Header("일반 패링 반사")]
     [SerializeField, Min(0f), Tooltip("반사 수리검이 적에게 주는 고정 피해")]
@@ -216,24 +212,14 @@ public sealed class DefenseShuriken : MonoBehaviour
         _onboardingHarmless = true;
     }
 
-    /// <summary>
-    /// origin에서 이 수리검 속도로 날아갈 때 motor 시점 아래 조준점이 velocity로 이동할 위치를 예측해 반환한다.
-    /// 비행 시간을 세 번 보정하며 예측 정확도와 최대 예측 거리로 앞당김을 제한한다.
-    /// </summary>
-    internal Vector3 PredictAimPoint(Vector3 origin, PlayerMotor motor, Vector3 velocity)
+    /// <summary>motor의 현재 시점보다 _aimDrop만큼 낮은 위치를 발사·유도 공통 조준점으로 반환한다.</summary>
+    internal Vector3 GetCurrentAimPoint(PlayerMotor motor)
     {
-        Vector3 target = motor.ViewOrigin - Vector3.up * _aimDrop;
-        Vector3 lead = Vector3.zero;
-        for (int i = 0; i < 3; i++)
-        {
-            float time = Vector3.Distance(origin, target + lead) / _speed;
-            lead = Vector3.ClampMagnitude(velocity * (time * _leadAccuracy), _maximumLeadDistance);
-        }
-        return target + lead;
+        return motor.ViewOrigin - Vector3.up * _aimDrop;
     }
 
     /// <summary>
-    /// distance와 현재 직진 상태를 사용해, 아직 유도 중인 수리검만 플레이어 예측 위치로 회전시킨다.
+    /// distance와 현재 직진 상태를 사용해, 아직 유도 중인 수리검만 플레이어의 현재 위치로 회전시킨다.
     /// 회전이 허용되면 _direction과 transform.rotation을 변경한다.
     /// </summary>
     private void SteerTowardsTarget(float distance)
@@ -241,7 +227,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         if (_terminalFlight || _homingTurnRate <= 0f || distance <= _homingStopDistance)
             return;
 
-        Vector3 aim = PredictAimPoint(transform.position, _targetMotor, _director.PlayerVelocity) - transform.position;
+        Vector3 aim = GetCurrentAimPoint(_targetMotor) - transform.position;
         if (aim.sqrMagnitude < 0.0001f)
             return;
 

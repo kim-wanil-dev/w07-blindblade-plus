@@ -204,13 +204,14 @@ public sealed class BambooThrower : MonoBehaviour
     }
 
     /// <summary>
-    /// 플레이어의 예측 위치를 향해 수리검을 생성하고 유도·반사 대상 조회용 디렉터와 함께 발사한다.
+    /// 플레이어의 현재 조준점을 향해 수리검을 생성하고 유도·반사 대상 조회용 디렉터와 함께 발사한다.
     /// 예약을 비행 집계로 넘기고 발사음을 재생한다. 몸 형상은 표시하지 않는다.
     /// </summary>
     private void Throw()
     {
         PlayerController player = Game.Player;
-        Vector3 target = _shurikenPrefab.PredictAimPoint(_muzzle.position, player.GetComponent<PlayerMotor>(), _director.PlayerVelocity);
+        PlayerMotor motor = player.GetComponent<PlayerMotor>();
+        Vector3 target = _shurikenPrefab.GetCurrentAimPoint(motor);
 
         Vector3 direction = (target - _muzzle.position).normalized;
         FacePlayer();
