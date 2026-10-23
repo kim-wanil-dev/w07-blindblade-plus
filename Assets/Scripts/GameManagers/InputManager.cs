@@ -181,7 +181,7 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 새 InputId로 좌클릭 일반 공격을 요청한다.
+    /// 새 InputId로 좌클릭 일반 공격을 요청한다. 불릿 타임 중 실이 연결된 적이 있으면 발도 돌진을 요청한다.
     /// 레거시 온보딩 모드에서만 홀드 차징을 시작하고 그 입력을 예약 상태로 기록한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
@@ -195,7 +195,13 @@ public sealed class InputManager : MonoBehaviour
                 PlayerInputRejectReason.None, 0, _attackPressTime);
             return;
         }
-        RequestNormalAttack(player, inputId, _attackPressTime);
+        RequestNormalAttack(player, inputId, _attackPressTime, HasBulletTimeDashTarget(player));
+    }
+
+    /// <summary>player가 불릿 타임 대상 돌진을 쓸 수 있고 대상 실이 연결될 적이 있으면 true를 반환한다. 상태는 바꾸지 않는다.</summary>
+    private static bool HasBulletTimeDashTarget(PlayerController player)
+    {
+        return player.IsBulletTimeDashReady && player.TryGetTargetedDashCandidate(out _);
     }
 
     /// <summary>
@@ -226,16 +232,21 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// 일반 공격을 시작하거나 버퍼에 넣는다. 레거시 온보딩 모드에서만 쳐내기 준비를 검기 예약으로 바꾸며, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
+    /// bulletTimeDash가 참이면 불릿 타임 첫 공격으로 실이 연결된 적에게 발도 돌진을 요청하고, 수락 시 돌진 거리 일부까지 불릿 타임을 유지한 뒤 쳐내기·회피 집중을 끝낸다.
+    /// 그 외에는 일반 공격을 시작하거나 버퍼에 넣는다. 레거시 온보딩 모드에서만 쳐내기 준비를 검기 예약으로 바꾸며, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
     /// </summary>
-    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
+    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime, bool bulletTimeDash)
     {
         int previousActionId = player.CurrentActionId;
-        bool swordWave = _legacyOnboarding && _empower.IsSwordWaveReady;
+        // 레거시 온보딩의 좌클릭 일섬도 발도 대상이 있으면 발도 돌진을 우선한다.
+        bool swordWave = _legacyOnboarding && _empower.IsSwordWaveReady && !bulletTimeDash;
         bool dodgeReady = _empower.IsDodgeReady;
-        bool accepted = swordWave ? _combat.RequestInPlaceAttack() : _combat.RequestAttack();
+        bool accepted = swordWave ? _combat.RequestInPlaceAttack()
+            : bulletTimeDash ? _combat.RequestBulletTimeAttack() : _combat.RequestAttack();
         if (accepted && swordWave) _empower.CompleteWithSwordWave(previousActionId);
-        if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
+        // 발도 돌진은 회피 준비여도 바로 끝내지 않고 돌진 거리 일부까지 불릿 타임을 유지한다.
+        if (accepted && bulletTimeDash) _empower.CompleteReadyWithDash();
+        else if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
         bool started = accepted && player.CurrentActionId != previousActionId;
         PlayerInputStatus status = started ? PlayerInputStatus.Started
             : accepted ? PlayerInputStatus.Buffered : PlayerInputStatus.Rejected;
@@ -267,6 +278,7 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// 레거시 온보딩에서 전달된 _chargeInputId를 처리해 홀드 차징 완료·취소 결과를 기록한다.
     /// 홀드를 일찍 놓으면 차징을 취소하고 같은 입력으로 일반 공격을 요청한다.
+    /// 발도 대상은 차징을 멈추기 전에 확인해 감속이 끝나는 회피 준비에서도 불릿 타임 입력으로 다룬다.
     /// </summary>
     private void ResolveUltimateCharge(PlayerController player)
     {
@@ -293,8 +305,9 @@ public sealed class InputManager : MonoBehaviour
         {
             _chargeInputId = 0;
             _onboardingChargeHoldPending = false;
+            bool bulletTimeDash = HasBulletTimeDashTarget(player);
             _empower.CancelCharge();
-            RequestNormalAttack(player, inputId, _chargePressTime);
+            RequestNormalAttack(player, inputId, _chargePressTime, bulletTimeDash);
         }
     }
 

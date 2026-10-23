@@ -7,6 +7,7 @@ using BlindBlade.Combat.Contracts;
 /// <summary>
 /// 성공 시 집중, 일섬의 짧은 집중 연출과 거합 자동 차징·공격 수명을 관리한다.
 /// 자원은 PlayerSkillGauge가 보유하며 수동 스킬은 집중 여부와 무관하게 전용 입력으로 시작한다.
+/// 성공 집중 중 좌클릭 발도 돌진이 나가면 돌진 거리 일부까지 불릿 타임을 유지한 뒤 집중을 끝낸다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
@@ -28,7 +29,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     [Header("준비")]
     [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 시간 제한과 별개입니다.")]
     private float _readyDuration = 5f;
-    [SerializeField, Range(0.5f, 1.5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 조건과 별개입니다.")]
+    [SerializeField, Range(0.5f, 5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 조건과 별개입니다.")]
     private float _dodgeReadyDuration = 1f;
 
     [Header("히트스톱")]
@@ -47,6 +48,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _worldTimeScale = 0.2f;
     [SerializeField, Range(0.1f, 1f), Tooltip("강화 준비와 강화 공격 동안 플레이어 시간 배율. 세계 배율보다 크면 플레이어가 덜 느리다.")]
     private float _playerTimeScale = 0.5f;
+    [SerializeField, Range(0f, 1f), Tooltip("불릿 타임 중 발도 돌진이 이 비율의 거리를 지날 때까지 불릿 타임을 유지하고 남은 돌진과 베기는 평소 속도로 한다. 0이면 돌진 시작 때 바로 끝낸다.")]
+    private float _dashBulletTimeRatio = 0.5f;
 
     [Header("거합 자동 차징")]
     [SerializeField, Min(0.01f), Tooltip("Q 한 번으로 거합 시전까지 자동 차징하는 실시간입니다. 세계 감속 시간과 별개입니다.")]
@@ -63,8 +66,18 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _presentationSlowProgress;
 
     [Header("스킬 자원")]
-    [SerializeField, Min(0.01f), Tooltip("일섬 시작부터 집중 연출이 유지되는 실시간입니다. 일시정지 동안 멈춥니다.")]
+    [SerializeField, Min(0.01f), Tooltip("일섬 시작부터 집중 연출이 유지되는 최대 실시간입니다. 돌진이 아래 비율의 거리를 먼저 지나면 그때 끝납니다. 일시정지 동안 멈춥니다.")]
     private float _swordWaveFocusDuration = 0.2f;
+    [SerializeField, Range(0f, 1f), Tooltip("일섬 돌진이 이 비율의 거리를 지나면 집중 감속을 끝내고 남은 돌진은 평소 속도로 합니다. 집중 동안에는 플레이어도 세계와 같은 배율로 느려집니다.")]
+    private float _swordWaveFocusDashRatio = 0.5f;
+    [SerializeField, Range(0.01f, 1f), Tooltip("일섬 집중 동안 세계 시간 배율입니다.")]
+    private float _swordWaveFocusTimeScale = 0.2f;
+    [SerializeField, Range(0.01f, 1f), Tooltip("일섬 집중 동안 플레이어 시간 배율입니다. 세계 배율보다 작으면 세계 배율을 따릅니다.")]
+    private float _swordWaveFocusPlayerTimeScale = 0.2f;
+    [SerializeField, Min(0.01f), Tooltip("일섬 집중이 걸릴 때 화면 어둠·FOV·소리가 들어오는 실시간(초).")]
+    private float _swordWaveFocusFadeIn = 0.04f;
+    [SerializeField, Min(0.01f), Tooltip("일섬 집중이 풀릴 때 화면 어둠·FOV·소리가 빠지는 실시간(초).")]
+    private float _swordWaveFocusFadeOut = 0.06f;
     private PlayerSkillGauge _gauges;
     private float _swordWaveFocusRemaining;
     private bool _automaticCharge;
@@ -89,8 +102,11 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _readyElapsed;
     private float _hitStopRemaining;
     private bool _onboardingReadyHeld;
+    // 발도 돌진으로 준비를 쓴 뒤 돌진 거리 일부까지 불릿 타임만 유지하는 중이다. 이때는 준비 입력을 받지 않는다.
+    private bool _dashHeld;
 
-    public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready;
+    public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready && !_dashHeld;
+    public bool IsDashBulletTimeHeld => _dashHeld;
     public bool IsDodgeReady => IsReady && _dodgeReady;
     public bool IsSwordWaveReady => IsReady && !_dodgeReady;
     public bool IsStriking => _active && _stage == PlayerEmpowerStage.Started;
@@ -109,6 +125,9 @@ public sealed class PlayerEmpower : MonoBehaviour
     public float ChargeSlowDuration => _chargeSlowDuration;
     public float ChargeWorldTimeScale => _chargeWorldTimeScale;
     public bool IsSwordWaveFocusing => _swordWaveFocusRemaining > 0f;
+    public float SwordWaveFocusPlayerTimeScale => _swordWaveFocusPlayerTimeScale;
+    public float SwordWaveFocusFadeIn => _swordWaveFocusFadeIn;
+    public float SwordWaveFocusFadeOut => _swordWaveFocusFadeOut;
     public bool IsAutomaticCharging => IsCharging && _automaticCharge;
     public bool IsSwordWaveCasting => _swordWave.IsSkillActive;
     public float CounterChargeDuration => 1.5f;
@@ -124,10 +143,13 @@ public sealed class PlayerEmpower : MonoBehaviour
         else UltimateReadyParry?.Invoke();
     }
 
-    /// <summary>잔량과 현재 행동을 검사해 일섬을 즉시 시작한다. 수락 시 한 칸을 소비하고 첫 집중 시간을 설정하며 성공 여부를 반환한다.</summary>
+    /// <summary>
+    /// 잔량과 현재 행동을 검사해 일섬을 즉시 시작한다. 수락 시 한 칸을 소비하고 첫 집중 시간을 설정하며 성공 여부를 반환한다.
+    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// </summary>
     public bool TryBeginSwordWave()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseSwordWave || !_combat.CanStartAction) return false;
+        if (!CanBeginManualSkill() || !_gauges.CanUseSwordWave || !_combat.PrepareManualSkill()) return false;
         if (!_combat.RequestSwordWaveAttack()) return false;
         if (!_gauges.TryConsumeSwordWave()) return false;
         if (_active) End(PlayerEmpowerEndReason.SwordWave);
@@ -139,16 +161,19 @@ public sealed class PlayerEmpower : MonoBehaviour
         _hitStopRemaining = 0f;
         _swordWaveFocusRemaining = _swordWaveFocusDuration;
         _timerUpdatedAt = Time.realtimeSinceStartupAsDouble;
-        ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _worldTimeScale);
+        ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _swordWaveFocusTimeScale);
         Publish(PlayerEmpowerStage.Ready, PlayerEmpowerEndReason.None);
         _swordWave.PlaySkill(_player.CurrentActionId);
         return true;
     }
 
-    /// <summary>집중 여부와 무관하게 거합 완충 자원으로 자동 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.</summary>
+    /// <summary>
+    /// 집중 여부와 무관하게 거합 완충 자원으로 자동 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.
+    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// </summary>
     public bool TryBeginAutomaticCharge()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseUltimate || !_combat.CanStartAction) return false;
+        if (!CanBeginManualSkill() || !_gauges.CanUseUltimate || !_combat.PrepareManualSkill()) return false;
         if (_active) End(PlayerEmpowerEndReason.Cancelled);
         _active = true;
         _stage = PlayerEmpowerStage.Ready;
@@ -207,6 +232,7 @@ public sealed class PlayerEmpower : MonoBehaviour
         double now = Time.realtimeSinceStartupAsDouble;
         float dt = (float)Math.Max(0d, now - _timerUpdatedAt);
         _timerUpdatedAt = now;
+        if (_dashHeld && Time.timeScale > 0f && !_player.IsPaused) UpdateDashHold();
         if (!IsReady || Time.timeScale <= 0f || _player.IsPaused) return;
 
         // 시전 전 프레임의 경과 시간이 타이머에 포함되지 않도록 시작 시각부터 잰다.
@@ -226,6 +252,9 @@ public sealed class PlayerEmpower : MonoBehaviour
         if (IsSwordWaveFocusing)
         {
             _swordWaveFocusRemaining = Mathf.Max(0f, _swordWaveFocusRemaining - dt);
+            // 일섬 돌진이 정한 거리를 지나거나 벽에 막혀 끝나면 시간이 남아도 감속을 풀고 남은 돌진은 평소 속도로 한다.
+            if (_swordWave.DashDistance > 0f && _swordWave.DashProgress >= _swordWaveFocusDashRatio)
+                _swordWaveFocusRemaining = 0f;
             if (!IsSwordWaveFocusing) End(PlayerEmpowerEndReason.Completed);
             return;
         }
@@ -236,11 +265,13 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>
     /// 패링 성공에 따른 일섬·거합 보상을 지급하고 패링 집중과 무적을 시작하거나 갱신한다.
-    /// attackId를 원인으로 사용하며 새 준비 또는 회피 준비 교체 여부를 반환한다.
+    /// attackId를 원인으로 사용하며 새 준비 또는 회피 준비 교체 여부를 반환한다. 발도 돌진의 불릿 타임을 유지하던 중이면 먼저 끝내고 새 준비를 시작한다.
     /// </summary>
     public bool NotifyPerfectParry(int attackId)
     {
         if (IsStriking) return false;
+        // 같은 소유자의 시간 요청은 겹쳐 등록되지 않으므로 유지하던 불릿 타임을 먼저 끝낸다.
+        if (_dashHeld) End(PlayerEmpowerEndReason.Attack);
         _gauges.RewardPerfectParry();
         _invulnerableUntil = Time.unscaledTime + _perfectParryInvulnerableDuration;
         if (IsReady)
@@ -274,11 +305,12 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>
     /// attackId를 원인으로 회피 전용 집중을 시작하거나 갱신한다.
-    /// 패링 준비와 강화 공격 중에는 해당 상태를 바꾸지 않는다.
+    /// 패링 준비와 강화 공격 중에는 해당 상태를 바꾸지 않는다. 발도 돌진의 불릿 타임을 유지하던 중이면 먼저 끝내고 새 회피 준비를 시작한다.
     /// </summary>
     public void BeginDodgeBulletTime(int attackId)
     {
         if (IsStriking) return;
+        if (_dashHeld) End(PlayerEmpowerEndReason.Attack);
         if (IsDodgeReady)
             _readyElapsed = 0f;
         else if (!IsReady)
@@ -435,6 +467,39 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
+    /// 불릿 타임 중 대상 돌진(발도) 공격이 수락되면 일섬 없이 쳐내기·회피 집중을 끝낸다. 스킬 게이지는 바꾸지 않는다.
+    /// 플레이어가 돌진 중이면 _dashHeld를 켜 _dashBulletTimeRatio 거리까지 불릿 타임을 유지하고, 예약되거나 일반 공격으로 바뀌었으면 바로 Attack으로 끝낸다.
+    /// </summary>
+    public void CompleteReadyWithDash()
+    {
+        if (!IsReady) return;
+        if (_player.CurrentState != PlayerActionState.IaidoDash || _dashBulletTimeRatio <= 0f)
+        {
+            End(PlayerEmpowerEndReason.Attack);
+            return;
+        }
+
+        _dashHeld = true;
+        // 쳐내기 히트스톱 중이면 돌진이 멈춰 보이지 않도록 바로 불릿 타임 배율로 바꾼다.
+        if (_hitStopRemaining > 0f)
+        {
+            _hitStopRemaining = 0f;
+            ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
+        }
+    }
+
+    /// <summary>
+    /// 유지 중인 발도 돌진이 _dashBulletTimeRatio 거리를 지났거나 돌진이 끝났으면 불릿 타임을 Attack으로 끝낸다.
+    /// 플레이어 행동 상태와 PlayerMotor의 DashProgress를 읽는다.
+    /// </summary>
+    private void UpdateDashHold()
+    {
+        if (_player.CurrentState == PlayerActionState.IaidoDash && _motor.IsDashing
+            && _motor.DashProgress < _dashBulletTimeRatio) return;
+        End(PlayerEmpowerEndReason.Attack);
+    }
+
+    /// <summary>
     /// 레거시 온보딩에서만 일반 공격과 일섬 검기 예약을 연결한다.
     /// previousActionId는 공격 요청 전 행동 ID이며, 준비 상태가 아니면 아무것도 바꾸지 않는다.
     /// </summary>
@@ -474,11 +539,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     /// <summary>
     /// 보스 거합을 받아쳐 플레이어 강화 공격을 받아치기 연출(적의 enemyCutColor 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자)로 한 번 발동하고 true를 반환한다.
     /// 게이지를 소비하지 않고 차징도 하지 않는다. 판정·피해·불릿 타임·무적은 평소 강화 공격과 같고 Started를 발행한다.
-    /// 이미 강화 공격 중이거나 사망·일시정지이면 false다. 진행 중이던 준비가 있으면 강화 공격으로 이어받는다.
+    /// 이미 강화 공격 중이거나 사망·일시정지이면 false다. 진행 중이던 준비가 있으면 강화 공격으로 이어받고, 발도 돌진의 불릿 타임 유지는 먼저 끝낸다.
     /// </summary>
     public bool BeginCounterStrike(Color enemyCutColor)
     {
         if (IsStriking || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
+        if (_dashHeld) End(PlayerEmpowerEndReason.Attack);
 
         if (!_active)
         {
@@ -523,6 +589,7 @@ public sealed class PlayerEmpower : MonoBehaviour
         _active = false;
         _dodgeReady = false;
         _onboardingReadyHeld = false;
+        _dashHeld = false;
         _stage = PlayerEmpowerStage.Ended;
         _hitStopRemaining = 0f;
         _charging = false;

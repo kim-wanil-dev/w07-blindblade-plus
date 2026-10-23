@@ -145,6 +145,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private bool _suppressSheatheOnGuardEnd;
     // 제자리 공격 요청은 예약된 공격이 시작되거나 버려질 때까지 대상 돌진을 막는다.
     private bool _inPlaceAttackRequested;
+    // 불릿 타임 공격 요청은 예약된 공격이 시작되거나 버려질 때까지 대상 돌진을 허용한다.
+    private bool _bulletTimeDashRequested;
     private PlayerInputRejectReason _lastRejectReason;
 
     private bool _attackWasDrawn;
@@ -238,6 +240,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             return;
 
         if (_inPlaceAttackRequested && !HasBufferedAttack) _inPlaceAttackRequested = false;
+        if (_bulletTimeDashRequested && !HasBufferedAttack) _bulletTimeDashRequested = false;
         _clock += _playerClock.DeltaTime;
         if (_queuedAttack && !IsFirstAttackFollowupBuffered && _queuedActionId == _player.CurrentActionId && _clock >= _queuedReadyAt
             && (_player.CurrentState == PlayerActionState.NormalAttack || CanStartAction))
@@ -310,6 +313,34 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     }
 
     /// <summary>
+    /// Shift 일섬·Q 거합 같은 수동 스킬을 시작하기 전에 가드와 퍼펙트 패링 모션을 끝내고, 이어지는 납도를 기다리지 않고 칼집에 넣은 상태로 확정한다.
+    /// 공격·회복 중에는 바꾸지 않으며, 정리한 뒤 행동을 바로 시작할 수 있는지(CanStartAction)를 반환한다.
+    /// </summary>
+    public bool PrepareManualSkill()
+    {
+        if (_player.IsGuarding) EndDefense();
+        CancelParryMotion();
+        if (_player.CurrentState == PlayerActionState.Free && _weaponState == KatanaWeaponState.Sheathing)
+        {
+            _weaponState = KatanaWeaponState.Sheathed;
+            Publish(KatanaStage.SheatheEnded);
+        }
+        return CanStartAction;
+    }
+
+    /// <summary>
+    /// 불릿 타임 중 입력으로 대상 돌진이 꺼져 있어도 실이 연결된 적에게 대상 돌진을 허용한 채 공격을 시작하거나 예약하고 입력 수락 여부를 반환한다.
+    /// 납도 중이면 납도를 끊고 바로 돌진한다. 예약된 경우 _bulletTimeDashRequested를 유지해 예약 공격이 시작될 때 대상 돌진을 시도하며, 이후 입력에는 허용이 이어지지 않는다.
+    /// </summary>
+    public bool RequestBulletTimeAttack()
+    {
+        _bulletTimeDashRequested = true;
+        bool accepted = RequestAttack();
+        if (!HasBufferedAttack) _bulletTimeDashRequested = false;
+        return accepted;
+    }
+
+    /// <summary>
     /// 반격, 대상 돌진, 일반 1·2타 연계 중 현재 상태에 맞는 공격을 시작하거나 다음 클릭 하나를 예약한다.
     /// 가드 중 입력은 가드를 끝내고, 퍼펙트 패링 모션 중 입력은 모션을 끊고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다. 제자리 공격 요청 중에는 대상 돌진을 건너뛴다.
     /// _resheatheBeforeOpeningAttack가 꺼져 있으면 연계가 끝난 뒤에도 납도 없이 뽑힌 검으로 1타를 시작한다.
@@ -341,6 +372,10 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         if (_queuedOpeningAttack) return Reject(PlayerInputRejectReason.AlreadyBuffered, "Attack: opening already buffered");
         if (_player.CurrentState == PlayerActionState.Free && _weaponState == KatanaWeaponState.Sheathing)
         {
+            // 불릿 타임 발도는 납도 완료를 기다리지 않고 납도를 끊어 바로 돌진한다. 지금 대상이 없으면 기존처럼 예약한다.
+            if (_bulletTimeDashRequested && _playerClock.Now >= _defenseReadyUntil
+                && _player.RequestTargetedIaidoAttack(1, true))
+                return true;
             _queuedOpeningAttack = true;
             return true;
         }
@@ -410,7 +445,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             QueueAttack(true, false, false, _nextComboAllowedAt);
             return true;
         }
-        if (!_inPlaceAttackRequested && _player.RequestTargetedIaidoAttack(strike))
+        if (!_inPlaceAttackRequested && _player.RequestTargetedIaidoAttack(strike, _bulletTimeDashRequested))
             return true;
         if (_resheatheBeforeOpeningAttack && strike == 1 && _weaponState == KatanaWeaponState.Drawn
             && !attackFromGuard && !_attackFromParryMotion && _clock >= _comboExpiresAt)
@@ -514,12 +549,12 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             if (_player.CurrentState == PlayerActionState.NormalAttack)
             {
                 _chainTransition = true;
-                targetedAccepted = _player.TryChainTargetedIaidoAttack(_queuedActionId, nextStrike);
+                targetedAccepted = _player.TryChainTargetedIaidoAttack(_queuedActionId, nextStrike, _bulletTimeDashRequested);
                 _chainTransition = false;
             }
             else if (_player.CurrentState == PlayerActionState.Free)
             {
-                targetedAccepted = _player.RequestTargetedIaidoAttack(nextStrike);
+                targetedAccepted = _player.RequestTargetedIaidoAttack(nextStrike, _bulletTimeDashRequested);
             }
 
             if (targetedAccepted)

@@ -44,6 +44,9 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private float _normalAttackNearbyRadius = 1.5f;
     private readonly List<FanTarget> _fanTargets = new List<FanTarget>();
     private readonly HashSet<EnemyHealth> _fanStruck = new HashSet<EnemyHealth>();
+    // 대상 돌진 한 번 동안 이미 휩쓸어 피해를 준 공유 체력 묶음이다. 행동 ID가 바뀌면 비운다.
+    private readonly HashSet<EnemyHealth> _dashSweepStruck = new HashSet<EnemyHealth>();
+    private int _dashSweepActionId;
 
     /// <summary>부채꼴 판정에 들어온 적과 피격 콜라이더, 시점 원점에서 가장 가까운 접촉 위치와 수평 거리다.</summary>
     private struct FanTarget
@@ -486,6 +489,51 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
                 hit ? nearest.Point : request.Origin, enemyDamaged);
         }
         return result;
+    }
+
+    /// <summary>
+    /// actionId의 대상 돌진 중 origin·forward·range의 일반 공격 부채꼴 안에 있는 적에게 일반 공격 피해를 준다.
+    /// excludeTargetId 적과 그 공유 체력 묶음은 도착 베기가 맡으므로 빼고, 같은 actionId 동안 이미 맞은 묶음은 다시 때리지 않는다.
+    /// 무적인 적은 건너뛰어 이후 프레임에 다시 검사하며, 이번 호출에서 실제 피해를 준 적이 있으면 true를 반환한다.
+    /// </summary>
+    public bool SweepDashFanAttack(int actionId, Vector3 origin, Vector3 forward, float range, string excludeTargetId)
+    {
+        if (_dashSweepActionId != actionId)
+        {
+            _dashSweepActionId = actionId;
+            _dashSweepStruck.Clear();
+            if (EnemyHealth.TryFind(excludeTargetId, out EnemyHealth excluded))
+                _dashSweepStruck.Add(excluded.SharedDamageKey);
+        }
+
+        forward = Vector3.ProjectOnPlane(forward, Vector3.up);
+        if (forward.sqrMagnitude < 0.0001f) forward = Vector3.ProjectOnPlane(_playerRoot.forward, Vector3.up);
+        forward.Normalize();
+        CollectFanTargets(origin, forward, range);
+
+        bool enemyDamaged = false;
+        _fanStruck.Clear();
+        _fanTargets.Sort((a, b) => b.Health.HasSharedDamagePriority.CompareTo(a.Health.HasSharedDamagePriority));
+        foreach (FanTarget target in _fanTargets)
+        {
+            EnemyHealth key = target.Health.SharedDamageKey;
+            // 같은 호출에서 묶음 상대가 막 맞았으면 혈흔만 낸다.
+            if (_fanStruck.Contains(key))
+            {
+                target.Health.PlaySharedHitEffect(target.Point);
+                continue;
+            }
+            if (_dashSweepStruck.Contains(key) || target.Health.IsInvulnerable) continue;
+
+            _dashSweepStruck.Add(key);
+            _fanStruck.Add(key);
+            Vector3 toTarget = Vector3.ProjectOnPlane(target.Point - origin, Vector3.up);
+            Vector3 direction = toTarget.sqrMagnitude > 0.0001f ? toTarget.normalized : forward;
+            enemyDamaged |= target.Health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, target.Point,
+                direction, nameof(PlayerAttackKind.Normal), actionId, 1,
+                BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
+        }
+        return enemyDamaged;
     }
 
     /// <summary>
