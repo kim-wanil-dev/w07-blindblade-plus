@@ -1169,11 +1169,100 @@ MonoBehaviour:
   _bottomOffset: 170
   _canvasSortingOrder: 101
   _backgroundColor: {r: 0.04, g: 0.045, b: 0.055, a: 0.78}
-  _fillColor: {r: 0.86, g: 0.1, b: 0.1, a: 0.92}
+  _readyColor: {r: 1, g: 0.78, b: 0.28, a: 1}
   _valueColor: {r: 0.98, g: 0.97, b: 0.93, a: 1}
   _labelColor: {r: 0.94, g: 0.92, b: 0.88, a: 1}
   _valueFontSize: 24
   _labelFontSize: 12
+  _valueOutlineWidth: 0
+  _valueOutlineColor: {r: 0, g: 0, b: 0, a: 1}
+  _hideFadeDuration: 0.15
+  _liquidDensityMaterial: {fileID: 2100000, guid: a529a693359f42b00da73747954a9a44, type: 2}
+  _liquidCompositeMaterial: {fileID: 2100000, guid: 81a181ade340d079c59398fdb92b7168, type: 2}
+  _liquidStyle:
+    _liquidRadius: 0.86
+    _bodyThreads:
+      _sphereScale: 1
+      _axisRoll: 20
+      _axisPitch: 25
+      _inclination: 65
+      _twist: 0.3
+      _precessionSpeed: 0.4
+      _counterAzimuth: 90
+      _segments: 64
+      _mainWidth: 1.1
+      _branchWidthRatio: 0.2
+      _strokeLength: 0.7
+      _thicknessVariation: 0.35
+      _branchSpread: 0.75
+      _backOpacity: 0.3
+      _feather: 2
+      _color: {r: 1, g: 1, b: 1, a: 1}
+      _orbitSpeed: 0.32
+      _counterSpeedRatio: 0.8
+      _tugStrength: 1.6
+      _tugMeanInterval: 1.2
+      _speedWander: 0.4
+      _fadeDuration: 0.25
+    _layerCount: 3
+    _layerTilt: 55
+    _tumbleAngle: 30
+    _tumbleSpeed: 0.35
+    _depthOpacity: 0.45
+    _textureSize: 256
+    _fillColor: {r: 0.85, g: 0.88, b: 0.95, a: 0.08}
+    _level1Color: {r: 0.42, g: 0.45, b: 0.52, a: 0.8}
+    _level2Color: {r: 0.66, g: 0.69, b: 0.75, a: 0.9}
+    _level3Color: {r: 0.86, g: 0.88, b: 0.92, a: 0.96}
+    _level4Color: {r: 1, g: 1, b: 1, a: 1}
+    _levelThresholds: {x: 0.25, y: 1.15, z: 2.1, w: 3.05}
+    _levelSoftness: 0.06
+    _surfaceWidth: 0.1
+    _waveAmplitude: 0.07
+    _waveLength: 0.9
+    _waveSpeed: 0.6
+    _fillSharpness: 4
+    _drainSharpness: 8
+    _sloshStrength: 3
+    _sloshDamping: 2.2
+    _sloshSwirl: 1.5
+    _clipSoftness: 1.2
+    _rimThread: 1
+    _rimWhenFilled: 0
+    _rimConnected: 1
+    _rimRadius: 0.95
+    _rimWidth: 0.24
+    _rimHeadCount: 3
+    _rimStrokeLength: 0.2
+    _rimHeadLength: 0.12
+    _rimTaperLength: 0.3
+    _rimTaper: 1.2
+    _rimHairline: 0.18
+    _rimWaveDepth: 0.5
+    _rimWaveCount: 3
+    _rimWaveSpeed: 1.2
+    _rimPulse: 0.2
+    _rimSpeed: 0.45
+    _rimHeadWander: 0.35
+    _rimHeadKick: 0.25
+    _rimHeadSpring: 6
+    _rimGlowWidth: 2.2
+    _rimGlowOpacity: 0.3
+    _ringGlowWidth: 0.22
+    _ringGlowOpacity: 0.18
+    _filledGlowOpacity: 0
+    _glowPulseDepth: 0.35
+    _glowPulseSpeed: 1.2
+    _fullFlowMultiplier: 1.6
+    _fullTransitionDuration: 0.3
+    _branchWidthRatio: 0.2
+    _branchSpread: 0.75
+    _thicknessVariation: 0.35
+    _feather: 1
+    _color: {r: 1, g: 1, b: 1, a: 1}
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
 --- !u!114 &7719342256018403928
 MonoBehaviour:
   m_ObjectHideFlags: 0
