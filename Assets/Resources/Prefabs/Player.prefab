@@ -383,11 +383,13 @@ MonoBehaviour:
   _minimumChargeTime: 1
   _enableTargetedDashAttack: 0
   _enableBulletTimeDashAttack: 1
+  _sweepDuringTargetedDash: 1
   _normalAttackRange: 4.5
   _iaidoAttackRange: 2
   _targetStandOff: 0.15
   _attackOriginHeight: 1.1
-  _targetedIaidoMaxDistance: 8
+  _targetedIaidoMaxDistance: 16
+  _targetedCenterScreenRatio: 0.2
   _crouchReentryInterval: 0.5
   _normalAttackRecovery: 0
   _guardStartRecovery: 0
@@ -742,8 +744,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88e1b84d94574f9e057daaacddd9c616, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _readyDuration: 5
-  _dodgeReadyDuration: 1
+  _readyDuration: 3
+  _dodgeReadyDuration: 3
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
   _perfectParryInvulnerableDuration: 1.5

@@ -43,11 +43,15 @@ public sealed class PlayerController : MonoBehaviour
     private bool _enableTargetedDashAttack = true;
     [SerializeField, Tooltip("대상 돌진을 꺼도 불릿 타임(쳐내기·극한 회피 준비) 중 첫 공격은 실이 연결된 적에게 대상 돌진(발도)을 사용합니다. 대상 실 표시도 이때 연결됩니다.")]
     private bool _enableBulletTimeDashAttack = true;
+    [SerializeField, Tooltip("대상 돌진(발도)으로 움직이는 동안 매 프레임 일반 공격 사거리의 부채꼴로 판정해 경로의 적에게 일반 공격 피해를 한 번씩 줍니다. 도착 베기 대상은 제외합니다.")]
+    private bool _sweepDuringTargetedDash = true;
     [SerializeField, Min(0f)] private float _normalAttackRange = 1.5f;
     [SerializeField, Min(0f)] private float _iaidoAttackRange = 2f;
     [SerializeField, Min(0f)] private float _targetStandOff = 0.15f;
     [SerializeField, Min(0f)] private float _attackOriginHeight = 1.1f;
     [SerializeField, Min(0f)] private float _targetedIaidoMaxDistance = 10f;
+    [SerializeField, Range(0.05f, 1f), Tooltip("대상 돌진(발도) 후보로 인정하는 화면 중앙 영역의 가로·세로 비율. 작을수록 적을 화면 정중앙에 더 가깝게 놓아야 실이 연결된다.")]
+    private float _targetedCenterScreenRatio = 1f / 3f;
 
     [Header("Crouch input")]
     [SerializeField, Min(0f), Tooltip("웅크리기를 다시 시작할 수 있는 최소 간격. 일어서기는 즉시 허용합니다.")]
@@ -188,6 +192,8 @@ public sealed class PlayerController : MonoBehaviour
         bool movementLocked = IsMovementLocked();
         bool lookLocked = _state == PlayerActionState.Paused || _state == PlayerActionState.Dead;
         _motor?.Tick(mode, movementLocked, lookLocked, deltaTime);
+        if (_state == PlayerActionState.IaidoDash)
+            SweepTargetedDash();
         PublishSenseContext(mode);
     }
 
@@ -934,12 +940,14 @@ public sealed class PlayerController : MonoBehaviour
         _targetedDashAttack = false;
     }
 
-    /// <summary>대시 종료 이유에 따라 벽 충돌 회복을 적용하거나 베기 상태로 전환합니다.</summary>
+    /// <summary>대시 종료 이유에 따라 벽 충돌 회복을 적용하거나 베기 상태로 전환합니다. 대상 돌진이면 도착 위치에서 마지막 휩쓸기 판정을 먼저 합니다.</summary>
     private void HandleDashEnded(PlayerDashEnd result)
     {
         if (_state != PlayerActionState.IaidoDash)
             return;
 
+        // 마지막 이동 구간의 적도 놓치지 않도록 상태를 바꾸기 전에 도착 위치에서 한 번 더 판정한다.
+        SweepTargetedDash();
         _lockedAttackDirection = _motor.DashDirection;
 
         if (_counterDashAttack)
@@ -989,6 +997,18 @@ public sealed class PlayerController : MonoBehaviour
     }
 
     /// <summary>
+    /// 대상 돌진 중이면 현재 시점 원점·돌진 방향·일반 공격 사거리로 부채꼴 판정을 요청해 경로의 적에게 일반 공격 피해를 준다.
+    /// 반격 대시이거나 _sweepDuringTargetedDash가 꺼져 있으면 아무것도 하지 않으며, 도착 베기 대상 _preferredTargetId는 판정에서 뺀다.
+    /// </summary>
+    private void SweepTargetedDash()
+    {
+        if (!_sweepDuringTargetedDash || !_targetedDashAttack || _counterDashAttack) return;
+        if (_combatService is EnemyCombatService combat)
+            combat.SweepDashFanAttack(_currentActionId, _motor.ViewOrigin, _motor.DashDirection, _normalAttackRange,
+                _preferredTargetId);
+    }
+
+    /// <summary>
     /// 현재 후보 중 화면 조건·거리·돌진 경로를 만족하는 가장 가까운 적을 선택한다.
     /// targetedAttack이 참이면 중앙 화면에 걸친 공개 콜라이더와 대상 돌진 거리로 검사하며,
     /// _enableTargetedDashAttack가 꺼져 있으면 bulletTimeDash가 참인 불릿 타임 요청에서만 대상 돌진 후보를 찾는다.
@@ -1030,9 +1050,10 @@ public sealed class PlayerController : MonoBehaviour
             if (mask == null)
                 return false;
 
-            // 투영 행렬의 X/Y를 3배로 좁혀 화면 중앙 1/3 영역의 프러스텀을 만든다.
+            // 투영 행렬의 X/Y를 비율의 역수만큼 키워 화면 중앙 _targetedCenterScreenRatio 영역의 프러스텀을 만든다.
+            float centerScale = 1f / _targetedCenterScreenRatio;
             Matrix4x4 centerProjection =
-                Matrix4x4.Scale(new Vector3(3f, 3f, 1f)) * camera.projectionMatrix;
+                Matrix4x4.Scale(new Vector3(centerScale, centerScale, 1f)) * camera.projectionMatrix;
             centerPlanes = GeometryUtility.CalculateFrustumPlanes(
                 centerProjection * camera.worldToCameraMatrix);
         }

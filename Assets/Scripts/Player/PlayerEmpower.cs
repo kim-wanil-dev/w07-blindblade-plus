@@ -29,7 +29,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     [Header("준비")]
     [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 시간 제한과 별개입니다.")]
     private float _readyDuration = 5f;
-    [SerializeField, Range(0.5f, 1.5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 조건과 별개입니다.")]
+    [SerializeField, Range(0.5f, 5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 조건과 별개입니다.")]
     private float _dodgeReadyDuration = 1f;
 
     [Header("히트스톱")]
