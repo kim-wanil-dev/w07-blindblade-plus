@@ -247,8 +247,8 @@ public static class OnboardingSceneBuilder
         serializedHud.FindProperty("_parryBeadsTutorialGamepadText").stringValue = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
         serializedHud.FindProperty("_swordWaveTutorialText").stringValue = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nShift를 누르면 한 칸을 써서 일섬을 발동합니다.\n마우스 좌클릭으로 계속 진행";
         serializedHud.FindProperty("_swordWaveTutorialGamepadText").stringValue = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nRT를 누르면 한 칸을 써서 일섬을 발동합니다.\nRB 버튼으로 계속 진행";
-        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "원형 거합 게이지가 100%가 되면 Q를 눌러 자동 차징 후 발동합니다.\n마우스 좌클릭으로 계속 진행";
-        serializedHud.FindProperty("_ultimateReadyTutorialGamepadText").stringValue = "원형 거합 게이지가 100%가 되면 Y를 눌러 자동 차징 후 발동합니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "원형 거합 게이지가 100%가 되면 Q를 눌러 발동합니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialGamepadText").stringValue = "원형 거합 게이지가 100%가 되면 Y를 눌러 발동합니다.\nRB 버튼으로 계속 진행";
         serializedHud.FindProperty("_idleMovementText").stringValue = "WASD키로 이동하기";
         serializedHud.FindProperty("_idleMovementGamepadText").stringValue = "왼쪽 스틱으로 이동하기";
 
