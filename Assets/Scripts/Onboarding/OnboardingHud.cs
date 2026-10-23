@@ -307,7 +307,6 @@ public sealed class OnboardingHud : MonoBehaviour
         _movementControlsVisible = visible;
         if (!visible) _idleMovementVisible = false;
         _movementPanel.gameObject.SetActive(visible);
-        if (visible) _movementPanel.rectTransform.sizeDelta = new Vector2(_movementPanel.rectTransform.sizeDelta.x, 184f);
         if (visible) RefreshMovementPrompt(false);
     }
 
@@ -715,20 +714,20 @@ public sealed class OnboardingHud : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
 
         _guidePanel = CreateImage("GuidePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
-        SetAnchoredRect(_guidePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(760f, 104f));
+        SetAnchoredRect(_guidePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 36f), new Vector2(620f, 86f));
         _instructionIcon = CreateImage("MouseHint", _guidePanel.transform, Color.white);
         _instructionIcon.preserveAspect = true;
         SetAnchoredRect(_instructionIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(28f, 0f), new Vector2(40f, 60f));
         _instructionText = CreateText("Instruction", _guidePanel.transform, INSTRUCTION_FONT_SIZE, TextAlignmentOptions.MidlineLeft);
         SetStretchRect(_instructionText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(100f, 8f), new Vector2(-26f, -8f));
         _notePanel = CreateImage("GuideNotePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
-        SetAnchoredRect(_notePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 174f), new Vector2(760f, 48f));
+        SetAnchoredRect(_notePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 130f), new Vector2(620f, 42f));
         _noteText = CreateText("GuideNote", _notePanel.transform, 24f, TextAlignmentOptions.Midline);
         SetStretchRect(_noteText.rectTransform, Vector2.zero, Vector2.one, new Vector2(20f, 4f), new Vector2(-20f, -4f));
         _notePanel.gameObject.SetActive(false);
 
         _objectivePanel = CreateImage("ObjectivePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
-        SetAnchoredRect(_objectivePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-140f, 120f), new Vector2(400f, 170f));
+        SetAnchoredRect(_objectivePanel.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-64f, -58f), new Vector2(400f, 170f));
         _objectivePanel.gameObject.AddComponent<RectMask2D>();
         _objectiveShine = CreateImage("ObjectiveShine", _objectivePanel.transform, new Color(0.94f, 0.97f, 1f, 0f));
         _objectiveShine.raycastTarget = false;
@@ -753,11 +752,11 @@ public sealed class OnboardingHud : MonoBehaviour
 
         _movementPanel = CreateImage("MovementControls", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.92f));
         SetAnchoredRect(_movementPanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(760f, 184f));
+            new Vector2(0.5f, 0f), new Vector2(0f, 36f), new Vector2(620f, 126f));
         _movementText = CreateText("MovementControlsText", _movementPanel.transform, 30f, TextAlignmentOptions.Center);
         _movementText.color = new Color(0.96f, 0.95f, 0.91f, 1f);
         _movementText.textWrappingMode = TextWrappingModes.Normal;
-        SetStretchRect(_movementText.rectTransform, Vector2.zero, Vector2.one, new Vector2(28f, 18f), new Vector2(-28f, -18f));
+        SetStretchRect(_movementText.rectTransform, Vector2.zero, Vector2.one, new Vector2(22f, 10f), new Vector2(-22f, -10f));
         _movementPanel.gameObject.SetActive(false);
 
         _defenseInputPanel = CreateImage("DefenseInputHint", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.88f));
@@ -887,20 +886,20 @@ public sealed class OnboardingHud : MonoBehaviour
         _objectiveShineRoutine = null;
     }
 
-    /// <summary>좁은 화면에서는 중앙 안내와 우하단 목표 패널을 줄여 서로 겹치지 않게 배치한다.</summary>
+    /// <summary>화면 비율에 따라 하단 안내를 압축하고 목표 패널을 우측 상단에 배치한다.</summary>
     private void ApplyResponsiveLayout()
     {
         bool compact = (float)Screen.width / Mathf.Max(1, Screen.height) < 1.5f;
-        _guidePanel.rectTransform.sizeDelta = compact ? new Vector2(640f, 104f) : new Vector2(760f, 104f);
-        _guidePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 42f : 62f);
+        _guidePanel.rectTransform.sizeDelta = compact ? new Vector2(540f, 86f) : new Vector2(620f, 86f);
+        _guidePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 28f : 36f);
         // 설명 줄은 안내 패널 바로 위에 같은 폭으로 붙인다.
-        _notePanel.rectTransform.sizeDelta = new Vector2(_guidePanel.rectTransform.sizeDelta.x, 48f);
-        _notePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 154f : 174f);
+        _notePanel.rectTransform.sizeDelta = new Vector2(_guidePanel.rectTransform.sizeDelta.x, 42f);
+        _notePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 122f : 130f);
         _objectivePanel.rectTransform.sizeDelta = new Vector2(400f, 170f);
-        _objectivePanel.rectTransform.anchoredPosition = compact ? new Vector2(-62f, 82f) : new Vector2(-140f, 120f);
+        _objectivePanel.rectTransform.anchoredPosition = compact ? new Vector2(-28f, -28f) : new Vector2(-64f, -58f);
         _movementPanel.rectTransform.sizeDelta = compact
-            ? new Vector2(640f, 184f) : new Vector2(760f, 184f);
-        _movementPanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 42f : 62f);
+            ? new Vector2(540f, 126f) : new Vector2(620f, 126f);
+        _movementPanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 28f : 36f);
         _tutorialPanel.rectTransform.sizeDelta = compact ? new Vector2(700f, 206f) : new Vector2(820f, 206f);
     }
 
