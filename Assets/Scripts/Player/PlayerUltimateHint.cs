@@ -14,6 +14,7 @@ public sealed class PlayerUltimateHint : MonoBehaviour
 {
     [Header("프리팹 UI 연결")]
     [SerializeField] private CanvasGroup _group;
+    [SerializeField] private RectTransform _gaugeRect;
     [SerializeField] private TextMeshProUGUI _valueText;
     [SerializeField] private TextMeshProUGUI _labelText;
     [SerializeField] private CombatThreadLiquidBody _liquidBody;
@@ -39,6 +40,14 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     [Header("런타임")]
     private PlayerEmpower _empower;
     private PlayerSkillGauge _skillGauge;
+
+    public RectTransform GaugeRect => _gaugeRect;
+
+    /// <summary>온보딩 하단 조작판 위에 원형 거합 게이지를 배치한다.</summary>
+    public void SetOnboardingLayout()
+    {
+        _gaugeRect.anchoredPosition = new Vector2(0f, 210f);
+    }
 
     void Awake()
     {

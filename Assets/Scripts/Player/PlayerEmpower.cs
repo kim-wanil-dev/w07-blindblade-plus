@@ -338,6 +338,15 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 단계가 바뀔 때 남은 집중과 감속 시간 요청을 끝낸다.
+    /// 게이지는 변경하지 않으며 준비 상태였으면 종료 사건을 발행한다.
+    /// </summary>
+    public void EndOnboardingFocus()
+    {
+        if (IsReady) End(PlayerEmpowerEndReason.SessionEnded);
+    }
+
+    /// <summary>
     /// 온보딩 연계 단계에 들어가기 전에 활성 집중을 끝내고 토큰을 startingTokens개로 설정한다.
     /// 새 퍼펙트 패링이 실제로 일어나기 전에는 준비와 불릿 타임을 시작하지 않는다.
     /// </summary>

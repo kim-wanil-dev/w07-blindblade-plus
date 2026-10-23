@@ -180,41 +180,37 @@ public static class OnboardingSceneBuilder
         {
             "이동 - WASD\n회피 - Space\n공격 - 마우스 왼쪽 버튼 클릭",
             "극한 회피 - 적의 공격에 맞춰 Space로 회피",
-            "우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기",
-            "우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기",
-            "우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기"
+            "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)",
+            "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)",
+            "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)"
         };
         string[] gamepadHints =
         {
             "이동 - 왼쪽 스틱\n회피 - A 버튼\n공격 - RB",
             "극한 회피 - 적의 공격에 맞춰 A 버튼으로 회피",
-            "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기",
-            "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기",
-            "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기"
+            "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)",
+            "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)",
+            "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)"
         };
         string[] followUpKeyboardHints =
         {
-            "", "", "", "일섬 - 마우스 왼쪽 버튼 클릭",
-            "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다."
+            "", "", "", "일섬: Shift", "거합: Q"
         };
         string[] followUpGamepadHints =
         {
-            "", "", "", "일섬 - RB 버튼",
-            "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다."
+            "", "", "", "일섬: RT", "거합: Y"
         };
         string[][] objectives =
         {
-            new[] { "발도로 적 3명 처치" },
+            new[] { "전방의 적 처치 0/3" },
             new[] { "수리검 극한 회피 1회" },
-            new[] { "막기 1회", "공격 쳐내기 0/1" },
+            new[] { "적의 공격 막기", "공격 직전에 막아 쳐내기" },
             new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
-            new[] { "거합 게이지 채우기 0/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 1/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 2/3\n(극한 회피, 쳐내기로 획득)", "거합으로 적 8명 처치" }
+            new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" }
         };
-        Sprite leftMouse = AssetDatabase.LoadAssetAtPath<Sprite>(LEFT_MOUSE);
         Sprite rightMouse = AssetDatabase.LoadAssetAtPath<Sprite>(RIGHT_MOUSE);
         int[] rightIconStages = { 2, 3, 4 };
-        int[] followUpIconStages = { 3, 4 };
-        int[] followUpObjectives = { 1, 1, 1, 2, 3 };
+        int[] followUpObjectives = { 1, 1, 1, 2, 1 };
 
         for (int i = 0; i < prompts.arraySize; i++)
         {
@@ -229,7 +225,7 @@ public static class OnboardingSceneBuilder
             if (System.Array.IndexOf(rightIconStages, i) >= 0) icon.objectReferenceValue = rightMouse;
             else icon.objectReferenceValue = null;
             SerializedProperty followUpIcon = prompt.FindPropertyRelative("_followUpKeyboardIcon");
-            followUpIcon.objectReferenceValue = System.Array.IndexOf(followUpIconStages, i) >= 0 ? leftMouse : null;
+            followUpIcon.objectReferenceValue = null;
 
             SerializedProperty objectiveArray = prompt.FindPropertyRelative("_objectives");
             objectiveArray.arraySize = objectives[i].Length;
@@ -241,18 +237,18 @@ public static class OnboardingSceneBuilder
         serializedHud.FindProperty("_movementWaveTutorialGamepadText").stringValue = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
         serializedHud.FindProperty("_perfectDodgeTutorialText").stringValue = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\n마우스 좌클릭으로 계속 진행";
         serializedHud.FindProperty("_perfectDodgeTutorialGamepadText").stringValue = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\nRB 버튼으로 계속 진행";
-        serializedHud.FindProperty("_perfectDodgeMeterTutorialText").stringValue = "극한 회피는 거합 게이지를 한 칸 채웁니다.\n마우스 좌클릭으로 계속 진행";
-        serializedHud.FindProperty("_perfectDodgeMeterTutorialGamepadText").stringValue = "극한 회피는 거합 게이지를 한 칸 채웁니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_perfectDodgeMeterTutorialText").stringValue = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_perfectDodgeMeterTutorialGamepadText").stringValue = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\nRB 버튼으로 계속 진행";
         serializedHud.FindProperty("_targetThreadTutorialText").stringValue = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
         serializedHud.FindProperty("_targetThreadTutorialGamepadText").stringValue = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
-        serializedHud.FindProperty("_parryHudTutorialText").stringValue = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행";
-        serializedHud.FindProperty("_parryHudTutorialGamepadText").stringValue = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
-        serializedHud.FindProperty("_parryBeadsTutorialText").stringValue = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
-        serializedHud.FindProperty("_parryBeadsTutorialGamepadText").stringValue = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
-        serializedHud.FindProperty("_swordWaveTutorialText").stringValue = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\n마우스 왼쪽 버튼 클릭으로 계속 진행";
-        serializedHud.FindProperty("_swordWaveTutorialGamepadText").stringValue = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\nRB 버튼으로 계속 진행";
-        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\n좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
-        serializedHud.FindProperty("_ultimateReadyTutorialGamepadText").stringValue = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\nRB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
+        serializedHud.FindProperty("_parryHudTutorialText").stringValue = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_parryHudTutorialGamepadText").stringValue = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_parryBeadsTutorialText").stringValue = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_parryBeadsTutorialGamepadText").stringValue = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_swordWaveTutorialText").stringValue = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nShift를 누르면 한 칸을 써서 일섬을 발동합니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_swordWaveTutorialGamepadText").stringValue = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nRT를 누르면 한 칸을 써서 일섬을 발동합니다.\nRB 버튼으로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialText").stringValue = "원형 거합 게이지가 100%가 되면 Q를 눌러 자동 차징 후 발동합니다.\n마우스 좌클릭으로 계속 진행";
+        serializedHud.FindProperty("_ultimateReadyTutorialGamepadText").stringValue = "원형 거합 게이지가 100%가 되면 Y를 눌러 자동 차징 후 발동합니다.\nRB 버튼으로 계속 진행";
         serializedHud.FindProperty("_idleMovementText").stringValue = "WASD키로 이동하기";
         serializedHud.FindProperty("_idleMovementGamepadText").stringValue = "왼쪽 스틱으로 이동하기";
 
