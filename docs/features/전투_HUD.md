@@ -8,7 +8,7 @@
 - `PlayerUltimateHint`는 Player 루트 아래 정렬 순서 101의 Screen Space Overlay Canvas를 만들고 화면 중하단에 거합 원형 게이지를 둔다. 세로 Fill, 가운데 내림 퍼센트, 아래 입력 안내를 표시한다. 키보드는 `Q:거합`, 게임패드는 `Y:거합`이며 100%에서는 금색 Fill과 대비되는 어두운 숫자를 사용한다.
 - Inspector 위치: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`의 `PerfectParryTokens` → `Combat Perfect Parry Token Hud`; `Assets/Resources/Prefabs/Player.prefab` 루트의 `Player Ultimate Hint`에서 Sprite·크기·하단 오프셋·색·TMP 폰트를 관리한다.
 - 관련 코드: `CombatPerfectParryTokenHud.ApplySwordWaveGauge`, `CreatePartialFills`, `UpdateOrbitThreads`; `PlayerUltimateHint.BuildCanvas`, `RefreshGauge`, `RefreshLabel`; `PlayerKatanaBeads.UpdateFills`.
-- M3 검증: Unity 재컴파일 오류·경고 0. RainyTwinBoss 격리 Play에서 1.6칸 HUD [1, 0.6, 0]·구슬 [1, 0, 0], 거합 99.9%는 99%/사용 불가·100%는 100%/사용 가능을 확인했다. 1920×1080 및 1280×720 캡처에서 원형 배치와 100% 숫자 대비를 확인했다. 실제 Q/Y 입력 장치 이벤트와 일반 전투 중 전체 안내 겹침은 미확인이다.
+- M3/M4 검증: Unity 재컴파일 오류·경고 0. RainyTwinBoss 격리 Play에서 1.6칸 HUD [1, 0.6, 0]·구슬 [1, 0, 0], 거합 99.9%는 99%/사용 불가·100%는 100%/사용 가능을 확인했다. 1920×1080 및 1280×720 캡처에서 원형 배치와 100% 숫자 대비를 확인했다. BambooStage1 Play에서도 1280×720 전투 HUD 배치를 확인하고, Input System 키보드 상태 이벤트로 Shift/Q 처리와 가상 Gamepad North 이벤트에 따른 Q/Y 안내 전환을 확인했다. 실제 하드웨어 입력과 재도전 후 전체 진행 흐름은 미확인이다.
 
 #### 수리검·적 방향 인디케이터 Inspector 토글 (2026-10-22)
 
