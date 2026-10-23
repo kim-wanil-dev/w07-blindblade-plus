@@ -2,6 +2,14 @@
 
 ### 전투 HUD
 
+#### 일섬·거합 독립 게이지 HUD (2026-10-23)
+
+- `CombatPerfectParryTokenHud`는 세 슬롯을 일섬 게이지의 소수 칸으로 표시한다. 슬롯 i는 `Clamp01(SwordWaveGauge - i)`이며 부분 충전은 아래에서 위로 채운다. 정수 완충 슬롯은 기존 실 공전 효과로 표시한다.
+- `PlayerUltimateHint`는 Player 루트 아래 정렬 순서 101의 Screen Space Overlay Canvas를 만들고 화면 중하단에 거합 원형 게이지를 둔다. 세로 Fill, 가운데 내림 퍼센트, 아래 입력 안내를 표시한다. 키보드는 `Q:거합`, 게임패드는 `Y:거합`이며 100%에서는 금색 Fill과 대비되는 어두운 숫자를 사용한다.
+- Inspector 위치: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`의 `PerfectParryTokens` → `Combat Perfect Parry Token Hud`; `Assets/Resources/Prefabs/Player.prefab` 루트의 `Player Ultimate Hint`에서 Sprite·크기·하단 오프셋·색·TMP 폰트를 관리한다.
+- 관련 코드: `CombatPerfectParryTokenHud.ApplySwordWaveGauge`, `CreatePartialFills`, `UpdateOrbitThreads`; `PlayerUltimateHint.BuildCanvas`, `RefreshGauge`, `RefreshLabel`; `PlayerKatanaBeads.UpdateFills`.
+- M3 검증: Unity 재컴파일 오류·경고 0. RainyTwinBoss 격리 Play에서 1.6칸 HUD [1, 0.6, 0]·구슬 [1, 0, 0], 거합 99.9%는 99%/사용 불가·100%는 100%/사용 가능을 확인했다. 1920×1080 및 1280×720 캡처에서 원형 배치와 100% 숫자 대비를 확인했다. 실제 Q/Y 입력 장치 이벤트와 일반 전투 중 전체 안내 겹침은 미확인이다.
+
 #### 수리검·적 방향 인디케이터 Inspector 토글 (2026-10-22)
 
 - 두 토글은 `CombatThreatPresentationProvider` 한 컴포넌트에서 관리한다. 기본값은 켜짐이며, 끄면 해당 방향 UI만 숨기고 수리검 투척·위협 판정과 적 발소리·인지 처리는 유지한다.
@@ -47,7 +55,7 @@
 | Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | ShowShurikenIndicators, ShowEnemyIndicators, PublishThreatSnapshots, AddProjectileThreat, ExpireFootsteps, PublishEndedFootsteps | 수리검·적 방향 표시의 공통 Inspector 설정, 일반·보스 수리검 공통 위협 스냅샷, C의 감쇠·만료·발행자 종료 사건 |
 | Assets/Scripts/Enemies/EnemyProjectile.cs, TwinBossProjectile.cs | IsHostileFlying, HasPassedPlayer, ProjectileId | 보스 수리검의 적대 비행·통과 상태와 세션 고유 식별자 제공 |
 | Assets/Scripts/UI/PlayerLowHealthVignette.cs | HandleDamageReceived, ApplyVignette, ResetPulse | 실제 피해 구독, 고정 두께·강도의 짧은 피격 펄스 |
-| Assets/Scripts/UI/CombatHud/CombatPerfectParryTokenHud.cs | ApplyTokens, Update, CreateOrbitThreads, UpdateOrbitThreads | 퍼펙트 패링 토큰 3칸 표시(2026-10-15). 2026-10-16 찬 토큰을 실 두 가닥이 감싸는 구체로 표시, 토큰 크기 2배, 빈 토큰 이미지 추가. 규칙과 이미지 교체는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
+| Assets/Scripts/UI/CombatHud/CombatPerfectParryTokenHud.cs | ApplySwordWaveGauge, CreatePartialFills, Update, CreateOrbitThreads, UpdateOrbitThreads | 일섬 3칸 소수 충전과 완충 슬롯의 실 공전 표시. 이전 토큰 HUD 기록은 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
 | Assets/Scripts/UI/CombatHud/CombatTokenOrbitThread.cs, CombatTokenOrbitStyle.cs, ThreadSphere.cs, ThreadSphereFlow.cs | OnPopulateMesh / 설정값 / 경로·흐름 | 토큰 실 구체 UI 메시와 설정, 칼 구슬과 공유하는 실 구체 계산. 상세는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
 | Assets/Editor/CombatHudAuthoring.cs | Install | 임시 Sprite·HUD 프리팹 생성 및 기존 씬 연결 |
 | Assets/Editor/BambooDefenseHudAuthoring.cs | Connect | Record·수리검 배열·HP·스태미너·C 공급자 연결 |

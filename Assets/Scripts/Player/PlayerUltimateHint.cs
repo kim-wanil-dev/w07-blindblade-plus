@@ -257,7 +257,7 @@ public sealed class PlayerUltimateHint : MonoBehaviour
         float normalizedGauge = _skillGauge.UltimateNormalized;
         _fill.fillAmount = ready ? 1f : normalizedGauge;
         _fill.color = ready ? _readyColor : _fillColor;
-        _valueText.color = ready ? _readyColor : _valueColor;
+        _valueText.color = ready ? _backgroundColor : _valueColor;
         int percent = ready ? 100 : Mathf.Clamp(Mathf.FloorToInt(normalizedGauge * 100f), 0, 99);
         _valueText.text = percent + "%";
     }
