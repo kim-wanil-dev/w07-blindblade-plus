@@ -263,6 +263,7 @@ GameObject:
   - component: {fileID: 7719342256018403926}
   - component: {fileID: 7719342256018403927}
   - component: {fileID: 7719342256018403928}
+  - component: {fileID: 411521575061151256}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -747,9 +748,10 @@ MonoBehaviour:
   _perfectParryInvulnerableDuration: 1.5
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
-  _ultimateChargeDuration: 1.5
+  _ultimateChargeDuration: 0.75
   _chargeWorldTimeScale: 0.1
   _chargeSlowDuration: 0.7
+  _swordWaveFocusDuration: 0.2
 --- !u!114 &1235757311588725982
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -900,7 +902,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 55
   _launchFovKick: 30
-  _launchTimeScale: 0.1
   _launchRiseRatio: 0.15
 --- !u!114 &6618034975521349126
 MonoBehaviour:
@@ -1148,13 +1149,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
-  _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
-  _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
-  _keyboardSwordWaveHint: "좌클릭 - 일섬"
-  _gamepadSwordWaveHint: "RB - 일섬"
-  _keyboardPrepareHint: "거합 게이지 3칸 - 극한 회피 또는 쳐내기로 집중"
-  _gamepadPrepareHint: "거합 게이지 3칸 - 극한 회피 또는 쳐내기로 집중"
-  _fadeDuration: 0.15
+  _gaugeSprite: {fileID: 0}
+  _gaugeSize: 104
+  _bottomOffset: 170
+  _canvasSortingOrder: 101
+  _backgroundColor: {r: 0.04, g: 0.045, b: 0.055, a: 0.78}
+  _fillColor: {r: 0.86, g: 0.1, b: 0.1, a: 0.92}
+  _valueColor: {r: 0.98, g: 0.97, b: 0.93, a: 1}
+  _labelColor: {r: 0.94, g: 0.92, b: 0.88, a: 1}
+  _valueFontSize: 24
+  _labelFontSize: 12
 --- !u!114 &7719342256018403928
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1170,6 +1174,27 @@ MonoBehaviour:
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
   _visibleDuration: 1.2
   _fadeDuration: 0.15
+--- !u!114 &411521575061151256
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2147414133172360306}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79efbd4ac496463799460626aff3f49a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerSkillGauge
+  _maxSwordWaveGauge: 3
+  _swordWaveCost: 1
+  _swordWavePerfectParryReward: 1
+  _swordWavePerfectDodgeReward: 0.5
+  _swordWaveKillReward: 0.1
+  _maxUltimateGauge: 100
+  _ultimatePerfectDodgeReward: 15
+  _ultimateKillReward: 1
+  _ultimateBossNormalHitReward: 3
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0

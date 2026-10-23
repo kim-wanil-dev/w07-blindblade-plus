@@ -131,7 +131,9 @@ public enum PlayerInputKind
     GuardPress,
     GuardHoldResume,
     GuardRelease,
-    Dodge
+    Dodge,
+    SwordWave,
+    Ultimate
 }
 
 /// <summary>입력이 거부된 이유. 시작·예약·후속 기록에서는 None이다.</summary>
@@ -147,7 +149,8 @@ public enum PlayerInputRejectReason
     AlreadyDodging,
     DodgeCooldown,
     NotGrounded,
-    NotEnoughStamina
+    NotEnoughStamina,
+    NotEnoughSkillGauge
 }
 
 /// <summary>입력 처리 결과. BufferDropped는 예약된 입력이 시작되지 못하고 사라진 경우다.</summary>

@@ -516,6 +516,7 @@ namespace BlindBlade.Telemetry
             if (knownAttempt && input.Kind == PlayerInputKind.Dodge && input.Status == PlayerInputStatus.Started)
                 _dodgeInputId = input.InputId;
             if (!attempt) return;
+            if (input.Kind == PlayerInputKind.SwordWave || input.Kind == PlayerInputKind.Ultimate) return;
             string kind = input.Kind == PlayerInputKind.GuardPress ? "guard" : input.Kind == PlayerInputKind.Dodge ? "dodge" : "attack";
             Add(_counts, kind + "Attempts");
             if (input.Status == PlayerInputStatus.Rejected) Add(_counts, kind + "Rejected");
