@@ -4,7 +4,6 @@ using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.AI;
-using UnityEngine.InputSystem;
 
 using BlindBlade.Combat.Contracts;
 using BlindBlade.Telemetry;
@@ -965,12 +964,10 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _tutorialAdvanceRequested = false;
     }
 
-    /// <summary>TimeScale이 0이어도 마우스와 게임패드 공격 누름을 읽어 대기 중인 설명 입력으로 저장한다.</summary>
+    /// <summary>TimeScale이 0이어도 생성 Attack 액션을 읽어 대기 중인 설명 입력으로 저장한다.</summary>
     private void UpdatePausedTutorialInput()
     {
-        if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
-            _tutorialAdvanceRequested = true;
-        if (Gamepad.current != null && Gamepad.current.rightShoulder.wasPressedThisFrame)
+        if (_inputManager != null && _inputManager.AttackPressedThisFrame)
             _tutorialAdvanceRequested = true;
     }
 

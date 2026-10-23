@@ -39,7 +39,7 @@ public sealed class PlayerInteraction : MonoBehaviour
             _promptUI.ShowFor(
                 this, target.CanInteract, target.InteractionPrompt);
 
-        if (target.CanInteract && InputDeviceDisplay.InteractPressed)
+        if (target.CanInteract && Game.Instance.InputManager.WorldInteractPressedThisFrame)
         {
             target.Interact();
         }

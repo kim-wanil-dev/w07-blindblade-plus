@@ -2004,9 +2004,10 @@ GameObject:
   m_Component:
   - component: {fileID: 2379322627095124571}
   - component: {fileID: 8905973759913255905}
-  - component: {fileID: 7778435071211031899}
+  - component: {fileID: 8422682223894534227}
+  - component: {fileID: 7514704300656300869}
   m_Layer: 0
-  m_Name: Fill
+  m_Name: ThreadLiquidBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2039,7 +2040,7 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5215509965047301718}
   m_CullTransparentMesh: 1
---- !u!114 &7778435071211031899
+--- !u!114 &8422682223894534227
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -2048,27 +2049,36 @@ MonoBehaviour:
   m_GameObject: {fileID: 5215509965047301718}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Script: {fileID: 11500000, guid: 1344c3c82d62a2a41a3576d8abb8e3ea, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.RawImage
   m_Material: {fileID: 0}
-  m_Color: {r: 0.86, g: 0.1, b: 0.1, a: 0.92}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 33790c7c3bd448148d9e12afb5aadf78, type: 3}
-  m_Type: 3
-  m_PreserveAspect: 1
-  m_FillCenter: 1
-  m_FillMethod: 1
-  m_FillAmount: 1
-  m_FillClockwise: 1
-  m_FillOrigin: 0
-  m_UseSpriteMesh: 0
-  m_PixelsPerUnitMultiplier: 1
+  m_Texture: {fileID: 0}
+  m_UVRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+--- !u!114 &7514704300656300869
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5215509965047301718}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6483dd1b2493727cc5ff709b3b29120f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.UI.CombatHud.CombatThreadLiquidBody
 --- !u!1 &5409267418575811167
 GameObject:
   m_ObjectHideFlags: 0
@@ -2475,6 +2485,7 @@ RectTransform:
   m_Children:
   - {fileID: 5463433642415870324}
   - {fileID: 2379322627095124571}
+  - {fileID: 6393068961191869488}
   - {fileID: 4074629820698197988}
   m_Father: {fileID: 7573600638939489684}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -2623,6 +2634,71 @@ MonoBehaviour:
   _showIcon: 1
   _arcThickness: 4
   _arcAngle: 18
+--- !u!1 &6859624561963973124
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6393068961191869488}
+  - component: {fileID: 7337501565673124968}
+  - component: {fileID: 5009836071898332385}
+  m_Layer: 0
+  m_Name: ThreadLiquid
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &6393068961191869488
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6859624561963973124}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6882119279606233380}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!222 &7337501565673124968
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6859624561963973124}
+  m_CullTransparentMesh: 1
+--- !u!114 &5009836071898332385
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6859624561963973124}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8cc7445ec658cd9baa69da845da1337, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.UI.CombatHud.CombatThreadLiquidGauge
+  m_Material: {fileID: 0}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &6933203180648047668
 GameObject:
   m_ObjectHideFlags: 0
@@ -2738,12 +2814,101 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
   _group: {fileID: 7423496591089241212}
-  _fill: {fileID: 7778435071211031899}
   _valueText: {fileID: 4336517703488421214}
   _labelText: {fileID: 1306682924180409193}
-  _fillColor: {r: 0.86, g: 0.1, b: 0.1, a: 0.92}
+  _liquidBody: {fileID: 7514704300656300869}
+  _liquid: {fileID: 5009836071898332385}
   _readyColor: {r: 1, g: 0.78, b: 0.28, a: 1}
   _valueColor: {r: 0.98, g: 0.97, b: 0.93, a: 1}
+  _valueOutlineWidth: 0
+  _valueOutlineColor: {r: 0, g: 0, b: 0, a: 1}
+  _hideFadeDuration: 0.15
+  _liquidDensityMaterial: {fileID: 2100000, guid: a529a693359f42b00da73747954a9a44, type: 2}
+  _liquidCompositeMaterial: {fileID: 2100000, guid: 81a181ade340d079c59398fdb92b7168, type: 2}
+  _liquidStyle:
+    _liquidRadius: 0.86
+    _bodyThreads:
+      _sphereScale: 1
+      _axisRoll: 20
+      _axisPitch: 25
+      _inclination: 65
+      _twist: 0.3
+      _precessionSpeed: 0.4
+      _counterAzimuth: 90
+      _segments: 64
+      _mainWidth: 1.1
+      _branchWidthRatio: 0.2
+      _strokeLength: 0.7
+      _thicknessVariation: 0.35
+      _branchSpread: 0.75
+      _backOpacity: 0.3
+      _feather: 2
+      _color: {r: 1, g: 1, b: 1, a: 1}
+      _orbitSpeed: 0.32
+      _counterSpeedRatio: 0.8
+      _tugStrength: 1.6
+      _tugMeanInterval: 1.2
+      _speedWander: 0.4
+      _fadeDuration: 0.25
+    _layerCount: 3
+    _layerTilt: 55
+    _tumbleAngle: 30
+    _tumbleSpeed: 0.35
+    _depthOpacity: 0.45
+    _textureSize: 256
+    _fillColor: {r: 0.85, g: 0.88, b: 0.95, a: 0.08}
+    _level1Color: {r: 0.42, g: 0.45, b: 0.52, a: 0.8}
+    _level2Color: {r: 0.66, g: 0.69, b: 0.75, a: 0.9}
+    _level3Color: {r: 0.86, g: 0.88, b: 0.92, a: 0.96}
+    _level4Color: {r: 1, g: 1, b: 1, a: 1}
+    _levelThresholds: {x: 0.25, y: 1.15, z: 2.1, w: 3.05}
+    _levelSoftness: 0.06
+    _surfaceWidth: 0.1
+    _waveAmplitude: 0.07
+    _waveLength: 0.9
+    _waveSpeed: 0.6
+    _fillSharpness: 4
+    _drainSharpness: 8
+    _sloshStrength: 3
+    _sloshDamping: 2.2
+    _sloshSwirl: 1.5
+    _clipSoftness: 1.2
+    _rimThread: 1
+    _rimWhenFilled: 0
+    _rimConnected: 1
+    _rimRadius: 0.95
+    _rimWidth: 0.24
+    _rimHeadCount: 3
+    _rimStrokeLength: 0.2
+    _rimHeadLength: 0.12
+    _rimTaperLength: 0.3
+    _rimTaper: 1.2
+    _rimHairline: 0.18
+    _rimWaveDepth: 0.5
+    _rimWaveCount: 3
+    _rimWaveSpeed: 1.2
+    _rimPulse: 0.2
+    _rimSpeed: 0.45
+    _rimHeadWander: 0.35
+    _rimHeadKick: 0.25
+    _rimHeadSpring: 6
+    _rimGlowWidth: 2.2
+    _rimGlowOpacity: 0.3
+    _ringGlowWidth: 0.22
+    _ringGlowOpacity: 0.18
+    _filledGlowOpacity: 0
+    _glowPulseDepth: 0.35
+    _glowPulseSpeed: 1.2
+    _fullFlowMultiplier: 1.6
+    _fullTransitionDuration: 0.3
+    _branchWidthRatio: 0.2
+    _branchSpread: 0.75
+    _thicknessVariation: 0.35
+    _feather: 1
+    _color: {r: 1, g: 1, b: 1, a: 1}
+    _tugStrength: 1.6
+    _tugMeanInterval: 1.2
+    _speedWander: 0.4
 --- !u!1 &7104516934526625128
 GameObject:
   m_ObjectHideFlags: 0
@@ -2873,37 +3038,93 @@ MonoBehaviour:
   - {fileID: 1503186345334717184}
   _filledSprite: {fileID: 21300000, guid: 33790c7c3bd448148d9e12afb5aadf78, type: 3}
   _emptySprite: {fileID: 21300000, guid: b0e2c553ae8f42d590c880c15d2e6ce7, type: 3}
-  _filledColor: {r: 0.86, g: 0.1, b: 0.1, a: 1}
   _emptyColor: {r: 0.62, g: 0.62, b: 0.64, a: 0.85}
-  _orbitStyle:
-    _sphereScale: 1
-    _axisRoll: 20
-    _axisPitch: 25
-    _inclination: 65
-    _twist: 0.3
-    _precessionSpeed: 0.4
-    _counterAzimuth: 90
-    _segments: 64
-    _mainWidth: 1.2
+  _liquidDensityMaterial: {fileID: 2100000, guid: a529a693359f42b00da73747954a9a44, type: 2}
+  _liquidCompositeMaterial: {fileID: 2100000, guid: 81a181ade340d079c59398fdb92b7168, type: 2}
+  _liquidStyle:
+    _liquidRadius: 0.84
+    _bodyThreads:
+      _sphereScale: 1
+      _axisRoll: 20
+      _axisPitch: 25
+      _inclination: 65
+      _twist: 0.3
+      _precessionSpeed: 0.4
+      _counterAzimuth: 90
+      _segments: 64
+      _mainWidth: 1.1
+      _branchWidthRatio: 0.2
+      _strokeLength: 0.7
+      _thicknessVariation: 0.35
+      _branchSpread: 0.75
+      _backOpacity: 0.3
+      _feather: 1
+      _color: {r: 1, g: 1, b: 1, a: 1}
+      _orbitSpeed: 0.32
+      _counterSpeedRatio: 0.8
+      _tugStrength: 1.6
+      _tugMeanInterval: 1.2
+      _speedWander: 0.4
+      _fadeDuration: 0.25
+    _layerCount: 3
+    _layerTilt: 55
+    _tumbleAngle: 30
+    _tumbleSpeed: 0.35
+    _depthOpacity: 0.45
+    _textureSize: 128
+    _fillColor: {r: 0.85, g: 0.88, b: 0.95, a: 0.08}
+    _level1Color: {r: 0.42, g: 0.45, b: 0.52, a: 0.8}
+    _level2Color: {r: 0.66, g: 0.69, b: 0.75, a: 0.9}
+    _level3Color: {r: 0.86, g: 0.88, b: 0.92, a: 0.96}
+    _level4Color: {r: 1, g: 1, b: 1, a: 1}
+    _levelThresholds: {x: 0.25, y: 1.15, z: 2.1, w: 3.05}
+    _levelSoftness: 0.06
+    _surfaceWidth: 0.12
+    _waveAmplitude: 0.08
+    _waveLength: 0.9
+    _waveSpeed: 0.6
+    _fillSharpness: 4
+    _drainSharpness: 8
+    _sloshStrength: 3
+    _sloshDamping: 2.2
+    _sloshSwirl: 1.5
+    _clipSoftness: 1
+    _rimThread: 1
+    _rimWhenFilled: 1
+    _rimConnected: 0
+    _rimRadius: 0.95
+    _rimWidth: 0.2
+    _rimHeadCount: 2
+    _rimStrokeLength: 0.25
+    _rimHeadLength: 0.12
+    _rimTaperLength: 0.6
+    _rimTaper: 1.4
+    _rimHairline: 0.18
+    _rimWaveDepth: 0.5
+    _rimWaveCount: 3
+    _rimWaveSpeed: 1.2
+    _rimPulse: 0.2
+    _rimSpeed: 0.45
+    _rimHeadWander: 0.35
+    _rimHeadKick: 0.25
+    _rimHeadSpring: 6
+    _rimGlowWidth: 2.2
+    _rimGlowOpacity: 0.3
+    _ringGlowWidth: 0.3
+    _ringGlowOpacity: 0.26
+    _filledGlowOpacity: 0.42
+    _glowPulseDepth: 0.3
+    _glowPulseSpeed: 0.6
+    _fullFlowMultiplier: 2.5
+    _fullTransitionDuration: 0.3
     _branchWidthRatio: 0.2
-    _strokeLength: 0.75
-    _thicknessVariation: 0.35
     _branchSpread: 0.75
-    _backOpacity: 0.3
-    _feather: 0.8
+    _thicknessVariation: 0.35
+    _feather: 1
     _color: {r: 1, g: 1, b: 1, a: 1}
-    _orbitSpeed: 0.32
-    _counterSpeedRatio: 0.8
     _tugStrength: 1.6
     _tugMeanInterval: 1.2
     _speedWander: 0.4
-    _fadeDuration: 0.25
-  _fullSpeedMultiplier: 2.5
-  _fullGlowStrength: 1
-  _fullGlowRadius: 1.7
-  _fullGlowPulseDepth: 0.35
-  _fullGlowPulseSpeed: 1.2
-  _fullTransitionDuration: 0.3
 --- !u!114 &7806477712612645830
 MonoBehaviour:
   m_ObjectHideFlags: 0

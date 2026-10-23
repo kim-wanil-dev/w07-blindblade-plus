@@ -1,11 +1,13 @@
 > 2026-10-23 정식 전투 변경: 일섬·거합 자원과 Shift/Q 입력을 분리한다. 패링당 거합 1/3·보스 일반 공격 유효 적중당 3%p를 적용하며, 현재 규칙과 검증은 [특수 스킬 게이지](특수스킬_게이지.md)를 따른다. 온보딩 개편은 이번 범위에서 제외한다.
 
+> 2026-10-23 일섬 토큰 표시 변경: PerfectParryTokens의 칸 표시는 실행 중 각 Token_i 자식 `Token_i_LiquidBody`·`Token_i_Liquid`가 그리는 실 액체다. 아래 `Token_i_Orbit`·"실 공전" 묶음 기록은 이전 표시이며 현재 설정은 [실 액체 게이지](실_액체_게이지.md)를 따른다.
+
 ### 전투 HUD
 
 #### 거합 게이지 프리팹 구성 (2026-10-23)
 
-- `BambooDefenseHud.prefab` 루트의 `PlayerUltimateHint`가 자식 `UltimateGaugeCanvas/UltimateGauge/GaugeCircle`의 `Background`, `Fill`, `Percentage`, `InputLabel`을 제어한다. UI 계층과 `CanvasGroup`·Image·TMP 참조는 프리팹에 직렬화되어 있으며, 플레이 중 새 오브젝트를 만들지 않는다.
-- 게이지 값은 아래에서 위로 채우고 중앙에 내림 정수 퍼센트를 표시한다. 입력 안내는 키보드에서 `Q:거합`, 게임패드에서 `Y:거합`으로 바뀐다. 컴포넌트는 플레이어의 `PlayerSkillGauge.Changed` 이벤트를 구독하고, 플레이어가 준비되기 전까지 찾기를 반복한다.
+- `BambooDefenseHud.prefab` 루트의 `PlayerUltimateHint`가 자식 `UltimateGaugeCanvas/UltimateGauge/GaugeCircle`의 `Background`, `ThreadLiquidBody`, `ThreadLiquid`, `Percentage`, `InputLabel`을 제어한다. UI 계층과 `CanvasGroup`·RawImage·실 액체 Graphic·TMP 참조는 프리팹에 직렬화되어 있으며, 플레이 중 새 HUD 오브젝트를 만들지 않는다.
+- 게이지 값은 실 액체로 아래에서 위로 차오르고 중앙에 내림 정수 퍼센트를 표시한다. 입력 안내는 키보드에서 `Q:거합`, 게임패드에서 `Y:거합`으로 바뀌며, 자동 차징·시전 중 HUD 전체가 페이드 아웃된다. 컴포넌트는 플레이어의 `PlayerSkillGauge.Changed` 이벤트를 구독하고, 플레이어가 준비되기 전까지 찾기를 반복한다.
 - 관련 파일: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`, `Assets/Scripts/Player/PlayerUltimateHint.cs`. 프리팹 직렬화 참조와 Unity 재컴파일은 확인했고, Play 화면 렌더링은 아직 확인하지 않았다.
 
 #### 수리검·적 방향 인디케이터 Inspector 토글 (2026-10-22)
@@ -86,7 +88,7 @@ HUD 프리팹: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`.
 | 스태미너 게이지 배경·채움 | CombatStatusCanvas/StaminaGauge/Background·Fill → Image / Source Image |
 | 발소리 아이콘 전체 | `Assets/Scenes/Defense/UI/CombatFootstepMarker.prefab` 루트 → Image / Source Image. HUD의 중첩 프리팹 마커 전체에 적용 |
 | 퍼펙트 패링 토큰 | CombatStatusCanvas/PerfectParryTokens → Combat Perfect Parry Token Hud / Filled Sprite·Empty Sprite(Image Source Image는 실행 중 이 값으로 바뀜). 좌하단 기준 (48,845), 184×64, 스태미너 게이지 아래(2026-10-16 토큰 56×56·간격 64px로 키움, 이전 116×32). 2026-10-16 Empty Sprite를 `Placeholders/TokenEmptySlot.png`, Empty Color를 (0.62,0.62,0.64,0.85)로 바꿨고, 실 공전 설정은 같은 컴포넌트의 "실 공전" 묶음이다. 찬 슬롯은 Image를 끄고, 실행 중 각 Token_i 자식 `Token_i_Orbit`이 실 구체를 그린다 |
-| 거합 원형 게이지 | `BambooDefenseHud.prefab` 루트 → PlayerUltimateHint. 자식 `UltimateGaugeCanvas`의 Canvas·CanvasScaler·CanvasGroup 및 `UltimateGauge/GaugeCircle`의 RectTransform/Image/TMP에서 배치와 표시를 관리한다. 캔버스는 Overlay, 정렬 순서 101이며 기본 원 크기 104px·하단 오프셋 170px이다. 런타임에는 프리팹 오브젝트를 생성하지 않는다 |
+| 거합 원형 게이지 | `BambooDefenseHud.prefab` 루트 → PlayerUltimateHint. 자식 `UltimateGaugeCanvas`의 Canvas·CanvasScaler·CanvasGroup과 `UltimateGauge/GaugeCircle`의 Background/Image, ThreadLiquidBody/RawImage·CombatThreadLiquidBody, ThreadLiquid/CombatThreadLiquidGauge, Percentage·InputLabel/TMP로 표시한다. 캔버스는 Overlay, 정렬 순서 101이며 기본 원 크기 104px·하단 오프셋 170px이다. 런타임에는 프리팹 오브젝트를 생성하지 않는다 |
 
 - 새 이미지는 Texture Type을 Sprite (2D and UI)로 가져온 뒤 Source Image에 연결한다. 같은 임시 PNG 파일 내용만 바꿀 수도 있다. 이때 `.meta`를 유지하면 기존 GUID 연결이 유지된다. 표시 코드 변경은 필요 없다.
 - 임시 PNG는 `Assets/Scenes/Defense/UI/Placeholders/`의 HealthPlaceholder·StaminaPlaceholder·FootstepPlaceholder·BarPlaceholder다. 흰색 알파 이미지에 HP 붉은색·스태미너 녹색·발소리 C 정책 색을 곱한다. 완성 이미지도 투명 배경 단색 Sprite를 사용하면 현재 색 정책이 유지된다.

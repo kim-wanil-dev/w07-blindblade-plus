@@ -10,14 +10,6 @@ public static class InputDeviceDisplay
     public static bool IsGamepad { get; private set; }
     public static event Action<bool> DeviceChanged;
 
-    public static bool InteractPressed =>
-        (Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame)
-        || (Gamepad.current != null && Gamepad.current.buttonWest.wasPressedThisFrame);
-
-    public static bool CancelPressed =>
-        (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
-        || (Gamepad.current != null && Gamepad.current.startButton.wasPressedThisFrame);
-
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void Initialize()
     {
@@ -40,7 +32,7 @@ public static class InputDeviceDisplay
         else if (device is Keyboard || device is Mouse) SetDevice(false);
     }
 
-    /// <summary>액션 외부의 키·마우스 클릭·패드 상호작용 및 Menu 입력을 기록한다. 중립 상태와 버튼 해제는 장치를 바꾸지 않는다.</summary>
+    /// <summary>액션과 분리된 원시 버튼 상태를 확인해 입력 장치 표시만 갱신한다.</summary>
     public static void PollButtons()
     {
         Keyboard keyboard = Keyboard.current;
@@ -78,10 +70,9 @@ public static class InputDeviceDisplay
     private static string ConvertKeys(string text)
     {
         if (text == "F") return "X";
-        return text.Replace("CTRL / C", "B").Replace("Ctrl / C", "B")
-            .Replace("좌클릭", "RB").Replace("우클릭", "LB")
+        return text.Replace("좌클릭", "RB").Replace("우클릭", "LB")
             .Replace("SPACE", "A").Replace("WASD", "왼쪽 스틱")
             .Replace("MOUSE", "오른쪽 스틱").Replace("[F]", "[X]")
-            .Replace("CTRL", "B").Replace("Ctrl", "B").Replace("ESC", "Menu");
+            .Replace("ESC", "Menu");
     }
 }
