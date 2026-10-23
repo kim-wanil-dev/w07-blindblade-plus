@@ -3,11 +3,13 @@ using UnityEngine.UI;
 
 using TMPro;
 
-/// <summary>기운이 가득 찬 집중 상태에서 궁극기를 쓸 수 있을 때 화면 하단에 입력 안내를 표시한다.</summary>
+/// <summary>본게임의 일섬 준비, 거합 게이지 완충 및 거합 사용 가능 상태에 맞는 입력 안내를 표시한다.</summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(PlayerEmpower))]
 public sealed class PlayerUltimateHint : MonoBehaviour
 {
+    private enum HintMode { Hidden, SwordWave, PrepareUltimate, Ultimate }
+
     private const float REFERENCE_WIDTH = 1920f;
     private const float REFERENCE_HEIGHT = 1080f;
     private const int CANVAS_SORTING_ORDER = 101;
@@ -16,6 +18,10 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     [SerializeField] private TMP_FontAsset _font;
     [SerializeField, TextArea(1, 2)] private string _keyboardHint = "좌클릭 홀드 - 거합";
     [SerializeField, TextArea(1, 2)] private string _gamepadHint = "RB 홀드 - 거합";
+    [SerializeField, TextArea(1, 2)] private string _keyboardSwordWaveHint = "좌클릭 - 일섬";
+    [SerializeField, TextArea(1, 2)] private string _gamepadSwordWaveHint = "RB - 일섬";
+    [SerializeField, TextArea(1, 2)] private string _keyboardPrepareHint = "거합 게이지 3칸 - 극한 회피 또는 쳐내기로 집중";
+    [SerializeField, TextArea(1, 2)] private string _gamepadPrepareHint = "거합 게이지 3칸 - 극한 회피 또는 쳐내기로 집중";
     [SerializeField, Min(0.01f), Tooltip("안내가 나타나고 사라지는 실시간(초)")]
     private float _fadeDuration = 0.15f;
     private PlayerEmpower _empower;
@@ -24,6 +30,7 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     private TextMeshProUGUI _text;
     private int _lastScreenWidth;
     private int _lastScreenHeight;
+    private HintMode _hintMode;
 
     void Awake()
     {
@@ -53,8 +60,23 @@ public sealed class PlayerUltimateHint : MonoBehaviour
         }
 
         // 궁극기 차징은 집중 중이고 기운이 가득 찼을 때만 받으므로 같은 조건에서만 보인다.
-        bool visible = Time.timeScale > 0f && _empower.IsReady && _empower.Tokens >= _empower.MaxTokens;
-        _group.alpha = Mathf.MoveTowards(_group.alpha, visible ? 1f : 0f, Time.unscaledDeltaTime / _fadeDuration);
+        HintMode nextMode = HintMode.Hidden;
+        if (Time.timeScale > 0f)
+        {
+            if (_empower.IsReady && _empower.Tokens >= _empower.MaxTokens)
+                nextMode = HintMode.Ultimate;
+            else if (_empower.Tokens >= _empower.MaxTokens)
+                nextMode = HintMode.PrepareUltimate;
+            else if (_empower.IsSwordWaveReady)
+                nextMode = HintMode.SwordWave;
+        }
+        if (_hintMode != nextMode)
+        {
+            _hintMode = nextMode;
+            RefreshText();
+        }
+        _group.alpha = Mathf.MoveTowards(_group.alpha, nextMode != HintMode.Hidden ? 1f : 0f,
+            Time.unscaledDeltaTime / _fadeDuration);
     }
 
     /// <summary>
@@ -124,9 +146,21 @@ public sealed class PlayerUltimateHint : MonoBehaviour
         RefreshText();
     }
 
-    /// <summary>현재 입력 장치에 맞는 키보드 또는 게임패드 안내 문구를 _text에 표시한다.</summary>
+    /// <summary>현재 준비된 일섬·거합 행동과 입력 장치에 맞는 조작 문구를 _text에 표시한다.</summary>
     private void RefreshText()
     {
-        _text.text = InputDeviceDisplay.IsGamepad && !string.IsNullOrEmpty(_gamepadHint) ? _gamepadHint : _keyboardHint;
+        bool gamepad = InputDeviceDisplay.IsGamepad;
+        switch (_hintMode)
+        {
+            case HintMode.SwordWave:
+                _text.text = gamepad ? _gamepadSwordWaveHint : _keyboardSwordWaveHint;
+                break;
+            case HintMode.PrepareUltimate:
+                _text.text = gamepad ? _gamepadPrepareHint : _keyboardPrepareHint;
+                break;
+            default:
+                _text.text = gamepad && !string.IsNullOrEmpty(_gamepadHint) ? _gamepadHint : _keyboardHint;
+                break;
+        }
     }
 }

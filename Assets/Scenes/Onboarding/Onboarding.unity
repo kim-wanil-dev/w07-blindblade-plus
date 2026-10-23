@@ -58834,10 +58834,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::OnboardingHud
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
   _prompts:
-  - _keyboardHint: "\uC774\uB3D9 - WASD\n\uD68C\uD53C - Space\n\uACF5\uACA9 - \uB9C8\uC6B0\uC2A4
-      \uC67C\uCABD \uBC84\uD2BC \uD074\uB9AD"
-    _gamepadHint: "\uC774\uB3D9 - \uC67C\uCABD \uC2A4\uD2F1\n\uD68C\uD53C - A \uBC84\uD2BC\n\uACF5\uACA9
-      - RB"
+  - _keyboardHint: "이동 - WASD\n회피 - Space\n공격 - 마우스 왼쪽 버튼 클릭"
+    _gamepadHint: "이동 - 왼쪽 스틱\n회피 - A 버튼\n공격 - RB"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: 
     _followUpGamepadHint: 
@@ -58845,7 +58843,7 @@ MonoBehaviour:
     _followUpObjective: 1
     _followUpNote: 
     _objectives:
-    - "\uBC1C\uB3C4\uB85C \uC801 3\uBA85 \uCC98\uCE58"
+    - "전방의 적 처치 0/3"
   - _keyboardHint: "\uADF9\uD55C \uD68C\uD53C - \uC801\uC758 \uACF5\uACA9\uC5D0 \uB9DE\uCDB0 Space\uB85C \uD68C\uD53C"
     _gamepadHint: "\uADF9\uD55C \uD68C\uD53C - \uC801\uC758 \uACF5\uACA9\uC5D0 \uB9DE\uCDB0 A \uBC84\uD2BC\uC73C\uB85C \uD68C\uD53C"
     _keyboardIcon: {fileID: 0}
@@ -58856,10 +58854,8 @@ MonoBehaviour:
     _followUpNote: 
     _objectives:
     - "\uC218\uB9AC\uAC80 \uADF9\uD55C \uD68C\uD53C 1\uD68C"
-  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uB9C9\uAE30\n\uCCD0\uB0B4\uAE30 - \uC801\uC758
-      \uACF5\uACA9 \uC2DC\uC810\uC5D0 \uB9DE\uCDB0 \uB9C9\uAE30"
-    _gamepadHint: "LB - \uB9C9\uAE30\n\uCCD0\uB0B4\uAE30 - \uC801\uC758 \uACF5\uACA9
-      \uC2DC\uC810\uC5D0 \uB9DE\uCDB0 LB \uB204\uB974\uAE30"
+  - _keyboardHint: "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)"
+    _gamepadHint: "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: 
     _followUpGamepadHint: 
@@ -58867,12 +58863,10 @@ MonoBehaviour:
     _followUpObjective: 1
     _followUpNote: 
     _objectives:
-    - "\uB9C9\uAE30 1\uD68C"
-    - "\uACF5\uACA9 \uCCD0\uB0B4\uAE30 0/1"
-  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uB9C9\uAE30\n\uCCD0\uB0B4\uAE30 - \uC801\uC758
-      \uACF5\uACA9 \uC2DC\uC810\uC5D0 \uB9DE\uCDB0 \uB9C9\uAE30"
-    _gamepadHint: "LB - \uB9C9\uAE30\n\uCCD0\uB0B4\uAE30 - \uC801\uC758 \uACF5\uACA9
-      \uC2DC\uC810\uC5D0 \uB9DE\uCDB0 LB \uB204\uB974\uAE30"
+    - "적의 공격 막기"
+    - "공격 직전에 막아 쳐내기"
+  - _keyboardHint: "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)"
+    _gamepadHint: "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: "\uC77C\uC12C - \uB9C8\uC6B0\uC2A4 \uC67C\uCABD \uBC84\uD2BC
       \uD074\uB9AD"
@@ -58884,10 +58878,8 @@ MonoBehaviour:
     - "\uC218\uB9AC\uAC80 \uB9C9\uAE30 1\uD68C"
     - "\uACF5\uACA9 \uCCD0\uB0B4\uAE30 0/1"
     - "\uC77C\uC12C \uBC1C\uB3D9 1\uD68C"
-  - _keyboardHint: "\uC6B0\uD074\uB9AD - \uB9C9\uAE30\n\uCCD0\uB0B4\uAE30 - \uC801\uC758
-      \uACF5\uACA9 \uC2DC\uC810\uC5D0 \uB9DE\uCDB0 \uB9C9\uAE30"
-    _gamepadHint: "LB - \uB9C9\uAE30\n\uCCD0\uB0B4\uAE30 - \uC801\uC758 \uACF5\uACA9
-      \uC2DC\uC810\uC5D0 \uB9DE\uCDB0 LB \uB204\uB974\uAE30"
+  - _keyboardHint: "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)"
+    _gamepadHint: "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: "\uC9D1\uC911 \uC0C1\uD0DC\uC5D0\uC11C \uB9C8\uC6B0\uC2A4
       \uC67C\uCABD \uBC84\uD2BC \uD640\uB4DC - \uAC70\uD569 \uBC1C\uB3D9. \n\uC77C\uACA9\uC73C\uB85C
@@ -58902,7 +58894,7 @@ MonoBehaviour:
     - "\uAC70\uD569 \uAC8C\uC774\uC9C0 \uCC44\uC6B0\uAE30 0/3\n(\uADF9\uD55C \uD68C\uD53C, \uCCD0\uB0B4\uAE30\uB85C \uD68D\uB4DD)"
     - "\uAC70\uD569 \uAC8C\uC774\uC9C0 \uCC44\uC6B0\uAE30 1/3\n(\uADF9\uD55C \uD68C\uD53C, \uCCD0\uB0B4\uAE30\uB85C \uD68D\uB4DD)"
     - "\uAC70\uD569 \uAC8C\uC774\uC9C0 \uCC44\uC6B0\uAE30 2/3\n(\uADF9\uD55C \uD68C\uD53C, \uCCD0\uB0B4\uAE30\uB85C \uD68D\uB4DD)"
-    - "\uAC70\uD569\uC73C\uB85C \uC801 8\uBA85 \uCC98\uCE58"
+    - "\uAC70\uD569\uC73C\uB85C \uC801 \uCC98\uCE58"
   _movementWaveTutorialText: "\uB2F9\uC2E0\uC744 \uD3EC\uD568\uD55C \uBB34\uC5B8\uAC00
     \uC6C0\uC9C1\uC77C \uB54C \n\uD30C\uB3D9\uC774 \uC0DD\uACA8 \uC8FC\uBCC0\uC744
     \uBC1D\uD799\uB2C8\uB2E4.\n\uB9C8\uC6B0\uC2A4 \uC88C\uD074\uB9AD\uC73C\uB85C
@@ -58920,12 +58912,8 @@ MonoBehaviour:
   _targetThreadTutorialGamepadText: "\uAC80\uC5D0\uC11C \uB098\uC628 \uAE30\uC6B4\uC774
     \uC801\uC5D0\uAC8C \uC5F0\uACB0\uB429\uB2C8\uB2E4.\nRB \uBC84\uD2BC\uC73C\uB85C
     \uBC1C\uB3C4 \uC2E4\uD589"
-  _parryHudTutorialText: "\uCCD0\uB0B4\uAE30\uC5D0 \uC131\uACF5\uD558\uBA74 \uC9D1\uC911
-    \uC0C1\uD0DC\uAC00 \uB418\uACE0, \n\uAC70\uD569 \uAC8C\uC774\uC9C0\uAC00 \uCC28\uC624\uB985\uB2C8\uB2E4.
-    \n\uB9C8\uC6B0\uC2A4 \uC88C\uD074\uB9AD\uC73C\uB85C \uACC4\uC18D \uC9C4\uD589"
-  _parryHudTutorialGamepadText: "\uCCD0\uB0B4\uAE30\uC5D0 \uC131\uACF5\uD558\uBA74
-    \uC9D1\uC911 \uC0C1\uD0DC\uAC00 \uB418\uACE0, \n\uAC70\uD569 \uAC8C\uC774\uC9C0\uAC00
-    \uCC28\uC624\uB985\uB2C8\uB2E4. \nRB \uBC84\uD2BC\uC73C\uB85C \uACC4\uC18D \uC9C4\uD589"
+  _parryHudTutorialText: "극한 회피나 쳐내기에 성공하면 거합 게이지가 한 칸 찹니다. 화면의 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행"
+  _parryHudTutorialGamepadText: "극한 회피나 쳐내기에 성공하면 거합 게이지가 한 칸 찹니다. 화면의 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행"
   _parryBeadsTutorialText: "\uac80\uc5d0 \ub2ec\ub9b0 \ubc29\uc6b8\ub3c4 \uac19\uc740 \uac70\ud569 \uac8c\uc774\uc9c0\ub97c \ubcf4\uc5ec\uc90d\ub2c8\ub2e4.\n\ub9c8\uc6b0\uc2a4 \uc88c\ud074\ub9ad\uc73c\ub85c \uacc4\uc18d \uc9c4\ud589"
   _parryBeadsTutorialGamepadText: "\uac80\uc5d0 \ub2ec\ub9b0 \ubc29\uc6b8\ub3c4 \uac19\uc740 \uac70\ud569 \uac8c\uc774\uc9c0\ub97c \ubcf4\uc5ec\uc90d\ub2c8\ub2e4.\nRB \ubc84\ud2bc\uc73c\ub85c \uacc4\uc18d \uc9c4\ud589"
   _swordWaveTutorialText: "\uCCD0\uB0B4\uAE30 \uC131\uACF5 \uC2DC \uACF5\uACA9 \uB300\uC2E0

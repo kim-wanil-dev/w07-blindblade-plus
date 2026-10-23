@@ -1150,6 +1150,10 @@ MonoBehaviour:
   _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
   _keyboardHint: "\uC88C\uD074\uB9AD \uD640\uB4DC - \uAC70\uD569"
   _gamepadHint: "RB \uD640\uB4DC - \uAC70\uD569"
+  _keyboardSwordWaveHint: "좌클릭 - 일섬"
+  _gamepadSwordWaveHint: "RB - 일섬"
+  _keyboardPrepareHint: "거합 게이지 3칸 - 극한 회피 또는 쳐내기로 집중"
+  _gamepadPrepareHint: "거합 게이지 3칸 - 극한 회피 또는 쳐내기로 집중"
   _fadeDuration: 0.15
 --- !u!114 &7719342256018403928
 MonoBehaviour:

@@ -88,7 +88,7 @@ public sealed class BambooThrower : MonoBehaviour
         _director = director;
         _spawned = true;
         FacePlayer();
-        if (!IsPlayerInThrowRange() || !_director.TryReserveThrow()) return false;
+        if (!IsPlayerInThrowRange(true) || !_director.TryReserveThrow()) return false;
 
         _reserved = true;
         _director.NotifyThrowTelegraph(_signalPoint.position, _telegraphDuration);
@@ -256,14 +256,14 @@ public sealed class BambooThrower : MonoBehaviour
 
     /// <summary>
     /// 플레이어까지의 수평 거리와 최소·최대 투척 거리를 비교한다.
-    /// 설정된 거리 범위 안이면 true를 반환한다.
+    /// ignoreMinimumDistance가 true인 온보딩 연습에서는 최대 거리만 적용하고 결과를 반환한다.
     /// </summary>
-    private bool IsPlayerInThrowRange()
+    private bool IsPlayerInThrowRange(bool ignoreMinimumDistance = false)
     {
         Vector3 offset = Vector3.ProjectOnPlane(Game.Player.transform.position - transform.position, Vector3.up);
 
         float distance = offset.sqrMagnitude;
-        return distance >= _minimumThrowDistance * _minimumThrowDistance
+        return (ignoreMinimumDistance || distance >= _minimumThrowDistance * _minimumThrowDistance)
             && distance <= _maximumThrowDistance * _maximumThrowDistance;
     }
 
