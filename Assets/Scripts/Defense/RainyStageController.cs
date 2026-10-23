@@ -17,8 +17,6 @@ public sealed class RainyStageController : MonoBehaviour
     private const float CLEAR_AFTER_DISSOLVE_DELAY = 1.5f;
     private const float FINAL_DISSOLVE_PAIR_DISTANCE = 5f;
     private const float FINAL_DISSOLVE_BEAST_OFFSET = 2.3f;
-    private const float WAVE_DURATION = 40f;
-    private const float SPAWN_RAMP_INTERVAL = 40f;
 
     [Header("스테이지 연결")]
     [SerializeField] private BambooDefenseDirector _director;
@@ -35,7 +33,7 @@ public sealed class RainyStageController : MonoBehaviour
     [InspectorName("시작 시 즉시 보스전")]
     [Tooltip("켜면 일반 적 웨이브와 보스 경고를 건너뛰고 쌍둥이 보스전으로 시작합니다. 보스 체크포인트가 저장되므로 일반 웨이브로 돌아가려면 스테이지 진행 정보를 초기화해야 합니다.")]
     private bool _startBossImmediately;
-    [SerializeField, Min(1), Tooltip("이 수만큼 일반 적을 처치하면 보스 등장 경고가 시작됩니다.")]
+    [SerializeField, Min(1), Tooltip("이 수만큼 일반 적을 처치하면 보스 등장 경고가 시작됩니다. 스폰 수와 속도는 DefenseEnemySpawner에서 설정합니다.")]
     private int _requiredKills = 50;
     [SerializeField, Range(256, 8192), Tooltip("보스가 등장할 때 적용할 가까운 빗방울 수입니다.")]
     private int _bossDropletCount = 2662;
@@ -85,9 +83,7 @@ public sealed class RainyStageController : MonoBehaviour
 
     void Awake()
     {
-        _director.SetMeleeSpawnLimit(_requiredKills);
         _director.SetKillGoal(_requiredKills);
-        _director.ConfigureTimedMeleeWave(_requiredKills, WAVE_DURATION, SPAWN_RAMP_INTERVAL);
         _warning.alpha = 0f;
         _warning.blocksRaycasts = false;
         _warning.interactable = false;
