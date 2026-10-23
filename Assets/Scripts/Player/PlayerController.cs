@@ -112,8 +112,9 @@ public sealed class PlayerController : MonoBehaviour
     public bool IsInRecovery => _state == PlayerActionState.Recovery;
     /// <summary>일반 공격 후 회복 중이며 이동을 허용하는 상태인지 반환한다.</summary>
     public bool IsAttackRecoveryMovement => _state == PlayerActionState.Recovery && _recoveryAllowsMovement;
-    /// <summary>불릿 타임 대상 돌진이 켜져 있고 쳐내기·극한 회피 준비(불릿 타임) 중이면 true를 반환한다.</summary>
-    public bool IsBulletTimeDashReady => _enableBulletTimeDashAttack && _empower.IsReady;
+    /// <summary>불릿 타임 대상 돌진이 켜져 있고 쳐내기·극한 회피 집중(불릿 타임) 중이면 true를 반환한다. 일섬 집중과 거합 자동 차징은 제외한다.</summary>
+    public bool IsBulletTimeDashReady => _enableBulletTimeDashAttack && _empower.IsReady
+        && !_empower.IsSwordWaveFocusing && !_empower.IsAutomaticCharging;
 
     public float RecoveryRemaining => _recoveryRemaining;
     public bool IsCrouching => _motor != null && _motor.IsCrouching;

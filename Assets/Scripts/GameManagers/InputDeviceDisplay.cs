@@ -52,7 +52,8 @@ public static class InputDeviceDisplay
         Gamepad pad = Gamepad.current;
         if (pad != null && (pad.buttonWest.wasPressedThisFrame || pad.startButton.wasPressedThisFrame
             || pad.buttonSouth.wasPressedThisFrame || pad.buttonEast.wasPressedThisFrame
-            || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame))
+            || pad.leftShoulder.wasPressedThisFrame || pad.rightShoulder.wasPressedThisFrame
+            || pad.buttonNorth.wasPressedThisFrame || pad.rightTrigger.wasPressedThisFrame))
             SetDevice(true);
         if (IsGamepad && pad == null) SetDevice(false);
     }

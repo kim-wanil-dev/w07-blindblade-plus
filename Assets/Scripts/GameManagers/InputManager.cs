@@ -33,12 +33,18 @@ public sealed class InputManager : MonoBehaviour
     private InputSystem_Actions _actions;
     private InputAction _guard;
     private InputAction _dodge;
+    private InputAction _swordWaveInput;
+    private InputAction _ultimateInput;
+    private PlayerSkillGauge _skillGauge;
+    private bool _legacyOnboarding;
     private int _nextInputId;
     private int _guardInputId;
     private double _attackPressTime;
     private double _guardPressTime;
     private double _guardReleaseTime;
     private double _dodgePressTime;
+    private double _swordWavePressTime;
+    private double _ultimatePressTime;
     private int _bufferedAttackInputId;
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
@@ -59,6 +65,11 @@ public sealed class InputManager : MonoBehaviour
         _dodge = new InputAction("Dodge", InputActionType.Button, "<Keyboard>/space");
         _guard.AddBinding("<Gamepad>/leftShoulder");
         _dodge.AddBinding("<Gamepad>/buttonSouth");
+        _swordWaveInput = new InputAction("SwordWave", InputActionType.Button, "<Keyboard>/leftShift");
+        _swordWaveInput.AddBinding("<Keyboard>/rightShift");
+        _swordWaveInput.AddBinding("<Gamepad>/rightTrigger");
+        _ultimateInput = new InputAction("Ultimate", InputActionType.Button, "<Keyboard>/q");
+        _ultimateInput.AddBinding("<Gamepad>/buttonNorth");
         InputAction attack = _actions.Player.Attack;
         for (int i = 0; i < attack.bindings.Count; i++)
             if (attack.bindings[i].path.StartsWith("<Gamepad>"))
@@ -69,6 +80,8 @@ public sealed class InputManager : MonoBehaviour
         _guard.performed += RecordGuardPress;
         _guard.canceled += RecordGuardRelease;
         _dodge.performed += RecordDodgePress;
+        _swordWaveInput.performed += RecordSwordWavePress;
+        _ultimateInput.performed += RecordUltimatePress;
     }
 
     void Update()
@@ -99,7 +112,7 @@ public sealed class InputManager : MonoBehaviour
             return;
         }
         // 강화 공격 연출 중에는 이동·시점·가드·회피·공격 입력을 받지 않는다.
-        if (_empower.IsStriking)
+        if (_empower.IsStriking || _empower.IsAutomaticCharging || _empower.IsSwordWaveCasting)
         {
             player.SetMovementInput(Vector2.zero);
             return;
@@ -116,6 +129,19 @@ public sealed class InputManager : MonoBehaviour
 
         ResolveBufferedInputs(player);
         ResolveUltimateCharge(player);
+        if (!_legacyOnboarding)
+        {
+            if (_ultimateInput.WasPressedThisFrame())
+            {
+                RequestSkill(true);
+                return;
+            }
+            if (_swordWaveInput.WasPressedThisFrame())
+            {
+                RequestSkill(false);
+                return;
+            }
+        }
 
         // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
         // 계속 누르는 우클릭은 가드가 끝나 자유 상태가 되면 다시 가드와 패링 창을 연다.
@@ -155,13 +181,13 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 새 InputId로 공격을 요청한다. 토큰이 가득 찬 강화 준비 중이면 궁극기 차징을 시작해 예약 입력으로 기록하고,
-    /// 그 외에는 RequestNormalAttack으로 공격을 요청한다. 불릿 타임 중 실이 연결된 적이 있으면 발도 돌진, 없으면 쳐내기 준비는 일섬, 회피 준비는 일반 공격을 사용한다.
+    /// 새 InputId로 좌클릭 일반 공격을 요청한다. 불릿 타임 중 실이 연결된 적이 있으면 발도 돌진을 요청한다.
+    /// 레거시 온보딩 모드에서만 홀드 차징을 시작하고 그 입력을 예약 상태로 기록한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        if (_empower.BeginCharge())
+        if (_legacyOnboarding && _empower.BeginCharge())
         {
             _chargeInputId = inputId;
             _chargePressTime = _attackPressTime;
@@ -206,14 +232,14 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// bulletTimeDash가 참이면 불릿 타임 첫 공격으로 실이 연결된 적에게 발도 돌진을 요청하고, 수락 시 돌진 거리 일부까지 불릿 타임을 유지한 뒤 쳐내기·회피 준비를 끝낸다.
-    /// 그 외 쳐내기 준비 중에는 제자리 공격에 일섬을 예약하고, 회피 준비 중에는 일반 공격을 요청해 수락 시 감속을 끝낸다.
+    /// bulletTimeDash가 참이면 불릿 타임 첫 공격으로 실이 연결된 적에게 발도 돌진을 요청하고, 수락 시 돌진 거리 일부까지 불릿 타임을 유지한 뒤 쳐내기·회피 집중을 끝낸다.
+    /// 그 외에는 일반 공격을 시작하거나 버퍼에 넣는다. 레거시 온보딩 모드에서만 쳐내기 준비를 검기 예약으로 바꾸며, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
     /// </summary>
     private void RequestNormalAttack(PlayerController player, int inputId, double pressTime, bool bulletTimeDash)
     {
         int previousActionId = player.CurrentActionId;
-        // 일섬이 별도 키로 분리되기 전까지 쳐내기 준비는 발도 대상이 없을 때만 좌클릭 일섬을 쓴다.
-        bool swordWave = _empower.IsSwordWaveReady && !bulletTimeDash;
+        // 레거시 온보딩의 좌클릭 일섬도 발도 대상이 있으면 발도 돌진을 우선한다.
+        bool swordWave = _legacyOnboarding && _empower.IsSwordWaveReady && !bulletTimeDash;
         bool dodgeReady = _empower.IsDodgeReady;
         bool accepted = swordWave ? _combat.RequestInPlaceAttack()
             : bulletTimeDash ? _combat.RequestBulletTimeAttack() : _combat.RequestAttack();
@@ -235,9 +261,23 @@ public sealed class InputManager : MonoBehaviour
             started ? player.CurrentActionId : 0, pressTime);
     }
 
+    /// <summary>ultimate로 Q 거합과 Shift 일섬을 구분해 한 번 요청한다. 실제 수락/잔량 부족/행동 불가를 고유 입력 ID로 기록한다.</summary>
+    private void RequestSkill(bool ultimate)
+    {
+        int inputId = ++_nextInputId;
+        bool enough = ultimate ? _skillGauge.CanUseUltimate : _skillGauge.CanUseSwordWave;
+        bool accepted = ultimate ? _empower.TryBeginAutomaticCharge() : _empower.TryBeginSwordWave();
+        PublishInput(inputId, ultimate ? PlayerInputKind.Ultimate : PlayerInputKind.SwordWave,
+            accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
+            accepted ? PlayerInputRejectReason.None : enough ? PlayerInputRejectReason.ActionBusy
+                : PlayerInputRejectReason.NotEnoughSkillGauge,
+            accepted && !ultimate ? Game.Player.CurrentActionId : 0,
+            ultimate ? _ultimatePressTime : _swordWavePressTime);
+    }
+
     /// <summary>
-    /// 진행 중인 궁극기 차징 입력 _chargeInputId를 처리한다. 차징이 다 차면 궁극기를 시작해 Started 또는 Rejected로 기록한다.
-    /// 다 차기 전에 버튼을 떼면 차징을 멈추고 같은 입력으로 공격을 요청한다. 회피 준비에서는 감속 종료 후 일반·돌진 공격을 쓴다.
+    /// 레거시 온보딩에서 전달된 _chargeInputId를 처리해 홀드 차징 완료·취소 결과를 기록한다.
+    /// 홀드를 일찍 놓으면 차징을 취소하고 같은 입력으로 일반 공격을 요청한다.
     /// 발도 대상은 차징을 멈추기 전에 확인해 감속이 끝나는 회피 준비에서도 불릿 타임 입력으로 다룬다.
     /// </summary>
     private void ResolveUltimateCharge(PlayerController player)
@@ -341,6 +381,12 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>context의 장치 입력 시각을 마지막 회피 누름 시각으로 저장한다.</summary>
     private void RecordDodgePress(InputAction.CallbackContext context) => _dodgePressTime = context.time;
 
+    /// <summary>context에 기록된 실제 Shift 또는 RT 누름 시각을 일섬 입력 로그용 상태에 저장한다.</summary>
+    private void RecordSwordWavePress(InputAction.CallbackContext context) => _swordWavePressTime = context.time;
+
+    /// <summary>context에 기록된 실제 Q 또는 Y 누름 시각을 거합 입력 로그용 상태에 저장한다.</summary>
+    private void RecordUltimatePress(InputAction.CallbackContext context) => _ultimatePressTime = context.time;
+
     void OnApplicationFocus(bool focused)
     {
         if (focused) return;
@@ -359,6 +405,8 @@ public sealed class InputManager : MonoBehaviour
         _actions.Dispose();
         _guard.Dispose();
         _dodge.Dispose();
+        _swordWaveInput.Dispose();
+        _ultimateInput.Dispose();
     }
 
     /// <summary>state와 Game.Player의 장치를 연결한다. 초기 입력은 차단하고 Playing 전환을 기다린다.</summary>
@@ -369,6 +417,8 @@ public sealed class InputManager : MonoBehaviour
         _combat = Game.Player.GetComponent<KatanaCombatCoordinator>();
         _motor = Game.Player.GetComponent<PlayerMotor>();
         _empower = Game.Player.GetComponent<PlayerEmpower>();
+        _skillGauge = Game.Player.GetComponent<PlayerSkillGauge>();
+        _legacyOnboarding = FindFirstObjectByType<OnboardingFlowController>() != null;
         _playerClock = Game.Player.GetComponent<PlayerClock>();
         _dodgeStaminaHint = Game.Player.GetComponent<PlayerDodgeStaminaHint>();
         _viewResetPending = true;
@@ -376,6 +426,8 @@ public sealed class InputManager : MonoBehaviour
         _actions.Player.Enable();
         _guard.Enable();
         _dodge.Enable();
+        _swordWaveInput.Enable();
+        _ultimateInput.Enable();
     }
 
     /// <summary>state가 Playing이면 입력을 허용하고 그 외에는 명령 전달과 유지 입력을 차단한다.</summary>
@@ -416,7 +468,7 @@ public sealed class InputManager : MonoBehaviour
         player.EndCharge();
         if (_combat != null) _combat.CancelParryAttempt();
         if (_motor != null) _motor.ClearInput();
-        if (_empower != null) _empower.CancelCharge();
+        if (_empower != null && !_empower.IsAutomaticCharging) _empower.CancelCharge();
     }
 
     /// <summary>
@@ -460,11 +512,13 @@ public sealed class InputManager : MonoBehaviour
     public void Shutdown()
     {
         SetGameplayInputEnabled(false);
+        if (_empower != null) _empower.CancelCharge();
         if (_state != null) _state.StateChanged -= HandleState;
         _state = null;
         _combat = null;
         _motor = null;
         _empower = null;
+        _skillGauge = null;
         _playerClock = null;
         if (_dodgeStaminaHint != null) _dodgeStaminaHint.Hide();
         _dodgeStaminaHint = null;
@@ -474,6 +528,8 @@ public sealed class InputManager : MonoBehaviour
         if (_actions != null) _actions.Player.Disable();
         if (_guard != null) _guard.Disable();
         if (_dodge != null) _dodge.Disable();
+        if (_swordWaveInput != null) _swordWaveInput.Disable();
+        if (_ultimateInput != null) _ultimateInput.Disable();
         SetCursor(false);
     }
 }

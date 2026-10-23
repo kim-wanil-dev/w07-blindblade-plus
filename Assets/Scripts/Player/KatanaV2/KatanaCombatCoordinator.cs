@@ -295,6 +295,23 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         return accepted;
     }
 
+    /// <summary>자유 상태에서 일섬용 1타를 예약 없이 시작한다. 입력 없이 타수·연계 상태를 초기화하고 실제 행동 시작 여부를 반환한다.</summary>
+    public bool RequestSwordWaveAttack()
+    {
+        if (!CanStartAction || _player.IsPaused) return false;
+        CancelPendingAttacks();
+        _counterAttack = false;
+        _counterUntil = 0f;
+        _attackWasDrawn = _weaponState != KatanaWeaponState.Sheathed;
+        _strike = 1;
+        _waiting = false;
+        _waitAfterRecovery = false;
+        _normalRequested = true;
+        bool accepted = _player.RequestNormalAttack();
+        _normalRequested = false;
+        return accepted;
+    }
+
     /// <summary>
     /// 불릿 타임 중 입력으로 대상 돌진이 꺼져 있어도 실이 연결된 적에게 대상 돌진을 허용한 채 공격을 시작하거나 예약하고 입력 수락 여부를 반환한다.
     /// 납도 중이면 납도를 끊고 바로 돌진한다. 예약된 경우 _bulletTimeDashRequested를 유지해 예약 공격이 시작될 때 대상 돌진을 시도하며, 이후 입력에는 허용이 이어지지 않는다.
