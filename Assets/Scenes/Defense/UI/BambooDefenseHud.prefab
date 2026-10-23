@@ -2973,6 +2973,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
   _group: {fileID: 7423496591089241212}
+  _gaugeRect: {fileID: 7573600638939489684}
   _valueText: {fileID: 4336517703488421214}
   _labelText: {fileID: 1306682924180409193}
   _liquidBody: {fileID: 7514704300656300869}

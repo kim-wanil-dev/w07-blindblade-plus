@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
 
 using TMPro;
@@ -105,18 +107,17 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField] private Prompt[] _prompts =
     {
         new Prompt("이동 - WASD\n회피 - Space\n공격 - 마우스 왼쪽 버튼 클릭", "이동 - 왼쪽 스틱\n회피 - A 버튼\n공격 - RB", null,
-            "발도로 적 3명 처치"),
+            "전방의 적 처치 0/3"),
         new Prompt("극한 회피 - 적의 공격에 맞춰 Space로 회피", "극한 회피 - 적의 공격에 맞춰 A 버튼으로 회피", null, "수리검 극한 회피 1회"),
-        new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
-            new[] { "막기 1회", "공격 쳐내기 0/1" }),
-        new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
+        new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
+            new[] { "적의 공격 막기", "공격 직전에 막아 쳐내기" }),
+        new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
             new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
-            "일섬 - 마우스 왼쪽 버튼 클릭",
-            "일섬 - RB 버튼", null, 2),
-        new Prompt("우클릭 - 막기\n쳐내기 - 적의 공격 시점에 맞춰 막기", "LB - 막기\n쳐내기 - 적의 공격 시점에 맞춰 LB 누르기", null,
-            new[] { "거합 게이지 채우기 0/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 1/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 2/3\n(극한 회피, 쳐내기로 획득)", "거합으로 적 8명 처치" },
-            "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.",
-            "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.", null, 3)
+            "일섬: Shift",
+            "일섬: RT", null, 2),
+        new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
+            new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" },
+            "거합: Q", "거합: Y", null, 1)
     };
 
     [Header("집중 안내")]
@@ -124,18 +125,18 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\n마우스 좌클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialGamepadText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialText = "극한 회피는 거합 게이지를 한 칸 채웁니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialGamepadText = "극한 회피는 거합 게이지를 한 칸 채웁니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialText = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialGamepadText = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialText = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
     [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialGamepadText = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "쳐내기에 성공하면 집중 상태가 되고, 거합 게이지가 차오릅니다. 화면의 거합 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\n마우스 왼쪽 버튼 클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\n좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\nRB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nShift를 누르면 한 칸을 써서 일섬을 발동합니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nRT를 누르면 한 칸을 써서 일섬을 발동합니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "원형 거합 게이지가 100%가 되면 Q를 눌러 자동 차징 후 발동합니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "원형 거합 게이지가 100%가 되면 Y를 눌러 자동 차징 후 발동합니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
 
@@ -158,8 +159,18 @@ public sealed class OnboardingHud : MonoBehaviour
     private Coroutine _objectiveUpdateRoutine;
     private TextMeshProUGUI _completionTitle;
     private TextMeshProUGUI _completionDetail;
+    private RectTransform _completionPanelRect;
+    private Button _continueButton;
+    private Button _repeatButton;
+    private TextMeshProUGUI _continueLabel;
+    private Action<bool> _stageChoiceSelected;
     private Image _movementPanel;
     private TextMeshProUGUI _movementText;
+    private Image _defenseInputPanel;
+    private TextMeshProUGUI _defenseInputText;
+    private Outline _defenseInputOutline;
+    private Image _shurikenInputPanel;
+    private TextMeshProUGUI _shurikenInputText;
     private Image _tutorialPanel;
     private RectTransform _tutorialPanelRect;
     private TextMeshProUGUI _tutorialText;
@@ -170,6 +181,11 @@ public sealed class OnboardingHud : MonoBehaviour
     private string _tutorialGamepadBody;
     private bool _movementControlsVisible;
     private bool _idleMovementVisible;
+    private bool _defenseHintVisible;
+    private bool _defenseHintNearby;
+    private bool _defenseHintParry;
+    private bool _defenseInputOnScreen;
+    private Coroutine _defenseHintFlashRoutine;
     private int _currentStage = -1;
     private int _currentObjective = -1;
     private int _lastScreenWidth;
@@ -246,6 +262,21 @@ public sealed class OnboardingHud : MonoBehaviour
         _objectiveUpdateRoutine = StartCoroutine(PlayCard("목표 갱신", prompt.GetObjective(objectiveIndex)));
     }
 
+    /// <summary>첫 단계의 count와 total을 사용해 우측 하단 처치 목표 숫자만 갱신한다.</summary>
+    public void SetOpeningKillProgress(int count, int total)
+    {
+        if (_currentStage != 0 || _currentObjective != 0) return;
+        _objectiveText.text = $"전방의 적 처치 {Mathf.Clamp(count, 0, total)}/{total}";
+    }
+
+    /// <summary>normalized 거합 게이지를 현재 수집 목표의 실제 정수 백분율로 표시한다.</summary>
+    public void SetUltimateGaugeProgress(float normalized)
+    {
+        if (_currentStage != 4 || _currentObjective != 0) return;
+        int percent = Mathf.FloorToInt(Mathf.Clamp01(normalized) * 100f);
+        _objectiveText.text = $"거합 게이지 채우기 {percent}%";
+    }
+
     /// <summary>진행 중인 목표 갱신 카드 코루틴을 멈춰 중앙 패널을 다른 카드가 이어서 쓰게 한다.</summary>
     private void StopObjectiveUpdate()
     {
@@ -277,6 +308,125 @@ public sealed class OnboardingHud : MonoBehaviour
         if (!visible) _idleMovementVisible = false;
         _movementPanel.gameObject.SetActive(visible);
         if (visible) RefreshMovementPrompt(false);
+    }
+
+    /// <summary>근접 방어 단계의 visible, nearby, parry에 맞춰 적 주변의 입력 힌트를 갱신한다.</summary>
+    public void SetDefenseHint(bool visible, bool nearby, bool parry)
+    {
+        if (_defenseHintVisible == visible && _defenseHintNearby == nearby && _defenseHintParry == parry) return;
+        _defenseHintVisible = visible;
+        _defenseHintNearby = nearby;
+        _defenseHintParry = parry;
+        if (!visible) _defenseInputOnScreen = false;
+        if (!visible && _defenseHintFlashRoutine != null)
+        {
+            StopCoroutine(_defenseHintFlashRoutine);
+            _defenseHintFlashRoutine = null;
+            RestoreDefenseHintStyle();
+        }
+        if (visible) RefreshDefenseHint();
+        _defenseInputPanel.gameObject.SetActive(visible && nearby && _defenseInputOnScreen);
+    }
+
+    /// <summary>근접 적의 worldPosition을 viewCamera로 투영해 입력 힌트를 배치하고 화면 밖이면 상단 60px 안쪽으로 옮긴다.</summary>
+    public void SetDefenseHintTarget(Vector3 worldPosition, Camera viewCamera)
+    {
+        if (!_defenseHintVisible || !_defenseHintNearby || viewCamera == null)
+        {
+            _defenseInputOnScreen = false;
+            _defenseInputPanel.gameObject.SetActive(false);
+            return;
+        }
+        Vector3 viewport = viewCamera.WorldToViewportPoint(worldPosition);
+        Vector2 screen = viewCamera.WorldToScreenPoint(worldPosition);
+        float halfWidth = _defenseInputPanel.rectTransform.rect.width * _canvas.scaleFactor * 0.5f;
+        float halfHeight = _defenseInputPanel.rectTransform.rect.height * _canvas.scaleFactor * 0.5f;
+        float minX = 60f + halfWidth;
+        float maxX = Screen.width - minX;
+        float topY = Screen.height - 60f - halfHeight;
+        bool outside = viewport.z <= 0f || screen.x < minX || screen.x > maxX
+            || screen.y < 60f + halfHeight || screen.y > topY;
+        if (outside)
+        {
+            if (viewport.z <= 0f)
+                screen.x = Vector3.Dot(worldPosition - viewCamera.transform.position, viewCamera.transform.right) < 0f
+                    ? minX : maxX;
+            screen.x = Mathf.Clamp(screen.x, minX, maxX);
+            screen.y = topY;
+        }
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvas.transform as RectTransform, screen, null, out Vector2 position);
+        _defenseInputPanel.rectTransform.anchoredPosition = position;
+        _defenseInputOnScreen = true;
+        _defenseInputPanel.gameObject.SetActive(true);
+    }
+
+    /// <summary>worldPosition의 비행 수리검 위에 parry 목표 또는 막기 목표의 장치별 조작 문구를 배치한다.</summary>
+    public void SetShurikenHint(Vector3 worldPosition, Camera viewCamera, bool parry)
+    {
+        Vector3 screen = viewCamera.WorldToScreenPoint(worldPosition);
+        if (screen.z <= 0f)
+        {
+            HideShurikenHint();
+            return;
+        }
+        bool gamepad = InputDeviceDisplay.IsGamepad;
+        _shurikenInputText.text = parry
+            ? (gamepad ? "쳐내기: 공격 직전에 LB" : "쳐내기: 공격 직전에 우클릭")
+            : (gamepad ? "막기: LB 홀드" : "막기: 우클릭 홀드");
+        float halfWidth = _shurikenInputPanel.rectTransform.rect.width * _canvas.scaleFactor * 0.5f;
+        float halfHeight = _shurikenInputPanel.rectTransform.rect.height * _canvas.scaleFactor * 0.5f;
+        float minX = 60f + halfWidth;
+        screen.x = Mathf.Clamp(screen.x, minX, Screen.width - minX);
+        screen.y = Mathf.Clamp(screen.y + 48f, 60f + halfHeight, Screen.height - 60f - halfHeight);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _canvas.transform as RectTransform, screen, null, out Vector2 position);
+        _shurikenInputPanel.rectTransform.anchoredPosition = position;
+        _shurikenInputPanel.gameObject.SetActive(true);
+    }
+
+    /// <summary>비행 수리검을 따라가던 조작 문구를 숨긴다.</summary>
+    public void HideShurikenHint()
+    {
+        _shurikenInputPanel.gameObject.SetActive(false);
+    }
+
+    /// <summary>근접 연습 적에게 막힌 공격을 받은 뒤 적 옆 조작 힌트만 금색으로 강조한다.</summary>
+    public void EmphasizeDefenseHint()
+    {
+        if (!_defenseHintVisible) return;
+        if (_defenseHintFlashRoutine != null) StopCoroutine(_defenseHintFlashRoutine);
+        _defenseHintFlashRoutine = StartCoroutine(FlashDefenseHint());
+    }
+
+    /// <summary>적 옆 버튼 힌트에 금색 테두리·글자를 잠시 적용한 뒤 되돌린다.</summary>
+    private IEnumerator FlashDefenseHint()
+    {
+        _defenseInputOutline.enabled = true;
+        _defenseInputText.color = TUTORIAL_GOLD;
+        _defenseInputText.fontSize = 30f;
+        yield return new WaitForSecondsRealtime(0.8f);
+        RestoreDefenseHintStyle();
+        _defenseHintFlashRoutine = null;
+    }
+
+    /// <summary>막힌 공격의 강조가 끝나거나 단계를 떠날 때 적 옆 안내의 기본 색과 크기를 복원한다.</summary>
+    private void RestoreDefenseHintStyle()
+    {
+        _defenseInputOutline.enabled = false;
+        _defenseInputText.color = new Color(0.96f, 0.95f, 0.91f, 1f);
+        _defenseInputText.fontSize = 26f;
+    }
+
+    /// <summary>현재 입력 장치와 방어 목표에 따라 적 주변의 막기 또는 쳐내기 힌트를 갱신한다.</summary>
+    private void RefreshDefenseHint()
+    {
+        if (!_defenseHintVisible) return;
+        if (_defenseHintParry)
+            _defenseInputText.text = InputDeviceDisplay.IsGamepad
+                ? "쳐내기: 공격 직전에 LB" : "쳐내기: 공격 직전에 우클릭";
+        else
+            _defenseInputText.text = InputDeviceDisplay.IsGamepad ? "막기: LB" : "막기: 우클릭";
     }
 
     /// <summary>이동 정체 안내를 켜거나 끄고, 켜졌을 때 중앙 조작 안내를 지정 문구로 바꾼다.</summary>
@@ -345,11 +495,15 @@ public sealed class OnboardingHud : MonoBehaviour
         SetTutorialTargetScreen(screen, Vector2.zero, false);
     }
 
-    /// <summary>worldBounds에 포함된 실제 연결 실의 화면 범위를 금색 프레임과 안내 연결선으로 강조한다.</summary>
-    public void SetTutorialTarget(Bounds worldBounds, Camera viewCamera, Vector2 padding)
+    /// <summary>
+    /// modelRenderer의 메시 경계를 viewCamera에 투영하고 padding을 더해 안내 프레임을 배치한다.
+    /// 화면 밖 영역은 잘라내며 보이는 메시 모서리가 없으면 프레임과 안내선을 숨긴다.
+    /// </summary>
+    public void SetTutorialTarget(MeshRenderer modelRenderer, Camera viewCamera, Vector2 padding)
     {
-        Vector3 min = worldBounds.min;
-        Vector3 max = worldBounds.max;
+        Bounds localBounds = modelRenderer.GetComponent<MeshFilter>().sharedMesh.bounds;
+        Vector3 min = localBounds.min;
+        Vector3 max = localBounds.max;
         Vector2 screenMin = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
         Vector2 screenMax = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
         bool hasVisibleCorner = false;
@@ -358,9 +512,9 @@ public sealed class OnboardingHud : MonoBehaviour
         for (int y = 0; y <= 1; y++)
         for (int z = 0; z <= 1; z++)
         {
-            Vector3 corner = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
+            Vector3 localCorner = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
                 z == 0 ? min.z : max.z);
-            Vector3 screen = viewCamera.WorldToScreenPoint(corner);
+            Vector3 screen = viewCamera.WorldToScreenPoint(modelRenderer.transform.TransformPoint(localCorner));
             if (screen.z <= 0f) continue;
             screenMin = Vector2.Min(screenMin, screen);
             screenMax = Vector2.Max(screenMax, screen);
@@ -368,6 +522,15 @@ public sealed class OnboardingHud : MonoBehaviour
         }
 
         if (!hasVisibleCorner)
+        {
+            _tutorialTargetFrame.gameObject.SetActive(false);
+            _tutorialConnector.gameObject.SetActive(false);
+            return;
+        }
+
+        screenMin = Vector2.Max(screenMin, viewCamera.pixelRect.min);
+        screenMax = Vector2.Min(screenMax, viewCamera.pixelRect.max);
+        if (screenMin.x >= screenMax.x || screenMin.y >= screenMax.y)
         {
             _tutorialTargetFrame.gameObject.SetActive(false);
             _tutorialConnector.gameObject.SetActive(false);
@@ -428,16 +591,68 @@ public sealed class OnboardingHud : MonoBehaviour
         yield return FadeStageOverlay(0f, 0.12f);
     }
 
-    /// <summary>
-    /// 완료된 stage 번호를 사용해 다음 온보딩 단계의 전환 화면을 표시한다.
-    /// 남아 있는 목표 갱신 카드는 이 카드로 대체한다.
-    /// </summary>
-    public IEnumerator ShowStageCompletion(int stage)
+    /// <summary>stage의 학습 내용을 요약하고 마지막 단계 여부에 맞는 진행·반복 버튼을 표시해 onSelected로 선택을 돌려준다.</summary>
+    public IEnumerator ShowStageChoice(int stage, bool finalStage, Action<bool> onSelected)
     {
         StopObjectiveUpdate();
-        string heading = "단계 " + (stage + 1) + "/" + _prompts.Length + " 완료";
-        string detail = "다음 단계 " + (stage + 2) + "/" + _prompts.Length;
-        yield return ShowCompletion(heading, detail, 0.65f);
+        EnsureEventSystem();
+        _stageChoiceSelected = onSelected;
+        _completionPanelRect.sizeDelta = new Vector2(620f, 280f);
+        ApplyCompletionLayout(false);
+        _completionTitle.text = "단계 " + (stage + 1) + "/" + _prompts.Length + " 완료";
+        _completionDetail.text = GetStageLesson(stage);
+        _completionDetail.rectTransform.anchoredPosition = new Vector2(0f, 145f);
+        _continueLabel.text = finalStage ? "1막 시작" : "다음 단계";
+        _continueButton.gameObject.SetActive(true);
+        _repeatButton.gameObject.SetActive(true);
+        yield return FadeCompletion(1f, 0.16f);
+        _completionGroup.interactable = true;
+        _completionGroup.blocksRaycasts = true;
+        EventSystem.current.SetSelectedGameObject(_continueButton.gameObject);
+    }
+
+    /// <summary>완료 선택 입력을 닫고 중앙 카드의 크기와 설명 위치를 이후 단계 시작 카드용으로 되돌린다.</summary>
+    public IEnumerator HideStageChoice()
+    {
+        _completionGroup.interactable = false;
+        _completionGroup.blocksRaycasts = false;
+        _stageChoiceSelected = null;
+        yield return FadeCompletion(0f, 0.16f);
+        _continueButton.gameObject.SetActive(false);
+        _repeatButton.gameObject.SetActive(false);
+        _completionPanelRect.sizeDelta = new Vector2(520f, 156f);
+        _completionDetail.rectTransform.anchoredPosition = new Vector2(0f, 25f);
+    }
+
+    /// <summary>stage와 현재 입력 장치에 맞는 단계 완료 복습 문구를 반환한다.</summary>
+    private static string GetStageLesson(int stage)
+    {
+        bool gamepad = InputDeviceDisplay.IsGamepad;
+        switch (stage)
+        {
+            case 0: return "적에게 다가가 공격하면 발도합니다.";
+            case 1: return "적의 공격에 맞기 직전 회피하면 파동과 감속이 발생합니다.";
+            case 2: return "적의 공격을 막고, 공격 직전에 막으면 쳐내기에 성공합니다.";
+            case 3: return gamepad
+                ? "일섬 게이지 1칸 이상이면 RT로 발동합니다."
+                : "일섬 게이지 1칸 이상이면 Shift로 발동합니다.";
+            default: return gamepad
+                ? "거합 게이지 100%에서 Y로 자동 차징 후 발동합니다."
+                : "거합 게이지 100%에서 Q로 자동 차징 후 발동합니다.";
+        }
+    }
+
+    /// <summary>현재 씬에 UI 입력 시스템이 없으면 마우스·키보드·패드 버튼을 받을 EventSystem을 만든다.</summary>
+    private static void EnsureEventSystem()
+    {
+        if (EventSystem.current == null)
+            new GameObject("OnboardingEventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+    }
+
+    /// <summary>repeat 선택값을 현재 완료 카드의 콜백에 전달한다.</summary>
+    private void SelectStageChoice(bool repeat)
+    {
+        _stageChoiceSelected?.Invoke(repeat);
     }
 
     /// <summary>
@@ -447,7 +662,9 @@ public sealed class OnboardingHud : MonoBehaviour
     public void PlayStageStart(int stage)
     {
         StopObjectiveUpdate();
-        string objective = stage >= 0 && stage < _prompts.Length ? _prompts[stage].GetObjective(0) : string.Empty;
+        string objective = stage == 0 ? "전방으로 이동해 적 처치"
+            : stage == 4 ? "거합 게이지 채우기"
+            : stage >= 0 && stage < _prompts.Length ? _prompts[stage].GetObjective(0) : string.Empty;
         _objectiveUpdateRoutine = StartCoroutine(PlayCard("단계 " + (stage + 1) + "/" + _prompts.Length + " 시작", objective));
     }
 
@@ -497,20 +714,20 @@ public sealed class OnboardingHud : MonoBehaviour
         scaler.matchWidthOrHeight = 0.5f;
 
         _guidePanel = CreateImage("GuidePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
-        SetAnchoredRect(_guidePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(760f, 104f));
+        SetAnchoredRect(_guidePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 36f), new Vector2(620f, 86f));
         _instructionIcon = CreateImage("MouseHint", _guidePanel.transform, Color.white);
         _instructionIcon.preserveAspect = true;
         SetAnchoredRect(_instructionIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(28f, 0f), new Vector2(40f, 60f));
         _instructionText = CreateText("Instruction", _guidePanel.transform, INSTRUCTION_FONT_SIZE, TextAlignmentOptions.MidlineLeft);
         SetStretchRect(_instructionText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(100f, 8f), new Vector2(-26f, -8f));
         _notePanel = CreateImage("GuideNotePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
-        SetAnchoredRect(_notePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 174f), new Vector2(760f, 48f));
+        SetAnchoredRect(_notePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 130f), new Vector2(620f, 42f));
         _noteText = CreateText("GuideNote", _notePanel.transform, 24f, TextAlignmentOptions.Midline);
         SetStretchRect(_noteText.rectTransform, Vector2.zero, Vector2.one, new Vector2(20f, 4f), new Vector2(-20f, -4f));
         _notePanel.gameObject.SetActive(false);
 
         _objectivePanel = CreateImage("ObjectivePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
-        SetAnchoredRect(_objectivePanel.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-140f, 120f), new Vector2(400f, 170f));
+        SetAnchoredRect(_objectivePanel.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-64f, -58f), new Vector2(400f, 170f));
         _objectivePanel.gameObject.AddComponent<RectMask2D>();
         _objectiveShine = CreateImage("ObjectiveShine", _objectivePanel.transform, new Color(0.94f, 0.97f, 1f, 0f));
         _objectiveShine.raycastTarget = false;
@@ -535,12 +752,38 @@ public sealed class OnboardingHud : MonoBehaviour
 
         _movementPanel = CreateImage("MovementControls", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.92f));
         SetAnchoredRect(_movementPanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
-            new Vector2(0.5f, 0f), new Vector2(0f, 62f), new Vector2(760f, 184f));
+            new Vector2(0.5f, 0f), new Vector2(0f, 36f), new Vector2(620f, 126f));
         _movementText = CreateText("MovementControlsText", _movementPanel.transform, 30f, TextAlignmentOptions.Center);
         _movementText.color = new Color(0.96f, 0.95f, 0.91f, 1f);
         _movementText.textWrappingMode = TextWrappingModes.Normal;
-        SetStretchRect(_movementText.rectTransform, Vector2.zero, Vector2.one, new Vector2(28f, 18f), new Vector2(-28f, -18f));
+        SetStretchRect(_movementText.rectTransform, Vector2.zero, Vector2.one, new Vector2(22f, 10f), new Vector2(-22f, -10f));
         _movementPanel.gameObject.SetActive(false);
+
+        _defenseInputPanel = CreateImage("DefenseInputHint", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.88f));
+        _defenseInputPanel.raycastTarget = false;
+        SetAnchoredRect(_defenseInputPanel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(340f, 64f));
+        _defenseInputText = CreateText("DefenseInputText", _defenseInputPanel.transform, 26f, TextAlignmentOptions.Center);
+        _defenseInputText.raycastTarget = false;
+        SetStretchRect(_defenseInputText.rectTransform, Vector2.zero, Vector2.one,
+            new Vector2(14f, 8f), new Vector2(-14f, -8f));
+        _defenseInputOutline = _defenseInputPanel.gameObject.AddComponent<Outline>();
+        _defenseInputOutline.effectColor = TUTORIAL_GOLD;
+        _defenseInputOutline.effectDistance = new Vector2(3f, 3f);
+        _defenseInputOutline.enabled = false;
+        _defenseInputPanel.gameObject.SetActive(false);
+
+        _shurikenInputPanel = CreateImage("ShurikenInputHint", canvasObject.transform,
+            new Color(0.015f, 0.02f, 0.025f, 0.88f));
+        _shurikenInputPanel.raycastTarget = false;
+        SetAnchoredRect(_shurikenInputPanel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(430f, 64f));
+        _shurikenInputText = CreateText("ShurikenInputText", _shurikenInputPanel.transform, 26f,
+            TextAlignmentOptions.Center);
+        _shurikenInputText.raycastTarget = false;
+        SetStretchRect(_shurikenInputText.rectTransform, Vector2.zero, Vector2.one,
+            new Vector2(14f, 8f), new Vector2(-14f, -8f));
+        _shurikenInputPanel.gameObject.SetActive(false);
 
         _tutorialConnector = CreateImage("TutorialTargetConnector", canvasObject.transform, TUTORIAL_GOLD);
         _tutorialConnector.raycastTarget = false;
@@ -583,6 +826,7 @@ public sealed class OnboardingHud : MonoBehaviour
         _tutorialPanel.gameObject.SetActive(false);
 
         Image completionPanel = CreateImage("CompletionPanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.92f));
+        _completionPanelRect = completionPanel.rectTransform;
         SetAnchoredRect(completionPanel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(520f, 156f));
         _completionGroup = completionPanel.gameObject.AddComponent<CanvasGroup>();
@@ -595,6 +839,13 @@ public sealed class OnboardingHud : MonoBehaviour
         _completionDetail = CreateText("CompletionDetail", completionPanel.transform, 24f, TextAlignmentOptions.Center);
         SetAnchoredRect(_completionDetail.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f),
             new Vector2(0.5f, 0f), new Vector2(0f, 25f), new Vector2(-40f, 48f));
+        _continueButton = CreateStageChoiceButton("ContinueButton", completionPanel.transform, new Vector2(-140f, -230f), "다음 단계");
+        _repeatButton = CreateStageChoiceButton("RepeatButton", completionPanel.transform, new Vector2(140f, -230f), "다시 연습");
+        _continueLabel = _continueButton.GetComponentInChildren<TextMeshProUGUI>();
+        _continueButton.onClick.AddListener(() => SelectStageChoice(false));
+        _repeatButton.onClick.AddListener(() => SelectStageChoice(true));
+        _continueButton.gameObject.SetActive(false);
+        _repeatButton.gameObject.SetActive(false);
 
         GameObject fadeObject = new GameObject("StepFade", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(CanvasGroup));
         fadeObject.transform.SetParent(canvasObject.transform, false);
@@ -635,19 +886,20 @@ public sealed class OnboardingHud : MonoBehaviour
         _objectiveShineRoutine = null;
     }
 
-    /// <summary>좁은 화면에서는 중앙 안내와 우하단 목표 패널을 줄여 서로 겹치지 않게 배치한다.</summary>
+    /// <summary>화면 비율에 따라 하단 안내를 압축하고 목표 패널을 우측 상단에 배치한다.</summary>
     private void ApplyResponsiveLayout()
     {
         bool compact = (float)Screen.width / Mathf.Max(1, Screen.height) < 1.5f;
-        _guidePanel.rectTransform.sizeDelta = compact ? new Vector2(640f, 104f) : new Vector2(760f, 104f);
-        _guidePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 42f : 62f);
+        _guidePanel.rectTransform.sizeDelta = compact ? new Vector2(540f, 86f) : new Vector2(620f, 86f);
+        _guidePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 28f : 36f);
         // 설명 줄은 안내 패널 바로 위에 같은 폭으로 붙인다.
-        _notePanel.rectTransform.sizeDelta = new Vector2(_guidePanel.rectTransform.sizeDelta.x, 48f);
-        _notePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 154f : 174f);
+        _notePanel.rectTransform.sizeDelta = new Vector2(_guidePanel.rectTransform.sizeDelta.x, 42f);
+        _notePanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 122f : 130f);
         _objectivePanel.rectTransform.sizeDelta = new Vector2(400f, 170f);
-        _objectivePanel.rectTransform.anchoredPosition = compact ? new Vector2(-62f, 82f) : new Vector2(-140f, 120f);
-        _movementPanel.rectTransform.sizeDelta = compact ? new Vector2(640f, 184f) : new Vector2(760f, 184f);
-        _movementPanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 42f : 62f);
+        _objectivePanel.rectTransform.anchoredPosition = compact ? new Vector2(-28f, -28f) : new Vector2(-64f, -58f);
+        _movementPanel.rectTransform.sizeDelta = compact
+            ? new Vector2(540f, 126f) : new Vector2(620f, 126f);
+        _movementPanel.rectTransform.anchoredPosition = new Vector2(0f, compact ? 28f : 36f);
         _tutorialPanel.rectTransform.sizeDelta = compact ? new Vector2(700f, 206f) : new Vector2(820f, 206f);
     }
 
@@ -659,6 +911,25 @@ public sealed class OnboardingHud : MonoBehaviour
         Image image = imageObject.GetComponent<Image>();
         image.color = color;
         return image;
+    }
+
+    /// <summary>parent에 label을 표시하는 완료 선택 버튼을 만들고 position에 배치해 반환한다.</summary>
+    private Button CreateStageChoiceButton(string name, Transform parent, Vector2 position, string label)
+    {
+        Image background = CreateImage(name, parent, new Color(0.28f, 0.23f, 0.14f, 1f));
+        SetAnchoredRect(background.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0.5f, 0.5f), position, new Vector2(250f, 58f));
+        Button button = background.gameObject.AddComponent<Button>();
+        ColorBlock colors = button.colors;
+        colors.normalColor = new Color(0.28f, 0.23f, 0.14f, 1f);
+        colors.highlightedColor = new Color(0.55f, 0.4f, 0.2f, 1f);
+        colors.selectedColor = colors.highlightedColor;
+        button.colors = colors;
+        TextMeshProUGUI text = CreateText("Label", background.transform, 25f, TextAlignmentOptions.Center);
+        text.text = label;
+        text.raycastTarget = false;
+        SetStretchRect(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(8f, 4f), new Vector2(-8f, -4f));
+        return button;
     }
 
     /// <summary>name과 font, size, alignment로 화면 안내 TMP를 만들고 결과를 반환한다.</summary>
@@ -750,6 +1021,7 @@ public sealed class OnboardingHud : MonoBehaviour
     {
         RefreshDevicePrompt();
         if (_movementControlsVisible) RefreshMovementPrompt(_idleMovementVisible);
+        if (_defenseHintVisible) RefreshDefenseHint();
         if (_tutorialPanel.gameObject.activeSelf) RefreshTutorialText();
     }
 

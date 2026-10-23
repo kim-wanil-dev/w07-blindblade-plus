@@ -81,6 +81,7 @@ namespace BlindBlade.Telemetry
             _flow.ObjectiveEntered += HandleObjectiveEntered;
             _flow.ObjectiveCompleted += HandleObjectiveCompleted;
             _flow.StageRetrying += HandleStageRetrying;
+            _flow.StageRepeated += HandleStageRepeated;
             _flow.OnboardingCompleted += HandleOnboardingCompleted;
             _flow.ObjectiveDefenseResolved += HandleDefense;
         }
@@ -145,6 +146,13 @@ namespace BlindBlade.Telemetry
                 _sectionDeaths = 1;
                 CloseSection("death");
             }
+            if (stepIndex >= 0 && stepIndex < STAGE_COUNT) _retryCounts[stepIndex]++;
+        }
+
+        /// <summary>완료 화면에서 stepIndex 단계를 다시 연습하면 현재 구간을 반복으로 닫고 다음 시도 횟수를 올린다.</summary>
+        private void HandleStageRepeated(int stepIndex)
+        {
+            if (_sectionOpen) CloseSection("repeated");
             if (stepIndex >= 0 && stepIndex < STAGE_COUNT) _retryCounts[stepIndex]++;
         }
 
@@ -273,10 +281,10 @@ namespace BlindBlade.Telemetry
             if (_stage == 0) return kind == PlayerInputKind.Attack;
             if (_stage == 1) return kind == PlayerInputKind.Dodge;
             if (_stage == 2) return kind == PlayerInputKind.GuardPress;
-            if (_stage == 3) return (_objective == 2 && kind == PlayerInputKind.Attack)
+            if (_stage == 3) return (_objective == 2 && kind == PlayerInputKind.SwordWave)
                 || (_objective < 2 && kind == PlayerInputKind.GuardPress);
-            if (_stage == 4) return (_objective == 3 && kind == PlayerInputKind.Attack)
-                || kind == PlayerInputKind.GuardPress || kind == PlayerInputKind.Dodge;
+            if (_stage == 4) return _objective == 1 ? kind == PlayerInputKind.Ultimate
+                : kind == PlayerInputKind.GuardPress || kind == PlayerInputKind.Dodge;
             return false;
         }
 
@@ -358,6 +366,7 @@ namespace BlindBlade.Telemetry
                 _flow.ObjectiveEntered -= HandleObjectiveEntered;
                 _flow.ObjectiveCompleted -= HandleObjectiveCompleted;
                 _flow.StageRetrying -= HandleStageRetrying;
+                _flow.StageRepeated -= HandleStageRepeated;
                 _flow.OnboardingCompleted -= HandleOnboardingCompleted;
                 _flow.ObjectiveDefenseResolved -= HandleDefense;
             }
