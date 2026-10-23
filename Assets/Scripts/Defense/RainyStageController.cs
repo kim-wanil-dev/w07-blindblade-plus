@@ -82,7 +82,8 @@ public sealed class RainyStageController : MonoBehaviour
     }
 
     void Awake()
-    {
+    {        
+        _director.SetMeleeSpawnLimit(_requiredKills);
         _director.SetKillGoal(_requiredKills);
         _warning.alpha = 0f;
         _warning.blocksRaycasts = false;
