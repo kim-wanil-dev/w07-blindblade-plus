@@ -31,10 +31,15 @@ public sealed class InputManager : MonoBehaviour
     private PlayerClock _playerClock;
     private PlayerDodgeStaminaHint _dodgeStaminaHint;
     private InputSystem_Actions _actions;
+    private InputAction _move;
+    private InputAction _look;
+    private InputAction _attack;
     private InputAction _guard;
     private InputAction _dodge;
     private InputAction _swordWaveInput;
     private InputAction _ultimateInput;
+    private InputAction _menu;
+    private InputAction _worldInteract;
     private PlayerSkillGauge _skillGauge;
     private int _nextInputId;
     private int _guardInputId;
@@ -51,27 +56,32 @@ public sealed class InputManager : MonoBehaviour
 
     public bool IsInitialized => _state != null;
     public bool IsGameplayInputEnabled { get; private set; }
+    /// <summary>현재 프레임에 생성된 Attack 액션이 눌렸는지 반환한다.</summary>
+    public bool AttackPressedThisFrame => _attack != null && _attack.WasPressedThisFrame();
+    /// <summary>현재 프레임에 생성된 Guard 액션이 눌렸는지 반환한다.</summary>
+    public bool GuardPressedThisFrame => _guard != null && _guard.WasPressedThisFrame();
+    /// <summary>현재 프레임에 생성된 Dodge 액션이 눌렸는지 반환한다.</summary>
+    public bool DodgePressedThisFrame => _dodge != null && _dodge.WasPressedThisFrame();
+    /// <summary>현재 프레임에 생성된 WorldInteract 액션이 눌렸는지 반환한다.</summary>
+    public bool WorldInteractPressedThisFrame => _worldInteract != null && _worldInteract.WasPressedThisFrame();
     public event Action<bool> GameplayInputEnabledChanged;
 
     void Awake()
     {
         _actions = new InputSystem_Actions();
-        _guard = new InputAction("Guard", InputActionType.Button, "<Mouse>/rightButton");
-        _dodge = new InputAction("Dodge", InputActionType.Button, "<Keyboard>/space");
-        _guard.AddBinding("<Gamepad>/leftShoulder");
-        _dodge.AddBinding("<Gamepad>/buttonSouth");
-        _swordWaveInput = new InputAction("SwordWave", InputActionType.Button, "<Keyboard>/leftShift");
-        _swordWaveInput.AddBinding("<Keyboard>/rightShift");
-        _swordWaveInput.AddBinding("<Gamepad>/rightTrigger");
-        _ultimateInput = new InputAction("Ultimate", InputActionType.Button, "<Keyboard>/q");
-        _ultimateInput.AddBinding("<Gamepad>/buttonNorth");
-        InputAction attack = _actions.Player.Attack;
-        for (int i = 0; i < attack.bindings.Count; i++)
-            if (attack.bindings[i].path.StartsWith("<Gamepad>"))
-                attack.ApplyBindingOverride(i, "<Gamepad>/rightShoulder");
+        InputSystem_Actions.PlayerActions playerActions = _actions.Player;
+        _move = playerActions.Move;
+        _look = playerActions.Look;
+        _attack = playerActions.Attack;
+        _guard = playerActions.Guard;
+        _dodge = playerActions.Dodge;
+        _swordWaveInput = playerActions.SwordWave;
+        _ultimateInput = playerActions.Ultimate;
+        _menu = playerActions.Menu;
+        _worldInteract = playerActions.WorldInteract;
 
         // 프레임 단위 폴링보다 정확한 장치 입력 시각을 기록용으로만 보관한다.
-        attack.performed += RecordAttackPress;
+        _attack.performed += RecordAttackPress;
         _guard.performed += RecordGuardPress;
         _guard.canceled += RecordGuardRelease;
         _dodge.performed += RecordDodgePress;
@@ -83,7 +93,7 @@ public sealed class InputManager : MonoBehaviour
     {
         InputDeviceDisplay.PollButtons();
         PlayerController player = Game.Player;
-        if (InputDeviceDisplay.CancelPressed && _state != null)
+        if (_menu.WasPressedThisFrame() && _state != null)
         {
             if (_state.State == GameplayState.Paused)
             {
@@ -103,7 +113,7 @@ public sealed class InputManager : MonoBehaviour
         if (!Application.isFocused) return;
         if (_lockCursorOnClick && !InputDeviceDisplay.IsGamepad && Cursor.lockState != CursorLockMode.Locked)
         {
-            if (_actions.Player.Attack.WasPressedThisFrame() || _guard.WasPressedThisFrame()) SetCursor(true);
+            if (_attack.WasPressedThisFrame() || _guard.WasPressedThisFrame()) SetCursor(true);
             return;
         }
         // 강화 공격 연출 중에는 이동·시점·가드·회피·공격 입력을 받지 않는다.
@@ -112,12 +122,12 @@ public sealed class InputManager : MonoBehaviour
             player.SetMovementInput(Vector2.zero);
             return;
         }
-        player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
-        Vector2 look = _actions.Player.Look.ReadValue<Vector2>();
+        player.SetMovementInput(_move.ReadValue<Vector2>());
+        Vector2 look = _look.ReadValue<Vector2>();
         // 시작·커서 잠금 직후의 튀는 시점 입력은 버린다.
         bool lookIgnored = Time.unscaledTime < _lookIgnoredUntil;
-        if (!lookIgnored && _actions.Player.Look.activeControl != null
-            && _actions.Player.Look.activeControl.device is Gamepad)
+        if (!lookIgnored && _look.activeControl != null
+            && _look.activeControl.device is Gamepad)
             _motor.AddGamepadLookInput(look, _gamepadLookDegreesPerSecond, _playerClock.DeltaTime);
         else if (!lookIgnored)
             player.AddLookInput(look);
@@ -153,9 +163,11 @@ public sealed class InputManager : MonoBehaviour
         }
         if (_dodge.WasPressedThisFrame()) RequestDodge(player);
         bool ignoreAttackPress = _ignoreAttackInputUntilRelease;
-        if (_ignoreAttackInputUntilRelease && !_actions.Player.Attack.IsPressed())
+        if (_ignoreAttackInputUntilRelease && !_attack.IsPressed())
             _ignoreAttackInputUntilRelease = false;
-        if (_actions.Player.Attack.WasPressedThisFrame() && !ignoreAttackPress) RequestAttack(player);
+
+        if (_attack.WasPressedThisFrame() && !ignoreAttackPress)
+            RequestAttack(player);
     }
 
     /// <summary>
@@ -171,13 +183,19 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 새 InputId로 좌클릭 일반 공격을 요청하고 그 결과를 기록한다.
-    /// player를 사용하며 실제 전투 입력의 상태를 변경한다.
+    /// player의 대상 실과 불릿 타임 상태를 확인해 새 InputId로 일반 공격 또는 발도 돌진을 요청한다.
+    /// 수락 결과를 입력 기록으로 발행한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        RequestNormalAttack(player, inputId, _attackPressTime);
+        RequestNormalAttack(player, inputId, _attackPressTime, HasBulletTimeDashTarget(player));
+    }
+
+    /// <summary>player가 불릿 타임 발도를 쓸 수 있고 대상 실이 연결될 적이 있으면 true를 반환한다. 상태는 바꾸지 않는다.</summary>
+    private static bool HasBulletTimeDashTarget(PlayerController player)
+    {
+        return player.IsBulletTimeDashReady && player.TryGetTargetedDashCandidate(out _);
     }
 
     /// <summary>
@@ -189,7 +207,7 @@ public sealed class InputManager : MonoBehaviour
         PlayerController player = Game.Player;
         if (!IsGameplayInputEnabled || player == null || player.IsPaused || !Application.isFocused) return;
         SetCursor(true);
-        player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
+        player.SetMovementInput(_move.ReadValue<Vector2>());
         _attackPressTime = Time.realtimeSinceStartupAsDouble;
         RequestAttack(player);
         _ignoreAttackInputUntilRelease = true;
@@ -204,14 +222,15 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// 일반 공격을 시작하거나 버퍼에 넣고, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
+    /// bulletTimeDash가 참이면 대상 발도를 시도해 수락 시 집중을 돌진 규칙대로 끝내고, 일반 공격은 회피 집중을 끝낸다.
     /// </summary>
-    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
+    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime, bool bulletTimeDash)
     {
         int previousActionId = player.CurrentActionId;
         bool dodgeReady = _empower.IsDodgeReady;
-        bool accepted = _combat.RequestAttack();
-        if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
+        bool accepted = bulletTimeDash ? _combat.RequestBulletTimeAttack() : _combat.RequestAttack();
+        if (accepted && bulletTimeDash) _empower.CompleteReadyWithDash();
+        else if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
         bool started = accepted && player.CurrentActionId != previousActionId;
         PlayerInputStatus status = started ? PlayerInputStatus.Started
             : accepted ? PlayerInputStatus.Buffered : PlayerInputStatus.Rejected;
@@ -313,11 +332,7 @@ public sealed class InputManager : MonoBehaviour
     void OnDestroy()
     {
         Shutdown();
-        _actions.Dispose();
-        _guard.Dispose();
-        _dodge.Dispose();
-        _swordWaveInput.Dispose();
-        _ultimateInput.Dispose();
+        if (_actions != null) _actions.Dispose();
     }
 
     /// <summary>state와 Game.Player의 장치를 연결한다. 초기 입력은 차단하고 Playing 전환을 기다린다.</summary>
@@ -334,10 +349,6 @@ public sealed class InputManager : MonoBehaviour
         _viewResetPending = true;
         _state.StateChanged += HandleState;
         _actions.Player.Enable();
-        _guard.Enable();
-        _dodge.Enable();
-        _swordWaveInput.Enable();
-        _ultimateInput.Enable();
     }
 
     /// <summary>state가 Playing이면 입력을 허용하고 그 외에는 명령 전달과 유지 입력을 차단한다.</summary>
@@ -402,7 +413,7 @@ public sealed class InputManager : MonoBehaviour
         PlayerController player = Game.Player;
         if (!IsGameplayInputEnabled || player == null || player.IsPaused || !Application.isFocused) return;
         SetCursor(true);
-        player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
+        player.SetMovementInput(_move.ReadValue<Vector2>());
         switch (command)
         {
             case TutorialResumeInput.Attack:
@@ -434,10 +445,6 @@ public sealed class InputManager : MonoBehaviour
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
         if (_actions != null) _actions.Player.Disable();
-        if (_guard != null) _guard.Disable();
-        if (_dodge != null) _dodge.Disable();
-        if (_swordWaveInput != null) _swordWaveInput.Disable();
-        if (_ultimateInput != null) _ultimateInput.Disable();
         SetCursor(false);
     }
 }

@@ -72,6 +72,8 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     [Header("상태")]
     private PlayerEmpower _empower;
     private EmpowerOverlay _overlay;
+    // 마지막 준비 비네트가 일섬 집중으로 걸렸으면 걷힐 때도 일섬 전환 시간을 쓴다.
+    private bool _swordWaveVignette;
     private CharacterController _controller;
     private PlayerHealth _health;
     private SensoryPerceptionMask _mask;
@@ -141,7 +143,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     void Update()
     {
         // 강화 공격 중의 비네트는 연출이 직접 정하고, 궁극기 차징 비네트는 따로 겹쳐 진행도만큼 안쪽으로 번진다.
-        if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsSwordWaveReady || _empower.IsSwordWaveFocusing ? _readyVignette : 0f);
+        if (!_empower.IsStriking) UpdateReadyVignette();
         _overlay.SetChargeVignette(_empower.ChargeProgress, _chargeVignette);
         if (!_startPulsePlayed) TryPlayStartPulse();
         PublishThreatSilhouette();
@@ -256,6 +258,22 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
             _dodgeRingColor, false);
         _dodgeRunning = true;
         return true;
+    }
+
+    /// <summary>
+    /// 쳐내기 준비나 일섬 집중이면 준비 비네트를, 아니면 0을 목표로 넘긴다.
+    /// 일섬 집중으로 건 비네트는 PlayerEmpower의 일섬 페이드 인·아웃 시간으로 짙어지고 걷히며, 쳐내기 준비가 다시 시작되면 기본 전환 시간으로 돌아간다. _swordWaveVignette를 바꾼다.
+    /// </summary>
+    private void UpdateReadyVignette()
+    {
+        bool swordWaveFocus = _empower.IsSwordWaveFocusing;
+        if (swordWaveFocus) _swordWaveVignette = true;
+        else if (_empower.IsSwordWaveReady) _swordWaveVignette = false;
+        float target = _empower.IsSwordWaveReady || swordWaveFocus ? _readyVignette : 0f;
+        if (_swordWaveVignette)
+            _overlay.SetVignette(target, swordWaveFocus ? _empower.SwordWaveFocusFadeIn : _empower.SwordWaveFocusFadeOut);
+        else
+            _overlay.SetVignette(target);
     }
 
     /// <summary>

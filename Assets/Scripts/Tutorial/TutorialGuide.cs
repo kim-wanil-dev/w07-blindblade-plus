@@ -290,22 +290,22 @@ public sealed class TutorialGuide : MonoBehaviour
         Time.timeScale = 0f;
     }
 
-    /// <summary>현재 안내에 지정한 새 좌클릭·우클릭·Space·Ctrl·F 입력이 발생했으면 true를 반환한다.</summary>
+    /// <summary>현재 안내에 지정한 액션 입력이 발생했으면 true를 반환한다.</summary>
     private bool IsResumeInputPressed()
     {
         switch (_hintLesson.ResumeInput)
         {
             case TutorialResumeInput.Attack:
-                return Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame;
+                return _input.AttackPressedThisFrame;
             case TutorialResumeInput.Defense:
-                return Mouse.current != null && Mouse.current.rightButton.wasPressedThisFrame;
+                return _input.GuardPressedThisFrame;
             case TutorialResumeInput.Dodge:
-                return Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
+                return _input.DodgePressedThisFrame;
             case TutorialResumeInput.Crouch:
                 return Keyboard.current != null && (Keyboard.current.leftCtrlKey.wasPressedThisFrame
                     || Keyboard.current.rightCtrlKey.wasPressedThisFrame);
             case TutorialResumeInput.Door:
-                return Keyboard.current != null && Keyboard.current.fKey.wasPressedThisFrame;
+                return _input.WorldInteractPressedThisFrame;
             default:
                 return false;
         }

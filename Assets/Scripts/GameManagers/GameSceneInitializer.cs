@@ -28,8 +28,6 @@ public sealed class GameSceneInitializer : MonoBehaviour
     private CorridorRoundController _round;
     private TerrainMemory _memory;
     private PlayerController _player;
-    private PlayerInputCommandAdapter _legacyInput;
-    private KatanaInputCommandAdapter _katanaInput;
     private CombatSessionRuntime _combatSession;
     private RainyStageAudio _rainAudio;
     private bool _started;
@@ -83,10 +81,6 @@ public sealed class GameSceneInitializer : MonoBehaviour
         }
         combat.ConfigurePlayer(_player.transform);
         _player.ConfigureCombatService(combat);
-        _legacyInput = _player.GetComponent<PlayerInputCommandAdapter>();
-        _katanaInput = _player.GetComponent<KatanaInputCommandAdapter>();
-        if (_legacyInput != null && _legacyInput.isActiveAndEnabled) _legacyInput.Initialize();
-        if (_katanaInput != null && _katanaInput.isActiveAndEnabled) _katanaInput.Initialize();
         // if (_showGameplayControls) _ui.Show<GameplayControlsUI>();
         InitializeSensory();
         if (_useTerrainMemory)
@@ -142,8 +136,6 @@ public sealed class GameSceneInitializer : MonoBehaviour
 
     void OnDisable()
     {
-        if (_legacyInput != null) _legacyInput.Shutdown();
-        if (_katanaInput != null) _katanaInput.Shutdown();
         if (_round != null) _round.Shutdown();
         if (_swordNoise != null) _swordNoise.Shutdown();
         if (_player != null) _player.FootstepEmitted -= HandlePlayerFootstep;
