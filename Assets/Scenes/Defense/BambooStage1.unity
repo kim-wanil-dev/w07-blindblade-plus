@@ -56606,8 +56606,8 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 150
-  _meleeSpawnGrowthPerMinute: 0
+  _meleeSpawnsPerMinute: 100
+  _meleeSpawnGrowthPerMinute: 10
   _firstMeleeKillThreshold: 0
   _firstMeleeSpawnsPerMinute: 0
   _secondMeleeKillThreshold: 0
@@ -56615,6 +56615,7 @@ MonoBehaviour:
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 100
+  _meleeSpawnLimit: 0
   _beastPrefab: {fileID: 0}
   _beastDeathSound: 0
   _weightBlendStartSpawnCount: 0
@@ -56637,6 +56638,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CombatThreatPresentationProvider
   _threatPresentationSource: {fileID: 0}
   _footstepCandidateSource: {fileID: 0}
+  _showShurikenIndicators: 1
+  _showEnemyIndicators: 0
   _visibilityThreshold: 0
   _nearDistance: 4
   _farDistance: 30
