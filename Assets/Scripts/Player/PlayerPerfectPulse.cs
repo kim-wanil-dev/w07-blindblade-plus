@@ -141,7 +141,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     void Update()
     {
         // 강화 공격 중의 비네트는 연출이 직접 정하고, 궁극기 차징 비네트는 따로 겹쳐 진행도만큼 안쪽으로 번진다.
-        if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsSwordWaveReady ? _readyVignette : 0f);
+        if (!_empower.IsStriking) _overlay.SetVignette(_empower.IsSwordWaveReady || _empower.IsSwordWaveFocusing ? _readyVignette : 0f);
         _overlay.SetChargeVignette(_empower.ChargeProgress, _chargeVignette);
         if (!_startPulsePlayed) TryPlayStartPulse();
         PublishThreatSilhouette();
