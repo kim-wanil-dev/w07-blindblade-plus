@@ -360,7 +360,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     /// </summary>
     private IEnumerator Focus()
     {
-        float duration = _counterFocusDuration > 0f ? _counterFocusDuration : _playerEmpower.UltimateChargeDuration;
+        float duration = _counterFocusDuration > 0f ? _counterFocusDuration : _playerEmpower.CounterChargeDuration;
         float slowDuration = Mathf.Max(0.01f, _playerEmpower.ChargeSlowDuration);
         _slowTarget = 0f;
         _slowWeight = 0f;

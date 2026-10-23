@@ -105,7 +105,7 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     [Header("상태")]
     private PlayerController _player;
     private PlayerClock _clock;
-    private PlayerEmpower _empower;
+    private PlayerSkillGauge _skillGauge;
     private GameObject _meshObject;
     private MeshRenderer _meshRenderer;
     private Mesh _mesh;
@@ -152,7 +152,7 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     {
         _player = GetComponent<PlayerController>();
         _clock = GetComponent<PlayerClock>();
-        _empower = GetComponent<PlayerEmpower>();
+        _skillGauge = GetComponent<PlayerSkillGauge>();
         BuildChain();
         BuildShell();
         BuildCracks();
@@ -432,14 +432,13 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
     }
 
     /// <summary>
-    /// PlayerEmpower.Tokens만큼 위 구슬부터 실 구체를 FadeDuration(플레이어 시간)에 걸쳐 채우고, 나머지는 같은 시간에 걸쳐 비운다.
-    /// 새로 차는 구슬은 흐름을 다시 시작하고, 보이는 구슬은 두 실의 흐름을 적분한다. 결과는 _fills에 저장한다.
-    /// 구슬이 모두 차면 _fullTransitionDuration에 걸쳐 실 구체를 _fullSpeedMultiplier배로 빠르게 돌리고, 맥동하는 빛무리 세기를 _glow에 저장한다.
+    /// deltaTime 동안 SwordWaveGauge의 정수 완충 칸만큼 위 구슬의 실 구체를 채우고 나머지는 비운다.
+    /// 구슬별 변화량을 _fills에 저장하고, 세 구슬이 모두 차면 빛무리 세기를 _glow에 저장한다.
     /// </summary>
     private void UpdateFills(float deltaTime)
     {
-        int tokens = _empower.Tokens;
-        _fullBlend = Mathf.MoveTowards(_fullBlend, tokens >= BEAD_COUNT ? 1f : 0f, deltaTime / _fullTransitionDuration);
+        int fullSlots = Mathf.Clamp(Mathf.FloorToInt(_skillGauge.SwordWaveGauge), 0, BEAD_COUNT);
+        _fullBlend = Mathf.MoveTowards(_fullBlend, fullSlots >= BEAD_COUNT ? 1f : 0f, deltaTime / _fullTransitionDuration);
         // 공전·궤도면 회전·두께 변화를 모두 빠르게 하도록 실 구체의 시계를 배율만큼 빨리 돌린다.
         float orbitDelta = deltaTime * Mathf.Lerp(1f, _fullSpeedMultiplier, _fullBlend);
         _time += orbitDelta;
@@ -449,7 +448,7 @@ public sealed class PlayerKatanaBeads : MonoBehaviour
         for (int bead = 0; bead < BEAD_COUNT; bead++)
         {
             float previous = _fills[bead];
-            bool filled = bead < tokens;
+            bool filled = bead < fullSlots;
             if (filled && previous <= 0f)
                 _flows[bead].Reset(_sphereStyle, _time);
 

@@ -3,13 +3,13 @@ using System.Collections.Generic;
 
 using UnityEngine;
 
-using BlindBlade.Combat.Contracts;
+
 
 /// <summary>
-/// 퍼펙트 패링 준비 중 좌클릭으로 나간 일반 공격이 시작되면 시선 방향으로 돌진하고, 돌진이 끝나는 순간 그 자리에서 시선 앞으로 관통 검기를 발사한다.
+/// 일섬 입력으로 시작된 베기와 함께 시선 방향으로 돌진하고, 돌진이 끝나면 관통 검기를 발사한다.
 /// 돌진이 없으면 베기 시작에 맞춰 발사하며, 그 경우 베기 전에 공격이 취소되거나 다른 행동으로 바뀌면 발사하지 않는다.
 /// 검기는 볼록한 날이 진행 방향을 향하도록 거의 눕힌 뒤 궁극기 사선(PlayerEmpowerStrike.CutAngle)과 같은 화면 기울기로 날아간다.
-/// 돌진이 시작되는 순간부터 끝나는 순간까지 FOV가 넓어졌다 돌아오고 세계가 더 느려지며, 그동안 플레이어 시계는 실시간으로 흐른다.
+/// 돌진 동안 FOV가 넓어졌다 돌아오며, 집중 감속의 수명은 PlayerEmpower가 별도로 관리한다.
 /// 돌진 중에는 플레이어 몸이 검기와 같은 반경으로 지나간 경로의 적에게 검기와 같은 피해를 주며, 검기와 맞은 적 목록을 함께 써서 피해가 겹치지 않는다.
 /// </summary>
 [DisallowMultipleComponent]
@@ -18,10 +18,6 @@ using BlindBlade.Combat.Contracts;
 [RequireComponent(typeof(PlayerEmpowerStrike))]
 public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 {
-    // 같은 소유자 요청은 겹쳐 등록할 수 없으므로 감속 배율을 바꿀 때 두 소유자를 번갈아 쓴다.
-    private const string LAUNCH_TIME_OWNER_A = "PlayerSwordWave.LaunchA";
-    private const string LAUNCH_TIME_OWNER_B = "PlayerSwordWave.LaunchB";
-    private const float LAUNCH_SCALE_STEP = 0.005f;
     private const string DASH_PATTERN_ID = "PlayerSwordWaveDash";
     private const float MIN_SWEEP_DISTANCE = 0.01f;
 
@@ -53,18 +49,12 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     [Header("발사 연출")]
     [SerializeField, Min(0f), Tooltip("돌진 동안 넓어지는 FOV(도). 0이면 FOV를 바꾸지 않는다. 연출 길이는 돌진 시간과 같다.")]
     private float _launchFovKick = 30f;
-    [SerializeField, Range(0.01f, 1f), Tooltip("돌진 동안 세계 시간 배율. 이 동안 플레이어 시계는 실시간으로 흐른다.")]
-    private float _launchTimeScale = 0.1f;
     [SerializeField, Range(0.01f, 0.9f), Tooltip("연출 시간 중 FOV가 넓어지고 감속이 걸리는 앞부분 비율. 나머지 동안 함께 돌아온다.")]
     private float _launchRiseRatio = 0.15f;
     private float _launchElapsed = -1f;
     private float _baseFov;
     private bool _fovApplied;
-    private CombatSessionRuntime _timeRuntime;
-    private CombatTimeToken _timeToken;
     private PlayerClock _clock;
-    private float _appliedTimeScale = 1f;
-    private bool _useLaunchOwnerB;
 
     [Header("상태")]
     private PlayerController _player;
@@ -76,10 +66,33 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private bool _armed;
     private int _previousActionId;
     private int _pendingActionId;
+    private int _skillActionId;
 
     public float DashDistance => _dashDistance;
     public bool IsLaunchSlowActive => _launchElapsed >= 0f;
     public bool IsAttackInvulnerable => _armed || _dashing;
+    public bool IsSkillActive => _armed || _dashing || _launchElapsed >= 0f;
+
+    /// <summary>actionId가 이 런처로 시작한 일섬 행동이면 true를 반환한다. 일반 베기의 보스 충전 보상을 구분한다.</summary>
+    public bool IsSkillAction(int actionId) => actionId > 0 && actionId == _skillActionId;
+
+    /// <summary>이미 시작된 actionId의 일반 베기를 일섬으로 연결해 즉시 돌진한다. 돌진이 없으면 기존 베기 시점까지 발사를 기다린다.</summary>
+    public void PlaySkill(int actionId)
+    {
+        _skillActionId = actionId;
+        _pendingActionId = actionId;
+        _armed = _dashDistance <= 0f;
+        BeginDash();
+    }
+
+    /// <summary>사망 또는 종료 시 일섬 예약과 돌진 피해 판정을 취소한다. 입력 없이 발사 연출과 공유 타격 기록을 정리한다.</summary>
+    public void CancelSkill()
+    {
+        _armed = false;
+        _dashing = false;
+        _hitTracker = null;
+        StopLaunchEffect();
+    }
     public event Action<DefenseSwordWave> SwordWaveLaunched;
 
     void Awake()
@@ -229,8 +242,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     }
 
     /// <summary>
-    /// 발사 연출 진행도를 돌진과 같은 플레이어 시계로 늘리고 _dashDuration으로 나눠, 앞부분에 커졌다 나머지 동안 줄어드는 세기로 FOV와 세계 배율을 바꾼다.
-    /// 연출이 끝나면 StopLaunchEffect로 FOV와 시간 요청을 원래대로 돌린다.
+    /// 돌진과 같은 플레이어 시계로 _launchElapsed를 진행해 _dashDuration 동안 FOV를 넓혔다가 기준값으로 복귀시킨다.
+    /// 일섬의 시간 감속은 PlayerEmpower가 별도로 관리한다.
     /// </summary>
     private void UpdateLaunchEffect()
     {
@@ -252,47 +265,15 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
             _camera.fieldOfView = _baseFov + _launchFovKick * weight;
             _fovApplied = true;
         }
-        float scale = Mathf.Lerp(1f, _launchTimeScale, weight);
-        if (Mathf.Abs(scale - _appliedTimeScale) >= LAUNCH_SCALE_STEP) ChangeTimeRequest(scale);
+        // 일섬의 감속 수명은 PlayerEmpower의 0.2초 집중이 관리한다.
     }
 
-    /// <summary>발사 연출을 끝내고 FOV를 기준 값으로 한 번 돌린 뒤 세계 시간 요청을 해제한다. _launchElapsed를 -1로 바꾼다.</summary>
+    /// <summary>발사 연출을 끝내고 FOV를 기준값으로 복구한 뒤 _launchElapsed를 -1로 바꾼다.</summary>
     private void StopLaunchEffect()
     {
         _launchElapsed = -1f;
         if (_fovApplied) _camera.fieldOfView = _baseFov;
         _fovApplied = false;
-        ReleaseTimeRequest();
     }
 
-    /// <summary>
-    /// scale 배율의 세계 시간 요청을 두 소유자 중 다른 쪽으로 새로 등록한 뒤 이전 요청을 해제해 배율이 끊기지 않게 바꾼다.
-    /// 세션 시간 런타임이 없으면 요청 없이 진행하며 _timeRuntime·_timeToken·_appliedTimeScale을 갱신한다.
-    /// </summary>
-    private void ChangeTimeRequest(float scale)
-    {
-        CombatSessionRuntime runtime = CombatSessionRuntime.Active;
-        CombatTimeToken previous = _timeToken;
-        CombatSessionRuntime previousRuntime = _timeRuntime;
-        _timeRuntime = null;
-        _timeToken = default;
-        _useLaunchOwnerB = !_useLaunchOwnerB;
-        if (runtime != null && runtime.IsInitialized)
-        {
-            _timeToken = runtime.RequestSlowMotion(new CombatTimeRequest(runtime.Session,
-                _useLaunchOwnerB ? LAUNCH_TIME_OWNER_B : LAUNCH_TIME_OWNER_A, CombatTimeReason.EmpoweredAttack, scale));
-            if (_timeToken.IsValid) _timeRuntime = runtime;
-        }
-        if (previousRuntime != null && previous.IsValid) previousRuntime.Release(previous);
-        _appliedTimeScale = scale;
-    }
-
-    /// <summary>등록한 세계 시간 요청이 있으면 해제하고 _timeRuntime·_timeToken을 비우며 _appliedTimeScale을 1로 돌린다.</summary>
-    private void ReleaseTimeRequest()
-    {
-        if (_timeRuntime != null && _timeToken.IsValid) _timeRuntime.Release(_timeToken);
-        _timeRuntime = null;
-        _timeToken = default;
-        _appliedTimeScale = 1f;
-    }
 }
