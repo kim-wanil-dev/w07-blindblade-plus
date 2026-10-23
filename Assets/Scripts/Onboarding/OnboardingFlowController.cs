@@ -245,7 +245,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _stamina = _player.GetComponent<PlayerStamina>();
         _empower = _player.GetComponent<PlayerEmpower>();
         _skillGauge = _player.GetComponent<PlayerSkillGauge>();
-        _ultimateHint = _player.GetComponent<PlayerUltimateHint>();
+        _ultimateHint = FindFirstObjectByType<PlayerUltimateHint>();
         _perfectPulse = _player.GetComponent<PlayerPerfectPulse>();
         _swordWave = _player.GetComponent<PlayerSwordWaveLauncher>();
         _dashTargetThread = _player.GetComponent<PlayerDashTargetThread>();
