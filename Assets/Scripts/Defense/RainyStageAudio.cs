@@ -72,9 +72,14 @@ public sealed class RainyStageAudio : MonoBehaviour
             return;
 
         _blend = Mathf.MoveTowards(_blend, 1f, Time.unscaledDeltaTime / _crossfadeDuration);
+        float blend = Mathf.Clamp01(_blend);
+
+        float lightVolume = blend >= 1f ? 0f : _rainVolume * Mathf.Cos(blend * Mathf.PI * 0.5f);
+        float heavyVolume = _rainVolume * Mathf.Sin(blend * Mathf.PI * 0.5f);
+
         if (_light.isValid())
-            _light.setVolume(_rainVolume * Mathf.Cos(_blend * Mathf.PI * 0.5f));
-        _heavy.setVolume(_rainVolume * Mathf.Sin(_blend * Mathf.PI * 0.5f));
+            _light.setVolume(Mathf.Max(0f, lightVolume));
+        _heavy.setVolume(Mathf.Max(0f, heavyVolume));
         if (_blend >= 1f && _light.isValid())
         {
             _light.stop(FMOD.Studio.STOP_MODE.IMMEDIATE);
