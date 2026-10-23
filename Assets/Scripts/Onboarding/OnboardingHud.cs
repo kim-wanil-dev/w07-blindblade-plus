@@ -113,12 +113,11 @@ public sealed class OnboardingHud : MonoBehaviour
             new[] { "적의 공격 막기", "공격 직전에 막아 쳐내기" }),
         new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
             new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
-            "일섬 - 마우스 왼쪽 버튼 클릭",
-            "일섬 - RB 버튼", null, 2),
+            "일섬: Shift",
+            "일섬: RT", null, 2),
         new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
-            new[] { "거합 게이지 채우기 0/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 1/3\n(극한 회피, 쳐내기로 획득)", "거합 게이지 채우기 2/3\n(극한 회피, 쳐내기로 획득)", "거합으로 적 처치" },
-            "마우스 왼쪽 버튼 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.",
-            "RB 홀드 - 거합 발동. 일격으로 주변의 적을 쓰러뜨립니다.", null, 3)
+            new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" },
+            "거합: Q", "거합: Y", null, 1)
     };
 
     [Header("집중 안내")]
@@ -126,18 +125,18 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\n마우스 좌클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialGamepadText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialText = "극한 회피는 거합 게이지를 한 칸 채웁니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialGamepadText = "극한 회피는 거합 게이지를 한 칸 채웁니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialText = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialGamepadText = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialText = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
     [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialGamepadText = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "극한 회피나 쳐내기에 성공하면 거합 게이지가 한 칸 찹니다. 화면의 게이지를 확인해 보세요.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "극한 회피나 쳐내기에 성공하면 거합 게이지가 한 칸 찹니다. 화면의 게이지를 확인해 보세요.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검에 달린 방울도 같은 거합 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\n마우스 왼쪽 버튼 클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "쳐내기 성공 시 공격 대신 일섬을 사용할 수 있습니다.\n경로상의 투사체를 없애는 검기를 날리며 돌진합니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\n좌클릭 홀드로 거합을 발동할 수 있습니다.\n마우스 왼쪽 버튼 홀드로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "게이지가 3칸일 때 극한 회피나 쳐내기 후 느려진 시간에\nRB 홀드로 거합을 발동할 수 있습니다.\nRB 홀드로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nShift를 누르면 한 칸을 써서 일섬을 발동합니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nRT를 누르면 한 칸을 써서 일섬을 발동합니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "원형 거합 게이지가 100%가 되면 Q를 눌러 자동 차징 후 발동합니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "원형 거합 게이지가 100%가 되면 Y를 눌러 자동 차징 후 발동합니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
 
@@ -268,6 +267,14 @@ public sealed class OnboardingHud : MonoBehaviour
     {
         if (_currentStage != 0 || _currentObjective != 0) return;
         _objectiveText.text = $"전방의 적 처치 {Mathf.Clamp(count, 0, total)}/{total}";
+    }
+
+    /// <summary>normalized 거합 게이지를 현재 수집 목표의 실제 정수 백분율로 표시한다.</summary>
+    public void SetUltimateGaugeProgress(float normalized)
+    {
+        if (_currentStage != 4 || _currentObjective != 0) return;
+        int percent = Mathf.FloorToInt(Mathf.Clamp01(normalized) * 100f);
+        _objectiveText.text = $"거합 게이지 채우기 {percent}%";
     }
 
     /// <summary>진행 중인 목표 갱신 카드 코루틴을 멈춰 중앙 패널을 다른 카드가 이어서 쓰게 한다.</summary>

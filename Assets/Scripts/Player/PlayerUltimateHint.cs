@@ -38,10 +38,19 @@ public sealed class PlayerUltimateHint : MonoBehaviour
 
     [Header("런타임")]
     private PlayerSkillGauge _skillGauge;
+    private RectTransform _gaugeRect;
     private CanvasGroup _group;
     private UnityEngine.UI.Image _fill;
     private TextMeshProUGUI _valueText;
     private TextMeshProUGUI _labelText;
+
+    public RectTransform GaugeRect => _gaugeRect;
+
+    /// <summary>온보딩 하단 조작판 위에 원형 거합 게이지를 배치한다.</summary>
+    public void SetOnboardingLayout()
+    {
+        _gaugeRect.anchoredPosition = new Vector2(0f, 210f);
+    }
 
     void Awake()
     {
@@ -110,6 +119,7 @@ public sealed class PlayerUltimateHint : MonoBehaviour
         GameObject gaugeObject = new GameObject("UltimateGauge", typeof(RectTransform));
         gaugeObject.transform.SetParent(canvasObject.transform, false);
         RectTransform gaugeRect = gaugeObject.GetComponent<RectTransform>();
+        _gaugeRect = gaugeRect;
         gaugeRect.anchorMin = new Vector2(0.5f, 0f);
         gaugeRect.anchorMax = new Vector2(0.5f, 0f);
         gaugeRect.pivot = new Vector2(0.5f, 0f);

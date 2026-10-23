@@ -36,7 +36,6 @@ public sealed class InputManager : MonoBehaviour
     private InputAction _swordWaveInput;
     private InputAction _ultimateInput;
     private PlayerSkillGauge _skillGauge;
-    private bool _legacyOnboarding;
     private int _nextInputId;
     private int _guardInputId;
     private double _attackPressTime;
@@ -48,11 +47,7 @@ public sealed class InputManager : MonoBehaviour
     private int _bufferedAttackInputId;
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
-    private int _chargeInputId;
-    private double _chargePressTime;
     private bool _ignoreAttackInputUntilRelease;
-    private bool _onboardingChargeHoldPending;
-    private bool _onboardingChargeHoldGamepad;
 
     public bool IsInitialized => _state != null;
     public bool IsGameplayInputEnabled { get; private set; }
@@ -128,19 +123,15 @@ public sealed class InputManager : MonoBehaviour
             player.AddLookInput(look);
 
         ResolveBufferedInputs(player);
-        ResolveUltimateCharge(player);
-        if (!_legacyOnboarding)
+        if (_ultimateInput.WasPressedThisFrame())
         {
-            if (_ultimateInput.WasPressedThisFrame())
-            {
-                RequestSkill(true);
-                return;
-            }
-            if (_swordWaveInput.WasPressedThisFrame())
-            {
-                RequestSkill(false);
-                return;
-            }
+            RequestSkill(true);
+            return;
+        }
+        if (_swordWaveInput.WasPressedThisFrame())
+        {
+            RequestSkill(false);
+            return;
         }
 
         // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
@@ -162,8 +153,7 @@ public sealed class InputManager : MonoBehaviour
         }
         if (_dodge.WasPressedThisFrame()) RequestDodge(player);
         bool ignoreAttackPress = _ignoreAttackInputUntilRelease;
-        if (_ignoreAttackInputUntilRelease && !_actions.Player.Attack.IsPressed()
-            && !IsOnboardingAttackButtonHeld(false) && !IsOnboardingAttackButtonHeld(true))
+        if (_ignoreAttackInputUntilRelease && !_actions.Player.Attack.IsPressed())
             _ignoreAttackInputUntilRelease = false;
         if (_actions.Player.Attack.WasPressedThisFrame() && !ignoreAttackPress) RequestAttack(player);
     }
@@ -181,26 +171,18 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 새 InputId로 좌클릭 일반 공격을 요청한다.
-    /// 레거시 온보딩 모드에서만 홀드 차징을 시작하고 그 입력을 예약 상태로 기록한다.
+    /// 새 InputId로 좌클릭 일반 공격을 요청하고 그 결과를 기록한다.
+    /// player를 사용하며 실제 전투 입력의 상태를 변경한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        if (_legacyOnboarding && _empower.BeginCharge())
-        {
-            _chargeInputId = inputId;
-            _chargePressTime = _attackPressTime;
-            PublishInput(inputId, PlayerInputKind.Attack, PlayerInputStatus.Buffered,
-                PlayerInputRejectReason.None, 0, _attackPressTime);
-            return;
-        }
         RequestNormalAttack(player, inputId, _attackPressTime);
     }
 
     /// <summary>
-    /// 온보딩 설명에서 이어진 공격 누름을 기존 차징·일반 공격 경로로 전달한다.
-    /// 실제 물리 홀드는 거합 차징이 끝나거나 버튼을 놓을 때까지 추적하고, 액션 재활성화에 따른 중복 누름은 _ignoreAttackInputUntilRelease로 막는다.
+    /// 온보딩 설명에서 이어진 공격 누름을 일반 공격으로 전달한다.
+    /// 현재 플레이어 입력을 사용하고 중복 누름은 버튼 해제까지 막는다.
     /// </summary>
     public void ApplyOnboardingAttackInput()
     {
@@ -210,10 +192,6 @@ public sealed class InputManager : MonoBehaviour
         player.SetMovementInput(_actions.Player.Move.ReadValue<Vector2>());
         _attackPressTime = Time.realtimeSinceStartupAsDouble;
         RequestAttack(player);
-        _onboardingChargeHoldGamepad = Gamepad.current != null && Gamepad.current.rightShoulder.isPressed
-            && (Mouse.current == null || !Mouse.current.leftButton.isPressed);
-        _onboardingChargeHoldPending = _chargeInputId != 0
-            && IsOnboardingAttackButtonHeld(_onboardingChargeHoldGamepad);
         _ignoreAttackInputUntilRelease = true;
     }
 
@@ -226,15 +204,13 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// 일반 공격을 시작하거나 버퍼에 넣는다. 레거시 온보딩 모드에서만 쳐내기 준비를 검기 예약으로 바꾸며, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
+    /// 일반 공격을 시작하거나 버퍼에 넣고, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
     /// </summary>
     private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
     {
         int previousActionId = player.CurrentActionId;
-        bool swordWave = _legacyOnboarding && _empower.IsSwordWaveReady;
         bool dodgeReady = _empower.IsDodgeReady;
-        bool accepted = swordWave ? _combat.RequestInPlaceAttack() : _combat.RequestAttack();
-        if (accepted && swordWave) _empower.CompleteWithSwordWave(previousActionId);
+        bool accepted = _combat.RequestAttack();
         if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
         bool started = accepted && player.CurrentActionId != previousActionId;
         PlayerInputStatus status = started ? PlayerInputStatus.Started
@@ -262,58 +238,6 @@ public sealed class InputManager : MonoBehaviour
                 : PlayerInputRejectReason.NotEnoughSkillGauge,
             accepted && !ultimate ? Game.Player.CurrentActionId : 0,
             ultimate ? _ultimatePressTime : _swordWavePressTime);
-    }
-
-    /// <summary>
-    /// 레거시 온보딩에서 전달된 _chargeInputId를 처리해 홀드 차징 완료·취소 결과를 기록한다.
-    /// 홀드를 일찍 놓으면 차징을 취소하고 같은 입력으로 일반 공격을 요청한다.
-    /// </summary>
-    private void ResolveUltimateCharge(PlayerController player)
-    {
-        if (_chargeInputId == 0) return;
-        int inputId = _chargeInputId;
-        if (_empower.IsUltimateChargeComplete)
-        {
-            _chargeInputId = 0;
-            _onboardingChargeHoldPending = false;
-            bool struck = _empower.TryBeginStrike();
-            if (!struck) _empower.CancelCharge();
-            PublishInput(inputId, PlayerInputKind.Attack,
-                struck ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
-                struck ? PlayerInputRejectReason.None : PlayerInputRejectReason.Unavailable, 0, _chargePressTime);
-        }
-        else if (!_empower.IsCharging)
-        {
-            _chargeInputId = 0;
-            _onboardingChargeHoldPending = false;
-            PublishInput(inputId, PlayerInputKind.Attack, PlayerInputStatus.BufferDropped,
-                PlayerInputRejectReason.None, 0, _chargePressTime);
-        }
-        else if (!IsAttackHeldForCharge())
-        {
-            _chargeInputId = 0;
-            _onboardingChargeHoldPending = false;
-            _empower.CancelCharge();
-            RequestNormalAttack(player, inputId, _chargePressTime);
-        }
-    }
-
-    /// <summary>기존 Attack 액션 또는 온보딩에서 이어받은 실제 버튼 홀드 상태를 반환한다.</summary>
-    private bool IsAttackHeldForCharge()
-    {
-        if (_actions.Player.Attack.IsPressed()) return true;
-        if (!_onboardingChargeHoldPending) return false;
-        bool held = IsOnboardingAttackButtonHeld(_onboardingChargeHoldGamepad);
-        if (!held) _onboardingChargeHoldPending = false;
-        return held;
-    }
-
-    /// <summary>gamepad가 참이면 RB, 아니면 마우스 좌클릭의 물리 홀드 상태를 반환한다.</summary>
-    private static bool IsOnboardingAttackButtonHeld(bool gamepad)
-    {
-        return gamepad
-            ? Gamepad.current != null && Gamepad.current.rightShoulder.isPressed
-            : Mouse.current != null && Mouse.current.leftButton.isPressed;
     }
 
     /// <summary>
@@ -405,7 +329,6 @@ public sealed class InputManager : MonoBehaviour
         _motor = Game.Player.GetComponent<PlayerMotor>();
         _empower = Game.Player.GetComponent<PlayerEmpower>();
         _skillGauge = Game.Player.GetComponent<PlayerSkillGauge>();
-        _legacyOnboarding = FindFirstObjectByType<OnboardingFlowController>() != null;
         _playerClock = Game.Player.GetComponent<PlayerClock>();
         _dodgeStaminaHint = Game.Player.GetComponent<PlayerDodgeStaminaHint>();
         _viewResetPending = true;
@@ -446,7 +369,6 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>Game.Player의 이동·가드·차지·패링 시도와 궁극기 차징을 정리하고 모터 입력을 초기화한다.</summary>
     private void ClearHeldInput()
     {
-        _onboardingChargeHoldPending = false;
         _ignoreAttackInputUntilRelease = false;
         PlayerController player = Game.Player;
         if (player == null) return;
@@ -511,7 +433,6 @@ public sealed class InputManager : MonoBehaviour
         _dodgeStaminaHint = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
-        _chargeInputId = 0;
         if (_actions != null) _actions.Player.Disable();
         if (_guard != null) _guard.Disable();
         if (_dodge != null) _dodge.Disable();
