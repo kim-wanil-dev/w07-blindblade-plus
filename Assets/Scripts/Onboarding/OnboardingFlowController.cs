@@ -227,7 +227,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _inputManager = Game.Instance.InputManager;
         SuppressGameOverScreen();
         // 온보딩은 단계 안내가 같은 위치에 궁극기 안내를 직접 표시하므로 공용 안내를 끈다.
-        _player.GetComponent<PlayerUltimateHint>().enabled = false;
+        FindFirstObjectByType<PlayerUltimateHint>().enabled = false;
         if (_arenaCenter == null)
         {
             GameObject arena = GameObject.Find("Arena");

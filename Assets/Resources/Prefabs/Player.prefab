@@ -261,7 +261,6 @@ GameObject:
   - component: {fileID: 7719342256018403924}
   - component: {fileID: 7719342256018403925}
   - component: {fileID: 7719342256018403926}
-  - component: {fileID: 7719342256018403927}
   - component: {fileID: 7719342256018403928}
   - component: {fileID: 411521575061151256}
   m_Layer: 0
@@ -1151,29 +1150,6 @@ MonoBehaviour:
   _fullGlowPulseDepth: 0.35
   _fullGlowPulseSpeed: 1.2
   _fullTransitionDuration: 0.3
---- !u!114 &7719342256018403927
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ab0053a0255a4cf09aa406939c0346e5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerUltimateHint
-  _font: {fileID: 11400000, guid: b11c4c70569688e42ab6166059d06671, type: 2}
-  _gaugeSprite: {fileID: 0}
-  _gaugeSize: 104
-  _bottomOffset: 170
-  _canvasSortingOrder: 101
-  _backgroundColor: {r: 0.04, g: 0.045, b: 0.055, a: 0.78}
-  _fillColor: {r: 0.86, g: 0.1, b: 0.1, a: 0.92}
-  _valueColor: {r: 0.98, g: 0.97, b: 0.93, a: 1}
-  _labelColor: {r: 0.94, g: 0.92, b: 0.88, a: 1}
-  _valueFontSize: 24
-  _labelFontSize: 12
 --- !u!114 &7719342256018403928
 MonoBehaviour:
   m_ObjectHideFlags: 0
