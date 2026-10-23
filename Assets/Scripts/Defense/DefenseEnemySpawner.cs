@@ -16,7 +16,6 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private const int FALLBACK_MELEE_RADIUS_COUNT = 4;
     private const int RANDOM_MELEE_POSITION_ATTEMPTS = 16;
     private const float MELEE_POSITION_SAMPLE_RADIUS = 1.5f;
-    private const float TIMED_WAVE_INITIAL_WEIGHT = 3f;
 
     [Header("스폰 공통")]
     [SerializeField, Min(0f), Tooltip("플레이어와 이 수평 거리 안에서는 적을 스폰하지 않는다.")]
@@ -72,6 +71,9 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     [SerializeField, Range(0f, 1f), InspectorName("돌진형 선택 확률")] private float _chargeTypeChance = 0.4f;
     [SerializeField, Min(1), Tooltip("성능 보호용 최대 근접 적 수"), InspectorName("근접 동시 생존 상한 (명)")]
     private int _maximumMelee = 30;
+    [SerializeField, Min(0), InspectorName("근접 총 생성 수 (0=무제한)"), Tooltip("일반 근접 적과 Beast를 합친 누적 생성 상한입니다. 동시 생존 상한과 다르며, RainyStageController의 보스 등장 처치 목표와 독립적입니다.")]
+    private int _meleeSpawnLimit;
+
     [Header("일반·Beast 선택 가중치")]
     [SerializeField] private GameObject _beastPrefab;
     [SerializeField, Tooltip("이 씬에서 생성한 Beast만 사용할 전용 사망음입니다. None이면 공통 사망음을 사용합니다.")]
@@ -95,13 +97,8 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private NavMeshPath _meleePath;
     private bool _reportedMeleePositionFailure;
     private float _nextMeleeSpawnAt;
-    private int _meleeSpawnLimit;
     private int _meleeSpawned;
     private int _meleeSpawnTier;
-    private int _timedWaveSpawnCount;
-    private float _timedWaveDuration;
-    private float _timedWaveInterval;
-    private float _timedWavePreparationDelay;
     private readonly Plane[] _reflectCameraPlanes = new Plane[6];
 
     [Header("세션 연결")]
@@ -128,9 +125,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         ["secondMeleeKillThreshold"] = _secondMeleeKillThreshold,
         ["secondMeleeSpawnsPerMinute"] = _secondMeleeSpawnsPerMinute,
         ["maximumMelee"] = _maximumMelee, ["chargeTypeStartTime"] = _chargeTypeStartTime,
-        ["chargeTypeChance"] = _chargeTypeChance, ["timedWaveSpawnCount"] = _timedWaveSpawnCount,
-        ["timedWaveDuration"] = _timedWaveDuration, ["timedWaveInterval"] = _timedWaveInterval,
-        ["timedWavePreparationDelay"] = _timedWavePreparationDelay,
+        ["chargeTypeChance"] = _chargeTypeChance,
         ["meleeSpawnLimit"] = _meleeSpawnLimit,
         ["weightBlendStartSpawnCount"] = _weightBlendStartSpawnCount,
         ["weightBlendEndSpawnCount"] = _weightBlendEndSpawnCount,
@@ -216,15 +211,6 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         _meleeSpawnLimit = Mathf.Max(0, limit);
     }
 
-    /// <summary>count·duration·interval과 preparationDelay를 사용해 Playing 시작 기준 근접 적 생성 일정을 저장한다.</summary>
-    internal void ConfigureTimedMeleeWave(int count, float duration, float interval, float preparationDelay)
-    {
-        _timedWaveSpawnCount = Mathf.Max(1, count);
-        _timedWaveDuration = Mathf.Max(1f, duration);
-        _timedWaveInterval = Mathf.Clamp(interval, 1f, _timedWaveDuration);
-        _timedWavePreparationDelay = Mathf.Max(0f, preparationDelay);
-    }
-
     /// <summary>입력 없이 현재 투척수·근접 적을 대기 풀로 되돌리고 이후 스폰을 막는다. 처치 사건은 만들지 않는다.</summary>
     internal void StopWave()
     {
@@ -306,11 +292,6 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     {
         if (_meleePrefab == null || (_meleeSpawnLimit > 0 && _meleeSpawned >= _meleeSpawnLimit))
             return;
-        if (_timedWaveSpawnCount > 0)
-        {
-            UpdateTimedMelee(elapsed);
-            return;
-        }
         if (elapsed < Mathf.Max(0f, _meleeStartTime))
             return;
 
@@ -338,34 +319,6 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             return;
         _nextMeleeSpawnAt = Time.time + 60f / Mathf.Max(0.01f, spawnsPerMinute);
         TrySpawnMelee(elapsed);
-    }
-
-    /// <summary>elapsed와 준비 시간으로 Playing 경과를 구해 interval마다 생성 빈도를 높이고 누적 예정 수까지 근접 적을 배치한다.</summary>
-    private void UpdateTimedMelee(float elapsed)
-    {
-        float stageElapsed = Mathf.Clamp(elapsed + _timedWavePreparationDelay, 0f, _timedWaveDuration);
-        int intervals = Mathf.CeilToInt(_timedWaveDuration / _timedWaveInterval);
-        float totalWeight = 0f;
-        float elapsedWeight = 0f;
-        for (int index = 0; index < intervals; index++)
-        {
-            float start = index * _timedWaveInterval;
-            float length = Mathf.Min(_timedWaveInterval, _timedWaveDuration - start);
-            float weight = TIMED_WAVE_INITIAL_WEIGHT + index;
-            totalWeight += length * weight;
-            elapsedWeight += Mathf.Clamp(stageElapsed - start, 0f, length) * weight;
-        }
-
-        int due = stageElapsed >= _timedWaveDuration
-            ? _timedWaveSpawnCount
-            : Mathf.FloorToInt(_timedWaveSpawnCount * elapsedWeight / totalWeight + 0.00001f);
-        if (_meleeSpawnLimit > 0)
-            due = Mathf.Min(due, _meleeSpawnLimit);
-        while (_meleeSpawned < due)
-        {
-            if (!TrySpawnMelee(elapsed))
-                break;
-        }
     }
 
     /// <summary>elapsed로 돌진형 여부를 정해 유효한 NavMesh 위치에 근접 적 한 명을 배치하고 생성 수를 갱신한다. 성공 여부를 반환한다.</summary>

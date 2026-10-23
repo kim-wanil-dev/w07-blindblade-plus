@@ -56541,6 +56541,14 @@ MonoBehaviour:
   _minimumThrowGap: 0.25
   _deferDuringMeleeTelegraph: 1
   _meleeTelegraphRadius: 4
+  _limitAttackTurns: 1
+  _attackTurnRadius: 10
+  _attackTurnScale: 1
+  _attackTurnExponent: 0.6
+  _minimumAttackTurns: 1
+  _maximumAttackTurns: 6
+  _attackTurnGrantGap: 0.4
+  _attackTurnTimeout: 3
 --- !u!4 &1968806060
 Transform:
   m_ObjectHideFlags: 0
@@ -56623,7 +56631,7 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 40
+  _meleeSpawnsPerMinute: 100
   _meleeSpawnGrowthPerMinute: 10
   _firstMeleeKillThreshold: 0
   _firstMeleeSpawnsPerMinute: 0
@@ -56632,6 +56640,7 @@ MonoBehaviour:
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 100
+  _meleeSpawnLimit: 100
   _beastPrefab: {fileID: 338732699294267485, guid: a9a7067fcf07e7b419232bda780c8248, type: 3}
   _beastDeathSound: 47
   _weightBlendStartSpawnCount: 0
