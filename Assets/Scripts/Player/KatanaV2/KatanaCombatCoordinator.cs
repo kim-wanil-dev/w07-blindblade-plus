@@ -313,11 +313,12 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     }
 
     /// <summary>
-    /// Shift 일섬·Q 거합 같은 수동 스킬을 시작하기 전에 가드와 퍼펙트 패링 모션을 끝내고, 이어지는 납도를 기다리지 않고 칼집에 넣은 상태로 확정한다.
-    /// 공격·회복 중에는 바꾸지 않으며, 정리한 뒤 행동을 바로 시작할 수 있는지(CanStartAction)를 반환한다.
+    /// Shift 일섬·Q 거합 같은 수동 스킬을 시작하기 전에 진행 중인 공격·공격 후 회복과 가드·퍼펙트 패링 모션을 끝내고, 이어지는 납도를 기다리지 않고 칼집에 넣은 상태로 확정한다.
+    /// 끊는 공격의 미판정 피해는 PlayerController가 먼저 확정하며, 정리한 뒤 행동을 바로 시작할 수 있는지(CanStartAction)를 반환한다.
     /// </summary>
     public bool PrepareManualSkill()
     {
+        _player.CancelActionForManualSkill();
         if (_player.IsGuarding) EndDefense();
         CancelParryMotion();
         if (_player.CurrentState == PlayerActionState.Free && _weaponState == KatanaWeaponState.Sheathing)

@@ -300,6 +300,27 @@ public sealed class PlayerController : MonoBehaviour
             CancelAttackForDodge();
     }
 
+    /// <summary>
+    /// 일섬·거합 같은 수동 스킬을 시작하기 전에 진행 중인 일반 공격·발도 돌진·돌진 베기·공격 후 회복을 끝내 자유 상태로 만든다.
+    /// 아직 판정하지 않은 일반 공격과 돌진 베기는 현재 행동 ID로 지금 판정해 피해를 준 뒤 끝낸다.
+    /// 자유·가드·충전·공격 외 회복·사망·일시정지 상태는 바꾸지 않는다.
+    /// </summary>
+    public void CancelActionForManualSkill()
+    {
+        if (_state == PlayerActionState.Free || _state == PlayerActionState.Guarding || !CanDodgeFromState())
+            return;
+
+        // 스킬로 끊겨도 휘두른 평타의 피해는 남기도록 미판정 공격을 먼저 확정한다.
+        if (!_attackImpactResolved && !_attackActionFinished)
+        {
+            if (_state == PlayerActionState.NormalAttack)
+                NotifyNormalAttackSweep(_currentActionId, true);
+            else if (_state == PlayerActionState.IaidoSlash)
+                NotifyIaidoSlashImpact(_currentActionId);
+        }
+        CancelAttackForDodge();
+    }
+
     /// <summary>현재 행동 상태에서 회피를 받을 수 있는지 반환한다. 자유·가드·일반 공격·발도 돌진·돌진 베기와 공격이 끝난 뒤의 회복이 대상이다.</summary>
     private bool CanDodgeFromState()
     {
