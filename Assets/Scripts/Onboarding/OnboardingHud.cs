@@ -496,11 +496,15 @@ public sealed class OnboardingHud : MonoBehaviour
         SetTutorialTargetScreen(screen, Vector2.zero, false);
     }
 
-    /// <summary>worldBounds에 포함된 실제 연결 실의 화면 범위를 금색 프레임과 안내 연결선으로 강조한다.</summary>
-    public void SetTutorialTarget(Bounds worldBounds, Camera viewCamera, Vector2 padding)
+    /// <summary>
+    /// modelRenderer의 메시 경계를 viewCamera에 투영하고 padding을 더해 안내 프레임을 배치한다.
+    /// 화면 밖 영역은 잘라내며 보이는 메시 모서리가 없으면 프레임과 안내선을 숨긴다.
+    /// </summary>
+    public void SetTutorialTarget(MeshRenderer modelRenderer, Camera viewCamera, Vector2 padding)
     {
-        Vector3 min = worldBounds.min;
-        Vector3 max = worldBounds.max;
+        Bounds localBounds = modelRenderer.GetComponent<MeshFilter>().sharedMesh.bounds;
+        Vector3 min = localBounds.min;
+        Vector3 max = localBounds.max;
         Vector2 screenMin = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
         Vector2 screenMax = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
         bool hasVisibleCorner = false;
@@ -509,9 +513,9 @@ public sealed class OnboardingHud : MonoBehaviour
         for (int y = 0; y <= 1; y++)
         for (int z = 0; z <= 1; z++)
         {
-            Vector3 corner = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
+            Vector3 localCorner = new Vector3(x == 0 ? min.x : max.x, y == 0 ? min.y : max.y,
                 z == 0 ? min.z : max.z);
-            Vector3 screen = viewCamera.WorldToScreenPoint(corner);
+            Vector3 screen = viewCamera.WorldToScreenPoint(modelRenderer.transform.TransformPoint(localCorner));
             if (screen.z <= 0f) continue;
             screenMin = Vector2.Min(screenMin, screen);
             screenMax = Vector2.Max(screenMax, screen);
@@ -519,6 +523,15 @@ public sealed class OnboardingHud : MonoBehaviour
         }
 
         if (!hasVisibleCorner)
+        {
+            _tutorialTargetFrame.gameObject.SetActive(false);
+            _tutorialConnector.gameObject.SetActive(false);
+            return;
+        }
+
+        screenMin = Vector2.Max(screenMin, viewCamera.pixelRect.min);
+        screenMax = Vector2.Min(screenMax, viewCamera.pixelRect.max);
+        if (screenMin.x >= screenMax.x || screenMin.y >= screenMax.y)
         {
             _tutorialTargetFrame.gameObject.SetActive(false);
             _tutorialConnector.gameObject.SetActive(false);
@@ -612,16 +625,21 @@ public sealed class OnboardingHud : MonoBehaviour
         _completionDetail.rectTransform.anchoredPosition = new Vector2(0f, 25f);
     }
 
-    /// <summary>stage에 대응하는 한 줄 복습 문구를 반환한다.</summary>
+    /// <summary>stage와 현재 입력 장치에 맞는 단계 완료 복습 문구를 반환한다.</summary>
     private static string GetStageLesson(int stage)
     {
+        bool gamepad = InputDeviceDisplay.IsGamepad;
         switch (stage)
         {
             case 0: return "적에게 다가가 공격하면 발도합니다.";
-            case 1: return "공격에 맞춰 회피하면 파동이 퍼지고 시간이 느려집니다.";
-            case 2: return "공격 직전에 막으면 쳐내기에 성공합니다.";
-            case 3: return "쳐내기 뒤 공격하면 일섬을 사용합니다.";
-            default: return "게이지 3칸과 집중 상태에서 공격을 홀드하면 거합을 사용합니다.";
+            case 1: return "적의 공격에 맞기 직전 회피하면 파동과 감속이 발생합니다.";
+            case 2: return "적의 공격을 막고, 공격 직전에 막으면 쳐내기에 성공합니다.";
+            case 3: return gamepad
+                ? "일섬 게이지 1칸 이상이면 RT로 발동합니다."
+                : "일섬 게이지 1칸 이상이면 Shift로 발동합니다.";
+            default: return gamepad
+                ? "거합 게이지 100%에서 Y로 자동 차징 후 발동합니다."
+                : "거합 게이지 100%에서 Q로 자동 차징 후 발동합니다.";
         }
     }
 
@@ -646,6 +664,7 @@ public sealed class OnboardingHud : MonoBehaviour
     {
         StopObjectiveUpdate();
         string objective = stage == 0 ? "전방으로 이동해 적 처치"
+            : stage == 4 ? "거합 게이지 채우기"
             : stage >= 0 && stage < _prompts.Length ? _prompts[stage].GetObjective(0) : string.Empty;
         _objectiveUpdateRoutine = StartCoroutine(PlayCard("단계 " + (stage + 1) + "/" + _prompts.Length + " 시작", objective));
     }

@@ -316,6 +316,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
     /// <summary>stage에 필요한 재배치·적·투척수·HUD를 설정하고 해당 단계의 목표를 0부터 시작한다.</summary>
     private void EnterStage(int stage)
     {
+        _empower.EndOnboardingFocus();
+        _motor.CancelDash();
         CleanupTrainingContent();
         _stage = Mathf.Clamp(stage, 0, FINAL_STAGE);
         _savedRunStage = _stage;
@@ -1231,8 +1233,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
         {
             PauseTutorial();
             _hud.ShowTutorial(_hud.PerfectDodgeTutorialText, _hud.PerfectDodgeTutorialGamepadText);
-            if (TryGetVisibleShurikenPosition(out Vector3 shurikenPosition))
-                _hud.SetTutorialTarget(shurikenPosition, _viewCamera, new Vector2(100f, 100f));
+            if (TryGetVisibleShurikenRenderer(out MeshRenderer shurikenRenderer))
+                _hud.SetTutorialTarget(shurikenRenderer, _viewCamera, new Vector2(24f, 24f));
             else
                 _hud.ClearTutorialTarget();
             yield return WaitForTutorialClick();
@@ -1262,6 +1264,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_restartQueued) yield break;
         yield return _hud.HideStageChoice();
         RestoreStageChoiceCursor();
+        _empower.EndOnboardingFocus();
+        _motor.CancelDash();
         EndTutorialPause();
 
         if (_repeatStageSelected)
@@ -1313,25 +1317,27 @@ public sealed class OnboardingFlowController : MonoBehaviour
         return false;
     }
 
-    /// <summary>현재 씬에서 화면 안에 보이는 비행 수리검 하나의 위치를 찾아 안내 프레임에 반환한다.</summary>
-    private bool TryGetVisibleShurikenPosition(out Vector3 position)
+    /// <summary>현재 씬에서 화면 중앙에 가장 가까운 비행 수리검 본체의 MeshRenderer를 반환한다.</summary>
+    private bool TryGetVisibleShurikenRenderer(out MeshRenderer modelRenderer)
     {
-        position = Vector3.zero;
+        modelRenderer = null;
         float closestToScreenCenter = float.PositiveInfinity;
         DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
         foreach (DefenseShuriken shuriken in shurikens)
         {
             if (shuriken == null || shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying
                 || !_launchedShurikenAttackIds.Contains(shuriken.AttackId)) continue;
+            MeshRenderer renderer = shuriken.GetComponentInChildren<MeshRenderer>();
+            if (renderer == null || !renderer.enabled) continue;
             Vector3 viewport = _viewCamera.WorldToViewportPoint(shuriken.transform.position);
             if (viewport.z <= 0f || viewport.x < 0f || viewport.x > 1f
                 || viewport.y < 0f || viewport.y > 1f) continue;
             float distance = Vector2.Distance(new Vector2(viewport.x, viewport.y), new Vector2(0.5f, 0.5f));
             if (distance >= closestToScreenCenter) continue;
             closestToScreenCenter = distance;
-            position = shuriken.transform.position;
+            modelRenderer = renderer;
         }
-        return !float.IsPositiveInfinity(closestToScreenCenter);
+        return modelRenderer != null;
     }
 
     /// <summary>전환 카드와 재배치가 끝날 때까지 입력을 끄고 현재 입력 허용 상태를 기억한다.</summary>
