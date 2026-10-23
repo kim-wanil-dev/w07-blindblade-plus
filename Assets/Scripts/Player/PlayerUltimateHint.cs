@@ -20,11 +20,8 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     [SerializeField] private CombatThreadLiquidGauge _liquid;
 
     [Header("표시")]
-    [SerializeField] private Color _readyColor = new Color(1f, 0.78f, 0.28f, 1f);
-    [SerializeField] private Color _valueColor = new Color(0.98f, 0.97f, 0.93f, 1f);
     [SerializeField, Range(0f, 1f), Tooltip("백분율 글자에 두르는 외곽선 두께. 0이면 외곽선이 없다.")]
-    private float _valueOutlineWidth;
-    [SerializeField] private Color _valueOutlineColor = Color.black;
+    private float _valueOutlineWidth = 0.18f;
     [SerializeField, Min(0.01f), Tooltip("거합 차징·시전이 시작되거나 끝날 때 HUD 전체가 사라지고 나타나는 실시간(초)")]
     private float _hideFadeDuration = 0.15f;
 
@@ -44,8 +41,9 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     {
         _liquidBody.Initialize(_liquidStyle, _liquidDensityMaterial, _liquidCompositeMaterial);
         _liquid.Initialize(_liquidStyle, _liquidBody);
+        _valueText.color = Color.black;
         _valueText.outlineWidth = _valueOutlineWidth;
-        _valueText.outlineColor = _valueOutlineColor;
+        _valueText.outlineColor = Color.white;
     }
 
     void OnEnable()
@@ -120,8 +118,8 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     }
 
     /// <summary>
-    /// 거합 게이지가 바뀌면 내림 정수 백분율과 준비 색을 최신 값으로 갱신한다.
-    /// Changed 입력을 사용하며 TextMeshProUGUI의 표시 상태를 변경한다.
+    /// 거합 게이지가 바뀌면 백분율 텍스트를 최신 값으로 갱신한다.
+    /// Changed 입력을 사용하며 TextMeshProUGUI의 표시 문자열을 변경한다.
     /// </summary>
     private void HandleGaugeChanged()
     {
@@ -129,14 +127,13 @@ public sealed class PlayerUltimateHint : MonoBehaviour
     }
 
     /// <summary>
-    /// 거합 게이지의 내림 정수 백분율을 표시하고 실제 준비 상태에서만 100%와 준비 색을 보인다.
-    /// UltimateNormalized와 CanUseUltimate를 사용하며 _valueText의 문자열과 색을 변경한다.
+    /// 거합 게이지의 내림 정수 백분율을 표시하고 준비 상태면 100%로 표시한다.
+    /// UltimateNormalized와 CanUseUltimate를 사용하며 _valueText.text를 변경한다.
     /// </summary>
     private void RefreshGauge()
     {
         bool ready = _skillGauge.CanUseUltimate;
         float normalizedGauge = _skillGauge.UltimateNormalized;
-        _valueText.color = ready ? _readyColor : _valueColor;
         int percent = ready ? 100 : Mathf.Clamp(Mathf.FloorToInt(normalizedGauge * 100f), 0, 99);
         _valueText.text = percent + "%";
     }

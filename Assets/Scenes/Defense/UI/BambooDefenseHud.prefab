@@ -2977,10 +2977,7 @@ MonoBehaviour:
   _labelText: {fileID: 1306682924180409193}
   _liquidBody: {fileID: 7514704300656300869}
   _liquid: {fileID: 5009836071898332385}
-  _readyColor: {r: 1, g: 0.78, b: 0.28, a: 1}
-  _valueColor: {r: 0.98, g: 0.97, b: 0.93, a: 1}
-  _valueOutlineWidth: 0
-  _valueOutlineColor: {r: 0, g: 0, b: 0, a: 1}
+  _valueOutlineWidth: 0.005
   _hideFadeDuration: 0.15
   _liquidDensityMaterial: {fileID: 2100000, guid: a529a693359f42b00da73747954a9a44, type: 2}
   _liquidCompositeMaterial: {fileID: 2100000, guid: 81a181ade340d079c59398fdb92b7168, type: 2}
