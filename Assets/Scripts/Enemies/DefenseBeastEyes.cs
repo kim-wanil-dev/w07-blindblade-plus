@@ -149,12 +149,14 @@ public sealed class DefenseBeastEyes : MonoBehaviour
     {
         // 경고 표시가 Awake에서 속성 블록과 몸 연기 렌더러를 준비한 뒤 섬광을 더한다.
         CreateGlints();
-        _attack.AttackCommitted += HandleAttackCommitted;
+        if (_attack != null)
+            _attack.AttackCommitted += HandleAttackCommitted;
     }
 
     void OnDestroy()
     {
-        _attack.AttackCommitted -= HandleAttackCommitted;
+        if (_attack != null)
+            _attack.AttackCommitted -= HandleAttackCommitted;
     }
 
     void LateUpdate()
