@@ -135,8 +135,8 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nShift를 누르면 한 칸을 써서 일섬을 발동합니다.\n마우스 좌클릭으로 계속 진행";
     [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nRT를 누르면 한 칸을 써서 일섬을 발동합니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "원형 거합 게이지가 100%가 되면 Q를 눌러 자동 차징 후 발동합니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "원형 거합 게이지가 100%가 되면 Y를 눌러 자동 차징 후 발동합니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "원형 거합 게이지가 100%가 되면 Q를 눌러 발동합니다.\n마우스 좌클릭으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "원형 거합 게이지가 100%가 되면 Y를 눌러 발동합니다.\nRB 버튼으로 계속 진행";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
 
@@ -637,8 +637,8 @@ public sealed class OnboardingHud : MonoBehaviour
                 ? "일섬 게이지 1칸 이상이면 RT로 발동합니다."
                 : "일섬 게이지 1칸 이상이면 Shift로 발동합니다.";
             default: return gamepad
-                ? "거합 게이지 100%에서 Y로 자동 차징 후 발동합니다."
-                : "거합 게이지 100%에서 Q로 자동 차징 후 발동합니다.";
+                ? "거합 게이지가 100%면 Y를 눌러 발동합니다."
+                : "거합 게이지가 100%면 Q를 눌러 발동합니다.";
         }
     }
 
