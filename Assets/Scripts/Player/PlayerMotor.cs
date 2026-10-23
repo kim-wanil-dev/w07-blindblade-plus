@@ -136,6 +136,8 @@ private Vector3 _attackLungeDirection;
     private float _dashDistanceTravelled;
     private string _dashTargetId;
     private Collider _dashTargetCollider;
+    private float _dashMaxDistance;
+    private float _dashStandOffDistance;
     private IPlayerMapService _mapService;
     private IPlayerCombatService _combatService;
     private float _lastHorizontalSpeed;
@@ -761,6 +763,8 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         _dashDistanceTravelled = 0f;
 
         float requestedDistance = Mathf.Max(0f, maxDistance);
+        _dashMaxDistance = requestedDistance;
+        _dashStandOffDistance = Mathf.Max(0f, standOffDistance);
         if (hasTarget)
         {
             float targetExtent = GetTargetExtent(targetCollider, targetCollisionRadius, _dashDirection);
@@ -799,6 +803,7 @@ private void TickDash(float deltaTime)
         if (TickDashSlowMotion())
             return;
 
+        UpdateDashTargetTracking();
         float remaining = _dashGoalDistance - _dashDistanceTravelled;
         if (remaining <= 0.001f)
         {
@@ -871,6 +876,29 @@ private void TickDash(float deltaTime)
                 ? PlayerDashEndReason.MaxDistanceReached
                 : PlayerDashEndReason.TargetReached);
         }
+    }
+
+    /// <summary>
+    /// 대상 돌진 중 대상 충돌체의 현재 중심으로 돌진 방향과 목표 거리를 다시 맞춘다.
+    /// _dashTargetCollider, _dashStandOffDistance, _dashMaxDistance를 사용하며 _dashDirection과 _dashGoalDistance를 갱신한다.
+    /// 대상이 없거나 충돌체가 꺼져 있으면 시작 때 정한 방향과 거리를 유지한다.
+    /// </summary>
+    private void UpdateDashTargetTracking()
+    {
+        if (string.IsNullOrEmpty(_dashTargetId) || _dashTargetCollider == null
+            || !_dashTargetCollider.enabled || !_dashTargetCollider.gameObject.activeInHierarchy)
+            return;
+
+        Vector3 toTarget = Vector3.ProjectOnPlane(_dashTargetCollider.bounds.center - transform.position, Vector3.up);
+        if (toTarget.sqrMagnitude < 0.0001f)
+            return;
+
+        _dashDirection = toTarget.normalized;
+        float playerRadius = _characterController.radius + _characterController.skinWidth;
+        float remaining = toTarget.magnitude - GetTargetExtent(_dashTargetCollider, 0f, _dashDirection)
+            - playerRadius - _dashStandOffDistance;
+        // 대상이 밀려나도 돌진 시작 때 허용한 최대 거리는 넘지 않는다.
+        _dashGoalDistance = Mathf.Clamp(_dashDistanceTravelled + remaining, _dashDistanceTravelled, _dashMaxDistance);
     }
 
     /// <summary>짧은 대시 예고 동안 전역 시간을 낮춘다. 완료되면 원래 배율로 복구하고 즉시 대시를 진행한다.</summary>

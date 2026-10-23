@@ -1108,7 +1108,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _ultimateMeterTutorialRunning = false;
     }
 
-    /// <summary>거합 게이지가 가득 차면 실제 원형 HUD와 Q/Y 자동 차징 조작을 안내한다.</summary>
+    /// <summary>거합 게이지가 가득 차면 실제 원형 HUD와 Q/Y 발동 조작을 안내한다.</summary>
     private IEnumerator ShowUltimateTutorial()
     {
         _ultimateTutorialPending = false;
