@@ -174,6 +174,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         PlayerAttackResolution result = new PlayerAttackResolution(request.ActionId, false, null, false);
         Collider collider = null;
         Vector3 point = request.Origin;
+        bool enemyDamaged = false;
         if (isActiveAndEnabled && request.Range > 0f && request.Direction.sqrMagnitude > 0f)
         {
             collider = FindFirstContact(request, out point);
@@ -182,7 +183,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
                 (string.IsNullOrEmpty(request.PreferredTargetId) || request.PreferredTargetId == health.TargetId))
             {
                 string id = health.TargetId;
-                health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
+                enemyDamaged = health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
                     request.Direction, request.Kind.ToString(), request.ActionId, 1,
                     BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
                 result = new PlayerAttackResolution(request.ActionId, true, id, health.CurrentHealth <= 0f);
@@ -205,7 +206,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         _hasDebugRequest = request.Range > 0f && request.Direction.sqrMagnitude > 0f;
         _debugUntil = Time.time + _gizmoDuration;
 #endif
-        if (complete) AttackContactResolved?.Invoke(request, collider, point, result.HitConfirmed);
+        if (complete) AttackContactResolved?.Invoke(request, collider, point, enemyDamaged);
         return result;
     }
 
@@ -401,9 +402,10 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         EnemyHealth health = contact != null ? contact.GetComponentInParent<EnemyHealth>() : null;
         bool hit = health != null && health.IsAlive && health.gameObject.scene == gameObject.scene;
         string id = hit ? health.TargetId : null;
+        bool enemyDamaged = false;
         if (hit)
         {
-            health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
+            enemyDamaged = health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
                 request.Direction, request.Kind.ToString(), request.ActionId, 1,
                 BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         }
@@ -421,7 +423,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         {
             _hasResolution = true;
             _lastResolution = result;
-            AttackContactResolved?.Invoke(request, contact, point, hit);
+            AttackContactResolved?.Invoke(request, contact, point, enemyDamaged);
         }
         return result;
     }
@@ -438,6 +440,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         CollectFanTargets(request.Origin, forward, request.Range);
 
         bool hit = _fanTargets.Count > 0;
+        bool enemyDamaged = false;
         FanTarget nearest = default;
         float nearestDistance = float.PositiveInfinity;
         _fanStruck.Clear();
@@ -458,7 +461,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             if (!target.Health.IsInvulnerable) _fanStruck.Add(target.Health.SharedDamageKey);
             Vector3 toTarget = Vector3.ProjectOnPlane(target.Point - request.Origin, Vector3.up);
             Vector3 direction = toTarget.sqrMagnitude > 0.0001f ? toTarget.normalized : forward;
-            target.Health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, target.Point,
+            enemyDamaged |= target.Health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, target.Point,
                 direction, request.Kind.ToString(), request.ActionId, 1,
                 BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         }
@@ -480,7 +483,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             _hasResolution = true;
             _lastResolution = result;
             AttackContactResolved?.Invoke(request, hit ? nearest.Collider : null,
-                hit ? nearest.Point : request.Origin, hit);
+                hit ? nearest.Point : request.Origin, enemyDamaged);
         }
         return result;
     }

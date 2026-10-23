@@ -242,8 +242,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     }
 
     /// <summary>
-    /// 발사 연출 진행도를 돌진과 같은 플레이어 시계로 늘리고 _dashDuration으로 나눠, 앞부분에 커졌다 나머지 동안 줄어드는 세기로 FOV와 세계 배율을 바꾼다.
-    /// 연출이 끝나면 StopLaunchEffect로 FOV와 시간 요청을 원래대로 돌린다.
+    /// 돌진과 같은 플레이어 시계로 _launchElapsed를 진행해 _dashDuration 동안 FOV를 넓혔다가 기준값으로 복귀시킨다.
+    /// 일섬의 시간 감속은 PlayerEmpower가 별도로 관리한다.
     /// </summary>
     private void UpdateLaunchEffect()
     {
@@ -268,7 +268,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         // 일섬의 감속 수명은 PlayerEmpower의 0.2초 집중이 관리한다.
     }
 
-    /// <summary>발사 연출을 끝내고 FOV를 기준 값으로 한 번 돌린 뒤 세계 시간 요청을 해제한다. _launchElapsed를 -1로 바꾼다.</summary>
+    /// <summary>발사 연출을 끝내고 FOV를 기준값으로 복구한 뒤 _launchElapsed를 -1로 바꾼다.</summary>
     private void StopLaunchEffect()
     {
         _launchElapsed = -1f;

@@ -88,13 +88,22 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     /// </summary>
     public void TakeDamage(DamageContext context)
     {
+        TryTakeDamage(context);
+    }
+
+    /// <summary>
+    /// context의 양수 피해를 수락하면 체력과 사망 상태를 갱신하고 true를 반환한다.
+    /// 생존하지 않거나 무적이면 피해를 거부하고, 무적 거부는 DamageBlocked에 알린다.
+    /// </summary>
+    public bool TryTakeDamage(DamageContext context)
+    {
         if (!IsAlive || !(context.Amount > 0f))
-            return;
+            return false;
 
         if (_invulnerable)
         {
             DamageBlocked?.Invoke(context);
-            return;
+            return false;
         }
         Debug.Log($"Take Damage {context.Amount} ");
         _currentHealth = _dieOnAnyHit ? 0f : Mathf.Max(0f, _currentHealth - context.Amount);
@@ -110,6 +119,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             Died?.Invoke(this);
             gameObject.SetActive(false);
         }
+        return true;
     }
 
     /// <summary>수락된 피해 context의 플레이어에게 실제 처치와 보스 일반 공격 충전을 지급한다. 공유 체력 묶음의 같은 행동 보상은 한 번만 반영한다.</summary>

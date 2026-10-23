@@ -43,6 +43,8 @@ public sealed class InputManager : MonoBehaviour
     private double _guardPressTime;
     private double _guardReleaseTime;
     private double _dodgePressTime;
+    private double _swordWavePressTime;
+    private double _ultimatePressTime;
     private int _bufferedAttackInputId;
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
@@ -78,6 +80,8 @@ public sealed class InputManager : MonoBehaviour
         _guard.performed += RecordGuardPress;
         _guard.canceled += RecordGuardRelease;
         _dodge.performed += RecordDodgePress;
+        _swordWaveInput.performed += RecordSwordWavePress;
+        _ultimateInput.performed += RecordUltimatePress;
     }
 
     void Update()
@@ -177,8 +181,8 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 새 InputId로 공격을 요청한다. 토큰이 가득 찬 강화 준비 중이면 궁극기 차징을 시작해 예약 입력으로 기록하고,
-    /// 그 외에는 RequestNormalAttack으로 공격을 요청한다. 쳐내기 준비면 일섬, 회피 준비면 기존 일반·돌진 공격 판정을 사용한다.
+    /// 새 InputId로 좌클릭 일반 공격을 요청한다.
+    /// 레거시 온보딩 모드에서만 홀드 차징을 시작하고 그 입력을 예약 상태로 기록한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
@@ -222,7 +226,7 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// 쳐내기 준비 중에는 제자리 공격에 일섬을 예약한다. 회피 준비 중에는 기존 대상 판정으로 일반·돌진 공격을 요청하고 수락 시 감속을 끝낸다.
+    /// 일반 공격을 시작하거나 버퍼에 넣는다. 레거시 온보딩 모드에서만 쳐내기 준비를 검기 예약으로 바꾸며, 회피 준비 중 수락된 공격은 회피 집중을 끝낸다.
     /// </summary>
     private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
     {
@@ -256,12 +260,13 @@ public sealed class InputManager : MonoBehaviour
             accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
             accepted ? PlayerInputRejectReason.None : enough ? PlayerInputRejectReason.ActionBusy
                 : PlayerInputRejectReason.NotEnoughSkillGauge,
-            accepted ? Game.Player.CurrentActionId : 0, Time.realtimeSinceStartupAsDouble);
+            accepted && !ultimate ? Game.Player.CurrentActionId : 0,
+            ultimate ? _ultimatePressTime : _swordWavePressTime);
     }
 
     /// <summary>
-    /// 진행 중인 궁극기 차징 입력 _chargeInputId를 처리한다. 차징이 다 차면 궁극기를 시작해 Started 또는 Rejected로 기록한다.
-    /// 다 차기 전에 버튼을 떼면 차징을 멈추고 같은 입력으로 공격을 요청한다. 회피 준비에서는 감속 종료 후 일반·돌진 공격을 쓴다.
+    /// 레거시 온보딩에서 전달된 _chargeInputId를 처리해 홀드 차징 완료·취소 결과를 기록한다.
+    /// 홀드를 일찍 놓으면 차징을 취소하고 같은 입력으로 일반 공격을 요청한다.
     /// </summary>
     private void ResolveUltimateCharge(PlayerController player)
     {
@@ -362,6 +367,12 @@ public sealed class InputManager : MonoBehaviour
 
     /// <summary>context의 장치 입력 시각을 마지막 회피 누름 시각으로 저장한다.</summary>
     private void RecordDodgePress(InputAction.CallbackContext context) => _dodgePressTime = context.time;
+
+    /// <summary>context에 기록된 실제 Shift 또는 RT 누름 시각을 일섬 입력 로그용 상태에 저장한다.</summary>
+    private void RecordSwordWavePress(InputAction.CallbackContext context) => _swordWavePressTime = context.time;
+
+    /// <summary>context에 기록된 실제 Q 또는 Y 누름 시각을 거합 입력 로그용 상태에 저장한다.</summary>
+    private void RecordUltimatePress(InputAction.CallbackContext context) => _ultimatePressTime = context.time;
 
     void OnApplicationFocus(bool focused)
     {
