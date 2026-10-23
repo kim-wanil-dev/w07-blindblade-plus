@@ -209,6 +209,8 @@ private Vector3 _attackLungeDirection;
     public float Deceleration => _deceleration;
     public bool IsCrouching => _crouchBlend > 0.001f;
     public bool IsDashing => _isDashing;
+    /// <summary>진행 중인 대시가 목표 거리 중 지난 비율(0~1)이다. 목표 거리가 없으면 1이다.</summary>
+    public float DashProgress => _dashGoalDistance > 0.001f ? Mathf.Clamp01(_dashDistanceTravelled / _dashGoalDistance) : 1f;
     public bool IsDodging => _isDodging;
     public bool IsCombatPushing => _combatPushDistance > 0f;
     public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Clock.Now);

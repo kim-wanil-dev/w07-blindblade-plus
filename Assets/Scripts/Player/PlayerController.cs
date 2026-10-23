@@ -41,6 +41,8 @@ public sealed class PlayerController : MonoBehaviour
     [Header("Attack")]
     [SerializeField, Tooltip("좌클릭 시 화면 중앙의 공개된 적에게 대상 돌진(발도)을 사용합니다. 끄면 항상 제자리 일반 공격을 사용하고 대상 실 표시도 숨깁니다.")]
     private bool _enableTargetedDashAttack = true;
+    [SerializeField, Tooltip("대상 돌진을 꺼도 불릿 타임(쳐내기·극한 회피 준비) 중 첫 공격은 실이 연결된 적에게 대상 돌진(발도)을 사용합니다. 대상 실 표시도 이때 연결됩니다.")]
+    private bool _enableBulletTimeDashAttack = true;
     [SerializeField, Min(0f)] private float _normalAttackRange = 1.5f;
     [SerializeField, Min(0f)] private float _iaidoAttackRange = 2f;
     [SerializeField, Min(0f)] private float _targetStandOff = 0.15f;
@@ -69,6 +71,7 @@ public sealed class PlayerController : MonoBehaviour
     private IPlayerMapService _mapService;
     private PlayerStamina _stamina;
     private PlayerClock _playerClock;
+    private PlayerEmpower _empower;
     private Vector2 _moveInput;
     private Vector2 _requestedMoveInput;
     private float _chargeElapsed;
@@ -109,6 +112,8 @@ public sealed class PlayerController : MonoBehaviour
     public bool IsInRecovery => _state == PlayerActionState.Recovery;
     /// <summary>일반 공격 후 회복 중이며 이동을 허용하는 상태인지 반환한다.</summary>
     public bool IsAttackRecoveryMovement => _state == PlayerActionState.Recovery && _recoveryAllowsMovement;
+    /// <summary>불릿 타임 대상 돌진이 켜져 있고 쳐내기·극한 회피 준비(불릿 타임) 중이면 true를 반환한다.</summary>
+    public bool IsBulletTimeDashReady => _enableBulletTimeDashAttack && _empower.IsReady;
 
     public float RecoveryRemaining => _recoveryRemaining;
     public bool IsCrouching => _motor != null && _motor.IsCrouching;
@@ -121,6 +126,7 @@ public sealed class PlayerController : MonoBehaviour
             _viewCamera = GetComponentInChildren<Camera>();
         _stamina = GetComponent<PlayerStamina>();
         _playerClock = GetComponent<PlayerClock>();
+        _empower = GetComponent<PlayerEmpower>();
 
         BindConfiguredServices();
         Game.Instance.RegisterPlayer(this);
@@ -487,9 +493,10 @@ public sealed class PlayerController : MonoBehaviour
 
     /// <summary>
     /// actionId의 일반 공격이 연계 가능한 상태인지 확인하고 공개된 돌진 대상을 찾는다.
+    /// bulletTimeDash가 참이면 대상 돌진이 꺼져 있어도 불릿 타임 입력으로 보고 대상을 찾는다.
     /// 유효하면 현재 공격을 끝내고 strike 타수의 대상 돌진을 시작하며 성공 여부를 반환한다.
     /// </summary>
-    public bool TryChainTargetedIaidoAttack(int actionId, int strike)
+    public bool TryChainTargetedIaidoAttack(int actionId, int strike, bool bulletTimeDash = false)
     {
         if (_state != PlayerActionState.NormalAttack
             || actionId != _currentActionId
@@ -500,7 +507,8 @@ public sealed class PlayerController : MonoBehaviour
             || !TrySelectIaidoTarget(
                 out PlayerCombatTarget combatTarget,
                 out Vector3 perceivedPosition,
-                targetedAttack: true))
+                targetedAttack: true,
+                bulletTimeDash: bulletTimeDash))
             return false;
 
         FinishAttackAction(0f, _currentAttackOutcome, true);
@@ -638,13 +646,17 @@ public sealed class PlayerController : MonoBehaviour
         return true;
     }
 
-    /// <summary>strike 순번으로 감지된 유효 대상을 선택해 즉사 판정 돌진 공격을 시작한다. 대상이 없거나 대시를 시작할 수 없으면 false를 반환한다.</summary>
-    public bool RequestTargetedIaidoAttack(int strike = 1)
+    /// <summary>
+    /// strike 순번으로 감지된 유효 대상을 선택해 즉사 판정 돌진 공격을 시작한다. 대상이 없거나 대시를 시작할 수 없으면 false를 반환한다.
+    /// bulletTimeDash가 참이면 대상 돌진이 꺼져 있어도 불릿 타임 입력으로 보고 대상을 찾는다.
+    /// </summary>
+    public bool RequestTargetedIaidoAttack(int strike = 1, bool bulletTimeDash = false)
     {
         if (_state != PlayerActionState.Free
             || strike < 1
             || strike > 3
-            || !TrySelectIaidoTarget(out PlayerCombatTarget combatTarget, out Vector3 perceivedPosition, targetedAttack: true))
+            || !TrySelectIaidoTarget(out PlayerCombatTarget combatTarget, out Vector3 perceivedPosition,
+                targetedAttack: true, bulletTimeDash: bulletTimeDash))
             return false;
 
         _targetedComboStrike = strike;
@@ -653,6 +665,7 @@ public sealed class PlayerController : MonoBehaviour
 
     /// <summary>
     /// 지금 좌클릭하면 대상 돌진이 고를 적을 TrySelectIaidoTarget과 같은 규칙으로 조회한다.
+    /// 대상 돌진이 꺼져 있으면 IsBulletTimeDashReady가 참인 불릿 타임 동안만 후보를 찾는다.
     /// 자유·가드 상태에서만 target에 후보를 출력하고 찾으면 true를 반환하며 행동 상태는 변경하지 않는다.
     /// </summary>
     public bool TryGetTargetedDashCandidate(out PlayerCombatTarget target)
@@ -661,7 +674,7 @@ public sealed class PlayerController : MonoBehaviour
         if (_state != PlayerActionState.Free && _state != PlayerActionState.Guarding)
             return false;
 
-        return TrySelectIaidoTarget(out target, out _, targetedAttack: true);
+        return TrySelectIaidoTarget(out target, out _, targetedAttack: true, bulletTimeDash: IsBulletTimeDashReady);
     }
 
     /// <summary>targetId의 생존 적에게 기존 대상 대시를 시작한다. 거리·벽 제한을 검사하고 반격 대시의 수락 여부를 반환한다.</summary>
@@ -678,7 +691,10 @@ public sealed class PlayerController : MonoBehaviour
         return BeginTargetedDashAttack(target, target.WorldPosition, true);
     }
 
-    /// <summary>target과 perceivedPosition으로 대시 공격을 시작한다. counterAttack이면 도착 후 일반 피해의 단발 반격을 사용하며 시작 여부를 반환한다.</summary>
+    /// <summary>
+    /// target과 perceivedPosition으로 대시 공격을 시작한다. counterAttack이면 도착 후 일반 피해의 단발 반격을 사용하며 시작 여부를 반환한다.
+    /// 회피 이동 중이면 회피를 끊고 지금 위치에서 바로 돌진한다.
+    /// </summary>
     private bool BeginTargetedDashAttack(PlayerCombatTarget target, Vector3 perceivedPosition, bool counterAttack = false)
     {
         StartAttack(PlayerActionState.IaidoDash);
@@ -689,6 +705,8 @@ public sealed class PlayerController : MonoBehaviour
         _lockedAttackDirection = Vector3.ProjectOnPlane(perceivedPosition - transform.position, Vector3.up).normalized;
         Publish(PlayerActionStage.DashStarted);
 
+        // 회피 이동이 끝날 때까지 돌진이 미뤄지면 지금 위치로 정한 방향·거리가 어긋나므로 회피 이동을 먼저 끊는다.
+        _motor.CancelDodge();
         bool began = _motor != null && _motor.BeginIaidoDash(_preferredTargetId, perceivedPosition, target.HitCollider, target.CollisionRadius, maxDistance, _targetStandOff);
 
         if (began)
@@ -972,21 +990,22 @@ public sealed class PlayerController : MonoBehaviour
     /// <summary>
     /// 현재 후보 중 화면 조건·거리·돌진 경로를 만족하는 가장 가까운 적을 선택한다.
     /// targetedAttack이 참이면 중앙 화면에 걸친 공개 콜라이더와 대상 돌진 거리로 검사하며,
-    /// _enableTargetedDashAttack가 꺼져 있으면 대상 돌진 후보를 찾지 않는다.
+    /// _enableTargetedDashAttack가 꺼져 있으면 bulletTimeDash가 참인 불릿 타임 요청에서만 대상 돌진 후보를 찾는다.
     /// 선택 결과를 selected와 perceivedPosition에 담고 성공 여부를 반환한다.
     /// </summary>
     private bool TrySelectIaidoTarget(
         out PlayerCombatTarget selected,
         out Vector3 perceivedPosition,
-        bool targetedAttack = false)
+        bool targetedAttack = false,
+        bool bulletTimeDash = false)
     {
         selected = default;
         perceivedPosition = Vector3.zero;
 
         if (_combatService == null || _motor == null)
             return false;
-        // 대상 돌진을 끄면 좌클릭은 제자리 일반 공격으로 이어지고 대상 실 표시도 후보를 잃는다.
-        if (targetedAttack && !_enableTargetedDashAttack)
+        // 대상 돌진을 끄면 불릿 타임 밖의 좌클릭은 제자리 일반 공격으로 이어지고 대상 실 표시도 후보를 잃는다.
+        if (targetedAttack && !_enableTargetedDashAttack && !bulletTimeDash)
             return false;
 
         IReadOnlyList<PlayerPerceivedTarget> targets = _perceptionProvider != null

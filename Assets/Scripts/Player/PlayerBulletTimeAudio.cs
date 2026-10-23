@@ -52,7 +52,8 @@ public sealed class PlayerBulletTimeAudio : MonoBehaviour
 
     void Update()
     {
-        bool warped = _empower.IsReady || _empower.IsStriking;
+        // 발도 돌진이 불릿 타임을 유지하는 동안에도 세계 감속에 맞춰 소리를 늦춘다.
+        bool warped = _empower.IsReady || _empower.IsStriking || _empower.IsDashBulletTimeHeld;
         float duration = warped ? _enterDuration : _exitDuration;
         float step = duration > 0f ? Time.unscaledDeltaTime / duration : 1f;
         _weight = Mathf.MoveTowards(_weight, warped ? 1f : 0f, step);

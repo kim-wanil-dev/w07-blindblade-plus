@@ -381,6 +381,7 @@ MonoBehaviour:
   _enableChargeAttack: 0
   _minimumChargeTime: 1
   _enableTargetedDashAttack: 0
+  _enableBulletTimeDashAttack: 1
   _normalAttackRange: 4.5
   _iaidoAttackRange: 2
   _targetStandOff: 0.15
@@ -747,6 +748,7 @@ MonoBehaviour:
   _perfectParryInvulnerableDuration: 1.5
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
+  _dashBulletTimeRatio: 0.5
   _ultimateChargeDuration: 1.5
   _chargeWorldTimeScale: 0.1
   _chargeSlowDuration: 0.7

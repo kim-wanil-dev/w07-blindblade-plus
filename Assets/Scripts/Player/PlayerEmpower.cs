@@ -7,7 +7,7 @@ using BlindBlade.Combat.Contracts;
 /// <summary>
 /// 쳐내기·극한 회피 뒤의 강화 준비와 거합 공격 수명, 거합 토큰을 관리한다.
 /// 쳐내기 또는 극한 회피로 토큰을 모으고, 각 성공 원인에 맞는 불릿 타임에서 공격 입력을 기다린다.
-/// 쳐내기 준비에서는 일섬, 극한 회피 준비에서는 일반·돌진 공격을 허용하고 토큰이 가득 차면 거합 차징을 허용한다.
+/// 두 준비 모두 실이 연결된 적에게 발도 돌진을 허용하고, 대상이 없으면 쳐내기 준비는 일섬, 극한 회피 준비는 일반 공격을 허용한다. 토큰이 가득 차면 거합 차징을 허용한다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
@@ -47,6 +47,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _worldTimeScale = 0.2f;
     [SerializeField, Range(0.1f, 1f), Tooltip("강화 준비와 강화 공격 동안 플레이어 시간 배율. 세계 배율보다 크면 플레이어가 덜 느리다.")]
     private float _playerTimeScale = 0.5f;
+    [SerializeField, Range(0f, 1f), Tooltip("불릿 타임 중 발도 돌진이 이 비율의 거리를 지날 때까지 불릿 타임을 유지하고 남은 돌진과 베기는 평소 속도로 한다. 0이면 돌진 시작 때 바로 끝낸다.")]
+    private float _dashBulletTimeRatio = 0.5f;
 
     [Header("궁극기 차징")]
     [SerializeField, Min(0.01f), Tooltip("토큰이 가득 찬 준비 중 좌클릭을 이 실시간(초)만큼 누르고 있으면 궁극기가 나간다. 세계 감속 시간과 따로 정한다.")]
@@ -68,6 +70,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     [Header("상태")]
     private KatanaCombatCoordinator _combat;
     private PlayerController _player;
+    private PlayerMotor _motor;
     private PlayerHealth _health;
     private PlayerEmpowerStrike _strike;
     private PlayerPerfectPulse _pulse;
@@ -82,8 +85,11 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _readyElapsed;
     private float _hitStopRemaining;
     private bool _onboardingReadyHeld;
+    // 발도 돌진으로 준비를 쓴 뒤 돌진 거리 일부까지 불릿 타임만 유지하는 중이다. 이때는 준비 입력을 받지 않는다.
+    private bool _dashHeld;
 
-    public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready;
+    public bool IsReady => _active && _stage == PlayerEmpowerStage.Ready && !_dashHeld;
+    public bool IsDashBulletTimeHeld => _dashHeld;
     public bool IsDodgeReady => IsReady && _dodgeReady;
     public bool IsSwordWaveReady => IsReady && !_dodgeReady;
     public bool IsStriking => _active && _stage == PlayerEmpowerStage.Started;
@@ -110,6 +116,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     {
         _combat = GetComponent<KatanaCombatCoordinator>();
         _player = GetComponent<PlayerController>();
+        _motor = GetComponent<PlayerMotor>();
         _health = GetComponent<PlayerHealth>();
         _strike = GetComponent<PlayerEmpowerStrike>();
         _pulse = GetComponent<PlayerPerfectPulse>();
@@ -129,6 +136,7 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     void Update()
     {
+        if (_dashHeld && Time.timeScale > 0f && !_player.IsPaused) UpdateDashHold();
         if (!IsReady || Time.timeScale <= 0f || _player.IsPaused) return;
 
         // 히트스톱과 준비 대기는 불릿 타임에 늘어나지 않도록 일시정지를 제외한 실시간으로 잰다.
@@ -154,10 +162,13 @@ public sealed class PlayerEmpower : MonoBehaviour
     /// 퍼펙트 패링마다 토큰을 MAX_TOKENS까지 하나 늘리고, 거합을 쓸 수 있는 상태에서 패링하면 UltimateReadyParry를 발행한다.
     /// 이미 쳐내기 준비 중이면 대기 시간만 다시 세고 false를 반환한다. 회피 준비 중이면 쳐내기 준비로 바꾸고 true를 반환한다.
     /// 준비 중이든 새 준비든 _perfectParryInvulnerableDuration 실시간 동안 무적을 건다. 강화 공격 중이면 아무것도 바꾸지 않고 false를 반환한다.
+    /// 발도 돌진의 불릿 타임을 유지하던 중이면 먼저 끝내고 새 준비를 시작한다.
     /// </summary>
     public bool NotifyPerfectParry(int attackId)
     {
         if (IsStriking) return false;
+        // 같은 소유자의 시간 요청은 겹쳐 등록되지 않으므로 유지하던 불릿 타임을 먼저 끝낸다.
+        if (_dashHeld) End(PlayerEmpowerEndReason.Attack);
         _tokens = Mathf.Min(_tokens + 1, MAX_TOKENS);
         _invulnerableUntil = Time.unscaledTime + _perfectParryInvulnerableDuration;
         if (IsReady)
@@ -188,10 +199,14 @@ public sealed class PlayerEmpower : MonoBehaviour
         if (_tokens == MAX_TOKENS && !_charging) UltimateReadyDodge?.Invoke();
     }
 
-    /// <summary>attackId의 회피 성공으로 토큰 변경 없이 1초 회피 전용 불릿 타임을 시작하거나 갱신한다. 쳐내기 준비와 강화 공격은 유지한다.</summary>
+    /// <summary>
+    /// attackId의 회피 성공으로 토큰 변경 없이 1초 회피 전용 불릿 타임을 시작하거나 갱신한다. 쳐내기 준비와 강화 공격은 유지한다.
+    /// 발도 돌진의 불릿 타임을 유지하던 중이면 먼저 끝내고 새 회피 준비를 시작한다.
+    /// </summary>
     public void BeginDodgeBulletTime(int attackId)
     {
         if (IsStriking) return;
+        if (_dashHeld) End(PlayerEmpowerEndReason.Attack);
         if (IsDodgeReady)
             _readyElapsed = 0f;
         else if (!IsReady)
@@ -340,6 +355,39 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
+    /// 불릿 타임 중 대상 돌진(발도) 공격이 수락되면 일섬 없이 쳐내기·회피 준비를 끝낸다. 토큰은 유지한다.
+    /// 플레이어가 돌진 중이면 _dashHeld를 켜 _dashBulletTimeRatio 거리까지 불릿 타임을 유지하고, 예약되거나 일반 공격으로 바뀌었으면 바로 Attack으로 끝낸다.
+    /// </summary>
+    public void CompleteReadyWithDash()
+    {
+        if (!IsReady) return;
+        if (_player.CurrentState != PlayerActionState.IaidoDash || _dashBulletTimeRatio <= 0f)
+        {
+            End(PlayerEmpowerEndReason.Attack);
+            return;
+        }
+
+        _dashHeld = true;
+        // 쳐내기 히트스톱 중이면 돌진이 멈춰 보이지 않도록 바로 불릿 타임 배율로 바꾼다.
+        if (_hitStopRemaining > 0f)
+        {
+            _hitStopRemaining = 0f;
+            ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredReady, _worldTimeScale);
+        }
+    }
+
+    /// <summary>
+    /// 유지 중인 발도 돌진이 _dashBulletTimeRatio 거리를 지났거나 돌진이 끝났으면 불릿 타임을 Attack으로 끝낸다.
+    /// 플레이어 행동 상태와 PlayerMotor의 DashProgress를 읽는다.
+    /// </summary>
+    private void UpdateDashHold()
+    {
+        if (_player.CurrentState == PlayerActionState.IaidoDash && _motor.IsDashing
+            && _motor.DashProgress < _dashBulletTimeRatio) return;
+        End(PlayerEmpowerEndReason.Attack);
+    }
+
+    /// <summary>
     /// 준비 중 좌클릭으로 일반 공격이 받아들여지면 검기 발사를 예약하고 준비를 SwordWave로 끝낸다.
     /// previousActionId는 공격 요청 전 플레이어 행동 ID이며, 검기는 그 뒤 시작된 일반 공격의 베기 시작에 나간다. 준비 중이 아니면 아무것도 바꾸지 않는다.
     /// </summary>
@@ -378,11 +426,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     /// <summary>
     /// 보스 거합을 받아쳐 플레이어 강화 공격을 받아치기 연출(적의 enemyCutColor 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자)로 한 번 발동하고 true를 반환한다.
     /// 토큰과 차징 없이 시작하며 토큰은 쓰지 않는다. 판정·피해·불릿 타임·무적은 평소 강화 공격과 같고 Started를 발행한다.
-    /// 이미 강화 공격 중이거나 사망·일시정지이면 false다. 진행 중이던 준비가 있으면 강화 공격으로 이어받는다.
+    /// 이미 강화 공격 중이거나 사망·일시정지이면 false다. 진행 중이던 준비가 있으면 강화 공격으로 이어받고, 발도 돌진의 불릿 타임 유지는 먼저 끝낸다.
     /// </summary>
     public bool BeginCounterStrike(Color enemyCutColor)
     {
         if (IsStriking || _player.IsPaused || _player.CurrentState == PlayerActionState.Dead) return false;
+        if (_dashHeld) End(PlayerEmpowerEndReason.Attack);
 
         if (!_active)
         {
@@ -426,6 +475,7 @@ public sealed class PlayerEmpower : MonoBehaviour
         _active = false;
         _dodgeReady = false;
         _onboardingReadyHeld = false;
+        _dashHeld = false;
         _stage = PlayerEmpowerStage.Ended;
         _hitStopRemaining = 0f;
         _charging = false;
