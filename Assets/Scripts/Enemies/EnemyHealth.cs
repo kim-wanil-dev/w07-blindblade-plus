@@ -33,6 +33,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     private float _currentHealth;
     private bool _invulnerable;
     private int _spawnGeneration;
+    private int _lastGaugeRewardActionId;
+    private int _lastGaugeRewardPlayerId;
 
     public float CurrentHealth => _currentHealth;
     public float MaxHealth => _maxHealth;
@@ -62,6 +64,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     void OnEnable()
     {
         _currentHealth = _maxHealth;
+        _lastGaugeRewardActionId = 0;
+        _lastGaugeRewardPlayerId = 0;
         _nextHitInterruptTime = 0f;
         _spawnGenerations.TryGetValue(TargetId, out _spawnGeneration);
         _spawnGeneration++;
@@ -94,6 +98,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         }
         Debug.Log($"Take Damage {context.Amount} ");
         _currentHealth = _dieOnAnyHit ? 0f : Mathf.Max(0f, _currentHealth - context.Amount);
+        RewardPlayerSkillGauge(context);
         if (_currentHealth > 0f && _cancelAttackOnHit) ApplyHitReaction(context);
         PlayDamageEffects(context);
         Damaged?.Invoke(context);
@@ -105,6 +110,37 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             Died?.Invoke(this);
             gameObject.SetActive(false);
         }
+    }
+
+    /// <summary>수락된 피해 context의 플레이어에게 실제 처치와 보스 일반 공격 충전을 지급한다. 공유 체력 묶음의 같은 행동 보상은 한 번만 반영한다.</summary>
+    private void RewardPlayerSkillGauge(DamageContext context)
+    {
+        if (context.Instigator == null) return;
+        PlayerSkillGauge gauges = context.Instigator.GetComponentInParent<PlayerSkillGauge>();
+        if (gauges == null || !gauges.isActiveAndEnabled) return;
+        PlayerHealth playerHealth = gauges.GetComponent<PlayerHealth>();
+        if (!playerHealth.IsAlive) return;
+
+        bool normal = context.PatternId == nameof(PlayerAttackKind.Normal)
+            || context.PatternId == nameof(PlayerAttackKind.IaidoFinisher);
+        bool boss = GetComponentInParent<BossController>() != null
+            || GetComponentInParent<TwinBossController>() != null;
+        PlayerSwordWaveLauncher wave = gauges.GetComponent<PlayerSwordWaveLauncher>();
+        KatanaCombatCoordinator combat = gauges.GetComponent<KatanaCombatCoordinator>();
+        if (normal && boss && context.AttackId > 0 && !wave.IsSkillAction(context.AttackId)
+            && !combat.IsCounterAttack)
+        {
+            EnemyHealth key = SharedDamageKey;
+            int playerId = gauges.GetInstanceID();
+            if (key._lastGaugeRewardActionId != context.AttackId || key._lastGaugeRewardPlayerId != playerId)
+            {
+                key._lastGaugeRewardActionId = context.AttackId;
+                key._lastGaugeRewardPlayerId = playerId;
+                gauges.RewardBossNormalHit();
+            }
+        }
+        // 공유 체력 동기화에서는 이 메서드를 호출하지 않아 처치 보상을 한 번만 지급한다.
+        if (_currentHealth <= 0f) gauges.RewardKill();
     }
 
     /// <summary>

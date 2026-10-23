@@ -292,6 +292,23 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         return accepted;
     }
 
+    /// <summary>자유 상태에서 일섬용 1타를 예약 없이 시작한다. 입력 없이 타수·연계 상태를 초기화하고 실제 행동 시작 여부를 반환한다.</summary>
+    public bool RequestSwordWaveAttack()
+    {
+        if (!CanStartAction || _player.IsPaused) return false;
+        CancelPendingAttacks();
+        _counterAttack = false;
+        _counterUntil = 0f;
+        _attackWasDrawn = _weaponState != KatanaWeaponState.Sheathed;
+        _strike = 1;
+        _waiting = false;
+        _waitAfterRecovery = false;
+        _normalRequested = true;
+        bool accepted = _player.RequestNormalAttack();
+        _normalRequested = false;
+        return accepted;
+    }
+
     /// <summary>
     /// 반격, 대상 돌진, 일반 1·2타 연계 중 현재 상태에 맞는 공격을 시작하거나 다음 클릭 하나를 예약한다.
     /// 가드 중 입력은 가드를 끝내고, 퍼펙트 패링 모션 중 입력은 모션을 끊고 발도 상태로 공격에 연결하며 입력 수락 여부를 반환한다. 제자리 공격 요청 중에는 대상 돌진을 건너뛴다.

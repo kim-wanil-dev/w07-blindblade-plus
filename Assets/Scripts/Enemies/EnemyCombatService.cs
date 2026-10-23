@@ -183,7 +183,8 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             {
                 string id = health.TargetId;
                 health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
-                    request.Direction, request.Kind.ToString()));
+                    request.Direction, request.Kind.ToString(), request.ActionId, 1,
+                    BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
                 result = new PlayerAttackResolution(request.ActionId, true, id, health.CurrentHealth <= 0f);
             }
         }
@@ -403,7 +404,8 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         if (hit)
         {
             health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
-                request.Direction, request.Kind.ToString()));
+                request.Direction, request.Kind.ToString(), request.ActionId, 1,
+                BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         }
         PlayerAttackResolution result = new PlayerAttackResolution(request.ActionId, hit, id,
             hit && health.CurrentHealth <= 0f, complete);
@@ -457,7 +459,8 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             Vector3 toTarget = Vector3.ProjectOnPlane(target.Point - request.Origin, Vector3.up);
             Vector3 direction = toTarget.sqrMagnitude > 0.0001f ? toTarget.normalized : forward;
             target.Health.TakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, target.Point,
-                direction, request.Kind.ToString()));
+                direction, request.Kind.ToString(), request.ActionId, 1,
+                BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         }
 
         bool complete = hit || finalSample;

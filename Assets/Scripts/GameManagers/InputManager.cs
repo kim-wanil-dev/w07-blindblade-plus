@@ -33,6 +33,10 @@ public sealed class InputManager : MonoBehaviour
     private InputSystem_Actions _actions;
     private InputAction _guard;
     private InputAction _dodge;
+    private InputAction _swordWaveInput;
+    private InputAction _ultimateInput;
+    private PlayerSkillGauge _skillGauge;
+    private bool _legacyOnboarding;
     private int _nextInputId;
     private int _guardInputId;
     private double _attackPressTime;
@@ -59,6 +63,11 @@ public sealed class InputManager : MonoBehaviour
         _dodge = new InputAction("Dodge", InputActionType.Button, "<Keyboard>/space");
         _guard.AddBinding("<Gamepad>/leftShoulder");
         _dodge.AddBinding("<Gamepad>/buttonSouth");
+        _swordWaveInput = new InputAction("SwordWave", InputActionType.Button, "<Keyboard>/leftShift");
+        _swordWaveInput.AddBinding("<Keyboard>/rightShift");
+        _swordWaveInput.AddBinding("<Gamepad>/rightTrigger");
+        _ultimateInput = new InputAction("Ultimate", InputActionType.Button, "<Keyboard>/q");
+        _ultimateInput.AddBinding("<Gamepad>/buttonNorth");
         InputAction attack = _actions.Player.Attack;
         for (int i = 0; i < attack.bindings.Count; i++)
             if (attack.bindings[i].path.StartsWith("<Gamepad>"))
@@ -99,7 +108,7 @@ public sealed class InputManager : MonoBehaviour
             return;
         }
         // 강화 공격 연출 중에는 이동·시점·가드·회피·공격 입력을 받지 않는다.
-        if (_empower.IsStriking)
+        if (_empower.IsStriking || _empower.IsAutomaticCharging || _empower.IsSwordWaveCasting)
         {
             player.SetMovementInput(Vector2.zero);
             return;
@@ -116,6 +125,19 @@ public sealed class InputManager : MonoBehaviour
 
         ResolveBufferedInputs(player);
         ResolveUltimateCharge(player);
+        if (!_legacyOnboarding)
+        {
+            if (_ultimateInput.WasPressedThisFrame())
+            {
+                RequestSkill(true);
+                return;
+            }
+            if (_swordWaveInput.WasPressedThisFrame())
+            {
+                RequestSkill(false);
+                return;
+            }
+        }
 
         // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
         // 계속 누르는 우클릭은 가드가 끝나 자유 상태가 되면 다시 가드와 패링 창을 연다.
@@ -161,7 +183,7 @@ public sealed class InputManager : MonoBehaviour
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        if (_empower.BeginCharge())
+        if (_legacyOnboarding && _empower.BeginCharge())
         {
             _chargeInputId = inputId;
             _chargePressTime = _attackPressTime;
@@ -205,7 +227,7 @@ public sealed class InputManager : MonoBehaviour
     private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
     {
         int previousActionId = player.CurrentActionId;
-        bool swordWave = _empower.IsSwordWaveReady;
+        bool swordWave = _legacyOnboarding && _empower.IsSwordWaveReady;
         bool dodgeReady = _empower.IsDodgeReady;
         bool accepted = swordWave ? _combat.RequestInPlaceAttack() : _combat.RequestAttack();
         if (accepted && swordWave) _empower.CompleteWithSwordWave(previousActionId);
@@ -222,6 +244,19 @@ public sealed class InputManager : MonoBehaviour
         PublishInput(inputId, PlayerInputKind.Attack, status,
             accepted ? PlayerInputRejectReason.None : _combat.LastRejectReason,
             started ? player.CurrentActionId : 0, pressTime);
+    }
+
+    /// <summary>ultimate로 Q 거합과 Shift 일섬을 구분해 한 번 요청한다. 실제 수락/잔량 부족/행동 불가를 고유 입력 ID로 기록한다.</summary>
+    private void RequestSkill(bool ultimate)
+    {
+        int inputId = ++_nextInputId;
+        bool enough = ultimate ? _skillGauge.CanUseUltimate : _skillGauge.CanUseSwordWave;
+        bool accepted = ultimate ? _empower.TryBeginAutomaticCharge() : _empower.TryBeginSwordWave();
+        PublishInput(inputId, ultimate ? PlayerInputKind.Ultimate : PlayerInputKind.SwordWave,
+            accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
+            accepted ? PlayerInputRejectReason.None : enough ? PlayerInputRejectReason.ActionBusy
+                : PlayerInputRejectReason.NotEnoughSkillGauge,
+            accepted ? Game.Player.CurrentActionId : 0, Time.realtimeSinceStartupAsDouble);
     }
 
     /// <summary>
@@ -346,6 +381,8 @@ public sealed class InputManager : MonoBehaviour
         _actions.Dispose();
         _guard.Dispose();
         _dodge.Dispose();
+        _swordWaveInput.Dispose();
+        _ultimateInput.Dispose();
     }
 
     /// <summary>state와 Game.Player의 장치를 연결한다. 초기 입력은 차단하고 Playing 전환을 기다린다.</summary>
@@ -356,6 +393,8 @@ public sealed class InputManager : MonoBehaviour
         _combat = Game.Player.GetComponent<KatanaCombatCoordinator>();
         _motor = Game.Player.GetComponent<PlayerMotor>();
         _empower = Game.Player.GetComponent<PlayerEmpower>();
+        _skillGauge = Game.Player.GetComponent<PlayerSkillGauge>();
+        _legacyOnboarding = FindFirstObjectByType<OnboardingFlowController>() != null;
         _playerClock = Game.Player.GetComponent<PlayerClock>();
         _dodgeStaminaHint = Game.Player.GetComponent<PlayerDodgeStaminaHint>();
         _viewResetPending = true;
@@ -363,6 +402,8 @@ public sealed class InputManager : MonoBehaviour
         _actions.Player.Enable();
         _guard.Enable();
         _dodge.Enable();
+        _swordWaveInput.Enable();
+        _ultimateInput.Enable();
     }
 
     /// <summary>state가 Playing이면 입력을 허용하고 그 외에는 명령 전달과 유지 입력을 차단한다.</summary>
@@ -403,7 +444,7 @@ public sealed class InputManager : MonoBehaviour
         player.EndCharge();
         if (_combat != null) _combat.CancelParryAttempt();
         if (_motor != null) _motor.ClearInput();
-        if (_empower != null) _empower.CancelCharge();
+        if (_empower != null && !_empower.IsAutomaticCharging) _empower.CancelCharge();
     }
 
     /// <summary>
@@ -447,11 +488,13 @@ public sealed class InputManager : MonoBehaviour
     public void Shutdown()
     {
         SetGameplayInputEnabled(false);
+        if (_empower != null) _empower.CancelCharge();
         if (_state != null) _state.StateChanged -= HandleState;
         _state = null;
         _combat = null;
         _motor = null;
         _empower = null;
+        _skillGauge = null;
         _playerClock = null;
         if (_dodgeStaminaHint != null) _dodgeStaminaHint.Hide();
         _dodgeStaminaHint = null;
@@ -461,6 +504,8 @@ public sealed class InputManager : MonoBehaviour
         if (_actions != null) _actions.Player.Disable();
         if (_guard != null) _guard.Disable();
         if (_dodge != null) _dodge.Disable();
+        if (_swordWaveInput != null) _swordWaveInput.Disable();
+        if (_ultimateInput != null) _ultimateInput.Disable();
         SetCursor(false);
     }
 }
