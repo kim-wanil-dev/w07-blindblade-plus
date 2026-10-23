@@ -66,8 +66,18 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _presentationSlowProgress;
 
     [Header("스킬 자원")]
-    [SerializeField, Min(0.01f), Tooltip("일섬 시작부터 집중 연출이 유지되는 실시간입니다. 일시정지 동안 멈춥니다.")]
+    [SerializeField, Min(0.01f), Tooltip("일섬 시작부터 집중 연출이 유지되는 최대 실시간입니다. 돌진이 아래 비율의 거리를 먼저 지나면 그때 끝납니다. 일시정지 동안 멈춥니다.")]
     private float _swordWaveFocusDuration = 0.2f;
+    [SerializeField, Range(0f, 1f), Tooltip("일섬 돌진이 이 비율의 거리를 지나면 집중 감속을 끝내고 남은 돌진은 평소 속도로 합니다. 집중 동안에는 플레이어도 세계와 같은 배율로 느려집니다.")]
+    private float _swordWaveFocusDashRatio = 0.5f;
+    [SerializeField, Range(0.01f, 1f), Tooltip("일섬 집중 동안 세계 시간 배율입니다.")]
+    private float _swordWaveFocusTimeScale = 0.2f;
+    [SerializeField, Range(0.01f, 1f), Tooltip("일섬 집중 동안 플레이어 시간 배율입니다. 세계 배율보다 작으면 세계 배율을 따릅니다.")]
+    private float _swordWaveFocusPlayerTimeScale = 0.2f;
+    [SerializeField, Min(0.01f), Tooltip("일섬 집중이 걸릴 때 화면 어둠·FOV·소리가 들어오는 실시간(초).")]
+    private float _swordWaveFocusFadeIn = 0.04f;
+    [SerializeField, Min(0.01f), Tooltip("일섬 집중이 풀릴 때 화면 어둠·FOV·소리가 빠지는 실시간(초).")]
+    private float _swordWaveFocusFadeOut = 0.06f;
     private PlayerSkillGauge _gauges;
     private float _swordWaveFocusRemaining;
     private bool _automaticCharge;
@@ -115,6 +125,9 @@ public sealed class PlayerEmpower : MonoBehaviour
     public float ChargeSlowDuration => _chargeSlowDuration;
     public float ChargeWorldTimeScale => _chargeWorldTimeScale;
     public bool IsSwordWaveFocusing => _swordWaveFocusRemaining > 0f;
+    public float SwordWaveFocusPlayerTimeScale => _swordWaveFocusPlayerTimeScale;
+    public float SwordWaveFocusFadeIn => _swordWaveFocusFadeIn;
+    public float SwordWaveFocusFadeOut => _swordWaveFocusFadeOut;
     public bool IsAutomaticCharging => IsCharging && _automaticCharge;
     public bool IsSwordWaveCasting => _swordWave.IsSkillActive;
     public float CounterChargeDuration => 1.5f;
@@ -130,10 +143,13 @@ public sealed class PlayerEmpower : MonoBehaviour
         else UltimateReadyParry?.Invoke();
     }
 
-    /// <summary>잔량과 현재 행동을 검사해 일섬을 즉시 시작한다. 수락 시 한 칸을 소비하고 첫 집중 시간을 설정하며 성공 여부를 반환한다.</summary>
+    /// <summary>
+    /// 잔량과 현재 행동을 검사해 일섬을 즉시 시작한다. 수락 시 한 칸을 소비하고 첫 집중 시간을 설정하며 성공 여부를 반환한다.
+    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// </summary>
     public bool TryBeginSwordWave()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseSwordWave || !_combat.CanStartAction) return false;
+        if (!CanBeginManualSkill() || !_gauges.CanUseSwordWave || !_combat.PrepareManualSkill()) return false;
         if (!_combat.RequestSwordWaveAttack()) return false;
         if (!_gauges.TryConsumeSwordWave()) return false;
         if (_active) End(PlayerEmpowerEndReason.SwordWave);
@@ -145,16 +161,19 @@ public sealed class PlayerEmpower : MonoBehaviour
         _hitStopRemaining = 0f;
         _swordWaveFocusRemaining = _swordWaveFocusDuration;
         _timerUpdatedAt = Time.realtimeSinceStartupAsDouble;
-        ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _worldTimeScale);
+        ChangeTimeRequest(READY_TIME_OWNER, CombatTimeReason.EmpoweredAttack, _swordWaveFocusTimeScale);
         Publish(PlayerEmpowerStage.Ready, PlayerEmpowerEndReason.None);
         _swordWave.PlaySkill(_player.CurrentActionId);
         return true;
     }
 
-    /// <summary>집중 여부와 무관하게 거합 완충 자원으로 자동 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.</summary>
+    /// <summary>
+    /// 집중 여부와 무관하게 거합 완충 자원으로 자동 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.
+    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// </summary>
     public bool TryBeginAutomaticCharge()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseUltimate || !_combat.CanStartAction) return false;
+        if (!CanBeginManualSkill() || !_gauges.CanUseUltimate || !_combat.PrepareManualSkill()) return false;
         if (_active) End(PlayerEmpowerEndReason.Cancelled);
         _active = true;
         _stage = PlayerEmpowerStage.Ready;
@@ -233,6 +252,9 @@ public sealed class PlayerEmpower : MonoBehaviour
         if (IsSwordWaveFocusing)
         {
             _swordWaveFocusRemaining = Mathf.Max(0f, _swordWaveFocusRemaining - dt);
+            // 일섬 돌진이 정한 거리를 지나거나 벽에 막혀 끝나면 시간이 남아도 감속을 풀고 남은 돌진은 평소 속도로 한다.
+            if (_swordWave.DashDistance > 0f && _swordWave.DashProgress >= _swordWaveFocusDashRatio)
+                _swordWaveFocusRemaining = 0f;
             if (!IsSwordWaveFocusing) End(PlayerEmpowerEndReason.Completed);
             return;
         }

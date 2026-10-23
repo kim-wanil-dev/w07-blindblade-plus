@@ -43,6 +43,7 @@ public sealed class EmpowerOverlay : MonoBehaviour
     private readonly List<Particle> _particles = new List<Particle>();
     private float _vignetteTarget;
     private float _vignetteBase;
+    private float _vignetteActiveBlendTime;
     private float _vignettePulseStrength;
     private float _vignettePulseDuration;
     private float _vignettePulseAge;
@@ -110,7 +111,14 @@ public sealed class EmpowerOverlay : MonoBehaviour
     /// <summary>비네트 진하기 목표를 target(0~1)으로 바꾼다. 실제 진하기는 _vignetteBlendTime에 걸쳐 따라간다.</summary>
     public void SetVignette(float target)
     {
+        SetVignette(target, _vignetteBlendTime);
+    }
+
+    /// <summary>비네트 진하기 목표를 target(0~1)으로 바꾸고 실제 진하기가 blendTime 실시간에 걸쳐 따라가게 한다. _vignetteActiveBlendTime을 바꾼다.</summary>
+    public void SetVignette(float target, float blendTime)
+    {
         _vignetteTarget = Mathf.Clamp01(target);
+        _vignetteActiveBlendTime = Mathf.Max(0.01f, blendTime);
     }
 
     /// <summary>
@@ -316,7 +324,8 @@ public sealed class EmpowerOverlay : MonoBehaviour
     /// </summary>
     private void UpdateVignette(float dt)
     {
-        _vignetteBase = Mathf.MoveTowards(_vignetteBase, _vignetteTarget, dt / _vignetteBlendTime);
+        float blendTime = _vignetteActiveBlendTime > 0f ? _vignetteActiveBlendTime : _vignetteBlendTime;
+        _vignetteBase = Mathf.MoveTowards(_vignetteBase, _vignetteTarget, dt / blendTime);
         _vignettePulseAge += dt;
         SetAlpha(_vignette, Mathf.Max(_vignetteBase, CurrentVignettePulse()));
         _chargeVignetteProgress = _chargeVignetteTargetProgress >= _chargeVignetteProgress

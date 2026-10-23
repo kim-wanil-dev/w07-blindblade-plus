@@ -345,7 +345,7 @@ MonoBehaviour:
   _stepInterval: 0.36
   _normalFootstepNoise: 0.6
   _quietFootstepNoise: 0.2
-  _iaidoSpeed: 28
+  _iaidoSpeed: 36.4
   _iaidoMaxDistance: 9
   _dashCollisionMask:
     serializedVersion: 2
@@ -384,6 +384,7 @@ MonoBehaviour:
   _enableTargetedDashAttack: 0
   _enableBulletTimeDashAttack: 1
   _sweepDuringTargetedDash: 1
+  _targetedDashSweepRangeMultiplier: 1.5
   _normalAttackRange: 4.5
   _iaidoAttackRange: 2
   _targetStandOff: 0.15
@@ -751,11 +752,16 @@ MonoBehaviour:
   _perfectParryInvulnerableDuration: 1.5
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
-  _dashBulletTimeRatio: 0.5
+  _dashBulletTimeRatio: 0
   _ultimateChargeDuration: 0.75
   _chargeWorldTimeScale: 0.1
   _chargeSlowDuration: 0.7
-  _swordWaveFocusDuration: 0.2
+  _swordWaveFocusDuration: 1.5
+  _swordWaveFocusDashRatio: 0.25
+  _swordWaveFocusTimeScale: 0.1
+  _swordWaveFocusPlayerTimeScale: 0.5
+  _swordWaveFocusFadeIn: 0.04
+  _swordWaveFocusFadeOut: 0.06
 --- !u!114 &1235757311588725982
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -884,6 +890,7 @@ MonoBehaviour:
   _lowpassCutoff: 800
   _enterDuration: 0.1
   _exitDuration: 0.3
+  _swordWaveWarpStrength: 0.15
 --- !u!114 &7253810946217735011
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -902,11 +909,15 @@ MonoBehaviour:
   _spawnHeightOffset: -0.5
   _dashDistance: 18
   _dashDuration: 0.3
+  _dashStartDelay: 0.08
   _dashHitMask:
     serializedVersion: 2
     m_Bits: 55
   _launchFovKick: 30
   _launchRiseRatio: 0.15
+  _hitStopDuration: 0.02
+  _hitStopBulletTimeMaxDuration: 0.03
+  _hitStopTimeScale: 0.02
 --- !u!114 &6618034975521349126
 MonoBehaviour:
   m_ObjectHideFlags: 0

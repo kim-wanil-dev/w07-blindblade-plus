@@ -45,6 +45,8 @@ public sealed class PlayerController : MonoBehaviour
     private bool _enableBulletTimeDashAttack = true;
     [SerializeField, Tooltip("대상 돌진(발도)으로 움직이는 동안 매 프레임 일반 공격 사거리의 부채꼴로 판정해 경로의 적에게 일반 공격 피해를 한 번씩 줍니다. 도착 베기 대상은 제외합니다.")]
     private bool _sweepDuringTargetedDash = true;
+    [SerializeField, Min(0f), Tooltip("대상 돌진 중 휩쓸기 판정 사거리를 일반 공격 사거리의 몇 배로 할지 정합니다. 부채꼴 각도와 근접 반경은 일반 공격과 같습니다.")]
+    private float _targetedDashSweepRangeMultiplier = 1f;
     [SerializeField, Min(0f)] private float _normalAttackRange = 1.5f;
     [SerializeField, Min(0f)] private float _iaidoAttackRange = 2f;
     [SerializeField, Min(0f)] private float _targetStandOff = 0.15f;
@@ -997,15 +999,15 @@ public sealed class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// 대상 돌진 중이면 현재 시점 원점·돌진 방향·일반 공격 사거리로 부채꼴 판정을 요청해 경로의 적에게 일반 공격 피해를 준다.
+    /// 대상 돌진 중이면 현재 시점 원점·돌진 방향과 일반 공격 사거리에 _targetedDashSweepRangeMultiplier를 곱한 사거리로 부채꼴 판정을 요청해 경로의 적에게 일반 공격 피해를 준다.
     /// 반격 대시이거나 _sweepDuringTargetedDash가 꺼져 있으면 아무것도 하지 않으며, 도착 베기 대상 _preferredTargetId는 판정에서 뺀다.
     /// </summary>
     private void SweepTargetedDash()
     {
         if (!_sweepDuringTargetedDash || !_targetedDashAttack || _counterDashAttack) return;
         if (_combatService is EnemyCombatService combat)
-            combat.SweepDashFanAttack(_currentActionId, _motor.ViewOrigin, _motor.DashDirection, _normalAttackRange,
-                _preferredTargetId);
+            combat.SweepDashFanAttack(_currentActionId, _motor.ViewOrigin, _motor.DashDirection,
+                _normalAttackRange * _targetedDashSweepRangeMultiplier, _preferredTargetId);
     }
 
     /// <summary>

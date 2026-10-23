@@ -213,6 +213,8 @@ private Vector3 _attackLungeDirection;
     public float DashProgress => _dashGoalDistance > 0.001f ? Mathf.Clamp01(_dashDistanceTravelled / _dashGoalDistance) : 1f;
     public bool IsDodging => _isDodging;
     public bool IsCombatPushing => _combatPushDistance > 0f;
+    /// <summary>마지막 전투 밀림이 지난 거리 비율(0~1)이다. 밀림이 끝난 뒤에는 마지막 값을 유지한다.</summary>
+    public float CombatPushProgress => _combatPushProgress;
     public float DodgeCooldownRemaining => Mathf.Max(0f, _nextDodgeTime - Clock.Now);
     // 다른 컴포넌트의 OnEnable이 이 컴포넌트의 Awake보다 먼저 시간을 읽을 수 있어 처음 쓸 때 찾는다.
     private PlayerClock Clock => _playerClock != null ? _playerClock : _playerClock = GetComponent<PlayerClock>();

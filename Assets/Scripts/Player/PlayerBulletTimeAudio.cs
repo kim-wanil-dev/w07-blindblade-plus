@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 퍼펙트 패링 뒤 강화 준비와 강화 공격(암전·납도) 동안 효과음·BGM 버스의 소리를 느리고 낮고 먹먹하게 바꾼다.
+/// 퍼펙트 패링 뒤 강화 준비와 강화 공격(암전·납도) 동안 효과음·BGM 버스의 소리를 느리고 낮고 먹먹하게 바꾼다. Shift 일섬의 짧은 집중 감속에는 아주 약하게만 건다.
 /// 궁극기 차징 중에는 세계가 더 느려지는 진행도를 따라 소리도 더 느려진다.
 /// 암전음 같은 연출음은 연출음 버스로 나가 영향을 받지 않으며, 강화가 끝나면 서서히 원래 소리로 되돌린다.
 /// 전환 시간은 불릿 타임에 늘어나지 않도록 일시정지를 제외한 실시간으로 잰다.
@@ -23,7 +23,11 @@ public sealed class PlayerBulletTimeAudio : MonoBehaviour
     private float _enterDuration = 0.1f;
     [SerializeField, Min(0f), Tooltip("강화 준비·공격이 끝나 원래 소리로 돌아오는 실시간(초).")]
     private float _exitDuration = 0.3f;
+    [SerializeField, Range(0f, 1f), Tooltip("Shift 일섬 집중 동안 거는 불릿 타임 소리의 세기. 1이면 일반 불릿 타임과 같고 0이면 걸지 않는다.")]
+    private float _swordWaveWarpStrength = 0.15f;
     private PlayerEmpower _empower;
+    // 마지막 소리가 일섬 집중으로 걸렸으면 풀 때도 일섬 페이드 시간을 쓴다.
+    private bool _swordWaveWarp;
     private float _weight;
     private float _chargeWeight;
     private float _externalWeight;
@@ -52,11 +56,26 @@ public sealed class PlayerBulletTimeAudio : MonoBehaviour
 
     void Update()
     {
-        // 발도 돌진이 불릿 타임을 유지하는 동안에도 세계 감속에 맞춰 소리를 늦춘다.
-        bool warped = _empower.IsReady || _empower.IsStriking || _empower.IsDashBulletTimeHeld;
-        float duration = warped ? _enterDuration : _exitDuration;
-        float step = duration > 0f ? Time.unscaledDeltaTime / duration : 1f;
-        _weight = Mathf.MoveTowards(_weight, warped ? 1f : 0f, step);
+        // 발도 돌진이 불릿 타임을 유지하는 동안에도 세계 감속에 맞춰 소리를 늦춘다. 일섬 집중은 _swordWaveWarpStrength만큼만 아주 약하게 건다.
+        bool swordWaveFocus = _empower.IsSwordWaveFocusing;
+        bool warped = (_empower.IsReady && !swordWaveFocus) || _empower.IsStriking || _empower.IsDashBulletTimeHeld;
+        float target = warped ? 1f : swordWaveFocus ? _swordWaveWarpStrength : 0f;
+        if (swordWaveFocus) _swordWaveWarp = true;
+        else if (warped) _swordWaveWarp = false;
+        float step;
+        if (_swordWaveWarp)
+        {
+            // 일섬 소리는 화면 어둠·FOV와 같은 페이드 시간에 0과 일섬 세기 사이를 오간다. 일반 불릿 타임에서 넘어오면 전체 폭으로 내린다.
+            float fade = target > _weight ? _empower.SwordWaveFocusFadeIn : _empower.SwordWaveFocusFadeOut;
+            float span = _weight > _swordWaveWarpStrength ? 1f : Mathf.Max(_swordWaveWarpStrength, 0.01f);
+            step = fade > 0f ? span * Time.unscaledDeltaTime / fade : 1f;
+        }
+        else
+        {
+            float duration = target > _weight ? _enterDuration : _exitDuration;
+            step = duration > 0f ? Time.unscaledDeltaTime / duration : 1f;
+        }
+        _weight = Mathf.MoveTowards(_weight, target, step);
         // 차징 감속은 세계 감속을 그대로 따라가고, 차징이 끝나면 복귀 시간에 걸쳐 풀어 음높이가 튀지 않게 한다.
         float chargeTarget = Mathf.SmoothStep(0f, 1f, _empower.ChargeSlowProgress);
         float exitStep = _exitDuration > 0f ? Time.unscaledDeltaTime / _exitDuration : 1f;
