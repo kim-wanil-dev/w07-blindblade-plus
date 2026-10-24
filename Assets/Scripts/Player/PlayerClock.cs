@@ -46,7 +46,7 @@ public sealed class PlayerClock : MonoBehaviour
     {
         if (Time.timeScale <= 0f) return 1f;
         if (_swordWave.IsHitStopActive) return 1f;
-        // 일섬 돌진의 앞부분은 일섬 전용 배율로 플레이어도 느려져 감속이 풀리는 순간의 리듬을 살린다.
+        // 일섬 돌진 전체에서 세계 감속을 보정해 플레이어 전용 배율로 움직인다.
         if (_empower.IsSwordWaveFocusing) return Mathf.Max(1f, _empower.SwordWaveFocusPlayerTimeScale / Time.timeScale);
         if (_empower.IsBulletTimeActive) return Mathf.Max(1f, _empower.PlayerTimeScale / Time.timeScale);
         if (_swordWave.IsLaunchSlowActive) return Mathf.Max(1f, 1f / Time.timeScale);
