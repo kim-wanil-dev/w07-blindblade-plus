@@ -1183,9 +1183,9 @@ MonoBehaviour:
   _swordWavePerfectDodgeReward: 0.5
   _swordWaveKillReward: 0.1
   _maxUltimateGauge: 100
-  _ultimatePerfectDodgeReward: 15
-  _ultimateKillReward: 1
-  _ultimateBossNormalHitReward: 3
+  _ultimatePerfectDodgeReward: 20
+  _ultimateKillReward: 2
+  _ultimateBossNormalHitReward: 5
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0
