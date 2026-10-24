@@ -4364,10 +4364,6 @@ PrefabInstance:
       propertyPath: _acceleration
       value: 12
       objectReference: {fileID: 0}
-    - target: {fileID: 3122603556444773555, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
-      propertyPath: m_ExcludeLayers.m_Bits
-      value: 4294967295
-      objectReference: {fileID: 0}
     - target: {fileID: 5120591557259224666, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _meleeOnly
       value: 0
@@ -4453,20 +4449,20 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8865722896377662893, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
-      propertyPath: m_Height
+      propertyPath: _height
       value: 2.6
       objectReference: {fileID: 0}
     - target: {fileID: 8865722896377662893, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
-      propertyPath: m_Radius
+      propertyPath: _radius
       value: 0.45
       objectReference: {fileID: 0}
     - target: {fileID: 8865722896377662893, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
-      propertyPath: m_Direction
+      propertyPath: _direction
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 8865722896377662893, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
-      propertyPath: m_ExcludeLayers.m_Bits
-      value: 4294967295
+      propertyPath: _blocksPlayer
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}

@@ -221,6 +221,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8877110437180011311}
   - component: {fileID: 5157593814592245201}
+  - component: {fileID: 6144725630945102187}
   - component: {fileID: 8892039143483168181}
   - component: {fileID: 8088586443167616543}
   - component: {fileID: 2113163858323081783}
@@ -273,6 +274,24 @@ CapsuleCollider:
   m_Height: 1.5
   m_Direction: 1
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &6144725630945102187
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8699794740363194082}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe1549398884f45b69f24870baeda42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _center: {x: 0, y: 0, z: 0}
+  _radius: 0.5
+  _height: 2
+  _direction: 1
+  _blocksPlayer: 0
+  _bodyCollider: {fileID: 5157593814592245201}
 --- !u!114 &8892039143483168181
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -287,7 +306,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyHealth
   _maxHealth: 1
   _dieOnAnyHit: 1
-  _hitCollider: {fileID: 5157593814592245201}
+  _hitCapsule: {fileID: 6144725630945102187}
   _cancelAttackOnHit: 0
   _dashTargetable: 0
   _hitRecovery: 0.16

@@ -526,8 +526,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
             if (!unit.Health.IsAlive)
                 continue;
 
-            Collider hitCollider = unit.Health.CreateCombatTarget().HitCollider;
-            Bounds bounds = hitCollider.bounds;
+            Bounds bounds = unit.Health.CreateCombatTarget().HitCapsule.Bounds;
 
             if (!GeometryUtility.TestPlanesAABB(_reflectCameraPlanes, bounds))
                 continue;

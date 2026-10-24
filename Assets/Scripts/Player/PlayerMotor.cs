@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -135,12 +136,24 @@ private Vector3 _attackLungeDirection;
     private float _dashGoalDistance;
     private float _dashDistanceTravelled;
     private string _dashTargetId;
-    private Collider _dashTargetCollider;
+    private EnemyHitCapsule _dashTargetCapsule;
     private float _dashMaxDistance;
     private float _dashStandOffDistance;
     private IPlayerMapService _mapService;
     private IPlayerCombatService _combatService;
     private float _lastHorizontalSpeed;
+    private readonly List<EnemyHitCapsule> _enemyCapsuleOverlaps = new List<EnemyHitCapsule>();
+    private readonly List<EnemyCapsuleHit> _enemyCapsuleHits = new List<EnemyCapsuleHit>();
+
+    /// <summary>발도 돌진 경로의 첫 장애물이다. 물리 충돌체는 Collider, 충돌체 없는 적은 Capsule에 저장한다.</summary>
+    private struct DashObstacle
+    {
+        public float Distance;
+        public Vector3 Point;
+        public Vector3 Normal;
+        public Collider Collider;
+        public EnemyHitCapsule Capsule;
+    }
 
     [Header("전투 카메라 반동")]
     [SerializeField, Min(0f)] private float _recoilReturnSpeed = 18f;
@@ -514,6 +527,15 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
             return false;
         }
 
+        // 충돌체 없는 적 캡슐도 기존 충돌체처럼 일어설 공간을 막는다. 몸 충돌체가 남은 적은 위 물리 검사에 이미 포함된다.
+        EnemyHitCapsule.OverlapAll(bottom, top, radius, _crouchCollisionMask, _enemyCapsuleOverlaps);
+        foreach (EnemyHitCapsule capsule in _enemyCapsuleOverlaps)
+        {
+            if (capsule.HasBodyCollider || capsule.Bounds.max.y <= worldCenter.y - height * 0.5f + 0.02f)
+                continue;
+            return false;
+        }
+
         return count < _crouchOverlapBuffer.Length;
     }
 
@@ -636,7 +658,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         float normalized = _combatPushElapsed / _combatPushDuration;
         float progress = 1f - (1f - normalized) * (1f - normalized);
         _verticalVelocity = _characterController.isGrounded ? -2f : _verticalVelocity - _gravity * deltaTime;
-        CollisionFlags flags = _characterController.Move(
+        CollisionFlags flags = MoveCharacter(
             _combatPushDirection * (_combatPushDistance * (progress - _combatPushProgress))
             + Vector3.up * (_verticalVelocity * deltaTime));
         _combatPushProgress = progress;
@@ -673,7 +695,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
             : _verticalVelocity - _gravity * deltaTime;
 
         Vector3 before = transform.position;
-        CollisionFlags flags = _characterController.Move(
+        CollisionFlags flags = MoveCharacter(
             _attackLungeDirection * distance + Vector3.up * (_verticalVelocity * deltaTime));
         _planarVelocity = deltaTime > 0f
             ? Vector3.ProjectOnPlane(transform.position - before, Vector3.up) / deltaTime
@@ -710,7 +732,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         float normalized = _dodgeElapsed / _dodgeDuration;
         float progress = 1f - (1f - normalized) * (1f - normalized);
         Vector3 before = transform.position;
-        CollisionFlags flags = _characterController.Move(_dodgeDirection * (_dodgeDistance * (progress - _dodgeProgress))
+        CollisionFlags flags = MoveCharacter(_dodgeDirection * (_dodgeDistance * (progress - _dodgeProgress))
             + Vector3.up * (_verticalVelocity * deltaTime));
         _lastHorizontalSpeed = Vector3.ProjectOnPlane(transform.position - before, Vector3.up).magnitude / deltaTime;
         _dodgeProgress = progress;
@@ -731,18 +753,31 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         Vector3 delta = Vector3.ProjectOnPlane(target.WorldPosition - transform.position, Vector3.up);
         if (delta.sqrMagnitude <= 0.0001f)
             return true;
-        if (!TryGetFirstDashObstacle(delta.normalized, delta.magnitude, out RaycastHit hit))
+        if (!TryGetFirstDashObstacle(delta.normalized, delta.magnitude, out DashObstacle obstacle))
             return true;
-        return _combatService != null
-            && _combatService.TryGetTarget(hit.collider, out PlayerCombatTarget contact)
+        return TryGetObstacleTarget(obstacle, out PlayerCombatTarget contact)
             && contact.TargetId == target.TargetId;
+    }
+
+    /// <summary>
+    /// obstacle의 물리 충돌체 또는 적 캡슐에 대응하는 같은 씬의 생존 적을 target으로 반환한다.
+    /// 전투 서비스가 없거나 적이 아니면 false를 반환한다.
+    /// </summary>
+    private bool TryGetObstacleTarget(DashObstacle obstacle, out PlayerCombatTarget target)
+    {
+        target = default;
+        if (_combatService == null)
+            return false;
+        return obstacle.Capsule != null
+            ? _combatService.TryGetTarget(obstacle.Capsule, out target)
+            : _combatService.TryGetTarget(obstacle.Collider, out target);
     }
 
     /// <summary>대상 위치 또는 전방 방향으로 목표 거리를 계산하고 대시를 시작합니다. 시작 가능 여부를 반환합니다.</summary>
     public bool BeginIaidoDash(
         string targetId,
         Vector3 targetPosition,
-        Collider targetCollider,
+        EnemyHitCapsule targetCapsule,
         float targetCollisionRadius,
         float maxDistance,
         float standOffDistance)
@@ -759,7 +794,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
 
         _dashDirection = direction.normalized;
         _dashTargetId = hasTarget ? targetId : null;
-        _dashTargetCollider = targetCollider;
+        _dashTargetCapsule = targetCapsule;
         _dashDistanceTravelled = 0f;
 
         float requestedDistance = Mathf.Max(0f, maxDistance);
@@ -767,7 +802,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         _dashStandOffDistance = Mathf.Max(0f, standOffDistance);
         if (hasTarget)
         {
-            float targetExtent = GetTargetExtent(targetCollider, targetCollisionRadius, _dashDirection);
+            float targetExtent = GetTargetExtent(targetCapsule, targetCollisionRadius, _dashDirection);
             float centerDistance = toTarget.magnitude;
             float playerRadius = _characterController.radius + _characterController.skinWidth;
             requestedDistance = Mathf.Clamp(
@@ -817,25 +852,25 @@ private void TickDash(float deltaTime)
         if (step <= 0f)
             return;
 
-        if (TryGetFirstDashObstacle(_dashDirection, step, out RaycastHit hit))
+        if (TryGetFirstDashObstacle(_dashDirection, step, out DashObstacle obstacle))
         {
             bool hitSelectedTarget =
-                _combatService != null
-                && !string.IsNullOrEmpty(_dashTargetId)
-                && _combatService.TryGetTarget(hit.collider, out PlayerCombatTarget contactedTarget)
+                !string.IsNullOrEmpty(_dashTargetId)
+                && TryGetObstacleTarget(obstacle, out PlayerCombatTarget contactedTarget)
                 && contactedTarget.IsAlive
                 && contactedTarget.TargetId == _dashTargetId;
 
             if (hitSelectedTarget)
             {
-                float contactDistance = Mathf.Max(0f, hit.distance - _characterController.skinWidth);
-                _characterController.Move(_dashDirection * Mathf.Min(step, contactDistance));
+                float contactDistance = Mathf.Max(0f, obstacle.Distance - _characterController.skinWidth);
+                MoveCharacter(_dashDirection * Mathf.Min(step, contactDistance));
                 FinishDash(PlayerDashEndReason.TargetReached);
                 return;
             }
 
-            PlayerWallResolution resolution = _mapService != null
-                ? _mapService.ResolveDashWallContact(hit.collider, hit.point, hit.normal)
+            // 충돌체 없는 적은 지도 처리 대상이 아니므로 다른 적 몸에 닿은 기존 결과처럼 벽 막힘으로 끝낸다.
+            PlayerWallResolution resolution = _mapService != null && obstacle.Collider != null
+                ? _mapService.ResolveDashWallContact(obstacle.Collider, obstacle.Point, obstacle.Normal)
                 : new PlayerWallResolution(false, false, false);
 
             if (!resolution.AllowsDashContinuation)
@@ -845,7 +880,7 @@ private void TickDash(float deltaTime)
             }
 
             // The map owner must update the physical obstacle before reporting it passable.
-            if (hit.collider != null && hit.collider.enabled && hit.collider.gameObject.activeInHierarchy)
+            if (obstacle.Collider != null && obstacle.Collider.enabled && obstacle.Collider.gameObject.activeInHierarchy)
             {
                 FinishDash(PlayerDashEndReason.WallBlocked);
                 return;
@@ -859,7 +894,7 @@ private void TickDash(float deltaTime)
             _verticalVelocity -= _gravity * deltaTime;
 
         Vector3 before = transform.position;
-        _characterController.Move((_dashDirection + Vector3.up * (_verticalVelocity / Mathf.Max(_iaidoSpeed, 0.01f))) * step);
+        MoveCharacter((_dashDirection + Vector3.up * (_verticalVelocity / Mathf.Max(_iaidoSpeed, 0.01f))) * step);
         Vector3 moved = transform.position - before;
         moved.y = 0f;
         float actualDistance = Vector3.Dot(moved, _dashDirection);
@@ -879,23 +914,22 @@ private void TickDash(float deltaTime)
     }
 
     /// <summary>
-    /// 대상 돌진 중 대상 충돌체의 현재 중심으로 돌진 방향과 목표 거리를 다시 맞춘다.
-    /// _dashTargetCollider, _dashStandOffDistance, _dashMaxDistance를 사용하며 _dashDirection과 _dashGoalDistance를 갱신한다.
-    /// 대상이 없거나 충돌체가 꺼져 있으면 시작 때 정한 방향과 거리를 유지한다.
+    /// 대상 돌진 중 대상 피격 캡슐의 현재 중심으로 돌진 방향과 목표 거리를 다시 맞춘다.
+    /// _dashTargetCapsule, _dashStandOffDistance, _dashMaxDistance를 사용하며 _dashDirection과 _dashGoalDistance를 갱신한다.
+    /// 대상이 없거나 피격 캡슐이 꺼져 있으면 시작 때 정한 방향과 거리를 유지한다.
     /// </summary>
     private void UpdateDashTargetTracking()
     {
-        if (string.IsNullOrEmpty(_dashTargetId) || _dashTargetCollider == null
-            || !_dashTargetCollider.enabled || !_dashTargetCollider.gameObject.activeInHierarchy)
+        if (string.IsNullOrEmpty(_dashTargetId) || _dashTargetCapsule == null || !_dashTargetCapsule.IsPresent)
             return;
 
-        Vector3 toTarget = Vector3.ProjectOnPlane(_dashTargetCollider.bounds.center - transform.position, Vector3.up);
+        Vector3 toTarget = Vector3.ProjectOnPlane(_dashTargetCapsule.Bounds.center - transform.position, Vector3.up);
         if (toTarget.sqrMagnitude < 0.0001f)
             return;
 
         _dashDirection = toTarget.normalized;
         float playerRadius = _characterController.radius + _characterController.skinWidth;
-        float remaining = toTarget.magnitude - GetTargetExtent(_dashTargetCollider, 0f, _dashDirection)
+        float remaining = toTarget.magnitude - GetTargetExtent(_dashTargetCapsule, 0f, _dashDirection)
             - playerRadius - _dashStandOffDistance;
         // 대상이 밀려나도 돌진 시작 때 허용한 최대 거리는 넘지 않는다.
         _dashGoalDistance = Mathf.Clamp(_dashDistanceTravelled + remaining, _dashDistanceTravelled, _dashMaxDistance);
@@ -955,22 +989,26 @@ private void TickDash(float deltaTime)
         _dashSlowMotionElapsed = 0f;
     }
 
-    /// <summary>지정 방향과 거리에서 플레이어 자신의 충돌체를 제외한 가장 가까운 장애물이나 목표 적을 반환합니다.</summary>
-private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out RaycastHit closestHit)
+    /// <summary>
+    /// 지정 방향과 거리에서 플레이어 자신의 충돌체를 제외한 가장 가까운 장애물이나 목표 적을 closest로 반환합니다.
+    /// 물리 충돌체는 CapsuleCastAll로, 충돌체 없는 적은 같은 캡슐의 피격 캡슐 이동 접촉으로 찾아 거리가 가까운 쪽을 고릅니다.
+    /// </summary>
+    private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out DashObstacle closest)
     {
-        closestHit = default;
+        closest = default;
         Vector3 worldCenter = transform.TransformPoint(_characterController.center);
         float radius = Mathf.Max(0.01f, _characterController.radius - _characterController.skinWidth);
         float halfSegment = Mathf.Max(0f, _characterController.height * 0.5f - _characterController.radius);
         Vector3 top = worldCenter + Vector3.up * halfSegment;
         Vector3 bottom = worldCenter - Vector3.up * halfSegment;
+        float castDistance = distance + _characterController.skinWidth;
 
         RaycastHit[] hits = Physics.CapsuleCastAll(
             top,
             bottom,
             radius,
             direction,
-            distance + _characterController.skinWidth,
+            castDistance,
             _dashCollisionMask,
             QueryTriggerInteraction.Ignore);
 
@@ -985,12 +1023,153 @@ private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out Rayc
             if (candidate.distance < nearest)
             {
                 nearest = candidate.distance;
-                closestHit = candidate;
+                closest = new DashObstacle
+                {
+                    Distance = candidate.distance,
+                    Point = candidate.point,
+                    Normal = candidate.normal,
+                    Collider = hitCollider
+                };
                 found = true;
             }
         }
 
+        EnemyHitCapsule.SweepAll(top, bottom, radius, direction, castDistance, _dashCollisionMask, _enemyCapsuleHits);
+        foreach (EnemyCapsuleHit candidate in _enemyCapsuleHits)
+        {
+            // 몸 충돌체가 남은 적은 위 물리 검사에서 이미 찾았다.
+            if (candidate.Capsule.HasBodyCollider || candidate.Distance >= nearest)
+                continue;
+
+            nearest = candidate.Distance;
+            closest = new DashObstacle
+            {
+                Distance = candidate.Distance,
+                Point = candidate.Point,
+                Normal = candidate.Normal,
+                Capsule = candidate.Capsule
+            };
+            found = true;
+        }
+
         return found;
+    }
+
+    /// <summary>
+    /// motion으로 CharacterController를 움직이고, 충돌체가 없어진 적의 몸 막힘을 코드로 이어서 처리합니다.
+    /// 이동 전에 몸 막힘 적 캡슐 앞에서 수평 이동을 자르고 접면을 따라 미끄러뜨린 뒤, 이동 후 겹친 적 캡슐에서 수평으로 밀어냅니다.
+    /// 적 캡슐에 막히거나 밀려나면 기존 옆면 충돌처럼 CollisionFlags.Sides를 더해 반환합니다.
+    /// </summary>
+    private CollisionFlags MoveCharacter(Vector3 motion)
+    {
+        bool blocked = ClipMotionByEnemyCapsules(ref motion);
+        CollisionFlags flags = _characterController.Move(motion);
+        blocked |= PushOutOfEnemyCapsules();
+        return blocked ? flags | CollisionFlags.Sides : flags;
+    }
+
+    /// <summary>
+    /// 현재 CharacterController의 월드 캡슐 축 양 끝 bottom·top과 적 캡슐과 유지할 접촉 반경 contactRadius를 반환합니다.
+    /// 접촉 반경은 CharacterController가 다른 충돌체 앞에서 멈추는 간격과 같게 반지름에 Skin Width를 더합니다.
+    /// </summary>
+    private void GetBodyCapsule(out Vector3 bottom, out Vector3 top, out float contactRadius)
+    {
+        Vector3 worldCenter = transform.TransformPoint(_characterController.center);
+        float halfSegment = Mathf.Max(0f, _characterController.height * 0.5f - _characterController.radius);
+        bottom = worldCenter - Vector3.up * halfSegment;
+        top = worldCenter + Vector3.up * halfSegment;
+        contactRadius = _characterController.radius + _characterController.skinWidth;
+    }
+
+    /// <summary>
+    /// motion의 수평 성분을 몸 막힘 적 캡슐의 첫 접촉 앞에서 자르고, 남은 거리는 접면 법선 성분을 지워 미끄러뜨립니다.
+    /// 최대 세 번 접면을 따라 다시 검사하며 수직 성분은 그대로 둡니다. 이미 겹친 캡슐은 이동 후 밀어내기에 맡기고, 막혔으면 true를 반환합니다.
+    /// </summary>
+    private bool ClipMotionByEnemyCapsules(ref Vector3 motion)
+    {
+        Vector3 remaining = new Vector3(motion.x, 0f, motion.z);
+        if (remaining.sqrMagnitude < 0.000001f)
+            return false;
+
+        GetBodyCapsule(out Vector3 bottom, out Vector3 top, out float radius);
+        Vector3 travelled = Vector3.zero;
+        bool blocked = false;
+        for (int i = 0; i < 3 && remaining.sqrMagnitude >= 0.000001f; i++)
+        {
+            float distance = remaining.magnitude;
+            Vector3 direction = remaining / distance;
+            if (!TryGetFirstBlockingCapsule(bottom + travelled, top + travelled, radius, direction, distance,
+                out EnemyCapsuleHit hit))
+            {
+                travelled += remaining;
+                remaining = Vector3.zero;
+                break;
+            }
+
+            blocked = true;
+            travelled += direction * hit.Distance;
+            remaining = direction * (distance - hit.Distance);
+            Vector3 normal = Vector3.ProjectOnPlane(hit.Normal, Vector3.up);
+            if (normal.sqrMagnitude < 0.000001f)
+            {
+                remaining = Vector3.zero;
+                break;
+            }
+            normal.Normalize();
+            remaining -= normal * Mathf.Min(0f, Vector3.Dot(remaining, normal));
+        }
+
+        motion = new Vector3(travelled.x, motion.y, travelled.z);
+        return blocked;
+    }
+
+    /// <summary>
+    /// bottom·top·radius의 몸 캡슐을 direction으로 distance만큼 옮길 때 처음 닿는 몸 막힘 적 캡슐을 hit로 반환합니다.
+    /// 시작부터 겹친 캡슐은 빠져나가는 이동을 막지 않도록 제외합니다.
+    /// </summary>
+    private bool TryGetFirstBlockingCapsule(Vector3 bottom, Vector3 top, float radius, Vector3 direction,
+        float distance, out EnemyCapsuleHit hit)
+    {
+        hit = default;
+        bool found = false;
+        float nearest = float.PositiveInfinity;
+        IReadOnlyList<EnemyHitCapsule> capsules = EnemyHitCapsule.Active;
+        for (int i = 0; i < capsules.Count; i++)
+        {
+            EnemyHitCapsule capsule = capsules[i];
+            if (!capsule.IsPresent || !capsule.BlocksPlayer || capsule.Overlaps(bottom, top, radius))
+                continue;
+            if (!capsule.Sweep(bottom, top, radius, direction, distance, out EnemyCapsuleHit candidate)
+                || candidate.Distance >= nearest)
+                continue;
+            nearest = candidate.Distance;
+            hit = candidate;
+            found = true;
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// 이동 후 몸 캡슐과 겹친 몸 막힘 적 캡슐마다 수평으로 밀어낼 양을 더해 CharacterController로 한 번 옮깁니다.
+    /// 적이 플레이어 쪽으로 걸어 들어온 겹침도 기존 겹침 복구처럼 풀며, 밀어냈으면 true를 반환합니다.
+    /// </summary>
+    private bool PushOutOfEnemyCapsules()
+    {
+        GetBodyCapsule(out Vector3 bottom, out Vector3 top, out float radius);
+        Vector3 push = Vector3.zero;
+        IReadOnlyList<EnemyHitCapsule> capsules = EnemyHitCapsule.Active;
+        for (int i = 0; i < capsules.Count; i++)
+        {
+            EnemyHitCapsule capsule = capsules[i];
+            if (!capsule.IsPresent || !capsule.BlocksPlayer)
+                continue;
+            if (capsule.TryGetHorizontalPush(bottom + push, top + push, radius, out Vector3 correction))
+                push += correction;
+        }
+        if (push.sqrMagnitude < 0.00000001f)
+            return false;
+        _characterController.Move(push);
+        return true;
     }
 
     /// <summary>후보 충돌체가 플레이어 본체 또는 자식인지 반환합니다.</summary>
@@ -1002,13 +1181,13 @@ private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out Rayc
     /// <summary>후보 충돌체가 현재 선택한 대상 충돌체인지 반환합니다.</summary>
 
 
-    /// <summary>방향별 대상 충돌체 반경을 계산하고 충돌체가 없으면 지정 반경을 반환합니다.</summary>
-    private static float GetTargetExtent(Collider targetCollider, float fallbackRadius, Vector3 direction)
+    /// <summary>방향별 대상 피격 캡슐 반경을 계산하고 피격 캡슐이 없으면 지정 반경을 반환합니다.</summary>
+    private static float GetTargetExtent(EnemyHitCapsule targetCapsule, float fallbackRadius, Vector3 direction)
     {
-        if (targetCollider == null)
+        if (targetCapsule == null)
             return Mathf.Max(0f, fallbackRadius);
 
-        Bounds bounds = targetCollider.bounds;
+        Bounds bounds = targetCapsule.Bounds;
         Vector3 extents = bounds.extents;
         return Mathf.Abs(direction.x) * extents.x
              + Mathf.Abs(direction.y) * extents.y
@@ -1028,7 +1207,7 @@ private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out Rayc
         _moveInput = Vector2.zero;
         PlayerDashEnd result = new PlayerDashEnd(reason, _dashTargetId, transform.position);
         _dashTargetId = null;
-        _dashTargetCollider = null;
+        _dashTargetCapsule = null;
         DashEnded?.Invoke(result);
     }
 
@@ -1130,7 +1309,7 @@ private bool TryGetFirstDashObstacle(Vector3 direction, float distance, out Rayc
     {
         Vector3 before = transform.position;
         bool grounded = _characterController.isGrounded;
-        _characterController.Move(horizontalDelta + Vector3.up * (_verticalVelocity * duration));
+        MoveCharacter(horizontalDelta + Vector3.up * (_verticalVelocity * duration));
         Vector3 actual = Vector3.ProjectOnPlane(transform.position - before, Vector3.up);
         _lastHorizontalSpeed = duration > 0f ? actual.magnitude / duration : 0f;
         if (_stepInProgress && grounded && _characterController.isGrounded)

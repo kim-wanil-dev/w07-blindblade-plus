@@ -77,6 +77,7 @@
 | 근접 공격 차례 제한(일반 웨이브 순차 공격) | [명세](features/근접_공격_차례_제한.md) |
 | 일반 Beast 적 | [명세](features/DefenseBeast.md) |
 | 적 전투 및 체력 | [명세](features/적_전투_체력.md) |
+| 적 피격 캡슐(충돌체 없는 잡몹 판정·코드 몸 막힘) | [명세](features/적_피격_캡슐.md) |
 | 감각 표현 | [명세](features/감각_표현.md) |
 | 발자국 시스템 | [감각 표현](features/감각_표현.md)에서 관리 (FootstepEmitter·발자국·파동) |
 | 화면 공간 윤곽선 | [명세](features/화면_공간_윤곽선.md) |

@@ -95,29 +95,24 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6433079663982134985}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
---- !u!136 &9029861113449799703
-CapsuleCollider:
+--- !u!114 &9029861113449799703
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6433079663982134985}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 2
-  m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe1549398884f45b69f24870baeda42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _center: {x: 0, y: 0, z: 0}
+  _radius: 0.5
+  _height: 2
+  _direction: 1
+  _blocksPlayer: 1
+  _bodyCollider: {fileID: 0}
 --- !u!23 &2413703306905384632
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -186,7 +181,6 @@ GameObject:
   - component: {fileID: 1906621012752804754}
   - component: {fileID: 3724893727897300803}
   - component: {fileID: 1474035193874858927}
-  - component: {fileID: 3571996316640888278}
   - component: {fileID: 45364169199649266}
   m_Layer: 0
   m_Name: Enemy_MultiPattern
@@ -491,7 +485,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _maxHealth: 10
   _dieOnAnyHit: 0
-  _hitCollider: {fileID: 9029861113449799703}
+  _hitCapsule: {fileID: 9029861113449799703}
   _cancelAttackOnHit: 1
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45
@@ -537,33 +531,6 @@ MonoBehaviour:
   _trailFade: 0.15
   _height: 1
   _forwardOffset: 0.35
---- !u!54 &3571996316640888278
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7039733516697902587}
-  serializedVersion: 4
-  m_Mass: 1
-  m_Drag: 0
-  m_AngularDrag: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 0
-  m_IsKinematic: 1
-  m_Interpolate: 0
-  m_Constraints: 0
-  m_CollisionDetection: 0
 --- !u!114 &45364169199649266
 MonoBehaviour:
   m_ObjectHideFlags: 0
