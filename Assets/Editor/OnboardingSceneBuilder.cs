@@ -20,16 +20,26 @@ public static class OnboardingSceneBuilder
     private const string TORCH_AUDIO = "Assets/Onboarding/Media/횃불 소리.wav";
     private const string LEFT_MOUSE = "Assets/Onboarding/Media/MouseLeft.png";
     private const string RIGHT_MOUSE = "Assets/Onboarding/Media/MouseRight.png";
+    private static readonly string[] STAGE_CARD_FIELDS =
+    {
+        "_stageStartTitle", "_stageStartDetail", "_stageCompleteTitle",
+        "_stageCompleteKeyboardDetail", "_stageCompleteGamepadDetail"
+    };
+    private static readonly string[] STAGE_BUTTON_FIELDS =
+    {
+        "_nextStageButtonText", "_finalStageButtonText", "_repeatStageButtonText"
+    };
 
     /// <summary>온보딩 에셋을 불러오고 BambooDefense 복제 씬, 인트로, 빌드 목록을 저장한다.</summary>
     [MenuItem("Tools/Onboarding/Build Onboarding Scene")]
     public static void Build()
     {
-        if (HasDirtySourceScene(SOURCE_SCENE) || HasDirtySourceScene(INTRO_SCENE))
-            throw new InvalidOperationException("BambooDefense 또는 IntroScene에 저장되지 않은 변경이 있어 온보딩 씬 작성 전에 중단했습니다.");
+        if (HasDirtySourceScene(SOURCE_SCENE) || HasDirtySourceScene(INTRO_SCENE) || HasDirtySourceScene(ONBOARDING_SCENE))
+            throw new InvalidOperationException("온보딩 씬 작성에 사용하는 씬에 저장되지 않은 변경이 있어 중단했습니다.");
+        (string[][] cardTexts, string[] buttonTexts) = ReadCardTexts();
         AssetDatabase.Refresh();
         ImportOnboardingMedia();
-        CreateOnboardingScene();
+        CreateOnboardingScene(cardTexts, buttonTexts);
         if (!UpdateIntroScene())
             throw new InvalidOperationException("IntroScene의 시작 버튼에 온보딩 전환을 연결하지 못했습니다.");
         RegisterBuildScene();
@@ -47,6 +57,43 @@ public static class OnboardingSceneBuilder
             if (scene.path == path && scene.isDirty) return true;
         }
         return false;
+    }
+
+    /// <summary>기존 온보딩 씬의 단계 카드와 버튼 Inspector 문구를 읽어 재생성 후에도 유지할 값을 반환한다.</summary>
+    private static (string[][] cardTexts, string[] buttonTexts) ReadCardTexts()
+    {
+        if (!File.Exists(ONBOARDING_SCENE))
+            throw new InvalidOperationException("온보딩 씬이 없어 Inspector의 단계 카드 문구를 읽을 수 없습니다.");
+
+        Scene scene = SceneManager.GetSceneByPath(ONBOARDING_SCENE);
+        bool openedHere = !scene.IsValid();
+        if (openedHere) scene = EditorSceneManager.OpenScene(ONBOARDING_SCENE, OpenSceneMode.Additive);
+        try
+        {
+            OnboardingHud hud = FindComponents<OnboardingHud>(scene).FirstOrDefault();
+            if (hud == null) throw new InvalidOperationException("온보딩 씬에 OnboardingHud가 없습니다.");
+            SerializedObject serializedHud = new SerializedObject(hud);
+            SerializedProperty prompts = serializedHud.FindProperty("_prompts");
+            if (prompts.arraySize != 5)
+                throw new InvalidOperationException("온보딩 단계 수가 5개가 아니어서 기존 카드 문구를 보존할 수 없습니다.");
+            string[][] cardTexts = new string[prompts.arraySize][];
+            for (int i = 0; i < prompts.arraySize; i++)
+            {
+                cardTexts[i] = new string[STAGE_CARD_FIELDS.Length];
+                SerializedProperty prompt = prompts.GetArrayElementAtIndex(i);
+                for (int field = 0; field < STAGE_CARD_FIELDS.Length; field++)
+                    cardTexts[i][field] = prompt.FindPropertyRelative(STAGE_CARD_FIELDS[field]).stringValue;
+            }
+
+            string[] buttonTexts = new string[STAGE_BUTTON_FIELDS.Length];
+            for (int field = 0; field < STAGE_BUTTON_FIELDS.Length; field++)
+                buttonTexts[field] = serializedHud.FindProperty(STAGE_BUTTON_FIELDS[field]).stringValue;
+            return (cardTexts, buttonTexts);
+        }
+        finally
+        {
+            if (openedHere) EditorSceneManager.CloseScene(scene, false);
+        }
     }
 
     /// <summary>횃불 WAV를 PCM으로 가져오고 클릭 PNG가 있을 경우 Sprite 타입으로 설정한다.</summary>
@@ -82,7 +129,7 @@ public static class OnboardingSceneBuilder
     }
 
     /// <summary>BambooDefense를 복제한 씬에서 웨이브·HUD·게임오버를 끄고 온보딩 제어기를 배치한다.</summary>
-    private static void CreateOnboardingScene()
+    private static void CreateOnboardingScene(string[][] cardTexts, string[] buttonTexts)
     {
         if (!AssetDatabase.IsValidFolder("Assets/Scenes/Onboarding"))
             AssetDatabase.CreateFolder("Assets/Scenes", "Onboarding");
@@ -119,7 +166,7 @@ public static class OnboardingSceneBuilder
 
         GameObject controllerObject = new GameObject("OnboardingFlow");
         OnboardingHud hud = controllerObject.AddComponent<OnboardingHud>();
-        ConfigureHud(hud, font);
+        ConfigureHud(hud, font, cardTexts, buttonTexts);
         OnboardingFlowController flow = controllerObject.AddComponent<OnboardingFlowController>();
         ConfigureFlow(flow, director, spawner, hud, FindTransform(scene, "Arena"));
         FindTransform(scene, "Ground").gameObject.AddComponent<OnboardingGroundGuide>();
@@ -168,8 +215,8 @@ public static class OnboardingSceneBuilder
         serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
     }
 
-    /// <summary>고정 폰트와 입력 장치별 단계 문구·목표·마우스 이미지를 HUD에 연결한다.</summary>
-    private static void ConfigureHud(OnboardingHud hud, TMP_FontAsset font)
+    /// <summary>font, cardTexts, buttonTexts와 입력 장치별 목표·마우스 이미지를 새 HUD의 Inspector 값으로 저장한다.</summary>
+    private static void ConfigureHud(OnboardingHud hud, TMP_FontAsset font, string[][] cardTexts, string[] buttonTexts)
     {
         SerializedObject serializedHud = new SerializedObject(hud);
         serializedHud.FindProperty("_font").objectReferenceValue = font;
@@ -221,6 +268,8 @@ public static class OnboardingSceneBuilder
             prompt.FindPropertyRelative("_followUpGamepadHint").stringValue = followUpGamepadHints[i];
             prompt.FindPropertyRelative("_followUpNote").stringValue = string.Empty;
             prompt.FindPropertyRelative("_followUpObjective").intValue = followUpObjectives[i];
+            for (int field = 0; field < STAGE_CARD_FIELDS.Length; field++)
+                prompt.FindPropertyRelative(STAGE_CARD_FIELDS[field]).stringValue = cardTexts[i][field];
             SerializedProperty icon = prompt.FindPropertyRelative("_keyboardIcon");
             if (System.Array.IndexOf(rightIconStages, i) >= 0) icon.objectReferenceValue = rightMouse;
             else icon.objectReferenceValue = null;
@@ -232,6 +281,9 @@ public static class OnboardingSceneBuilder
             for (int objectiveIndex = 0; objectiveIndex < objectiveArray.arraySize; objectiveIndex++)
                 objectiveArray.GetArrayElementAtIndex(objectiveIndex).stringValue = objectives[i][objectiveIndex];
         }
+
+        for (int field = 0; field < STAGE_BUTTON_FIELDS.Length; field++)
+            serializedHud.FindProperty(STAGE_BUTTON_FIELDS[field]).stringValue = buttonTexts[field];
 
         serializedHud.FindProperty("_movementWaveTutorialText").stringValue = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\n마우스 좌클릭으로 계속 진행";
         serializedHud.FindProperty("_movementWaveTutorialGamepadText").stringValue = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";

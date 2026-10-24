@@ -47,6 +47,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private const float STAMINA_REGEN_PER_SECOND = 100f;
     private const float STAGE1_FADE_DURATION = 0.5f;
     private const float OPENING_FADE_DURATION = 0.6f;
+    private const float STAGE_CHOICE_DELAY = 1f;
 
     private static int _savedRunStage;
     private static int _restartStage;
@@ -1203,7 +1204,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     /// <summary>
     /// 현재 단계의 중복 완료를 막고 다음 단계 전환을 예약한다.
-    /// 극한 회피 단계의 남은 수리검은 무해화하고 마지막 단계의 수리검은 정리한다.
+    /// 극한 회피 단계의 남은 수리검은 판정이 끝날 때까지 무해화하고 마지막 단계의 수리검은 정리한다.
     /// </summary>
     private void QueueAdvance()
     {
@@ -1220,20 +1221,19 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     /// <summary>
     /// 실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 선택에 따라 단계 반복·다음 단계·첫 막 전환을 진행한다.
-    /// 극한 회피 단계는 수리검을 강조한 뒤 파동과 수리검이 정리될 때까지 기다린다.
+    /// 극한 회피 단계는 남은 수리검을 없애고 첫 성공 설명·파동을 마친 뒤, 완료 선택 카드가 있는 단계에서 1초 기다린다.
     /// </summary>
     private IEnumerator AdvanceAfterResolvedEvent()
     {
         yield return new WaitForEndOfFrame();
         LockTransitionInput();
+        if (_stage == PERFECT_DODGE_STAGE)
+            ClearRangedPractice();
         if (_stage == PERFECT_DODGE_STAGE && !_perfectDodgeTutorialSeen)
         {
             PauseTutorial();
             _hud.ShowTutorial(_hud.PerfectDodgeTutorialText, _hud.PerfectDodgeTutorialGamepadText);
-            if (TryGetVisibleShurikenRenderer(out MeshRenderer shurikenRenderer))
-                _hud.SetTutorialTarget(shurikenRenderer, _viewCamera, new Vector2(24f, 24f));
-            else
-                _hud.ClearTutorialTarget();
+            _hud.ClearTutorialTarget();
             yield return WaitForTutorialClick();
 
             _hud.HideTutorial();
@@ -1241,12 +1241,14 @@ public sealed class OnboardingFlowController : MonoBehaviour
             EndTutorialPause();
             _perfectDodgeTutorialSeen = true;
         }
-        // 다음 단계의 시작 파동이 극한 회피 파동을 덮어쓰지 않고 남은 수리검 연출도 끝나도록 기다린다.
-        while (_stage == PERFECT_DODGE_STAGE && (_perfectPulse.IsRunning || HasLaunchedShurikenInFlight()))
+        // 다음 단계의 시작 파동이 극한 회피 파동을 덮어쓰지 않도록 기다린다.
+        while (_stage == PERFECT_DODGE_STAGE && _perfectPulse.IsRunning)
         {
             if (_restartQueued) yield break;
             yield return null;
         }
+        yield return new WaitForSecondsRealtime(STAGE_CHOICE_DELAY);
+        if (_restartQueued) yield break;
         PauseTutorial();
         _stageChoiceReceived = false;
         _stageChoiceActive = true;
@@ -1300,41 +1302,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         Cursor.lockState = _cursorLockBeforeStageChoice;
         Cursor.visible = _cursorVisibleBeforeStageChoice;
         _stageChoiceOwnsCursor = false;
-    }
-
-    /// <summary>현재 회피 학습 단계에서 발사된 수리검이 아직 비행 중인지 반환한다.</summary>
-    private bool HasLaunchedShurikenInFlight()
-    {
-        DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
-        foreach (DefenseShuriken shuriken in shurikens)
-        {
-            if (shuriken != null && shuriken.gameObject.scene == gameObject.scene && shuriken.IsFlying
-                && _launchedShurikenAttackIds.Contains(shuriken.AttackId)) return true;
-        }
-        return false;
-    }
-
-    /// <summary>현재 씬에서 화면 중앙에 가장 가까운 비행 수리검 본체의 MeshRenderer를 반환한다.</summary>
-    private bool TryGetVisibleShurikenRenderer(out MeshRenderer modelRenderer)
-    {
-        modelRenderer = null;
-        float closestToScreenCenter = float.PositiveInfinity;
-        DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
-        foreach (DefenseShuriken shuriken in shurikens)
-        {
-            if (shuriken == null || shuriken.gameObject.scene != gameObject.scene || !shuriken.IsFlying
-                || !_launchedShurikenAttackIds.Contains(shuriken.AttackId)) continue;
-            MeshRenderer renderer = shuriken.GetComponentInChildren<MeshRenderer>();
-            if (renderer == null || !renderer.enabled) continue;
-            Vector3 viewport = _viewCamera.WorldToViewportPoint(shuriken.transform.position);
-            if (viewport.z <= 0f || viewport.x < 0f || viewport.x > 1f
-                || viewport.y < 0f || viewport.y > 1f) continue;
-            float distance = Vector2.Distance(new Vector2(viewport.x, viewport.y), new Vector2(0.5f, 0.5f));
-            if (distance >= closestToScreenCenter) continue;
-            closestToScreenCenter = distance;
-            modelRenderer = renderer;
-        }
-        return modelRenderer != null;
     }
 
     /// <summary>전환 카드와 재배치가 끝날 때까지 입력을 끄고 현재 입력 허용 상태를 기억한다.</summary>
