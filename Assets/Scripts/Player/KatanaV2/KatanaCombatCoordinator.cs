@@ -350,7 +350,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     {
         if (!isActiveAndEnabled || _player.IsPaused || Time.timeScale <= 0f)
             return Reject(PlayerInputRejectReason.Unavailable, "Attack: input unavailable");
-        if (CanCounterAttack) return RequestCounterAttack();
+        if (CanCounterAttack && !_inPlaceAttackRequested) return RequestCounterAttack();
         if (_parryMotion)
         {
             // 퍼펙트 패링 모션 중 공격은 모션을 끊고 납도 없이 발도 상태에서 바로 시작한다. 시작하지 못하면 모션을 이어간다.
