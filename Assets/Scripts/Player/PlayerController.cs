@@ -42,7 +42,7 @@ public sealed class PlayerController : MonoBehaviour
     [SerializeField, Tooltip("좌클릭 시 화면 중앙의 공개된 적에게 대상 돌진(발도)을 사용합니다. 끄면 항상 제자리 일반 공격을 사용하고 대상 실 표시도 숨깁니다.")]
     private bool _enableTargetedDashAttack = true;
     [SerializeField, Tooltip("대상 돌진을 꺼도 불릿 타임(쳐내기·극한 회피 준비) 중 첫 공격은 실이 연결된 적에게 대상 돌진(발도)을 사용합니다. 대상 실 표시도 이때 연결됩니다.")]
-    private bool _enableBulletTimeDashAttack = true;
+    private bool _enableBulletTimeDashAttack;
     [SerializeField, Tooltip("대상 돌진(발도)으로 움직이는 동안 매 프레임 일반 공격 사거리의 부채꼴로 판정해 경로의 적에게 일반 공격 피해를 한 번씩 줍니다. 도착 베기 대상은 제외합니다.")]
     private bool _sweepDuringTargetedDash = true;
     [SerializeField, Min(0f), Tooltip("대상 돌진 중 휩쓸기 판정 사거리를 일반 공격 사거리의 몇 배로 할지 정합니다. 부채꼴 각도와 근접 반경은 일반 공격과 같습니다.")]
@@ -707,10 +707,10 @@ public sealed class PlayerController : MonoBehaviour
         return TrySelectIaidoTarget(out target, out _, targetedAttack: true, bulletTimeDash: IsBulletTimeDashReady);
     }
 
-    /// <summary>targetId의 생존 적에게 기존 대상 대시를 시작한다. 거리·벽 제한을 검사하고 반격 대시의 수락 여부를 반환한다.</summary>
+    /// <summary>집중 중이 아닐 때 targetId의 생존 적에게 대상 대시를 시작한다. 거리·벽 제한을 검사하고 반격 대시 수락 여부를 반환한다.</summary>
     public bool RequestCounterDashAttack(string targetId)
     {
-        if (_state != PlayerActionState.Free
+        if (_empower.IsReady || _state != PlayerActionState.Free
             || !_combatService.TryGetTarget(targetId, out PlayerCombatTarget target)
             || !target.IsAlive || target.HitCapsule == null
             || Vector3.ProjectOnPlane(target.WorldPosition - transform.position, Vector3.up).magnitude > _motor.IaidoMaxDistance
@@ -1034,7 +1034,7 @@ public sealed class PlayerController : MonoBehaviour
     /// <summary>
     /// 현재 후보 중 화면 조건·거리·돌진 경로를 만족하는 가장 가까운 적을 선택한다.
     /// targetedAttack이 참이면 중앙 화면에 걸친 공개 콜라이더와 대상 돌진 거리로 검사하며,
-    /// _enableTargetedDashAttack가 꺼져 있으면 bulletTimeDash가 참인 불릿 타임 요청에서만 대상 돌진 후보를 찾는다.
+    /// 집중 중에는 대상 돌진을 허용하지 않으며 그 외에는 _enableTargetedDashAttack 설정을 따른다.
     /// 선택 결과를 selected와 perceivedPosition에 담고 성공 여부를 반환한다.
     /// </summary>
     private bool TrySelectIaidoTarget(
@@ -1046,6 +1046,7 @@ public sealed class PlayerController : MonoBehaviour
         selected = default;
         perceivedPosition = Vector3.zero;
 
+        if (targetedAttack && _empower.IsReady) return false;
         if (_combatService == null || _motor == null)
             return false;
         // 대상 돌진을 끄면 불릿 타임 밖의 좌클릭은 제자리 일반 공격으로 이어지고 대상 실 표시도 후보를 잃는다.

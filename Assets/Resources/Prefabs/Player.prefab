@@ -381,7 +381,7 @@ MonoBehaviour:
   _enableChargeAttack: 0
   _minimumChargeTime: 1
   _enableTargetedDashAttack: 0
-  _enableBulletTimeDashAttack: 1
+  _enableBulletTimeDashAttack: 0
   _sweepDuringTargetedDash: 1
   _targetedDashSweepRangeMultiplier: 1.5
   _normalAttackRange: 4.5
@@ -745,7 +745,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _readyDuration: 3
-  _dodgeReadyDuration: 3
+  _dodgeReadyDuration: 1
   _hitStopDuration: 0.08
   _hitStopScale: 0.03
   _perfectParryInvulnerableDuration: 1.5

@@ -6,8 +6,8 @@ using BlindBlade.Combat.Contracts;
 
 /// <summary>
 /// 성공 시 집중, 일섬의 짧은 집중 연출과 거합 자동 차징·공격 수명을 관리한다.
-/// 자원은 PlayerSkillGauge가 보유하며 수동 스킬은 집중 여부와 무관하게 전용 입력으로 시작한다.
-/// 성공 집중 중 좌클릭 발도 돌진이 나가면 돌진 거리 일부까지 불릿 타임을 유지한 뒤 집중을 끝낸다.
+/// 자원은 PlayerSkillGauge가 보유하며 거합은 집중 여부와 무관하게 전용 입력으로 시작한다.
+/// 패링 집중 중 좌클릭은 게이지 소모 없는 일섬을 시작하고 극한 회피 집중에서는 일섬을 막는다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
@@ -27,9 +27,9 @@ public sealed class PlayerEmpower : MonoBehaviour
     private const float CHARGE_SCALE_STEP = 0.001f;
 
     [Header("준비")]
-    [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 시간 제한과 별개입니다.")]
-    private float _readyDuration = 5f;
-    [SerializeField, Range(0.5f, 5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 조건과 별개입니다.")]
+    [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 성공 후 좌클릭 무료 일섬을 사용할 수 있는 집중의 실시간입니다.")]
+    private float _readyDuration = 3f;
+    [SerializeField, Range(0.5f, 5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 대상 돌진과 일섬은 사용할 수 없습니다.")]
     private float _dodgeReadyDuration = 1f;
 
     [Header("히트스톱")]
@@ -144,14 +144,32 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
-    /// 잔량과 현재 행동을 검사해 일섬을 즉시 시작한다. 수락 시 한 칸을 소비하고 첫 집중 시간을 설정하며 성공 여부를 반환한다.
-    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// 이전 Shift 전용 일섬 요청을 거부하고 false를 반환한다.
+    /// 일섬은 패링 집중 중 좌클릭의 TryBeginParrySwordWave 경로에서만 시작한다.
     /// </summary>
     public bool TryBeginSwordWave()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseSwordWave || !_combat.PrepareManualSkill()) return false;
+        return false;
+    }
+
+    /// <summary>
+    /// 패링 집중 중 좌클릭으로 일섬을 요청하고 실제 시작 여부를 반환한다.
+    /// 일섬 게이지를 검사하거나 소비하지 않으며 극한 회피 집중·일섬 연출·거합 차징에서는 시작하지 않는다.
+    /// </summary>
+    public bool TryBeginParrySwordWave()
+    {
+        if (!IsSwordWaveReady || IsSwordWaveFocusing || IsCharging) return false;
+        return BeginSwordWave();
+    }
+
+    /// <summary>
+    /// 현재 행동을 일섬으로 전환하고 집중 연출과 실행 ID를 설정한 뒤 성공 여부를 반환한다.
+    /// 일섬 잔량을 검사하거나 소비하지 않으며 극한 회피 집중에서는 항상 거부한다.
+    /// </summary>
+    private bool BeginSwordWave()
+    {
+        if (IsDodgeReady || !CanBeginManualSkill() || !_combat.PrepareManualSkill()) return false;
         if (!_combat.RequestSwordWaveAttack()) return false;
-        if (!_gauges.TryConsumeSwordWave()) return false;
         if (_active) End(PlayerEmpowerEndReason.SwordWave);
         _active = true;
         _dodgeReady = false;
