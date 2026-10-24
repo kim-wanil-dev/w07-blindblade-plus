@@ -210,7 +210,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 250
+  _maxHealth: 350
   _dieOnAnyHit: 0
   _hitCapsule: {fileID: 2783519461308245103}
   _cancelAttackOnHit: 0
@@ -914,7 +914,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 250
+  _maxHealth: 350
   _dieOnAnyHit: 0
   _hitCapsule: {fileID: 3851094726613045287}
   _cancelAttackOnHit: 0

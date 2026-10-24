@@ -171,7 +171,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 150
+  _maxHealth: 250
   _dieOnAnyHit: 0
   _hitCapsule: {fileID: 4827519306614793318}
   _cancelAttackOnHit: 0

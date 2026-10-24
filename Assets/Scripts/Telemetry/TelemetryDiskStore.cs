@@ -587,14 +587,34 @@ namespace BlindBlade.Telemetry
         internal JArray Records { get; }
         internal string BatchId { get; }
 
-        /// <summary>cursorPath에 endOffset을 저장할 records 배치를 만든다. 사건 키로 재시도 중복을 식별한다.</summary>
+        /// <summary>
+        /// records에서 limit과 byteLimit을 넘지 않는 중요 사건 배치를 복사한다.
+        /// 직렬화 크기를 사용하며 일반 원본 커서를 변경하지 않는 배치 또는 null을 반환한다.
+        /// </summary>
+        internal static UploadBatch CreatePriority(IEnumerable<JObject> records, int limit, int byteLimit)
+        {
+            JArray selected = new JArray();
+            int bytes = 0;
+            foreach (JObject record in records)
+            {
+                int recordBytes = Encoding.UTF8.GetByteCount(record.ToString(Formatting.None)) + 1;
+                if (recordBytes > byteLimit) continue;
+                if (selected.Count >= limit || bytes + recordBytes > byteLimit) break;
+                selected.Add(record.DeepClone());
+                bytes += recordBytes;
+            }
+            return selected.Count == 0 ? null : new UploadBatch(null, 0, selected);
+        }
+
+        /// <summary>records와 cursorPath·endOffset으로 일반 또는 우선 배치를 만든다. 우선 배치는 별도 ID를 사용하고 일반 커서를 갖지 않는다.</summary>
         internal UploadBatch(string cursorPath, long endOffset, JArray records)
         {
             CursorPath = cursorPath;
             EndOffset = endOffset;
             Records = records;
-            BatchId = (string)records[0]["sessionId"] + ":" + (long)records[0]["eventSequence"]
-                + ":" + (long)records[records.Count - 1]["eventSequence"];
+            BatchId = string.IsNullOrEmpty(cursorPath) ? "priority:" + Guid.NewGuid().ToString("N")
+                : (string)records[0]["sessionId"] + ":" + (long)records[0]["eventSequence"]
+                    + ":" + (long)records[records.Count - 1]["eventSequence"];
         }
     }
 }

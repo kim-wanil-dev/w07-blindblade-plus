@@ -7,6 +7,9 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class EnemyHealth : MonoBehaviour, IDamageable
 {
+    private const string SWORD_WAVE_DASH_PATTERN_ID = "PlayerSwordWaveDash";
+    private const string SWORD_WAVE_PATTERN_ID = "DefenseSwordWave";
+
     private static readonly Dictionary<string, EnemyHealth> _targets = new Dictionary<string, EnemyHealth>();
     private static readonly Dictionary<string, int> _spawnGenerations = new Dictionary<string, int>();
 
@@ -122,7 +125,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         return true;
     }
 
-    /// <summary>수락된 피해 context의 플레이어에게 실제 처치와 보스 일반 공격 충전을 지급한다. 공유 체력 묶음의 같은 행동 보상은 한 번만 반영한다.</summary>
+    /// <summary>수락된 피해 context의 플레이어에게 보스 적중 또는 일반 적 처치 보상을 지급한다. 일섬과 일반·대시 공격을 구분하고 공유 체력 보상은 한 번만 반영한다.</summary>
     private void RewardPlayerSkillGauge(DamageContext context)
     {
         if (context.Instigator == null) return;
@@ -137,6 +140,9 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             || GetComponentInParent<TwinBossController>() != null;
         PlayerSwordWaveLauncher wave = gauges.GetComponent<PlayerSwordWaveLauncher>();
         KatanaCombatCoordinator combat = gauges.GetComponent<KatanaCombatCoordinator>();
+        bool swordWaveAttack = wave.IsSkillAction(context.AttackId)
+            || context.PatternId == SWORD_WAVE_DASH_PATTERN_ID
+            || context.PatternId == SWORD_WAVE_PATTERN_ID;
         if (normal && boss && context.AttackId > 0 && !wave.IsSkillAction(context.AttackId)
             && !combat.IsCounterAttack)
         {
@@ -150,7 +156,13 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             }
         }
         // 공유 체력 동기화에서는 이 메서드를 호출하지 않아 처치 보상을 한 번만 지급한다.
-        if (_currentHealth <= 0f) gauges.RewardKill();
+        if (_currentHealth <= 0f && !boss)
+        {
+            if (swordWaveAttack)
+                gauges.RewardUltimateKill();
+            else if (normal && !combat.IsCounterAttack)
+                gauges.RewardKill();
+        }
     }
 
     /// <summary>

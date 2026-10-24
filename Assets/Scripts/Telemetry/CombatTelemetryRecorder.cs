@@ -35,7 +35,6 @@ namespace BlindBlade.Telemetry
 
         private readonly Dictionary<int, JObject> _pendingEnds = new Dictionary<int, JObject>();
         private readonly Dictionary<int, JObject> _pendingContacts = new Dictionary<int, JObject>();
-        private bool _completePending;
         private bool _deathPending;
         private readonly Dictionary<int, JObject> _attacks = new Dictionary<int, JObject>();
         private readonly Dictionary<int, int> _perfectDodgeAttackDodgeIds = new Dictionary<int, int>();
@@ -132,7 +131,7 @@ namespace BlindBlade.Telemetry
                 ["startedKst"] = _stageStartedKst, ["movementIntervalSeconds"] = _movementSampleIntervalSeconds,
                 ["reactionClock"] = "frameRealtime",
                 ["positionSpace"] = "Unity world XZ, metres" });
-            _service.RequestFlush();
+            _service.RequestFlushImmediately();
         }
 
         void Update()
@@ -154,10 +153,9 @@ namespace BlindBlade.Telemetry
             }
             if (_state.State == GameplayState.Cleared)
             {
-                FinishStage("final_clear");
+                FinishGame();
                 return;
             }
-            if (_completePending) { FinishStage("cleared"); return; }
             if (_state.State != GameplayState.Playing) return;
             double now = Time.realtimeSinceStartupAsDouble;
             if (now >= _nextMovement)
@@ -211,7 +209,6 @@ namespace BlindBlade.Telemetry
             _reactionStartTimes.Clear();
             _pendingEnds.Clear();
             _pendingContacts.Clear();
-            _completePending = false;
             _deathPending = false;
             _inputs.Clear();
             _attempts.Clear();
@@ -225,7 +222,7 @@ namespace BlindBlade.Telemetry
             _reactionCount = 0;
             Record("stage_started", Summary("started"));
             RecordStageConfiguration();
-            _service.RequestFlush();
+            _service.RequestFlushImmediately();
         }
 
         /// <summary>현재 stage와 연결된 Inspector 값을 stage_config 사건으로 저장한다.</summary>
@@ -263,6 +260,21 @@ namespace BlindBlade.Telemetry
             Record("stage_ended", Summary(reason));
             _stageClosed = true;
             _service.RequestFlushImmediately();
+        }
+
+        /// <summary>
+        /// 현재 도전의 게임 클리어 사실과 최종 요약을 한 번 기록하고 즉시 전송을 요청한다.
+        /// 현재 구간과 KST 시각을 사용하며 gameCompleted 상태와 구간 종료 상태를 변경한다.
+        /// </summary>
+        private void FinishGame()
+        {
+            if (_closed || _stageClosed) return;
+            _counts["gameCompleted"] = true;
+            _counts["gameCompletedOccurredAtKst"] = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
+            Record("game_completed", new JObject { ["stageId"] = _stageId,
+                ["stageAttemptId"] = _attemptSessionId, ["runId"] = _runId,
+                ["gameCompletedOccurredAtKst"] = _counts["gameCompletedOccurredAtKst"] });
+            FinishStage("final_clear");
         }
 
         /// <summary>현재 위치와 직전 표본 이후 실제 플레이 시간을 기록하고 표본 기준 시각을 갱신한다.</summary>
@@ -311,7 +323,13 @@ namespace BlindBlade.Telemetry
                 BeginStage(next);
                 return;
             }
-            if (type == "stage_complete") { _completePending = true; return; }
+            if (type == "stage_complete")
+            {
+                if ((string)data["stageId"] != _stageId) return;
+                if (data.Value<bool?>("gameCompleted") == true) FinishGame();
+                else FinishStage("cleared");
+                return;
+            }
             if (type == "stage_config" || type == "enemy_spawned" || type == "enemy_defeated"
                 || type == "enemy_despawned" || type == "player_skill_activated" || type.StartsWith("boss_"))
             {
@@ -554,7 +572,6 @@ namespace BlindBlade.Telemetry
             if (_stageClosed) return;
             _counts["deaths"] = 1;
             _deathPending = true;
-            _completePending = false;
             Record("player_died", new JObject { ["position"] = TelemetryJson.Position(health.transform.position) });
             _service.RequestFlushImmediately();
         }
@@ -562,22 +579,20 @@ namespace BlindBlade.Telemetry
         /// <summary>게임 상태 변경 때 마지막 위치 표본을 닫고 일시정지 진입 시 로그 저장·전송을 앞당긴다.</summary>
         private void HandleState(GameplayState state)
         {
-            if (_stageClosed) return;
-            RecordMovement();
             if (state == GameplayState.Paused)
             {
+                if (!_stageClosed)
+                {
+                    RecordMovement();
+                    Record("stage_summary", Summary("in_progress"));
+                }
                 _service.RequestFlushImmediately();
                 return;
             }
+            if (_stageClosed) return;
+            RecordMovement();
             if (state == GameplayState.Cleared)
-            {
-                _counts["gameCompleted"] = true;
-                _counts["gameCompletedOccurredAtKst"] = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());
-                Record("game_completed", new JObject { ["stageId"] = _stageId,
-                    ["stageAttemptId"] = _attemptSessionId, ["runId"] = _runId,
-                    ["gameCompletedOccurredAtKst"] = _counts["gameCompletedOccurredAtKst"] });
-                FinishStage("final_clear");
-            }
+                FinishGame();
         }
 
         /// <summary>일반 적 처치 사건을 현재 구간의 kills에 더한다.</summary>
