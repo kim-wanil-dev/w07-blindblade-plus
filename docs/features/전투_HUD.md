@@ -4,6 +4,24 @@
 
 ### 전투 HUD
 
+#### Beast 발소리 인디케이터 화면 판정 보정 (2026-10-25)
+
+- 원인: 실제 Beast 발걸음과 HUD 연결은 정상이었지만, 기존 공급자는 적 아래 모든 Renderer의 Bounds를 화면 진입 판단에 포함했다. `WolfEyeGlint` 파티클의 약 5m 범위가 카메라에 걸리면서 뒤에 있는 Beast도 `IsInCamera=true`가 되고 방향 UI가 숨겨졌다. 연기·궤적도 같은 오판을 일으킬 수 있었다.
+- 수정: 공통 `EnemyFootstepVisibility.IsInCamera`가 활성 `EnemyHitCapsule`이 있으면 그 몸체 경계를 사용하고, 없으면 메시·스킨 메시와 발행자 위치로 판정한다. ParticleSystemRenderer·LineRenderer·TrailRenderer는 제외한다. 기본 공급자와 실제 적의 C 발소리 후보가 이 판정을 공유하며 몸체 참조는 사건 생성 시 캐시한다. C 전용 미리보기 대상은 기존 대상 분류를 유지한다.
+- 1스테이지 점검: BambooStage1의 HUD는 같은 씬 DefenseDirector 공급자와 연결돼 있고 표시 옵션이 켜져 있으며 마커는 24개다. 일반·Beast 프리팹 모두 기존 발걸음 컴포넌트를 유지하며, 메시 fallback도 지원한다. 1스테이지 역시 공통 판정을 사용해 이펙트로 인한 표시 누락을 방지한다. 1스테이지 실제 Play는 이번 확인 범위에서 수행하지 않았다.
+- 검증: 수정 전 2-1에서 Beast의 발 접촉 구독과 발소리 사건은 정상인데, 화면 밖 적의 눈 섬광 Bounds가 화면에 걸려 UI가 꺼지는 것을 재현했다. 수정 후 실제 2-1 Play에서 Beast 발걸음 39개 중 화면 밖 19개가 마커 19개로 표시됐다. 이 19개는 파티클 범위가 화면에 걸린 상태였으므로 기존 방식에서는 숨겨지는 대상이었다. 최종 Unity 재컴파일 오류 0건·경고 0건. 테스트 코드는 저장소에 추가하지 않았다.
+- 연결 및 범위: 스폰 가중치 문제는 사용자 요청으로 이번 수정에서 제외했다. 스폰 설정·스폰 선택 코드는 변경하지 않았고, 열려 있던 RainyTwinBoss의 미저장 변경을 저장하거나 되돌리지 않았다. Play 확인용 진행도·실행 ID·백그라운드 실행 설정은 복원했다.
+- 관련 코드: `Assets/Scripts/Rendering/EnemyFootstepVisibility.cs`, `Assets/Scripts/Defense/CombatThreatPresentationProvider.cs`의 `ActiveFootstep`·`HandleFootstep`·`CreateSnapshot`, `Assets/Scripts/Rendering/EnemyFootstepCandidates.cs`의 `Candidate`·`IsInCamera`.
+
+#### 2-1 적 발소리 인디케이터 연결 복구 (2026-10-25)
+
+- 원인: 공용 `BambooDefenseHud.prefab`의 `CombatFootstepHud._provider`는 씬 공급자를 직접 저장할 수 없어 비어 있다. `BambooStage1`은 씬 인스턴스에 `DefenseDirector/CombatThreatPresentationProvider` 참조를 저장했지만 `RainyTwinBoss`의 2-1 HUD에는 해당 참조가 누락됐다. 공급자의 `Show Enemy Indicators=true`와 24개 마커가 있어도 HUD가 발걸음 사건을 구독하지 않아 표시되지 않았다.
+- 수정: `Assets/Scenes/Defense/RainyTwinBoss.unity`의 `FootstepMarkers/CombatFootstepHud.Provider`를 같은 씬 `DefenseDirector`의 공급자에 연결하고 저장했다.
+- 재발 방지: `CombatFootstepHud`가 켜질 때 참조가 없거나 다른 씬을 가리키면 같은 씬의 활성 공급자를 찾아 구독한다. 뒤늦게 생성된 공급자는 0.5초 간격으로 재시도하고, 연결되면 검색을 멈춘다. 실제 구독한 공급자를 별도로 보관해 참조 변경·재활성화 시 이전 구독과 마커를 정리하고 현재 스냅샷을 적용한다. 전역 검색 대신 현재 씬 루트와 재사용 목록을 사용한다.
+- Inspector: 씬의 `DefenseDirector > CombatThreatPresentationProvider > 적 방향 인디케이터 표시`에서 표시를 켜고 끈다. HUD 쪽 참조는 `BambooDefenseHud > FootstepMarkers > CombatFootstepHud > Provider`다. 지면 발자국의 스포너 설정과는 별개의 화면 밖 적 방향 UI 설정이다.
+- 검증: Unity 재컴파일 오류 0건·경고 0건. 실제 2-1 Play에서 프레임 진행과 생존 상태를 확인하고, 자연 발걸음 스냅샷 6개·표시 대상 2개·마커 2개를 관찰했다. HUD를 끄고 Provider 참조를 비운 뒤 다시 켜도 같은 씬 공급자에 자동 연결됐다. 표시 옵션을 끄면 스냅샷·마커 0개, 다시 켜면 발걸음 59개·표시 대상 25개 중 기존 마커 풀 한도인 24개를 표시했다. 테스트 코드는 저장소에 추가하지 않았다. 종료 후 진행도 PlayerPrefs와 백그라운드 실행 설정을 복원하고 원래 2-1 씬의 Edit Mode로 돌아왔다.
+- 관련 코드: `Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs` / `TrySubscribeProvider`, `FindSceneProvider`, `OnEnable`, `LateUpdate`, `OnDisable`; 관련 계약은 [발소리 후보](발소리_후보.md)를 따른다.
+
 #### 일섬 게이지 비활성화 (2026-10-24)
 
 - 공용 `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`의 `PerfectParryTokens` 오브젝트를 비활성화했다. 실행 중 토글이 아니라 프리팹의 기본 활성 상태를 껐으므로 세 칸 일섬 게이지와 자식 액체 표현이 생성·표시되지 않는다. 거합 원형 게이지는 유지한다.

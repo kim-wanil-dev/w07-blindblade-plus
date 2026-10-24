@@ -10,8 +10,11 @@ namespace BlindBlade.UI.CombatHud
     [DisallowMultipleComponent]
     public sealed class CombatFootstepHud : MonoBehaviour
     {
+        private const float PROVIDER_RESOLVE_INTERVAL = 0.5f;
+
         [Header("공급자와 이미지 연결")]
-        [SerializeField] private CombatThreatPresentationProvider _provider;
+        [SerializeField, Tooltip("발소리 표시 공급자. 비어 있거나 다른 씬을 가리키면 현재 HUD와 같은 씬의 활성 공급자를 자동으로 연결한다.")]
+        private CombatThreatPresentationProvider _provider;
         [SerializeField] private CombatFootstepMarker[] _markers;
         [SerializeField] private RectTransform _container;
 
@@ -25,7 +28,11 @@ namespace BlindBlade.UI.CombatHud
         private bool[] _used;
         private CombatSessionKey _session;
         private bool _hasSession;
-        private bool _subscribed;
+        private CombatThreatPresentationProvider _subscribedProvider;
+        private float _nextProviderResolveTime;
+        private readonly List<GameObject> _sceneRoots = new List<GameObject>();
+        private readonly List<CombatThreatPresentationProvider> _providerCandidates =
+            new List<CombatThreatPresentationProvider>();
 
         private readonly struct FootstepVersion
         {
@@ -49,16 +56,13 @@ namespace BlindBlade.UI.CombatHud
 
         void OnEnable()
         {
-            if (_provider == null)
-                return;
-            _provider.FootstepChanged += HandleFootstep;
-            _subscribed = true;
-            foreach (FootstepPresentationSnapshot snapshot in _provider.GetCurrentFootsteps())
-                HandleFootstep(snapshot);
+            _nextProviderResolveTime = 0f;
+            TrySubscribeProvider();
         }
 
         void LateUpdate()
         {
+            TrySubscribeProvider();
             if (_provider != null && !_provider.ShowEnemyIndicators)
             {
                 if (_slots.Count > 0 || _revisions.Count > 0 || _hasSession)
@@ -74,10 +78,56 @@ namespace BlindBlade.UI.CombatHud
 
         void OnDisable()
         {
-            if (_subscribed && _provider != null)
-                _provider.FootstepChanged -= HandleFootstep;
-            _subscribed = false;
+            if (_subscribedProvider != null)
+                _subscribedProvider.FootstepChanged -= HandleFootstep;
+            _subscribedProvider = null;
             ClearMarkers();
+        }
+
+        /// <summary>
+        /// 현재 HUD와 같은 씬의 공급자를 연결하고 기존 발소리 스냅샷을 적용한다.
+        /// 공급자 참조가 바뀌면 이전 구독·마커를 정리하고, 참조가 없으면 0.5초 간격으로 다시 찾는다.
+        /// </summary>
+        private void TrySubscribeProvider()
+        {
+            if (_provider != null && _provider.gameObject.scene != gameObject.scene)
+                _provider = null;
+            if (_provider == null && Time.unscaledTime >= _nextProviderResolveTime)
+            {
+                _nextProviderResolveTime = Time.unscaledTime + PROVIDER_RESOLVE_INTERVAL;
+                _provider = FindSceneProvider();
+            }
+            if (_provider != null && _subscribedProvider == _provider) return;
+
+            if (_subscribedProvider != null)
+                _subscribedProvider.FootstepChanged -= HandleFootstep;
+            _subscribedProvider = null;
+            if (_slots.Count > 0 || _revisions.Count > 0 || _hasSession)
+                ClearMarkers();
+            if (_provider == null) return;
+
+            _subscribedProvider = _provider;
+            _subscribedProvider.FootstepChanged += HandleFootstep;
+            foreach (FootstepPresentationSnapshot snapshot in _subscribedProvider.GetCurrentFootsteps())
+                HandleFootstep(snapshot);
+        }
+
+        /// <summary>
+        /// 현재 HUD의 씬 루트만 순회하여 활성 발소리 공급자를 반환하고 없으면 null을 반환한다.
+        /// 재사용 목록으로 다른 씬의 공급자 혼용과 조회마다 발생하는 배열 할당을 피한다.
+        /// </summary>
+        private CombatThreatPresentationProvider FindSceneProvider()
+        {
+            _sceneRoots.Clear();
+            gameObject.scene.GetRootGameObjects(_sceneRoots);
+            foreach (GameObject root in _sceneRoots)
+            {
+                _providerCandidates.Clear();
+                root.GetComponentsInChildren(true, _providerCandidates);
+                foreach (CombatThreatPresentationProvider candidate in _providerCandidates)
+                    if (candidate.isActiveAndEnabled) return candidate;
+            }
+            return null;
         }
 
         /// <summary>snapshot의 발행자·걸음 순번·revision으로 최신 사건만 받아 적별 마커를 갱신하거나 반환한다. 빈 슬롯이 없으면 생략한다.</summary>

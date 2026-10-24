@@ -78,15 +78,17 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         public double ExpiresAt { get; }
         public EnemyHealth Emitter { get; }
         public Renderer[] Renderers { get; }
+        public EnemyHitCapsule BodyCapsule { get; }
 
-        /// <summary>snapshot·만료 시각·emitter와 외형 renderers를 보관해 발소리 수명과 화면 진입을 판정한다.</summary>
+        /// <summary>snapshot·만료 시각·emitter·외형 renderers·bodyCapsule을 보관해 발소리 수명과 몸체의 화면 진입을 판정한다.</summary>
         public ActiveFootstep(FootstepPresentationSnapshot snapshot, double expiresAt, EnemyHealth emitter,
-            Renderer[] renderers)
+            Renderer[] renderers, EnemyHitCapsule bodyCapsule)
         {
             Snapshot = snapshot;
             ExpiresAt = expiresAt;
             Emitter = emitter;
             Renderers = renderers;
+            BodyCapsule = bodyCapsule;
         }
     }
 
@@ -356,11 +358,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             float fade = _footstepFadeDuration > 0f
                 ? Mathf.Clamp01((float)(activeFootstep.ExpiresAt - now) / _footstepFadeDuration) : 1f;
             ThreatPresentationSnapshot presentation = CreateSnapshot(previous.Presentation.Target,
-                activeFootstep.Emitter.transform.position, true, true, fade, activeFootstep.Renderers);
+                activeFootstep.Emitter.transform.position, true, true, fade, activeFootstep.Renderers,
+                activeFootstep.BodyCapsule);
             FootstepPresentationSnapshot updated = new FootstepPresentationSnapshot(
                 previous.EventIdentity, previous.Emitter, previous.Origin, previous.OccurredAt, presentation);
             _activeFootsteps[i] = new ActiveFootstep(updated, activeFootstep.ExpiresAt,
-                activeFootstep.Emitter, activeFootstep.Renderers);
+                activeFootstep.Emitter, activeFootstep.Renderers, activeFootstep.BodyCapsule);
         }
         _currentFootsteps.Clear();
         foreach (ActiveFootstep footstep in _activeFootsteps)
@@ -401,12 +404,14 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         int activeIndex = FindActiveFootstep(health);
         Renderer[] renderers = activeIndex >= 0
             ? _activeFootsteps[activeIndex].Renderers : health.GetComponentsInChildren<Renderer>();
+        EnemyHitCapsule bodyCapsule = activeIndex >= 0
+            ? _activeFootsteps[activeIndex].BodyCapsule : health.GetComponent<EnemyHitCapsule>();
         ThreatPresentationSnapshot presentation = CreateSnapshot(pulseTarget, health.transform.position,
-            true, true, 1f, renderers);
+            true, true, 1f, renderers, bodyCapsule);
         FootstepPresentationSnapshot snapshot = new FootstepPresentationSnapshot(
             identity, emitter, position, timestamp, presentation);
         ActiveFootstep activeFootstep = new ActiveFootstep(snapshot,
-            Time.realtimeSinceStartupAsDouble + _footstepLifetime, health, renderers);
+            Time.realtimeSinceStartupAsDouble + _footstepLifetime, health, renderers, bodyCapsule);
         if (activeIndex < 0)
         {
             _activeFootsteps.Add(activeFootstep);
@@ -484,7 +489,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     /// <summary>position·활성/자격·alphaMultiplier와 발소리 외형을 읽어 화면 진입·플레이어 기준 방향의 표시 결과를 반환한다.</summary>
     private ThreatPresentationSnapshot CreateSnapshot(
         CombatEntityKey target, Vector3 position, bool isActive, bool isEligible,
-        float alphaMultiplier = 1f, Renderer[] footstepRenderers = null)
+        float alphaMultiplier = 1f, Renderer[] footstepRenderers = null, EnemyHitCapsule bodyCapsule = null)
     {
         float visibility = _perceptionMask.GetVisibility(position);
         Vector3 viewport = _playerCamera.WorldToViewportPoint(position);
@@ -497,15 +502,8 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
                 GeometryUtility.CalculateFrustumPlanes(_playerCamera, _cameraPlanes);
                 _cameraPlanesFrame = Time.frameCount;
             }
-            foreach (Renderer renderer in footstepRenderers)
-            {
-                if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy
-                    && GeometryUtility.TestPlanesAABB(_cameraPlanes, renderer.bounds))
-                {
-                    inCamera = true;
-                    break;
-                }
-            }
+            inCamera = BlindBlade.Perception.EnemyFootstepVisibility.IsInCamera(
+                bodyCapsule, footstepRenderers, _cameraPlanes, inCamera);
         }
         bool worldVisible = visibility > _visibilityThreshold && inCamera;
         Quaternion viewYaw = Quaternion.Euler(0f, _playerCamera.transform.eulerAngles.y, 0f);

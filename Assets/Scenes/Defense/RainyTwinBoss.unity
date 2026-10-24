@@ -52312,6 +52312,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1968806060}
     m_Modifications:
+    - target: {fileID: 1012769593652945470, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: _provider
+      value: 
+      objectReference: {fileID: 1968806063}
     - target: {fileID: 1473519880545102016, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -56661,10 +56665,10 @@ MonoBehaviour:
   _beastDeathSound: 47
   _weightBlendStartSpawnCount: 0
   _weightBlendEndSpawnCount: 100
-  _meleeWeightAtStart: 0.7
-  _beastWeightAtStart: 0.3
-  _meleeWeightAtEnd: 0.3
-  _beastWeightAtEnd: 0.7
+  _meleeWeightAtStart: 0.3
+  _beastWeightAtStart: 0.7
+  _meleeWeightAtEnd: 0.7
+  _beastWeightAtEnd: 0.3
 --- !u!114 &1968806063
 MonoBehaviour:
   m_ObjectHideFlags: 0

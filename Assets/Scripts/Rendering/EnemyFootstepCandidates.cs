@@ -43,6 +43,7 @@ namespace BlindBlade.Perception
             public float Lifetime { get; set; }
             public float FadeDuration { get; set; }
             public Renderer[] Renderers { get; set; }
+            public EnemyHitCapsule BodyCapsule { get; set; }
             public FootstepPresentationSnapshot Snapshot { get; set; }
         }
 
@@ -148,7 +149,9 @@ namespace BlindBlade.Perception
                 Lifetime = settings.FootstepLifetime,
                 FadeDuration = Mathf.Min(settings.FootstepFadeDuration, settings.FootstepLifetime),
                 Renderers = previous != null && previous.EmitterTransform == emitterTransform
-                    ? previous.Renderers : emitterTransform.GetComponentsInChildren<Renderer>()
+                    ? previous.Renderers : emitterTransform.GetComponentsInChildren<Renderer>(),
+                BodyCapsule = previous != null && previous.EmitterTransform == emitterTransform
+                    ? previous.BodyCapsule : emitterTransform.GetComponent<EnemyHitCapsule>()
             };
             _candidates[key] = candidate;
             RefreshNow();
@@ -205,16 +208,16 @@ namespace BlindBlade.Perception
                 && entityId == candidate.Emitter.EntityId;
         }
 
-        /// <summary>candidate의 C 대상 화면 분류 또는 원본 모델 Bounds와 카메라 교차 여부를 반환한다.</summary>
+        /// <summary>candidate의 몸체·메시·발행자 위치로 화면 진입을 반환하며 실제 적이 아닌 C 전용 대상만 기존 분류를 사용한다.</summary>
         private bool IsInCamera(Candidate candidate)
         {
-            if (candidate.Target != null && candidate.Target.Resolver == _resolver)
+            if (!candidate.UsesHealth && candidate.Target != null && candidate.Target.Resolver == _resolver)
                 return candidate.Target.Snapshot.IsInCamera;
-            foreach (Renderer renderer in candidate.Renderers)
-                if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy
-                    && GeometryUtility.TestPlanesAABB(_cameraPlanes, renderer.bounds))
-                    return true;
-            return false;
+            Vector3 viewport = _resolver.ViewCamera.WorldToViewportPoint(candidate.EmitterTransform.position);
+            bool pointInCamera = viewport.z > 0f && viewport.x >= 0f && viewport.x <= 1f
+                && viewport.y >= 0f && viewport.y <= 1f;
+            return EnemyFootstepVisibility.IsInCamera(candidate.BodyCapsule, candidate.Renderers,
+                _cameraPlanes, pointInCamera);
         }
 
         /// <summary>C 대상의 실제 표시 요청을 반환한다. 미연결 기존 적은 현재 감각 마스크와 inCamera로 월드 표시를 확인한다.</summary>
