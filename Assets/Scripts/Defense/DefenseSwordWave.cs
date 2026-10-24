@@ -21,11 +21,12 @@ public sealed class DefenseSwordWave : MonoBehaviour
     private float _damage;
     [SerializeField, Tooltip("켜면 슬로모션과 상관없이 실시간으로 날아간다. 일시정지 중에는 멈춘다. 끄면 기존처럼 게임 시간이다.")]
     private bool _unscaledTime;
-    private readonly RaycastHit[] _hits = new RaycastHit[32];
+    private readonly List<EnemyCapsuleHit> _hits = new List<EnemyCapsuleHit>();
     private readonly HashSet<EnemyHealth> _struck = new HashSet<EnemyHealth>();
     private readonly HashSet<EnemyHealth> _blocked = new HashSet<EnemyHealth>();
     private SharedDamageHitTracker _hitTracker;
     private GameObject _owner;
+    private int _attackId;
     private Vector3 _direction;
     private float _travelled;
     private bool _flying;
@@ -76,6 +77,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
 
     void OnDestroy()
     {
+        MultiKillAttackRuntime.CompleteAttack(_attackId);
         Destroy(_mesh);
     }
 
@@ -116,8 +118,16 @@ public sealed class DefenseSwordWave : MonoBehaviour
     /// </summary>
     internal void Launch(GameObject owner, Vector3 origin, Vector3 direction, SharedDamageHitTracker hitTracker)
     {
+        Launch(owner, origin, direction, hitTracker, 0);
+    }
+
+    /// <summary>owner의 검기를 origin에서 발사하고 hitTracker와 attackId를 비행 중 지연 처치까지 유지한다.</summary>
+    internal void Launch(GameObject owner, Vector3 origin, Vector3 direction,
+        SharedDamageHitTracker hitTracker, int attackId)
+    {
         _hitTracker = hitTracker;
         _owner = owner;
+        _attackId = attackId;
         _direction = direction.normalized;
         _travelled = 0f;
         transform.SetPositionAndRotation(origin, Quaternion.LookRotation(_direction));
@@ -137,15 +147,17 @@ public sealed class DefenseSwordWave : MonoBehaviour
         EnemyProjectile.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
         TwinBossProjectile.ReleaseInSweep(transform.position, transform.position + _direction * step, _hitRadius);
 
-        int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits,
-            step, _hitMask, QueryTriggerInteraction.Ignore);
-        for (int i = 0; i < count; i++)
+        // 피해로 적이 비활성화되면 활성 캡슐 목록이 바뀌므로 접촉을 먼저 모두 모은 뒤 피해를 준다.
+        EnemyHitCapsule.SweepAll(transform.position, transform.position, _hitRadius, _direction,
+            step, _hitMask, _hits);
+        foreach (EnemyCapsuleHit hit in _hits)
         {
-            EnemyHealth enemy = _hits[i].collider.GetComponentInParent<EnemyHealth>();
+            EnemyHealth enemy = hit.Capsule.Health;
             if (enemy == null || !enemy.IsAlive) continue;
-            Vector3 point = _hits[i].distance > 0f ? _hits[i].point : _hits[i].collider.ClosestPoint(transform.position);
+            Vector3 point = hit.Distance > 0f ? hit.Point : hit.Capsule.ClosestPoint(transform.position);
             float amount = _damage > 0f ? _damage : Mathf.Max(enemy.CurrentHealth, 1f);
-            _hitTracker.ProcessHit(enemy, new DamageContext(amount, _owner, point, _direction, PATTERN_ID));
+            _hitTracker.ProcessHit(enemy, new DamageContext(amount, _owner, point, _direction,
+                PATTERN_ID, _attackId, 0, BlindBlade.Combat.Contracts.IncomingAttackKind.Unknown));
         }
     }
 

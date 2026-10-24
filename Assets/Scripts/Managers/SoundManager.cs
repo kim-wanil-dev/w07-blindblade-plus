@@ -1069,6 +1069,7 @@ public class SoundManager
     /// <summary>
     /// source에 FMOD 이벤트를 연결하고, Rigidbody 또는 Transform에서 얻은 속도를 전달한다.
     /// instance와 source를 입력받으며, 연결된 이벤트의 3D 속성 갱신을 FMOD에 맡긴다.
+    /// Rigidbody를 없앤 NavMesh 이동 적 루트는 기존 키네마틱 Rigidbody처럼 속도 0을 유지한다.
     /// </summary>
     private void AttachInstanceWithVelocity(FMOD.Studio.EventInstance instance, GameObject source)
     {
@@ -1079,7 +1080,7 @@ public class SoundManager
             return;
         }
 
-        RuntimeManager.AttachInstanceToGameObject(instance, source, true);
+        RuntimeManager.AttachInstanceToGameObject(instance, source, source.GetComponent<EnemyMotor>() == null);
     }
 
     /// <summary>

@@ -67,6 +67,7 @@ GameObject:
   - component: {fileID: 2277485912429586605}
   - component: {fileID: 5109041760811172805}
   - component: {fileID: 6529499087085923373}
+  - component: {fileID: 4827519306614793318}
   - component: {fileID: 6906976076280903024}
   - component: {fileID: 4283722663164136279}
   - component: {fileID: 7885862450644974965}
@@ -172,7 +173,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _maxHealth: 250
   _dieOnAnyHit: 0
-  _hitCollider: {fileID: 6529499087085923373}
+  _hitCapsule: {fileID: 4827519306614793318}
   _cancelAttackOnHit: 0
   _dashTargetable: 1
   _hitRecovery: 0.16
@@ -202,6 +203,24 @@ CapsuleCollider:
   m_Height: 2
   m_Direction: 1
   m_Center: {x: 0, y: 1, z: 0}
+--- !u!114 &4827519306614793318
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1251805882621175175}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe1549398884f45b69f24870baeda42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _center: {x: 0, y: 0, z: 0}
+  _radius: 0.5
+  _height: 2
+  _direction: 1
+  _blocksPlayer: 0
+  _bodyCollider: {fileID: 6529499087085923373}
 --- !u!54 &6906976076280903024
 Rigidbody:
   m_ObjectHideFlags: 0

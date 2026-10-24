@@ -42,29 +42,24 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 459261498809069850}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
---- !u!136 &7002509349255642647
-CapsuleCollider:
+--- !u!114 &7002509349255642647
+MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 459261498809069850}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 2
-  m_Radius: 0.5
-  m_Height: 2
-  m_Direction: 1
-  m_Center: {x: 0, y: 0, z: 0}
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe1549398884f45b69f24870baeda42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _center: {x: 0, y: 0, z: 0}
+  _radius: 0.5
+  _height: 2
+  _direction: 1
+  _blocksPlayer: 1
+  _bodyCollider: {fileID: 0}
 --- !u!23 &5473276660778638394
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -349,7 +344,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _maxHealth: 10
   _dieOnAnyHit: 0
-  _hitCollider: {fileID: 7002509349255642647}
+  _hitCapsule: {fileID: 7002509349255642647}
   _cancelAttackOnHit: 0
   _hitRecovery: 0.16
   _hitInterruptCooldown: 0.45

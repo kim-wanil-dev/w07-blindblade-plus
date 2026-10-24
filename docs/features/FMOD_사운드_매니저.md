@@ -1,5 +1,10 @@
 ### FMOD 사운드 매니저
 
+#### Rigidbody 없는 적의 도플러 속도 유지 (2026-10-24)
+
+- 잡몹 루트의 키네마틱 Rigidbody를 [적 피격 캡슐](적_피격_캡슐.md) 전환으로 제거했다. 기존에는 부착 재생이 NavMeshAgent가 Transform으로 옮기는 키네마틱 Rigidbody의 속도(0)를 FMOD에 넘겼다.
+- `AttachInstanceWithVelocity`는 Rigidbody가 없고 `EnemyMotor`가 있는 발음체에 Transform 기반 속도를 쓰지 않아 기존처럼 속도 0을 유지한다. Rigidbody가 남은 보스와 그 외 발음체는 기존 규칙 그대로다.
+
 #### Rainy Stage 적 물 발소리의 플레이어 이벤트 공유 (2026-10-18)
 
 - 활성 `RainyStageAudio.UseWaterFootsteps`가 참이면 일반 `EnemyFootsteps`, `TwinBossFootsteps`, `BeastBossAudio`, `BossPresentation`은 `EnemyWaterFootstep=49`를 재생한다. 이 ID는 플레이어 `RainFootstep=42`와 동일한 `event:/Footsteps/Footsteps_Water_Light` 이벤트 GUID와 0.65 음량 배율을 사용한다. 적 ID의 청각 거리 분류는 유지한다.
@@ -331,7 +336,7 @@ Stairwell의 비어 있던 PlayerController.Combat Service Source와 EnemyCombat
 | PlayerController.FootstepEmitted | GameSceneInitializer.HandlePlayerFootstep | 실제 발 접촉에 PlayerFootstepEvent.NoiseStrength로 Footstep을 플레이어에 부착 재생 |
 | FootstepEmitter.OnFootstepEmitted | 기존 EnemyFootsteps | 실제 적 발 접촉 위치에 EnemySoundSettings의 EnemyFootstep을 재생 |
 | PlayerController.ActionEvent | PlayerCombatAudio.HandleAction | 일반 공격 시작에 A/B 선택, 발도 베기 시작에 C 선택, 미충돌 결과에 스윙 요청 |
-| EnemyCombatService.AttackContactResolved | PlayerCombatAudio.HandleContact | 피해 판정 완료 후 PlayerAttackRequest, Collider, Vector3 point, bool enemyDamaged 전달. Collider=null은 스윙, 일반 접촉은 임시 충돌음, 실제 적 피해는 EnemyDamageAudio에 위임 |
+| EnemyCombatService.AttackContactResolved | PlayerCombatAudio.HandleContact | 피해 판정 완료 후 PlayerAttackRequest, bool hasContact, Vector3 point, bool enemyDamaged 전달(2026-10-24 Collider에서 변경). 접촉 없음은 스윙, 일반 접촉은 임시 충돌음, 실제 적 피해는 EnemyDamageAudio에 위임 |
 | EnemyHealth.Damaged | EnemyDamageAudio.HandleDamage | DamageContext의 플레이어 Instigator와 실제 Point로 피격음 재생 |
 | KatanaCombatCoordinator.EventRaised | PlayerCombatAudio.HandleKatana | 납도 상태의 일반 공격/쳐내기 또는 발도 베기 시작에 검 뽑기 소리 |
 | KatanaCombatCoordinator.ParrySucceeded | PlayerCombatAudio.HandleParry | 실제 쳐내기 접촉 Point에 임시 충돌음 |

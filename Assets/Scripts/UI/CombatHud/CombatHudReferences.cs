@@ -11,6 +11,8 @@ namespace BlindBlade.UI.CombatHud
         [Header("기존 표시 연결")]
         [SerializeField] private TextMeshProUGUI _recordText;
         [SerializeField] private DefenseDirectionMarker[] _directionMarkers;
+        [SerializeField] private TextMeshProUGUI _multiKillLatestText;
+        [SerializeField] private TextMeshProUGUI _multiKillPreviousText;
 
         [Header("전투 HUD 연결")]
         [SerializeField] private CombatPlayerHud _playerHud;
@@ -18,6 +20,8 @@ namespace BlindBlade.UI.CombatHud
 
         public TextMeshProUGUI RecordText => _recordText;
         public DefenseDirectionMarker[] DirectionMarkers => _directionMarkers;
+        public TextMeshProUGUI MultiKillLatestText => _multiKillLatestText;
+        public TextMeshProUGUI MultiKillPreviousText => _multiKillPreviousText;
         public CombatPlayerHud PlayerHud => _playerHud;
         public CombatFootstepHud FootstepHud => _footstepHud;
     }

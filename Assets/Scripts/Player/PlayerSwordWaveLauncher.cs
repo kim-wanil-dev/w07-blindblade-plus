@@ -44,7 +44,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private float _dashStartDelay = 0.08f;
     [SerializeField, Tooltip("돌진 중 몸 판정이 검사하는 레이어. 적이 아닌 접촉은 무시한다. 반경과 피해는 검기 프리팹 값을 쓴다.")]
     private LayerMask _dashHitMask = ~(1 << BambooGrove.DEBRIS_LAYER);
-    private readonly RaycastHit[] _dashHits = new RaycastHit[32];
+    private readonly List<EnemyCapsuleHit> _dashHits = new List<EnemyCapsuleHit>();
     private SharedDamageHitTracker _hitTracker;
     private CharacterController _controller;
     private bool _dashing;
@@ -89,6 +89,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private int _previousActionId;
     private int _pendingActionId;
     private int _skillActionId;
+    private int _multiKillAttackId;
 
     public float DashDistance => _dashDistance;
     /// <summary>일섬 출발 대기 또는 몸 돌진이 진행 중이면 true를 반환해 집중 감속의 종료 시점을 알린다.</summary>
@@ -104,14 +105,16 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     public bool IsSkillAction(int actionId) => actionId > 0 && actionId == _skillActionId;
 
     /// <summary>
-    /// 이미 시작된 actionId의 일반 베기를 일섬으로 연결한다. 돌진이 있으면 _dashStartDelay 실시간 동안 제자리에서 기다린 뒤 돌진하고,
+    /// 이미 시작된 actionId의 일반 베기를 새 실행 ID를 가진 일섬으로 연결한다. 돌진이 있으면 _dashStartDelay 실시간 동안 제자리에서 기다린 뒤 돌진하고,
     /// 대기가 0이면 바로 돌진한다. 돌진이 없으면 기존 베기 시점까지 발사를 기다린다. FOV는 집중 감속의 페이드 인·아웃을 따른다.
     /// </summary>
     public void PlaySkill(int actionId)
     {
+        FinishPendingMultiKillAttack();
         _focusFov = true;
         _skillActionId = actionId;
         _pendingActionId = actionId;
+        _multiKillAttackId = MultiKillAttackRuntime.AllocateAttackId();
         _armed = _dashDistance <= 0f;
         if (_dashDistance > 0f && _dashStartDelay > 0f)
         {
@@ -124,6 +127,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     /// <summary>사망 또는 종료 시 일섬 예약·출발 대기와 돌진 피해 판정을 취소한다. 입력 없이 발사 연출·타격 정지와 공유 타격 기록을 정리한다.</summary>
     public void CancelSkill()
     {
+        FinishPendingMultiKillAttack();
         _armed = false;
         _dashing = false;
         _dashStartDelayRemaining = 0f;
@@ -132,6 +136,16 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         ResetFov();
         EndHitStop();
     }
+
+    /// <summary>아직 검기에 넘기지 않은 일섬 실행 ID를 완료 처리하고 로컬 참조를 비운다.</summary>
+    private void FinishPendingMultiKillAttack()
+    {
+        if (_multiKillAttackId == 0)
+            return;
+        MultiKillAttackRuntime.CompleteAttack(_multiKillAttackId);
+        _multiKillAttackId = 0;
+    }
+
     public event Action<DefenseSwordWave> SwordWaveLaunched;
 
     void Awake()
@@ -150,6 +164,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     void OnDisable()
     {
+        FinishPendingMultiKillAttack();
         _hitTracker = null;
         _armed = false;
         _dashing = false;
@@ -186,15 +201,22 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
             if (_player.CurrentActionId == _previousActionId)
             {
                 // 예약된 공격이 버려지면 검기도 함께 버린다.
-                if (!_combat.HasBufferedAttack) _armed = false;
+                if (!_combat.HasBufferedAttack)
+                {
+                    _armed = false;
+                    FinishPendingMultiKillAttack();
+                }
                 return;
             }
             if (_player.CurrentState != PlayerActionState.NormalAttack)
             {
                 _armed = false;
+                FinishPendingMultiKillAttack();
                 return;
             }
             _pendingActionId = _player.CurrentActionId;
+            if (_multiKillAttackId == 0)
+                _multiKillAttackId = MultiKillAttackRuntime.AllocateAttackId();
             BeginDash();
             // 돌진이 있으면 검기는 돌진이 끝나는 순간 StrikeAlongDash가 발사한다.
             if (_dashing)
@@ -207,6 +229,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         if (_player.CurrentActionId != _pendingActionId || _player.CurrentState != PlayerActionState.NormalAttack)
         {
             _armed = false;
+            FinishPendingMultiKillAttack();
             return;
         }
         _timing.GetStrikeWindow(PlayerAttackKind.Normal, out float start, out _);
@@ -217,15 +240,17 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     }
 
     /// <summary>
-    /// previousActionId 뒤에 시작되는 다음 일반 공격이 시작되면 돌진하고, 돌진이 끝나는 순간(돌진이 없으면 베기 시작에) 검기 하나를 발사하도록 예약한다.
+    /// previousActionId 뒤에 시작되는 다음 일반 공격을 새 실행 ID를 가진 일섬으로 연결하고, 돌진이 끝나는 순간(돌진이 없으면 베기 시작에) 검기 하나를 발사하도록 예약한다.
     /// 이미 시작된 공격이면 다음 Update에서 바로 돌진하며, 이전 예약은 이 예약으로 바뀐다.
     /// </summary>
     public void Arm(int previousActionId)
     {
+        FinishPendingMultiKillAttack();
         _focusFov = false;
         _armed = true;
         _previousActionId = previousActionId;
         _pendingActionId = 0;
+        _multiKillAttackId = MultiKillAttackRuntime.AllocateAttackId();
     }
 
     /// <summary>
@@ -238,8 +263,9 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         Vector3 direction = _motor.ViewForward;
         Vector3 origin = _camera.transform.position + direction * _spawnDistance + Vector3.up * _spawnHeightOffset;
         DefenseSwordWave wave = Instantiate(_wavePrefab);
-        wave.Launch(gameObject, origin, direction, _hitTracker);
+        wave.Launch(gameObject, origin, direction, _hitTracker, _multiKillAttackId);
         _hitTracker = null;
+        _multiKillAttackId = 0;
         BlindBlade.Telemetry.CombatTelemetrySignals.SkillActivated("SwordWave", "manual",
             Guid.NewGuid().ToString("N"), transform.position);
         // 초승달 메시는 볼록한 쪽이 위를 향하므로 앞으로 눕혀야 진행 방향으로 날을 세워 날아간다.
@@ -284,16 +310,18 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         EnemyProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         TwinBossProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         RainStageWeather.RecordDashSweep(_dashLastCenter, center);
-        int count = Physics.SphereCastNonAlloc(_dashLastCenter, _wavePrefab.HitRadius, direction, _dashHits,
-            distance, _dashHitMask, QueryTriggerInteraction.Ignore);
+        // 피해로 적이 비활성화되면 활성 캡슐 목록이 바뀌므로 접촉을 먼저 모두 모은 뒤 피해를 준다.
+        EnemyHitCapsule.SweepAll(_dashLastCenter, _dashLastCenter, _wavePrefab.HitRadius, direction,
+            distance, _dashHitMask, _dashHits);
         int struckBefore = _dashStruck.Count;
-        for (int i = 0; i < count; i++)
+        foreach (EnemyCapsuleHit hit in _dashHits)
         {
-            EnemyHealth enemy = _dashHits[i].collider.GetComponentInParent<EnemyHealth>();
+            EnemyHealth enemy = hit.Capsule.Health;
             if (enemy == null || !enemy.IsAlive) continue;
-            Vector3 point = _dashHits[i].distance > 0f ? _dashHits[i].point : _dashHits[i].collider.ClosestPoint(center);
+            Vector3 point = hit.Distance > 0f ? hit.Point : hit.Capsule.ClosestPoint(center);
             float amount = _wavePrefab.Damage > 0f ? _wavePrefab.Damage : Mathf.Max(enemy.CurrentHealth, 1f);
-            _hitTracker.ProcessHit(enemy, new DamageContext(amount, gameObject, point, direction, DASH_PATTERN_ID));
+            _hitTracker.ProcessHit(enemy, new DamageContext(amount, gameObject, point, direction,
+                DASH_PATTERN_ID, _multiKillAttackId, 0, IncomingAttackKind.Unknown));
         }
         if (_dashStruck.Count > struckBefore) BeginHitStop();
         _dashLastCenter = center;

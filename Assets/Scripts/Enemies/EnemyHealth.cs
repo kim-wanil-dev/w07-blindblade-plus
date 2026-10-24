@@ -17,7 +17,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     [SerializeField, Min(1f)] private float _maxHealth = 10f;
     [SerializeField, Tooltip("켜면 양수 피해를 주는 유효한 공격 한 번에 사망합니다.")]
     private bool _dieOnAnyHit;
-    [SerializeField] private Collider _hitCollider;
+    [SerializeField] private EnemyHitCapsule _hitCapsule;
     [SerializeField] private bool _cancelAttackOnHit;
     [SerializeField, Tooltip("끄면 플레이어의 대상 돌진 공격 후보에서 제외합니다. 다른 피해 판정은 유지합니다.")]
     private bool _dashTargetable = true;
@@ -57,6 +57,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public event Action<float, float> HealthChanged;
     public event Action<EnemyHealth> Dying;
     public event Action<EnemyHealth> Died;
+    /// <summary>마지막으로 체력을 0으로 만든 피해 문맥이다. 사망 구독자는 실행 출처를 이 값에서 읽는다.</summary>
+    public DamageContext LethalDamageContext { get; private set; }
 
     void Awake()
     {
@@ -115,9 +117,10 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         PlayDamageEffects(context);
         Damaged?.Invoke(context);
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
-        if (_sharedHealth != null) _sharedHealth.SyncSharedHealth(_currentHealth);
+        if (_sharedHealth != null) _sharedHealth.SyncSharedHealth(_currentHealth, context);
         if (_currentHealth <= 0f)
         {
+            LethalDamageContext = context;
             Dying?.Invoke(this);
             Died?.Invoke(this);
             gameObject.SetActive(false);
@@ -174,20 +177,21 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         EffectManager effects = Game.Instance.EffectManager;
         effects.Play(EffectId.BloodHit, context.Point);
         if (_currentHealth <= 0f)
-            effects.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+            effects.Play(EffectId.EnemyDeath, _hitCapsule.Bounds.center);
     }
 
     /// <summary>
-    /// 체력을 함께 쓰는 상대가 맞아 바뀐 체력 current로 이 적의 체력을 맞추고 HealthChanged를 알린다.
-    /// 피격 반응·혈흔·Damaged는 맞은 쪽만 내며, current가 0이면 이 적도 사망 효과와 사망 이벤트 뒤 비활성화된다.
+    /// 체력을 함께 쓰는 상대가 맞아 바뀐 체력 current와 치명타 출처 context로 이 적의 체력을 맞춘다.
+    /// 피격 반응·혈흔·Damaged는 맞은 쪽만 내며, current가 0이면 context를 보존하고 사망 이벤트 뒤 비활성화한다.
     /// </summary>
-    private void SyncSharedHealth(float current)
+    private void SyncSharedHealth(float current, DamageContext context)
     {
         if (!IsAlive || Mathf.Approximately(_currentHealth, current)) return;
         _currentHealth = Mathf.Clamp(current, 0f, _maxHealth);
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
         if (_currentHealth > 0f) return;
-        Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+        LethalDamageContext = context;
+        Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCapsule.Bounds.center);
         Dying?.Invoke(this);
         Died?.Invoke(this);
         gameObject.SetActive(false);
@@ -195,11 +199,11 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
 
     /// <summary>
     /// 체력을 함께 쓰는 상대가 대신 맞은 범위 공격에 이 적도 걸렸을 때 point에 혈흔만 재생한다.
-    /// 살아 있고 무적이 아니며 피격 판정 _hitCollider가 켜져 있을 때만 재생하고 HP·피격 반응·Damaged는 바꾸지 않는다.
+    /// 살아 있고 무적이 아니며 피격 캡슐 _hitCapsule이 켜져 있을 때만 재생하고 HP·피격 반응·Damaged는 바꾸지 않는다.
     /// </summary>
     public void PlaySharedHitEffect(Vector3 point)
     {
-        if (!IsAlive || _invulnerable || !_hitCollider.enabled) return;
+        if (!IsAlive || _invulnerable || !_hitCapsule.IsEnabled) return;
         Game.Instance.EffectManager.Play(EffectId.BloodHit, point);
     }
 
@@ -224,13 +228,13 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     }
 
     /// <summary>
-    /// 지정된 Collider와 현재 체력 상태로 플레이어 계약의 전투 대상 정보를 반환한다.
-    /// 식별자는 인스턴스마다 고유하며 반경은 Collider의 수평 크기를 사용한다.
+    /// 지정된 피격 캡슐과 현재 체력 상태로 플레이어 계약의 전투 대상 정보를 반환한다.
+    /// 식별자는 인스턴스마다 고유하며 반경은 피격 캡슐 경계의 수평 크기를 사용한다.
     /// </summary>
     public PlayerCombatTarget CreateCombatTarget()
     {
-        Vector3 extents = _hitCollider.bounds.extents;
-        return new PlayerCombatTarget(TargetId, transform.position, _hitCollider,
+        Vector3 extents = _hitCapsule.Bounds.extents;
+        return new PlayerCombatTarget(TargetId, transform.position, _hitCapsule,
             Mathf.Max(extents.x, extents.z), IsAlive);
     }
 
