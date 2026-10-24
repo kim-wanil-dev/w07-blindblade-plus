@@ -116,9 +116,11 @@ public sealed class TwinBossProjectile : MonoBehaviour
         }
     }
 
-    /// <summary>플레이어 공격에 막힌 수리검의 위치에서 가드 소리를 내고 비행을 종료한다.</summary>
+    /// <summary>플레이어 공격에 막힌 적대 수리검의 외형을 두 낙하 조각으로 바꾸고 가드 소리와 함께 비행을 종료한다.</summary>
     private void ReleaseBlocked()
     {
+        if (!IsHostileFlying) return;
+        ShurikenCutFragment.Spawn(transform, _collisionMask);
         Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
         Release();
     }

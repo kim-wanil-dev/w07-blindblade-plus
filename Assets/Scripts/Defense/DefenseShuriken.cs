@@ -346,11 +346,13 @@ private void ApplyVisualPitch()
     }
 
     /// <summary>
-    /// 플레이어 공격에 막힌 수리검을 지금 위치에서 가드 성공 소리를 내며 없앤다.
-    /// 궁극기와 검기·돌진이 같은 소리와 해제 경로를 쓰도록 함께 부르며, 비행이 끝나 Released를 알린 뒤 파괴된다.
+    /// 플레이어 공격에 막힌 적대 수리검의 현재 외형을 두 낙하 조각으로 바꾸고 가드 성공 소리를 낸다.
+    /// 비행을 즉시 종료하고 Released를 알리며 원본을 제거한다. 이미 종료되거나 반사된 수리검은 유지한다.
     /// </summary>
     public void ReleaseBlocked()
     {
+        if (!IsHostile) return;
+        ShurikenCutFragment.Spawn(transform, _collisionMask);
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_attackId, "Destroyed", transform.position);
         Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
         Release();

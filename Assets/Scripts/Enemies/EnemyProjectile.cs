@@ -409,9 +409,11 @@ public class EnemyProjectile : MonoBehaviour
     /// <summary>_clearedByPlayerAttacks가 켜져 있고 반사되지 않은 채 비행 중인지 반환한다.</summary>
     private bool IsClearable => _clearedByPlayerAttacks && _isFlying && !_reflected;
 
-    /// <summary>플레이어 공격에 막힌 투사체를 현재 위치에서 가드 성공 소리를 내며 비행 종료·해제한다.</summary>
+    /// <summary>플레이어 공격에 막힌 투사체의 현재 외형으로 낙하 조각을 만들고 가드 소리와 함께 비행 종료·해제한다.</summary>
     private void ReleaseBlocked()
     {
+        if (!IsClearable) return;
+        ShurikenCutFragment.Spawn(transform, _collisionMask);
         Managers.Sound.PlayCue(CombatSoundCue.Guard, transform.position);
         Release();
     }
