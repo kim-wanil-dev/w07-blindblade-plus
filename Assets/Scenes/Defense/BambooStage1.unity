@@ -52294,6 +52294,38 @@ PrefabInstance:
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
       objectReference: {fileID: 0}
+    - target: {fileID: 1473519880545102016, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1473519880545102016, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1473519880545102016, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1473519880545102016, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1771986015500494336, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1771986015500494336, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1771986015500494336, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1771986015500494336, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2945568411076688482, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_AnchoredPosition.x
       value: 0.000015258789
@@ -52338,6 +52370,22 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4922974510082497536, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4922974510082497536, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4922974510082497536, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4922974510082497536, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5429458185024076922, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: m_TextStyleHashCode
       value: -1183493901
@@ -52370,11 +52418,11 @@ PrefabInstance:
       propertyPath: m_AnchoredPosition.x
       value: 0.000015258789
       objectReference: {fileID: 0}
-      - target: {fileID: 9000000000000000201, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+    - target: {fileID: 9000000000000000201, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: _director
       value: 
       objectReference: {fileID: 1968806059}
-  m_RemovedComponents: []
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -55261,7 +55309,7 @@ MonoBehaviour:
   _boss: {fileID: 350192290}
   _warning: {fileID: 132706044}
   _startBossImmediately: 0
-  _requiredKills: 100
+  _requiredKills: 600
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
@@ -56610,7 +56658,7 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 100
+  _meleeSpawnsPerMinute: 600
   _meleeSpawnGrowthPerMinute: 10
   _firstMeleeKillThreshold: 0
   _firstMeleeSpawnsPerMinute: 0
@@ -56618,7 +56666,7 @@ MonoBehaviour:
   _secondMeleeSpawnsPerMinute: 0
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
-  _maximumMelee: 100
+  _maximumMelee: 200
   _meleeSpawnLimit: 0
   _beastPrefab: {fileID: 0}
   _beastDeathSound: 0
@@ -62313,4 +62361,3 @@ SceneRoots:
   - {fileID: 350192289}
   - {fileID: 132706047}
   - {fileID: 1919222288}
-
