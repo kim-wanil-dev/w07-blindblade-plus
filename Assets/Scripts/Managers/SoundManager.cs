@@ -21,6 +21,7 @@ public class SoundManager
 
     [Header("Effects")]
     private readonly List<ActiveEffect> _effects = new List<ActiveEffect>();
+    private readonly List<ActiveEffect> _enemyFootsteps = new List<ActiveEffect>();
     private readonly List<ActiveStreamingEffect> _streamingEffects = new List<ActiveStreamingEffect>();
     private readonly List<PendingStreamingEffect> _pendingStreamingEffects = new List<PendingStreamingEffect>();
     private bool _effectsPaused;
@@ -152,6 +153,68 @@ public class SoundManager
         if (_combatProfile != null && (soundId == SoundId.SwordHit || soundId == SoundId.PlayerDamaged))
             return PlayCue(CombatSoundCue.Damage, position, owner, false);
         return PlayEffect(soundId, position, owner, false, volume, playDuringMovement, pitch: pitch);
+    }
+
+    /// <summary>
+    /// owner의 이전 soundId 발소리를 즉시 정지하고 position에서 일반 적 발소리를 volume 배율로 재생한다.
+    /// SoundLibrary의 최대 동시 적 발소리 수에 닿으면 플레이어에게서 가장 먼 발소리를 끊고, 새 발소리가 가장 멀면 재생하지 않는다.
+    /// playDuringMovement로 이동 예외를 지정하며 재생에 성공하면 _enemyFootsteps에 기록하고 true를 반환한다.
+    /// </summary>
+    public bool PlayEnemyFootstep(SoundId soundId, Vector3 position, float volume, GameObject owner, bool playDuringMovement)
+    {
+        StopFor(owner, soundId, forceStop: true);
+        RemoveFinishedEnemyFootsteps(owner);
+        if (!TryReserveEnemyFootstep(position))
+            return false;
+        if (!PlayEffect(soundId, position, owner, false, volume, playDuringMovement))
+            return false;
+        _enemyFootsteps.Add(_effects[_effects.Count - 1]);
+        return true;
+    }
+
+    /// <summary>
+    /// 핸들이 해제된 적 발소리와 owner가 방금 정지한 발소리를 _enemyFootsteps에서 제거한다.
+    /// </summary>
+    private void RemoveFinishedEnemyFootsteps(GameObject owner)
+    {
+        for (int i = _enemyFootsteps.Count - 1; i >= 0; i--)
+        {
+            ActiveEffect effect = _enemyFootsteps[i];
+            if (!effect.Instance.isValid() || (effect.HasOwner && effect.Owner == owner))
+                _enemyFootsteps.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// SoundLibrary의 최대 동시 적 발소리 수 안에서 position의 새 발소리 자리를 확보한다.
+    /// 가득 차 있으면 플레이어에게서 position보다 먼 발소리 중 가장 먼 것을 정지하고 _enemyFootsteps에서 뺀 뒤 true를 반환한다.
+    /// 최대 수가 0이면 제한하지 않으며, 자리를 만들지 못하면 false를 반환한다.
+    /// </summary>
+    private bool TryReserveEnemyFootstep(Vector3 position)
+    {
+        int maximum = _library.MaxEnemyFootsteps;
+        if (maximum <= 0 || _enemyFootsteps.Count < maximum)
+            return true;
+        if (!Game.IsInitialized || Game.Player == null)
+            return false;
+
+        Vector3 listener = Game.Player.transform.position;
+        float farthestDistance = (position - listener).sqrMagnitude;
+        int farthestIndex = -1;
+        for (int i = 0; i < _enemyFootsteps.Count; i++)
+        {
+            float distance = (_enemyFootsteps[i].Position - listener).sqrMagnitude;
+            if (distance <= farthestDistance)
+                continue;
+            farthestDistance = distance;
+            farthestIndex = i;
+        }
+        if (farthestIndex < 0)
+            return false;
+
+        StopEffect(_enemyFootsteps[farthestIndex].Instance, false);
+        _enemyFootsteps.RemoveAt(farthestIndex);
+        return true;
     }
 
     /// <summary>
@@ -603,6 +666,7 @@ public class SoundManager
             }
         }
         _effects.Clear();
+        _enemyFootsteps.Clear();
         StopStreamingEffects();
         _effectsPaused = false;
         _combatFocusUntil = 0f;
