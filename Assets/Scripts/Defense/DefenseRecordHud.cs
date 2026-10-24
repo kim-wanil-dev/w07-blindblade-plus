@@ -22,22 +22,27 @@ public sealed class DefenseRecordHud : MonoBehaviour
 
     void Update()
     {
-        // 보스 등장 등으로 기록을 숨기면 문구를 끄고 갱신하지 않는다.
         _text.enabled = !_director.IsRecordHidden;
         if (_director.IsRecordHidden)
             return;
+
         bool started = _director.HasStarted;
         int seconds = started ? Mathf.FloorToInt(_director.SurvivalTime) : Mathf.CeilToInt(_director.Countdown);
+
+        int goal = _director.KillGoal;
         int kills = _director.Kills;
-        if (started == _shownStarted && seconds == _shownSeconds && kills == _shownKills)
+        int displayedKills = goal > 0 ? Mathf.Clamp(kills, 0, goal) : kills;
+
+        if (started == _shownStarted && seconds == _shownSeconds && displayedKills == _shownKills)
             return;
+
         _shownStarted = started;
         _shownSeconds = seconds;
-        int goal = _director.KillGoal;
-        _shownKills = Math.Clamp(kills, 0, goal);
+        _shownKills = displayedKills;
+
         if (!started)
             _text.text = "준비 " + seconds;
         else
-            _text.text = goal > 0 ? $"처치 {kills}/{goal}" : $"생존 {seconds / 60:00}:{seconds % 60:00}    처치 {kills}";
+            _text.text = goal > 0 ? $"처치 {displayedKills}/{goal}" : $"생존 {seconds / 60:00}:{seconds % 60:00}    처치 {kills}";
     }
 }
