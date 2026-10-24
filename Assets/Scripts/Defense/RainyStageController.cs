@@ -14,7 +14,6 @@ public sealed class RainyStageController : MonoBehaviour
 {
     private const int ENTRANCE_WAVE_LAYERS = 5;
     private const float ACT_TITLE_DURATION = 1.5f;
-    private const float CLEAR_AFTER_DISSOLVE_DELAY = 1.5f;
     private const float FINAL_DISSOLVE_PAIR_DISTANCE = 5f;
     private const float FINAL_DISSOLVE_BEAST_OFFSET = 2.3f;
 
@@ -404,7 +403,7 @@ public sealed class RainyStageController : MonoBehaviour
         _phase = StagePhase.Complete;
         BlindBlade.Telemetry.CombatTelemetrySignals.Stage("2-2", complete: true, gameCompleted: true);
         Game.Instance.UIManager.Get<GameClearUI>().SetNextDisplayDelay(
-            BossDeathDissolve.DURATION + CLEAR_AFTER_DISSOLVE_DELAY);
+            BossDeathDissolve.DURATION);
         Game.Instance.GameStateManager.RequestGameClear();
     }
 }

@@ -13,7 +13,6 @@ public sealed class BambooStage1Controller : MonoBehaviour
 {
     private const int ENTRANCE_WAVE_LAYERS = 5;
     private const float ACT_TITLE_DURATION = 1.5f;
-    private const float ACT_COMPLETE_DELAY = 1.5f;
 
     [Header("스테이지 연결")]
     [SerializeField] private BambooDefenseDirector _director;
@@ -393,10 +392,10 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _actTitleRoutine = null;
     }
 
-    /// <summary>보스 소멸 종료 1.5초 뒤 공용 UI 캔버스 중앙에 1막 완료 카드를 열고 버튼을 선택한다.</summary>
+    /// <summary>BossDeathDissolve.DURATION만큼 기다린 뒤 공용 UI 캔버스 중앙에 1막 완료 카드를 열고 버튼을 선택한다.</summary>
     private IEnumerator ShowActCompleteAfterDeath()
     {
-        yield return new WaitForSecondsRealtime(BossDeathDissolve.DURATION + ACT_COMPLETE_DELAY);
+        yield return new WaitForSecondsRealtime(BossDeathDissolve.DURATION);
         _stageTransitionRoutine = null;
         if (Game.Instance.GameStateManager.State != GameplayState.ActComplete)
             yield break;
