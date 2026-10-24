@@ -20,7 +20,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     private const string PATTERN_ID = "EmpowerStrike";
 
     [Header("공격 피해")]
-    [SerializeField, Min(0f)] private float _damage = 50f;
+    [SerializeField, Min(0f)] private float _damage = 100f;
 
     [Header("암전")]
     [SerializeField, Min(0f), Tooltip("수락부터 납도까지 화면이 암흑으로 덮인 채 검격과 갈라진 선만 보이는 실시간.")]

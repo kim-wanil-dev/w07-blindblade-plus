@@ -140,6 +140,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     public event Action<int, int> ObjectiveEntered;
     public event Action<int, int> ObjectiveCompleted;
+    public event Action<int> StageCompleted;
     public event Action<int> StageRetrying;
     public event Action<int> StageRepeated;
     public event Action OnboardingCompleted;
@@ -1216,6 +1217,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_stage == FINAL_STAGE)
             ClearRangedPractice();
         ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
+        StageCompleted?.Invoke(_stage);
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 

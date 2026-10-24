@@ -20,18 +20,18 @@ public sealed class PlayerSkillGauge : MonoBehaviour
     private float _swordWavePerfectParryReward = 1f;
     [SerializeField, Min(0f)]
     private float _swordWavePerfectDodgeReward = 0.5f;
-    [SerializeField, Min(0f)]
+    [SerializeField, Min(0f), Tooltip("일반/대시 공격으로 일반 적을 처치했을 때의 일섬 게이지 보상. 0.1은 한 칸의 10%입니다.")]
     private float _swordWaveKillReward = 0.1f;
 
     [Header("거합 게이지 설정")]
     [SerializeField, Min(0.01f), Tooltip("거합 사용 비용은 최대 게이지 전체이며, 패링 보상은 최대값의 정확히 1/3입니다.")]
     private float _maxUltimateGauge = 100f;
-    [SerializeField, Min(0f)]
-    private float _ultimatePerfectDodgeReward = 15f;
-    [SerializeField, Min(0f)]
-    private float _ultimateKillReward = 1f;
-    [SerializeField, Min(0f)]
-    private float _ultimateBossNormalHitReward = 3f;
+    [SerializeField, Min(0f), Tooltip("극한 회피 성공 시 거합 게이지 증가량(%p).")]
+    private float _ultimatePerfectDodgeReward = 20f;
+    [SerializeField, Min(0f), Tooltip("일반/대시/일섬 공격으로 일반 적을 처치했을 때의 거합 게이지 증가량(%p).")]
+    private float _ultimateKillReward = 2f;
+    [SerializeField, Min(0f), Tooltip("일반/대시 공격으로 보스에게 유효 피해를 줬을 때의 거합 게이지 증가량(%p).")]
+    private float _ultimateBossNormalHitReward = 5f;
 
     [Header("현재 게이지")]
     private float _swordWaveGauge;
@@ -86,7 +86,7 @@ public sealed class PlayerSkillGauge : MonoBehaviour
     }
 
     /// <summary>
-    /// 처치 보상으로 Inspector 설정량만큼 두 게이지를 적립한다.
+    /// 일반 또는 대시 공격으로 일반 적을 처치한 보상으로 Inspector 설정량만큼 두 게이지를 적립한다.
     /// 입력은 없으며 두 게이지를 상한까지 변경한다.
     /// </summary>
     public void RewardKill()
@@ -95,7 +95,16 @@ public sealed class PlayerSkillGauge : MonoBehaviour
     }
 
     /// <summary>
-    /// 보스 일반 공격 유효 적중 보상으로 거합 게이지만 적립한다.
+    /// 일섬으로 일반 적을 처치한 보상으로 거합 게이지만 Inspector 설정량만큼 적립한다.
+    /// 입력은 없으며 거합 게이지를 상한까지 변경한다.
+    /// </summary>
+    public void RewardUltimateKill()
+    {
+        AddRewards(0f, _ultimateKillReward);
+    }
+
+    /// <summary>
+    /// 보스에게 일반 또는 대시 공격이 유효 적중한 보상으로 거합 게이지만 적립한다.
     /// 입력은 없으며 거합 게이지를 상한까지 변경한다.
     /// </summary>
     public void RewardBossNormalHit()
