@@ -32,6 +32,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     [SerializeField, Min(0.01f)] private float _hitPushDuration = 0.12f;
     private EnemyAttackSelector _attackSelector;
     private EnemyMotor _motor;
+    private bool _isBoss;
     private float _nextHitInterruptTime;
     private float _currentHealth;
     private bool _invulnerable;
@@ -43,6 +44,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public float MaxHealth => _maxHealth;
     public bool IsAlive => isActiveAndEnabled && _currentHealth > 0f;
     public bool IsInvulnerable => _invulnerable;
+    public bool IsBoss => _isBoss;
     public bool IsDashTargetable => _dashTargetable;
     /// <summary>_sharedHealth와 자신 중 인스턴스 ID가 작은 쪽을 반환해 같은 체력 묶음의 타격 기록을 하나로 합친다.</summary>
     public EnemyHealth SharedDamageKey => _sharedHealth != null && _sharedHealth.GetInstanceID() < GetInstanceID()
@@ -68,6 +70,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
 
     void OnEnable()
     {
+        _isBoss = GetComponentInParent<BossController>() != null
+            || GetComponentInParent<TwinBossController>() != null;
         _currentHealth = _maxHealth;
         _lastGaugeRewardActionId = 0;
         _lastGaugeRewardPlayerId = 0;
@@ -110,7 +114,6 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             DamageBlocked?.Invoke(context);
             return false;
         }
-        Debug.Log($"Take Damage {context.Amount} ");
         _currentHealth = _dieOnAnyHit ? 0f : Mathf.Max(0f, _currentHealth - context.Amount);
         RewardPlayerSkillGauge(context);
         if (_currentHealth > 0f && _cancelAttackOnHit) ApplyHitReaction(context);
@@ -256,6 +259,18 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             if (target != null && target.IsAlive)
                 activeTargets.Add(target);
         return activeTargets;
+    }
+
+    /// <summary>
+    /// destination 목록을 비우고 활성 상태이며 생존한 적을 복사한다.
+    /// 호출자가 destination을 재사용하면 조회마다 목록을 새로 할당하지 않는다.
+    /// </summary>
+    public static void CopyActiveTargetsTo(List<EnemyHealth> destination)
+    {
+        destination.Clear();
+        foreach (EnemyHealth target in _targets.Values)
+            if (target != null && target.IsAlive)
+                destination.Add(target);
     }
 
     /// <summary>

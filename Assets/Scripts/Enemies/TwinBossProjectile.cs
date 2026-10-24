@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -9,6 +10,8 @@ using BlindBlade.Telemetry;
 [DisallowMultipleComponent]
 public sealed class TwinBossProjectile : MonoBehaviour
 {
+    private static readonly HashSet<TwinBossProjectile> _activeHostileFlights = new HashSet<TwinBossProjectile>();
+
     [Header("비행 설정")]
     [SerializeField, Min(0.1f)] private float _speed = 12f;
     [SerializeField, Min(0.1f)] private float _lifetime = 5f;
@@ -43,6 +46,25 @@ public sealed class TwinBossProjectile : MonoBehaviour
     public bool IsHostileFlying => _flying && !_reflected;
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int ProjectileId => _projectileId;
+
+    /// <summary>
+    /// 활성 적대 비행 보스 투사체를 destination에 복사한다.
+    /// destination을 재사용하면 씬 전체 검색과 조회마다 발생하는 배열 할당을 피한다.
+    /// </summary>
+    public static void CopyActiveHostileFlightsTo(List<TwinBossProjectile> destination)
+    {
+        destination.Clear();
+        foreach (TwinBossProjectile projectile in _activeHostileFlights)
+            if (projectile != null && projectile.gameObject.activeInHierarchy && projectile.IsHostileFlying)
+                destination.Add(projectile);
+    }
+
+    /// <summary>새 플레이 세션에서 이전 실행의 적대 비행 보스 투사체 참조를 비운다.</summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveHostileFlights()
+    {
+        _activeHostileFlights.Clear();
+    }
 
     /// <summary>적대 보스 투사체의 현재 피해 구가 cylinder에 닿으면 attackId를 출력한다.</summary>
     public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
@@ -109,6 +131,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
         KatanaDamageReceiver player, float damage, Vector3 direction, int attackId,
         string parentPatternId, string patternInstanceId)
     {
+        _activeHostileFlights.Remove(this);
         _shooter = shooter;
         _shooterCollider = shooterCollider;
         _player = player;
@@ -126,6 +149,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
         CombatSessionRuntime session = CombatSessionRuntime.Active;
         _projectileId = session != null && session.IsInitialized ? session.AllocateProjectileId() : 0;
         _flying = true;
+        _activeHostileFlights.Add(this);
         if (_flightSound != SoundId.None)
             Managers.Sound.PlayAttachedLoop(_flightSound, gameObject);
     }
@@ -252,6 +276,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
                 if (parried && _shooter != null && _shooter.IsAlive)
                 {
                     _reflected = true;
+                    _activeHostileFlights.Remove(this);
                     _telemetryAttackId = 0;
                     _elapsed = 0f;
                     StopFlightSound();
@@ -280,6 +305,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
     {
         if (!_flying) return;
         _flying = false;
+        _activeHostileFlights.Remove(this);
         if (_telemetryAttackId != 0)
         {
             CombatTelemetrySignals.End(_telemetryAttackId, unresolvedOutcome, transform.position);
@@ -299,6 +325,7 @@ public sealed class TwinBossProjectile : MonoBehaviour
 
     void OnDisable()
     {
+        _activeHostileFlights.Remove(this);
         if (!_flying) return;
         _flying = false;
         if (_telemetryAttackId != 0)

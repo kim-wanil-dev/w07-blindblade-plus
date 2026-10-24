@@ -543,13 +543,13 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2147414133172360306}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d89eba03c73fe846a1b6fe7dcc5955f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _showOverlay: 1
-  _logEvents: 1
+  _showOverlay: 0
+  _logEvents: 0
   _showCombatFeedback: 1
   _feedbackDuration: 0.8
 --- !u!114 &3744323796873655163

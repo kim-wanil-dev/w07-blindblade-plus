@@ -7,6 +7,8 @@ using BlindBlade.Combat.Contracts;
 
 public class EnemyProjectile : MonoBehaviour
 {
+    private static readonly HashSet<EnemyProjectile> _activeHostileFlights = new HashSet<EnemyProjectile>();
+
     [Header("투사체 설정")]
     [SerializeField, Min(0.1f)] private float _speed = 12f;
     [SerializeField, Min(0.01f)] private float _lifetime = 4f;
@@ -51,6 +53,25 @@ public class EnemyProjectile : MonoBehaviour
     public bool IsHostileFlying => _isFlying && !_reflected;
     public bool HasPassedPlayer => _hasPassedPlayer;
     public int ProjectileId => _projectileId;
+
+    /// <summary>
+    /// 활성 적대 비행 투사체를 destination에 복사한다.
+    /// destination을 재사용하면 씬 전체 검색과 조회마다 발생하는 배열 할당을 피한다.
+    /// </summary>
+    public static void CopyActiveHostileFlightsTo(List<EnemyProjectile> destination)
+    {
+        destination.Clear();
+        foreach (EnemyProjectile projectile in _activeHostileFlights)
+            if (projectile != null && projectile.gameObject.activeInHierarchy && projectile.IsHostileFlying)
+                destination.Add(projectile);
+    }
+
+    /// <summary>새 플레이 세션에서 이전 실행의 적대 비행 투사체 참조를 비운다.</summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void ResetActiveHostileFlights()
+    {
+        _activeHostileFlights.Clear();
+    }
 
     /// <summary>적대 투사체의 현재 피해 구가 cylinder에 닿으면 attackId를 출력한다.</summary>
     public bool TryGetDodgeThreat(DodgeThreatCylinder cylinder, out int attackId)
@@ -173,6 +194,7 @@ public class EnemyProjectile : MonoBehaviour
     void OnDisable()
     {
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_damage.AttackId, "Cancelled", transform.position);
+        _activeHostileFlights.Remove(this);
         _isFlying = false;
     }
 
@@ -182,6 +204,7 @@ public class EnemyProjectile : MonoBehaviour
     /// </summary>
     public virtual void Initialize(DamageContext damage, Vector3 direction, Transform target = null)
     {
+        _activeHostileFlights.Remove(this);
         _damage = damage;
         _speedMultiplier = 1f;
         _homingMultiplier = 1f;
@@ -200,6 +223,7 @@ public class EnemyProjectile : MonoBehaviour
         _isFlying = _direction.sqrMagnitude > 0f;
         if (_isFlying)
         {
+            _activeHostileFlights.Add(this);
             transform.rotation = Quaternion.LookRotation(_direction);
             // 소멸하면 소유자 파괴로 SoundManager가 정지하고, 반사는 Reflect에서 직접 멈춘다.
             if (_flightSound != SoundId.None)
@@ -333,6 +357,7 @@ public class EnemyProjectile : MonoBehaviour
         _target = null;
         if (TryGetComponent(out OutlineLayer threatLayer)) threatLayer.enabled = false;
         _reflected = true;
+        _activeHostileFlights.Remove(this);
         _elapsedTime = 0f;
         transform.rotation = Quaternion.LookRotation(_direction);
         _isFlying = true;
@@ -397,6 +422,7 @@ public class EnemyProjectile : MonoBehaviour
     /// </summary>
     public virtual void Release()
     {
+        _activeHostileFlights.Remove(this);
         _isFlying = false;
         BlindBlade.Telemetry.CombatTelemetrySignals.End(_damage.AttackId, "Miss", transform.position);
         Destroy(gameObject);
