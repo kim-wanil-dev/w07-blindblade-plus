@@ -305,6 +305,23 @@ private Vector3 _attackLungeDirection;
     {
         AddLookDelta(input * (degreesPerSecond * deltaTime / Mathf.Max(0.001f, _lookSensitivity)));
     }
+
+    /// <summary>input, gamepad, degreesPerSecond, deltaTime으로 온보딩 중 시점을 즉시 갱신해 플레이어·카메라 회전을 바꾼다.</summary>
+    public void ApplyOnboardingLookInput(Vector2 input, bool gamepad, float degreesPerSecond, float deltaTime)
+    {
+        Vector2 lookDelta = gamepad
+            ? input * (degreesPerSecond * deltaTime / Mathf.Max(0.001f, _lookSensitivity))
+            : input;
+        if (lookDelta.sqrMagnitude <= 0f) return;
+
+        _yaw += lookDelta.x * _lookSensitivity;
+        _pitch = Mathf.Clamp(_pitch - lookDelta.y * _lookSensitivity,
+            -_verticalLookLimit, _verticalLookLimit);
+        transform.rotation = Quaternion.Euler(0f, _yaw, 0f);
+        if (_cameraPivot != null)
+            _cameraPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
+    }
+
     /// <summary>delta 시점 변화량을 누적해 다음 Tick에서 카메라 회전에 반영합니다.</summary>
     public void AddLookDelta(Vector2 delta)
     {

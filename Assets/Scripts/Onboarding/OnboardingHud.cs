@@ -27,6 +27,8 @@ public sealed class OnboardingHud : MonoBehaviour
         private int _followUpObjective = 1;
         [SerializeField, TextArea(1, 2), Tooltip("후속 안내 위 줄에 표시하는 설명. 비우면 표시하지 않는다.")]
         private string _followUpNote;
+        [SerializeField, TextArea(1, 2), Tooltip("패드 후속 안내 위 줄에 표시하는 설명. 비우면 키보드 설명을 사용한다.")]
+        private string _followUpGamepadNote;
         [SerializeField, TextArea(1, 2)] private string[] _objectives;
 
         [Header("단계 카드")]
@@ -48,7 +50,7 @@ public sealed class OnboardingHud : MonoBehaviour
         /// </summary>
         public Prompt(string keyboardHint, string gamepadHint, Sprite keyboardIcon, string[] objectives,
             string followUpKeyboardHint, string followUpGamepadHint, Sprite followUpKeyboardIcon,
-            int followUpObjective = 1, string followUpNote = null)
+            int followUpObjective = 1, string followUpNote = null, string followUpGamepadNote = null)
         {
             _keyboardHint = keyboardHint;
             _gamepadHint = gamepadHint;
@@ -58,6 +60,7 @@ public sealed class OnboardingHud : MonoBehaviour
             _followUpKeyboardIcon = followUpKeyboardIcon;
             _followUpObjective = followUpObjective;
             _followUpNote = followUpNote;
+            _followUpGamepadNote = followUpGamepadNote;
             _objectives = objectives;
         }
 
@@ -70,10 +73,12 @@ public sealed class OnboardingHud : MonoBehaviour
             return gamepad && !string.IsNullOrEmpty(_gamepadHint) ? _gamepadHint : _keyboardHint;
         }
 
-        /// <summary>objectiveIndex가 후속 안내 구간이면 안내 위 줄의 설명을, 아니면 빈 문자열을 반환한다.</summary>
-        public string GetNote(int objectiveIndex)
+        /// <summary>objectiveIndex, followUpNoteVisible, gamepad에 맞는 후속 노트를 반환하고 해당하지 않으면 빈 문자열을 돌려준다.</summary>
+        public string GetNote(int objectiveIndex, bool followUpNoteVisible, bool gamepad)
         {
-            return UsesFollowUp(objectiveIndex) && !string.IsNullOrEmpty(_followUpNote) ? _followUpNote : string.Empty;
+            if (!followUpNoteVisible || !UsesFollowUp(objectiveIndex)) return string.Empty;
+            return gamepad && !string.IsNullOrEmpty(_followUpGamepadNote)
+                ? _followUpGamepadNote : _followUpNote;
         }
 
         /// <summary>후속 안내가 등록되어 있고 objectiveIndex가 _followUpObjective 이상인지 반환한다.</summary>
@@ -128,13 +133,16 @@ public sealed class OnboardingHud : MonoBehaviour
         new Prompt("극한 회피 - 적의 공격에 맞춰 Space로 회피", "극한 회피 - 적의 공격에 맞춰 A 버튼으로 회피", null, "수리검 극한 회피 1회"),
         new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
             new[] { "적의 공격 막기", "공격 직전에 막아 쳐내기" }),
-        new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
-            new[] { "수리검 막기 1회", "공격 쳐내기 0/1", "일섬 발동 1회" },
-            "일섬: Shift",
-            "일섬: RT", null, 2),
+        new Prompt("쳐내기: 적이 공격할 때 막기 (우클릭)", "쳐내기: 적이 공격할 때 막기 (LB)", null,
+            new[] { "수리검 쳐내기 1회", "일섬 발동 1회" },
+            "일섬: 좌클릭",
+            "일섬: RB", null, 1, "다시 쳐낸 뒤 집중 중 좌클릭으로 일섬을 발동합니다.",
+            "다시 쳐낸 뒤 집중 중 RB로 일섬을 발동합니다."),
         new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
             new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" },
-            "거합: Q", "거합: Y", null, 1)
+            "거합: Q 홀드", "거합: Y 홀드", null, 1,
+            "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다.",
+            "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다.")
     };
 
     [Header("단계 완료 선택")]
@@ -143,29 +151,30 @@ public sealed class OnboardingHud : MonoBehaviour
     [SerializeField] private string _repeatStageButtonText;
 
     [Header("집중 안내")]
-    [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeTutorialGamepadText = "극한 회피에 성공하면 파동이 발생해 주위를 잠시 밝히고, 시간이 느려집니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialText = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _perfectDodgeMeterTutorialGamepadText = "극한 회피는 일섬 게이지를 반 칸, 거합 게이지를 15% 채웁니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialText = "검에서 나온 기운이 적에게 연결됩니다.\n마우스 좌클릭으로 발도 실행";
-    [SerializeField, TextArea(2, 4)] private string _targetThreadTutorialGamepadText = "검에서 나온 기운이 적에게 연결됩니다.\nRB 버튼으로 발도 실행";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "화면의 원형 표시가 거합 게이지입니다. 극한 회피는 15%, 쳐내기는 약 33%를 채웁니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _parryBeadsTutorialGamepadText = "검의 방울 세 개와 화면의 세 칸은 일섬 게이지를 보여줍니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nShift를 누르면 한 칸을 써서 일섬을 발동합니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "화면의 세 칸과 검의 방울은 일섬 게이지입니다. 쳐내기로 한 칸을 채웁니다.\nRT를 누르면 한 칸을 써서 일섬을 발동합니다.\nRB 버튼으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "원형 거합 게이지가 100%가 되면 Q를 눌러 발동합니다.\n마우스 좌클릭으로 계속 진행";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "원형 거합 게이지가 100%가 되면 Y를 눌러 발동합니다.\nRB 버튼으로 계속 진행";
+    [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.";
+    [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다.";
+    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다.";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 좌클릭으로 일섬을 발동합니다.";
+    [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 RB로 일섬을 발동합니다.";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "거합 게이지를 모두 채웠습니다.\nQ를 홀드해 거합을 발동합니다.";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "거합 게이지를 모두 채웠습니다.\nY를 홀드해 거합을 발동합니다.";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
+
+    [Header("정보 안내")]
+    [SerializeField, Min(0f), Tooltip("일시 안내가 남아 있는 시간(초)입니다. 게임 시간이 정지하면 타이머도 멈춥니다.")]
+    private float _informationNoteDuration = 4f;
+    [SerializeField, Min(0f), Tooltip("일시 안내가 사라지는 데 걸리는 시간(초)입니다.")]
+    private float _informationNoteFadeDuration = 0.2f;
 
     private Canvas _canvas;
     private Image _guidePanel;
     private Image _notePanel;
     private TextMeshProUGUI _noteText;
+    private CanvasGroup _tutorialCanvasGroup;
+    private CanvasGroup _tutorialConnectorGroup;
+    private CanvasGroup _tutorialTargetGroup;
     private Image _objectivePanel;
     private Image _objectiveShine;
     private Image _instructionIcon;
@@ -212,21 +221,17 @@ public sealed class OnboardingHud : MonoBehaviour
     private int _currentObjective = -1;
     private int _lastScreenWidth;
     private int _lastScreenHeight;
+    private bool _followUpNoteVisible = true;
+    private bool _informationNoteActive;
+    private Coroutine _informationNoteRoutine;
 
     /// <summary>필요한 경우 온보딩 단계 안내 문구를 Inspector에서 교체할 배열을 반환한다.</summary>
     public Prompt[] Prompts => _prompts;
+    public bool IsInformationNoteVisible => _informationNoteActive;
     public string MovementWaveTutorialText => _movementWaveTutorialText;
     public string MovementWaveTutorialGamepadText => _movementWaveTutorialGamepadText;
-    public string PerfectDodgeTutorialText => _perfectDodgeTutorialText;
-    public string PerfectDodgeTutorialGamepadText => _perfectDodgeTutorialGamepadText;
-    public string PerfectDodgeMeterTutorialText => _perfectDodgeMeterTutorialText;
-    public string PerfectDodgeMeterTutorialGamepadText => _perfectDodgeMeterTutorialGamepadText;
-    public string TargetThreadTutorialText => _targetThreadTutorialText;
-    public string TargetThreadTutorialGamepadText => _targetThreadTutorialGamepadText;
     public string ParryHudTutorialText => _parryHudTutorialText;
     public string ParryHudTutorialGamepadText => _parryHudTutorialGamepadText;
-    public string ParryBeadsTutorialText => _parryBeadsTutorialText;
-    public string ParryBeadsTutorialGamepadText => _parryBeadsTutorialGamepadText;
     public string SwordWaveTutorialText => _swordWaveTutorialText;
     public string SwordWaveTutorialGamepadText => _swordWaveTutorialGamepadText;
     public string UltimateReadyTutorialText => _ultimateReadyTutorialText;
@@ -264,8 +269,10 @@ public sealed class OnboardingHud : MonoBehaviour
             return;
         }
 
+        StopInformationNote();
         _currentStage = stage;
         _currentObjective = objectiveIndex;
+        _followUpNoteVisible = true;
         Prompt prompt = _prompts[stage];
         _objectiveTitle.text = "목표";
         _objectiveText.text = prompt.GetObjective(objectiveIndex);
@@ -282,6 +289,70 @@ public sealed class OnboardingHud : MonoBehaviour
         _objectiveShineRoutine = StartCoroutine(AnimateObjectiveShine());
         StopObjectiveUpdate();
         _objectiveUpdateRoutine = StartCoroutine(PlayCard("목표 갱신", prompt.GetObjective(objectiveIndex)));
+    }
+
+    /// <summary>후속 안내의 보조 문구를 visible에 맞춰 표시하거나 숨기고 현재 입력 안내를 다시 그린다.</summary>
+    public void SetFollowUpNoteVisible(bool visible)
+    {
+        if (_followUpNoteVisible == visible) return;
+        _followUpNoteVisible = visible;
+        RefreshDevicePrompt();
+    }
+
+    /// <summary>keyboardText와 gamepadText를 플레이를 막지 않는 정보 안내로 표시하고 Inspector 시간 후 서서히 숨긴다.</summary>
+    public void ShowInformationNote(string keyboardText, string gamepadText)
+    {
+        ShowTutorial(keyboardText, gamepadText);
+        _informationNoteActive = true;
+        _informationNoteRoutine = StartCoroutine(FadeInformationNote());
+    }
+
+    /// <summary>정보 안내의 Inspector 지속·페이드 시간 동안 노트 알파를 낮추고 뒤의 목표 안내를 복원한다.</summary>
+    private IEnumerator FadeInformationNote()
+    {
+        float elapsed = 0f;
+        while (elapsed < _informationNoteDuration)
+        {
+            if (Time.timeScale > 0f && Application.isFocused) elapsed += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        float fadeElapsed = 0f;
+        float startAlpha = _tutorialCanvasGroup.alpha;
+        while (fadeElapsed < _informationNoteFadeDuration)
+        {
+            if (Time.timeScale > 0f && Application.isFocused)
+            {
+                fadeElapsed += Time.unscaledDeltaTime;
+                SetTutorialAlpha(Mathf.Lerp(startAlpha, 0f,
+                    Mathf.Clamp01(fadeElapsed / Mathf.Max(0.001f, _informationNoteFadeDuration))));
+            }
+            yield return null;
+        }
+
+        _informationNoteActive = false;
+        _informationNoteRoutine = null;
+        HideTutorial();
+        SetTutorialAlpha(1f);
+        RefreshDevicePrompt();
+    }
+
+    /// <summary>새 목표나 행동 안내가 일시 노트보다 우선하도록 기존 정보 노트를 취소한다.</summary>
+    private void StopInformationNote()
+    {
+        if (_informationNoteRoutine != null) StopCoroutine(_informationNoteRoutine);
+        _informationNoteRoutine = null;
+        if (_informationNoteActive) HideTutorial();
+        _informationNoteActive = false;
+        SetTutorialAlpha(1f);
+    }
+
+    /// <summary>alpha를 설명 카드·대상 테두리·연결선에 함께 적용해 정보 안내 전체를 페이드한다.</summary>
+    private void SetTutorialAlpha(float alpha)
+    {
+        _tutorialCanvasGroup.alpha = alpha;
+        _tutorialConnectorGroup.alpha = alpha;
+        _tutorialTargetGroup.alpha = alpha;
     }
 
     /// <summary>첫 단계의 count와 total을 사용해 우측 하단 처치 목표 숫자만 갱신한다.</summary>
@@ -462,6 +533,9 @@ public sealed class OnboardingHud : MonoBehaviour
     /// <summary>body 문구를 밝은 안내판에 표시하고 tutorial overlay를 보인다.</summary>
     public void ShowTutorial(string keyboardBody, string gamepadBody)
     {
+        StopInformationNote();
+        RefreshDevicePrompt();
+        ClearTutorialTarget();
         _tutorialKeyboardBody = keyboardBody;
         _tutorialGamepadBody = string.IsNullOrEmpty(gamepadBody) ? keyboardBody : gamepadBody;
         RefreshTutorialText();
@@ -616,6 +690,8 @@ public sealed class OnboardingHud : MonoBehaviour
     /// <summary>stage의 학습 내용을 요약하고 마지막 단계 여부에 맞는 진행·반복 버튼을 표시해 onSelected로 선택을 돌려준다.</summary>
     public IEnumerator ShowStageChoice(int stage, bool finalStage, Action<bool> onSelected)
     {
+        StopInformationNote();
+        RefreshDevicePrompt();
         StopObjectiveUpdate();
         EnsureEventSystem();
         _stageChoiceSelected = onSelected;
@@ -724,7 +800,9 @@ public sealed class OnboardingHud : MonoBehaviour
         SetStretchRect(_instructionText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(100f, 8f), new Vector2(-26f, -8f));
         _notePanel = CreateImage("GuideNotePanel", canvasObject.transform, new Color(0.015f, 0.02f, 0.025f, 0.78f));
         SetAnchoredRect(_notePanel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 130f), new Vector2(620f, 42f));
+        _notePanel.raycastTarget = false;
         _noteText = CreateText("GuideNote", _notePanel.transform, 24f, TextAlignmentOptions.Midline);
+        _noteText.raycastTarget = false;
         SetStretchRect(_noteText.rectTransform, Vector2.zero, Vector2.one, new Vector2(20f, 4f), new Vector2(-20f, -4f));
         _notePanel.gameObject.SetActive(false);
 
@@ -788,12 +866,16 @@ public sealed class OnboardingHud : MonoBehaviour
         _shurikenInputPanel.gameObject.SetActive(false);
 
         _tutorialConnector = CreateImage("TutorialTargetConnector", canvasObject.transform, TUTORIAL_GOLD);
+        _tutorialConnectorGroup = _tutorialConnector.gameObject.AddComponent<CanvasGroup>();
+        _tutorialConnectorGroup.blocksRaycasts = false;
         _tutorialConnector.raycastTarget = false;
         _tutorialConnector.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
         _tutorialConnector.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
         _tutorialConnector.rectTransform.pivot = new Vector2(0.5f, 0.5f);
         _tutorialConnector.gameObject.SetActive(false);
         _tutorialTargetFrame = CreateImage("TutorialTargetFrame", canvasObject.transform, Color.clear);
+        _tutorialTargetGroup = _tutorialTargetFrame.gameObject.AddComponent<CanvasGroup>();
+        _tutorialTargetGroup.blocksRaycasts = false;
         _tutorialTargetFrame.raycastTarget = false;
         _tutorialTargetRect = _tutorialTargetFrame.rectTransform;
         Image targetTop = CreateImage("TopBorder", _tutorialTargetFrame.transform, TUTORIAL_GOLD);
@@ -815,9 +897,12 @@ public sealed class OnboardingHud : MonoBehaviour
         _tutorialTargetFrame.gameObject.SetActive(false);
 
         _tutorialPanel = CreateImage("TutorialCard", canvasObject.transform, TUTORIAL_PAPER);
+        _tutorialCanvasGroup = _tutorialPanel.gameObject.AddComponent<CanvasGroup>();
+        _tutorialCanvasGroup.interactable = false;
+        _tutorialCanvasGroup.blocksRaycasts = false;
         _tutorialPanelRect = _tutorialPanel.rectTransform;
         SetAnchoredRect(_tutorialPanelRect, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 270f), new Vector2(820f, 206f));
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 350f), new Vector2(820f, 206f));
         Outline tutorialOutline = _tutorialPanel.gameObject.AddComponent<Outline>();
         tutorialOutline.effectColor = TUTORIAL_GOLD;
         tutorialOutline.effectDistance = new Vector2(4f, 4f);
@@ -1041,10 +1126,10 @@ public sealed class OnboardingHud : MonoBehaviour
         Prompt prompt = _prompts[_currentStage];
         bool gamepad = InputDeviceDisplay.IsGamepad;
         _instructionText.text = prompt.GetHint(gamepad, _currentObjective);
-        bool swordWaveHint = _currentStage == 3 && _currentObjective == 2;
+        bool swordWaveHint = _currentStage == 3 && _currentObjective == 1;
         _instructionText.enableAutoSizing = !swordWaveHint;
         if (swordWaveHint) _instructionText.fontSize = INSTRUCTION_FONT_SIZE;
-        string note = prompt.GetNote(_currentObjective);
+        string note = prompt.GetNote(_currentObjective, _followUpNoteVisible, gamepad);
         _noteText.text = note;
         _notePanel.gameObject.SetActive(!string.IsNullOrEmpty(note));
         _instructionIcon.sprite = prompt.GetIcon(_currentObjective);
