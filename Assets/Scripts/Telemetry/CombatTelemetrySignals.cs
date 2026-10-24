@@ -12,12 +12,42 @@ namespace BlindBlade.Telemetry
     /// <summary>전투 생산자가 확정한 공격 수명과 접촉을 분석기에 전달한다. 게임 판정은 변경하지 않는다.</summary>
     public static class CombatTelemetrySignals
     {
+        private static readonly List<EnemyHealth> _activeEnemyBuffer = new List<EnemyHealth>();
+        private static readonly List<DefenseShuriken> _activeShurikenBuffer = new List<DefenseShuriken>();
+        private static readonly List<EnemyProjectile> _activeEnemyProjectileBuffer = new List<EnemyProjectile>();
+        private static readonly List<TwinBossProjectile> _activeTwinProjectileBuffer = new List<TwinBossProjectile>();
+        private static readonly HashSet<GameObject> _countedProjectiles = new HashSet<GameObject>();
+        private static SensoryManager _sensoryManager;
+
         public static event Action<string, int, JObject> Raised;
+
+        /// <summary>새 플레이 세션에서 이전 씬의 적·투사체 참조를 재사용 버퍼에서 비운다.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetAwarenessBuffers()
+        {
+            ClearAwarenessBuffers();
+            _sensoryManager = null;
+        }
+
+        /// <summary>재사용 목록과 중복 집합을 비우고 할당된 용량은 유지한다.</summary>
+        private static void ClearAwarenessBuffers()
+        {
+            _activeEnemyBuffer.Clear();
+            _activeShurikenBuffer.Clear();
+            _activeEnemyProjectileBuffer.Clear();
+            _activeTwinProjectileBuffer.Clear();
+            _countedProjectiles.Clear();
+        }
 
         /// <summary>최대 감지 거리 안의 살아 있는 적과 적대 수리검 수를 실제 설정 반경으로 표본화한다.</summary>
         public static JObject CaptureAwarenessSnapshot(Vector3 playerPosition)
         {
-            SensoryManager sensory = UnityEngine.Object.FindAnyObjectByType<SensoryManager>();
+            ClearAwarenessBuffers();
+            if (_sensoryManager == null)
+                _sensoryManager = Game.IsInitialized
+                    ? Game.Instance.SensoryManager
+                    : UnityEngine.Object.FindAnyObjectByType<SensoryManager>();
+            SensoryManager sensory = _sensoryManager;
             bool collected = sensory != null;
             JObject snapshot = new JObject
             {
@@ -39,26 +69,28 @@ namespace BlindBlade.Telemetry
             int normalEnemies = 0;
             int bosses = 0;
             int hostileShurikens = 0;
-            foreach (EnemyHealth enemy in EnemyHealth.GetActiveTargets())
+            EnemyHealth.CopyActiveTargetsTo(_activeEnemyBuffer);
+            foreach (EnemyHealth enemy in _activeEnemyBuffer)
             {
                 if ((enemy.transform.position - playerPosition).sqrMagnitude > radiusSquared) continue;
-                if (enemy.GetComponentInParent<BossController>() != null
-                    || enemy.GetComponentInParent<TwinBossController>() != null)
+                if (enemy.IsBoss)
                     bosses++;
                 else
                     normalEnemies++;
             }
-            HashSet<GameObject> countedProjectiles = new HashSet<GameObject>();
-            foreach (DefenseShuriken shuriken in DefenseShuriken.GetActiveHostileShurikens())
-                if (countedProjectiles.Add(shuriken.gameObject)
+            DefenseShuriken.CopyActiveHostileShurikensTo(_activeShurikenBuffer);
+            foreach (DefenseShuriken shuriken in _activeShurikenBuffer)
+                if (_countedProjectiles.Add(shuriken.gameObject)
                     && (shuriken.transform.position - playerPosition).sqrMagnitude <= radiusSquared)
                     hostileShurikens++;
-            foreach (EnemyProjectile projectile in UnityEngine.Object.FindObjectsByType<EnemyProjectile>(FindObjectsSortMode.None))
-                if (projectile.IsHostileFlying && countedProjectiles.Add(projectile.gameObject)
+            EnemyProjectile.CopyActiveHostileFlightsTo(_activeEnemyProjectileBuffer);
+            foreach (EnemyProjectile projectile in _activeEnemyProjectileBuffer)
+                if (_countedProjectiles.Add(projectile.gameObject)
                     && (projectile.transform.position - playerPosition).sqrMagnitude <= radiusSquared)
                     hostileShurikens++;
-            foreach (TwinBossProjectile projectile in UnityEngine.Object.FindObjectsByType<TwinBossProjectile>(FindObjectsSortMode.None))
-                if (projectile.IsHostileFlying && countedProjectiles.Add(projectile.gameObject)
+            TwinBossProjectile.CopyActiveHostileFlightsTo(_activeTwinProjectileBuffer);
+            foreach (TwinBossProjectile projectile in _activeTwinProjectileBuffer)
+                if (_countedProjectiles.Add(projectile.gameObject)
                     && (projectile.transform.position - playerPosition).sqrMagnitude <= radiusSquared)
                     hostileShurikens++;
 
@@ -66,6 +98,7 @@ namespace BlindBlade.Telemetry
             snapshot["bossCount"] = bosses;
             snapshot["hostileShurikenCount"] = hostileShurikens;
             snapshot["hostileTotalCount"] = normalEnemies + bosses + hostileShurikens;
+            ClearAwarenessBuffers();
             return snapshot;
         }
 

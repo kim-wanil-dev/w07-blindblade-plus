@@ -175,10 +175,20 @@ public sealed class DefenseShuriken : MonoBehaviour
     public static List<DefenseShuriken> GetActiveHostileShurikens()
     {
         List<DefenseShuriken> hostileShurikens = new List<DefenseShuriken>(_activeShurikens.Count);
+        CopyActiveHostileShurikensTo(hostileShurikens);
+        return hostileShurikens;
+    }
+
+    /// <summary>
+    /// destination 목록을 비우고 활성 상태인 적대 수리검을 복사한다.
+    /// 호출자가 destination을 재사용하면 조회마다 목록을 새로 할당하지 않는다.
+    /// </summary>
+    public static void CopyActiveHostileShurikensTo(List<DefenseShuriken> destination)
+    {
+        destination.Clear();
         foreach (DefenseShuriken shuriken in _activeShurikens)
             if (shuriken != null && shuriken.IsHostile)
-                hostileShurikens.Add(shuriken);
-        return hostileShurikens;
+                destination.Add(shuriken);
     }
 
     /// <summary>
