@@ -29,6 +29,13 @@ public sealed class OnboardingHud : MonoBehaviour
         private string _followUpNote;
         [SerializeField, TextArea(1, 2)] private string[] _objectives;
 
+        [Header("단계 카드")]
+        [SerializeField] private string _stageStartTitle;
+        [SerializeField, TextArea(1, 2)] private string _stageStartDetail;
+        [SerializeField] private string _stageCompleteTitle;
+        [SerializeField, TextArea(1, 2)] private string _stageCompleteKeyboardDetail;
+        [SerializeField, TextArea(1, 2)] private string _stageCompleteGamepadDetail;
+
         /// <summary>keyboardHint, gamepadHint, keyboardIcon, objectives로 교체 가능한 단계 안내를 만든다.</summary>
         public Prompt(string keyboardHint, string gamepadHint, Sprite keyboardIcon, params string[] objectives)
             : this(keyboardHint, gamepadHint, keyboardIcon, objectives, null, null, null)
@@ -89,6 +96,16 @@ public sealed class OnboardingHud : MonoBehaviour
 
         /// <summary>현재 단계에 등록된 순차 목표 문구 수를 반환한다.</summary>
         public int ObjectiveCount => _objectives != null ? _objectives.Length : 0;
+
+        public string StageStartTitle => _stageStartTitle;
+        public string StageStartDetail => _stageStartDetail;
+        public string StageCompleteTitle => _stageCompleteTitle;
+
+        /// <summary>현재 입력 장치에 맞는 단계 완료 문구를 Inspector 설정에서 반환한다.</summary>
+        public string GetStageCompleteDetail(bool gamepad)
+        {
+            return gamepad ? _stageCompleteGamepadDetail : _stageCompleteKeyboardDetail;
+        }
     }
 
     private const float REFERENCE_WIDTH = 1920f;
@@ -119,6 +136,11 @@ public sealed class OnboardingHud : MonoBehaviour
             new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" },
             "거합: Q", "거합: Y", null, 1)
     };
+
+    [Header("단계 완료 선택")]
+    [SerializeField] private string _nextStageButtonText;
+    [SerializeField] private string _finalStageButtonText;
+    [SerializeField] private string _repeatStageButtonText;
 
     [Header("집중 안내")]
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.\n마우스 좌클릭으로 계속 진행";
@@ -599,10 +621,10 @@ public sealed class OnboardingHud : MonoBehaviour
         _stageChoiceSelected = onSelected;
         _completionPanelRect.sizeDelta = new Vector2(620f, 280f);
         ApplyCompletionLayout(false);
-        _completionTitle.text = "단계 " + (stage + 1) + "/" + _prompts.Length + " 완료";
-        _completionDetail.text = GetStageLesson(stage);
+        _completionTitle.text = _prompts[stage].StageCompleteTitle;
+        _completionDetail.text = _prompts[stage].GetStageCompleteDetail(InputDeviceDisplay.IsGamepad);
         _completionDetail.rectTransform.anchoredPosition = new Vector2(0f, 145f);
-        _continueLabel.text = finalStage ? "1막 시작" : "다음 단계";
+        _continueLabel.text = finalStage ? _finalStageButtonText : _nextStageButtonText;
         _continueButton.gameObject.SetActive(true);
         _repeatButton.gameObject.SetActive(true);
         yield return FadeCompletion(1f, 0.16f);
@@ -624,24 +646,6 @@ public sealed class OnboardingHud : MonoBehaviour
         _completionDetail.rectTransform.anchoredPosition = new Vector2(0f, 25f);
     }
 
-    /// <summary>stage와 현재 입력 장치에 맞는 단계 완료 복습 문구를 반환한다.</summary>
-    private static string GetStageLesson(int stage)
-    {
-        bool gamepad = InputDeviceDisplay.IsGamepad;
-        switch (stage)
-        {
-            case 0: return "적에게 다가가 공격하면 발도합니다.";
-            case 1: return "적의 공격에 맞기 직전 회피하면 파동과 감속이 발생합니다.";
-            case 2: return "적의 공격을 막고, 공격 직전에 막으면 쳐내기에 성공합니다.";
-            case 3: return gamepad
-                ? "일섬 게이지 1칸 이상이면 RT로 발동합니다."
-                : "일섬 게이지 1칸 이상이면 Shift로 발동합니다.";
-            default: return gamepad
-                ? "거합 게이지가 100%면 Y를 눌러 발동합니다."
-                : "거합 게이지가 100%면 Q를 눌러 발동합니다.";
-        }
-    }
-
     /// <summary>현재 씬에 UI 입력 시스템이 없으면 마우스·키보드·패드 버튼을 받을 EventSystem을 만든다.</summary>
     private static void EnsureEventSystem()
     {
@@ -656,16 +660,14 @@ public sealed class OnboardingHud : MonoBehaviour
     }
 
     /// <summary>
-    /// stage의 시작을 단계 전환 카드와 같은 중앙 카드로 알리고 첫 목표 문구를 설명 줄에 표시한다.
+    /// stage의 Inspector 시작 제목과 설명을 단계 전환 카드와 같은 중앙 카드에 표시한다.
     /// 목표 갱신 카드처럼 기다리지 않고 재생하므로 표시 중에도 입력을 막지 않는다.
     /// </summary>
     public void PlayStageStart(int stage)
     {
         StopObjectiveUpdate();
-        string objective = stage == 0 ? "전방으로 이동해 적 처치"
-            : stage == 4 ? "거합 게이지 채우기"
-            : stage >= 0 && stage < _prompts.Length ? _prompts[stage].GetObjective(0) : string.Empty;
-        _objectiveUpdateRoutine = StartCoroutine(PlayCard("단계 " + (stage + 1) + "/" + _prompts.Length + " 시작", objective));
+        Prompt prompt = _prompts[stage];
+        _objectiveUpdateRoutine = StartCoroutine(PlayCard(prompt.StageStartTitle, prompt.StageStartDetail));
     }
 
     /// <summary>heading과 detail 카드를 중앙 패널에 한 번 표시하고 끝나면 진행 중인 카드 참조를 비운다.</summary>
@@ -839,8 +841,8 @@ public sealed class OnboardingHud : MonoBehaviour
         _completionDetail = CreateText("CompletionDetail", completionPanel.transform, 24f, TextAlignmentOptions.Center);
         SetAnchoredRect(_completionDetail.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f),
             new Vector2(0.5f, 0f), new Vector2(0f, 25f), new Vector2(-40f, 48f));
-        _continueButton = CreateStageChoiceButton("ContinueButton", completionPanel.transform, new Vector2(-140f, -230f), "다음 단계");
-        _repeatButton = CreateStageChoiceButton("RepeatButton", completionPanel.transform, new Vector2(140f, -230f), "다시 연습");
+        _continueButton = CreateStageChoiceButton("ContinueButton", completionPanel.transform, new Vector2(-140f, -230f), _nextStageButtonText);
+        _repeatButton = CreateStageChoiceButton("RepeatButton", completionPanel.transform, new Vector2(140f, -230f), _repeatStageButtonText);
         _continueLabel = _continueButton.GetComponentInChildren<TextMeshProUGUI>();
         _continueButton.onClick.AddListener(() => SelectStageChoice(false));
         _repeatButton.onClick.AddListener(() => SelectStageChoice(true));
