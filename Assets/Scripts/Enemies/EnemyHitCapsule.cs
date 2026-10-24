@@ -47,6 +47,7 @@ public sealed class EnemyHitCapsule : MonoBehaviour
     public static IReadOnlyList<EnemyHitCapsule> Active => _active;
     public EnemyHealth Health => _health;
     public bool HasBodyCollider => _bodyCollider != null;
+    public Collider BodyCollider => _bodyCollider;
     public bool BlocksPlayer => _blocksPlayer && _bodyCollider == null;
     /// <summary>기존 충돌체의 enabled와 같은 뜻이다. 몸 충돌체가 있으면 그 충돌체의 enabled를 반환한다.</summary>
     public bool IsEnabled => _bodyCollider != null ? _bodyCollider.enabled : enabled;

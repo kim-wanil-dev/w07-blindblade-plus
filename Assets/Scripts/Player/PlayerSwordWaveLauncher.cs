@@ -36,12 +36,12 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private float _spawnHeightOffset = -0.5f;
 
     [Header("돌진")]
-    [SerializeField, Min(0f), Tooltip("검기 공격이 시작될 때 시선 수평 방향으로 돌진하는 거리(미터). 기본값은 회피 거리 2.4m의 7.5배다. 0이면 돌진하지 않는다.")]
-    private float _dashDistance = 18f;
+    [SerializeField, Min(0f), Tooltip("검기 공격이 시작될 때 시선 수평 방향으로 돌진하는 거리(미터). 기본값은 회피 거리 2.4m의 10배다. 0이면 돌진하지 않는다.")]
+    private float _dashDistance = 24f;
     [SerializeField, Min(0.01f), Tooltip("돌진 거리를 지나는 플레이어 시간(초). 벽이나 이동 경계에 닿으면 멈춘다.")]
-    private float _dashDuration = 0.3f;
-    [SerializeField, Min(0f), Tooltip("일섬을 누른 뒤 집중 감속 속에서 제자리에 멈춰 있다가 돌진을 시작하기까지의 실시간(초). 일시정지 동안 멈춘다.")]
-    private float _dashStartDelay = 0.08f;
+    private float _dashDuration = 0.123f;
+    [SerializeField, Min(0f), Tooltip("일섬 집중 감속 연출이 다 들어온 뒤 제자리에 멈춰 있다가 돌진을 시작하기까지의 실시간(초). 실제 대기는 PlayerEmpower의 집중 페이드 인 시간을 더한 값이며 일시정지 동안 멈춘다.")]
+    private float _dashStartDelay = 0.1f;
     [SerializeField, Tooltip("돌진 중 몸 판정이 검사하는 레이어. 적이 아닌 접촉은 무시한다. 반경과 피해는 검기 프리팹 값을 쓴다.")]
     private LayerMask _dashHitMask = ~(1 << BambooGrove.DEBRIS_LAYER);
     private readonly List<EnemyCapsuleHit> _dashHits = new List<EnemyCapsuleHit>();
@@ -68,9 +68,9 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
 
     [Header("타격 정지")]
     [SerializeField, Min(0f), Tooltip("일섬 돌진이 적을 벨 때마다 세계와 플레이어를 거의 멈추는 실시간(초). 불릿 타임이 아닐 때의 값이며 0이면 쓰지 않는다. 일시정지 동안 멈춘다.")]
-    private float _hitStopDuration = 0.03f;
+    private float _hitStopDuration = 0.01f;
     [SerializeField, Min(0f), Tooltip("불릿 타임 중 타격 정지의 최대 실시간(초). 불릿 타임에는 기본 정지 시간을 세계 배율로 나눠 늘리되 이 값을 넘기지 않는다.")]
-    private float _hitStopBulletTimeMaxDuration = 0.03f;
+    private float _hitStopBulletTimeMaxDuration = 0.015f;
     [SerializeField, Range(0.01f, 1f), Tooltip("타격 정지 동안 세계 시간 배율. 플레이어도 같은 배율로 멈춘다.")]
     private float _hitStopTimeScale = 0.02f;
     private float _hitStopRemaining;
@@ -105,7 +105,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     public bool IsSkillAction(int actionId) => actionId > 0 && actionId == _skillActionId;
 
     /// <summary>
-    /// 이미 시작된 actionId의 일반 베기를 새 실행 ID를 가진 일섬으로 연결한다. 돌진이 있으면 _dashStartDelay 실시간 동안 제자리에서 기다린 뒤 돌진하고,
+    /// 이미 시작된 actionId의 일반 베기를 새 실행 ID를 가진 일섬으로 연결한다. 돌진이 있으면 집중 페이드 인과 _dashStartDelay를 더한 실시간 동안 제자리에서 기다린 뒤 돌진하고,
     /// 대기가 0이면 바로 돌진한다. 돌진이 없으면 기존 베기 시점까지 발사를 기다린다. FOV는 집중 감속의 페이드 인·아웃을 따른다.
     /// </summary>
     public void PlaySkill(int actionId)
@@ -118,7 +118,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         _armed = _dashDistance <= 0f;
         if (_dashDistance > 0f && _dashStartDelay > 0f)
         {
-            _dashStartDelayRemaining = _dashStartDelay;
+            // 감속 연출이 다 들어온 뒤부터 멈춤 시간을 센다.
+            _dashStartDelayRemaining = _empower.SwordWaveFocusFadeIn + _dashStartDelay;
             return;
         }
         BeginDash();
@@ -278,7 +279,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     }
 
     /// <summary>
-    /// 이번 검기 공격의 공유 피격 추적기를 새로 만들고 시선 수평 방향으로 _dashDistance 돌진과 발사 연출을 함께 시작한다.
+    /// 이번 검기 공격의 공유 피격 추적기를 새로 만들고 시선 수평 방향으로 _dashDistance 돌진과 발사 연출을 함께 시작한다. 돌진은 적 몸에 막히지 않고 벽에서만 멈춘다.
     /// 돌진 거리가 0이면 돌진과 몸 판정 없이 검기만 쓰며, 시작 위치를 _dashLastCenter에 저장하고 곧바로 몸 판정을 한 번 한다.
     /// </summary>
     private void BeginDash()
@@ -287,7 +288,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         _hitTracker = new SharedDamageHitTracker(_dashStruck, new HashSet<EnemyHealth>());
         _dashing = false;
         if (_dashDistance <= 0f) return;
-        _motor.ApplyCombatPush(_motor.ViewForward, _dashDistance, _dashDuration);
+        _motor.ApplyCombatPush(_motor.ViewForward, _dashDistance, _dashDuration, true);
         _dashing = true;
         _launchElapsed = 0f;
         _dashLastCenter = _controller.bounds.center;
