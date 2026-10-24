@@ -20,12 +20,15 @@ public class SoundLibrary : ScriptableObject
     [Header("전투 신호 청취")]
     [SerializeField, Min(0f)] private float _combatFocusDuration = 0.35f;
     [SerializeField, Range(0f, 1f)] private float _combatFootstepVolume = 0.35f;
+    [SerializeField, Min(0), Tooltip("동시에 재생하는 일반 적 발소리의 최대 수. 넘으면 플레이어에게서 먼 발소리부터 끊는다. 0이면 제한하지 않는다.")]
+    private int _maxEnemyFootsteps = 8;
 
     internal string BgmBusPath => _bgmBusPath;
     internal string EffectBusPath => _effectBusPath;
     internal string CinematicBusPath => _cinematicBusPath;
     internal float CombatFocusDuration => _combatFocusDuration;
     internal float CombatFootstepVolume => _combatFootstepVolume;
+    internal int MaxEnemyFootsteps => _maxEnemyFootsteps;
 
     /// <summary>
     /// soundId의 공통 재생 사용 여부·음량·pitch 배율 및 호출부 Label 사용 여부를 조회한다.

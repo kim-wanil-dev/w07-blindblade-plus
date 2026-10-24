@@ -139,7 +139,7 @@ public sealed class EnemyFootsteps : MonoBehaviour
 
     /// <summary>
     /// position에서 공통 발걸음 소리를 5dB 증폭하여 최소 간격으로 재생하고 C# 이벤트에 위치를 전달한다.
-    /// 같은 적의 이전 발소리는 즉시 정지하며, None 설정이어도 위치 이벤트는 전달한다.
+    /// 같은 적의 이전 발소리는 즉시 정지하고 동시 재생 수는 SoundLibrary 최대값을 따르며, None 설정이어도 위치 이벤트는 전달한다.
     /// </summary>
     private void EmitFootstep(Vector3 position)
     {
@@ -158,9 +158,7 @@ public sealed class EnemyFootsteps : MonoBehaviour
         if (soundId != SoundId.None && Time.time >= _nextFootstepSoundTime)
         {
             _nextFootstepSoundTime = Time.time + MIN_FOOTSTEP_SOUND_INTERVAL;
-            Managers.Sound.StopFor(gameObject, soundId, forceStop: true);
-            Managers.Sound.Play(soundId, position, volume: FOOTSTEP_VOLUME, owner: gameObject,
-                playDuringMovement: attackMovement);
+            Managers.Sound.PlayEnemyFootstep(soundId, position, FOOTSTEP_VOLUME, gameObject, attackMovement);
         }
         Footstep?.Invoke(position);
     }

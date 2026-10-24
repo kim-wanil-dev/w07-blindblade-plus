@@ -1,5 +1,13 @@
 ### FMOD 사운드 매니저
 
+#### 일반 적 발소리 최대 동시 재생 수 (2026-10-24)
+
+- `SoundLibrary`의 전투 신호 청취 그룹에 `Max Enemy Footsteps`(기본 8, 에셋 값 8)를 추가했다. 0이면 제한하지 않는다.
+- `EnemyFootsteps.EmitFootstep`은 `SoundManager.PlayEnemyFootstep`으로 재생한다. 같은 적의 이전 발소리를 즉시 정지하는 기존 동작을 이 메서드가 수행하고, 재생 중인 일반 적 발소리를 `_enemyFootsteps`로 센다.
+- 최대 수에 닿으면 플레이어 위치에서 가장 먼 발소리 중 새 발소리보다 먼 것을 정지하고 새 발소리를 재생한다. 새 발소리가 가장 멀면 재생하지 않는다. 위치 이벤트(`Footstep`)는 재생 여부와 관계없이 전달한다.
+- 보스 발소리(`TwinBossFootsteps`, `BeastBossAudio`, `BossPresentation`)는 기존 `Play`를 써 개수에 들어가지 않는다. Rainy Stage의 적 물 발소리가 플레이어 `RainFootstep`과 같은 FMOD 이벤트를 쓰므로 FMOD 이벤트 최대 인스턴스 대신 Unity에서 제한한다.
+- 관련 코드: Assets/Scripts/Managers/SoundManager.cs의 `PlayEnemyFootstep`·`RemoveFinishedEnemyFootsteps`·`TryReserveEnemyFootstep`·`StopEffects`, Assets/Scripts/SoundSystem/SoundLibrary.cs의 `MaxEnemyFootsteps`, Assets/Resources/Sound/SoundLibrary.asset, Assets/Scripts/Enemies/EnemyFootsteps.cs. C# 빌드 오류 0개. 실제 청취와 적합한 최대 수는 Play 미확인이다.
+
 #### Rigidbody 없는 적의 도플러 속도 유지 (2026-10-24)
 
 - 잡몹 루트의 키네마틱 Rigidbody를 [적 피격 캡슐](적_피격_캡슐.md) 전환으로 제거했다. 기존에는 부착 재생이 NavMeshAgent가 Transform으로 옮기는 키네마틱 Rigidbody의 속도(0)를 FMOD에 넘겼다.
