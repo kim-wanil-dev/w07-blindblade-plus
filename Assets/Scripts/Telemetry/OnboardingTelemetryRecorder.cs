@@ -19,7 +19,7 @@ namespace BlindBlade.Telemetry
         private static readonly int[] _retryCounts = new int[STAGE_COUNT];
 
         [Header("온보딩 단계 로그")]
-        [SerializeField] private string _configVersion = "onboarding-2026-10-17-stage-ids-5";
+        [SerializeField] private string _configVersion = "onboarding-2026-10-24-action-guides";
         [SerializeField, Min(5f)] private float _summaryIntervalSeconds = 15f;
 
         [Header("로컬 저장과 자동 전송")]
@@ -288,8 +288,8 @@ namespace BlindBlade.Telemetry
             if (_stage == 0) return kind == PlayerInputKind.Attack;
             if (_stage == 1) return kind == PlayerInputKind.Dodge;
             if (_stage == 2) return kind == PlayerInputKind.GuardPress;
-            if (_stage == 3) return (_objective == 2 && kind == PlayerInputKind.SwordWave)
-                || (_objective < 2 && kind == PlayerInputKind.GuardPress);
+            if (_stage == 3) return _objective == 0 ? kind == PlayerInputKind.GuardPress
+                : _objective == 1 && (kind == PlayerInputKind.GuardPress || kind == PlayerInputKind.SwordWave);
             if (_stage == 4) return _objective == 1 ? kind == PlayerInputKind.Ultimate
                 : kind == PlayerInputKind.GuardPress || kind == PlayerInputKind.Dodge;
             return false;

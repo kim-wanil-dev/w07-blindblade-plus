@@ -8,6 +8,12 @@ using UnityEngine.InputSystem;
 [DefaultExecutionOrder(-40)]
 public sealed class InputManager : MonoBehaviour
 {
+    public enum OnboardingPromptAction
+    {
+        Attack,
+        Ultimate
+    }
+
     private const string DODGE_STAMINA_SOUND_PATH = "UI/StaminaInsufficient.wav";
     private const float DODGE_STAMINA_SOUND_VOLUME = 1.42f;
 
@@ -53,6 +59,12 @@ public sealed class InputManager : MonoBehaviour
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
     private bool _ignoreAttackInputUntilRelease;
+    private bool _onboardingPromptActive;
+    private bool _onboardingPromptRequiresRelease;
+    private bool _onboardingPromptInputPending;
+    private bool _onboardingPromptInputClaimed;
+    private OnboardingPromptAction _onboardingPromptAction;
+    private double _onboardingPromptPressTime;
 
     public bool IsInitialized => _state != null;
     public bool IsGameplayInputEnabled { get; private set; }
@@ -100,14 +112,24 @@ public sealed class InputManager : MonoBehaviour
                 GameSettingsPopupUI.TryCloseForGameplay();
                 return;
             }
-            if (_state.State == GameplayState.Playing && IsGameplayInputEnabled
+            if (_state.State == GameplayState.Playing && (IsGameplayInputEnabled || _onboardingPromptActive)
                 && player != null && !player.IsPaused)
             {
+                if (_onboardingPromptActive)
+                {
+                    _onboardingPromptRequiresRelease = true;
+                    _onboardingPromptInputPending = false;
+                }
                 ClearHeldInput();
                 if (!GameSettingsPopupUI.TryOpenForGameplay())
                     SetCursor(false);
                 return;
             }
+        }
+        if (_onboardingPromptActive)
+        {
+            UpdateOnboardingPromptInput(player);
+            return;
         }
         if (!IsGameplayInputEnabled || player == null || player.IsPaused) return;
         // 거합 차징은 Q·Y를 누르고 있는 동안만 이어지며, 다 차기 전에 떼면 게이지를 쓰지 않고 취소한다.
@@ -167,6 +189,82 @@ public sealed class InputManager : MonoBehaviour
             RequestAttack(player);
     }
 
+    /// <summary>온보딩 행동 안내 중 조준을 적용하고 새 공격 또는 거합 입력을 한 건만 보관한다.</summary>
+    private void UpdateOnboardingPromptInput(PlayerController player)
+    {
+        if (_state == null || _state.State != GameplayState.Playing || player == null || player.IsPaused
+            || !Application.isFocused || _onboardingPromptInputPending || _onboardingPromptInputClaimed) return;
+
+        if (_motor != null)
+        {
+            Vector2 look = _look.ReadValue<Vector2>();
+            if (_look.activeControl != null && _look.activeControl.device is Gamepad)
+                _motor.ApplyOnboardingLookInput(look, true, _gamepadLookDegreesPerSecond, Time.unscaledDeltaTime);
+            else
+                _motor.ApplyOnboardingLookInput(look, false, _gamepadLookDegreesPerSecond, Time.unscaledDeltaTime);
+        }
+
+        InputAction action = _onboardingPromptAction == OnboardingPromptAction.Attack ? _attack : _ultimateInput;
+        if (_onboardingPromptRequiresRelease)
+        {
+            if (!action.IsPressed()) _onboardingPromptRequiresRelease = false;
+            return;
+        }
+        if (!action.WasPressedThisFrame()) return;
+
+        _onboardingPromptInputPending = true;
+        _onboardingPromptPressTime = _onboardingPromptAction == OnboardingPromptAction.Attack
+            ? _attackPressTime : _ultimatePressTime;
+    }
+
+    /// <summary>새 온보딩 입력을 실제 행동 요청으로 전달하고 기록 시각을 보존한다.</summary>
+    public void ExecuteOnboardingPromptAction(OnboardingPromptAction action, double pressTime)
+    {
+        PlayerController player = Game.Player;
+        if (!IsGameplayInputEnabled || player == null || player.IsPaused || !Application.isFocused) return;
+        if (action == OnboardingPromptAction.Attack)
+        {
+            _attackPressTime = pressTime;
+            RequestAttack(player, true, pressTime);
+            _ignoreAttackInputUntilRelease = true;
+            SetCursor(true);
+            return;
+        }
+
+        RequestSkill(true, pressTime, true);
+    }
+
+    /// <summary>action의 새 누름만 안내에 전달하도록 프롬프트를 열고 이미 누른 상태는 해제를 기다린다.</summary>
+    public void BeginOnboardingActionPrompt(OnboardingPromptAction action)
+    {
+        _onboardingPromptAction = action;
+        _onboardingPromptInputPending = false;
+        _onboardingPromptInputClaimed = false;
+        InputAction input = action == OnboardingPromptAction.Attack ? _attack : _ultimateInput;
+        _onboardingPromptRequiresRelease = input.IsPressed();
+        _onboardingPromptActive = true;
+    }
+
+    /// <summary>대기 중인 프롬프트 누름을 꺼내 한 번만 소비하고 입력 장치 시각을 반환한다.</summary>
+    public bool TryConsumeOnboardingActionPromptInput(out OnboardingPromptAction action, out double pressTime)
+    {
+        action = _onboardingPromptAction;
+        pressTime = _onboardingPromptPressTime;
+        if (!_onboardingPromptActive || !_onboardingPromptInputPending) return false;
+        _onboardingPromptInputPending = false;
+        _onboardingPromptInputClaimed = true;
+        return true;
+    }
+
+    /// <summary>온보딩 행동 안내가 끝나면 임시 입력 감지를 닫고 다음 단계에 누름 상태를 넘기지 않는다.</summary>
+    public void EndOnboardingActionPrompt()
+    {
+        _onboardingPromptActive = false;
+        _onboardingPromptRequiresRelease = false;
+        _onboardingPromptInputPending = false;
+        _onboardingPromptInputClaimed = false;
+    }
+
     /// <summary>
     /// 현재 우클릭 _guardInputId로 방어를 요청하고 가드 시작 또는 거부 결과를 kind 입력 기록으로 발행한다.
     /// 거부 이유는 Coordinator의 LastRejectReason을 사용한다. 누르고 있는 입력의 재진입은 매 프레임 거부될 수 있으므로 가드가 실제로 시작된 경우에만 기록한다.
@@ -180,22 +278,26 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 패링 집중이면 게이지 소모 없는 일섬을, 그 외에는 player의 일반 공격을 새 InputId로 요청한다.
-    /// 수락 결과를 입력 기록으로 발행한다.
+    /// player의 공격을 새 InputId로 요청한다. swordWaveOnly이면 집중 만료 시 일반 공격으로 대체하지 않고 pressTime을 입력 기록에 저장한다.
+    ///
+    /// swordWaveOnly가 false이면 일반 상태 규칙을 적용하고, 실제 수락 결과를 입력 기록으로 발행한다.
     /// </summary>
-    private void RequestAttack(PlayerController player)
+    private void RequestAttack(PlayerController player, bool swordWaveOnly = false, double pressTime = -1d)
     {
         int inputId = ++_nextInputId;
-        if (_empower.IsSwordWaveReady && !_empower.IsSwordWaveFocusing && !_empower.IsCharging)
+        double inputPressTime = pressTime >= 0d ? pressTime : _attackPressTime;
+        bool canLaunchSwordWave = _empower.IsSwordWaveReady
+            && !_empower.IsSwordWaveFocusing && !_empower.IsCharging;
+        if (canLaunchSwordWave || swordWaveOnly)
         {
-            bool accepted = _empower.TryBeginParrySwordWave();
+            bool accepted = canLaunchSwordWave && _empower.TryBeginParrySwordWave();
             PublishInput(inputId, PlayerInputKind.SwordWave,
                 accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
                 accepted ? PlayerInputRejectReason.None : PlayerInputRejectReason.ActionBusy,
-                accepted ? player.CurrentActionId : 0, _attackPressTime);
+                accepted ? player.CurrentActionId : 0, inputPressTime);
             return;
         }
-        RequestNormalAttack(player, inputId, _attackPressTime);
+        RequestNormalAttack(player, inputId, inputPressTime);
     }
 
     /// <summary>
@@ -242,18 +344,21 @@ public sealed class InputManager : MonoBehaviour
             started ? player.CurrentActionId : 0, pressTime);
     }
 
-    /// <summary>ultimate로 Q 거합과 Shift 일섬을 구분해 한 번 요청한다. 실제 수락/잔량 부족/행동 불가를 고유 입력 ID로 기록한다.</summary>
-    private void RequestSkill(bool ultimate)
+    /// <summary>ultimate 요청을 한 번 수행하고 pressTime을 기록한다. requireHeld이면 실제 거합 차징 전에 Q/Y 유지도 확인한다.</summary>
+    private void RequestSkill(bool ultimate, double pressTime = -1d, bool requireHeld = false)
     {
         int inputId = ++_nextInputId;
+        double inputPressTime = pressTime >= 0d
+            ? pressTime : ultimate ? _ultimatePressTime : _swordWavePressTime;
         bool enough = ultimate ? _skillGauge.CanUseUltimate : _skillGauge.CanUseSwordWave;
-        bool accepted = ultimate ? _empower.TryBeginAutomaticCharge() : _empower.TryBeginSwordWave();
+        bool accepted = (!requireHeld || !ultimate || _ultimateInput.IsPressed())
+            && (ultimate ? _empower.TryBeginAutomaticCharge() : _empower.TryBeginSwordWave());
         PublishInput(inputId, ultimate ? PlayerInputKind.Ultimate : PlayerInputKind.SwordWave,
             accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
             accepted ? PlayerInputRejectReason.None : enough ? PlayerInputRejectReason.ActionBusy
                 : PlayerInputRejectReason.NotEnoughSkillGauge,
             accepted && !ultimate ? Game.Player.CurrentActionId : 0,
-            ultimate ? _ultimatePressTime : _swordWavePressTime);
+            inputPressTime);
     }
 
     /// <summary>
@@ -317,6 +422,11 @@ public sealed class InputManager : MonoBehaviour
     void OnApplicationFocus(bool focused)
     {
         if (focused) return;
+        if (_onboardingPromptActive)
+        {
+            _onboardingPromptRequiresRelease = true;
+            _onboardingPromptInputPending = false;
+        }
         ClearHeldInput();
         SetCursor(false);
     }
@@ -351,6 +461,11 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>state가 Playing이면 입력을 허용하고 그 외에는 명령 전달과 유지 입력을 차단한다.</summary>
     private void HandleState(GameplayState state)
     {
+        if (_onboardingPromptActive && state != GameplayState.Playing)
+        {
+            _onboardingPromptRequiresRelease = true;
+            _onboardingPromptInputPending = false;
+        }
         SetGameplayInputEnabled(state == GameplayState.Playing);
     }
 
@@ -441,6 +556,7 @@ public sealed class InputManager : MonoBehaviour
         _dodgeStaminaHint = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
+        EndOnboardingActionPrompt();
         if (_actions != null) _actions.Player.Disable();
         SetCursor(false);
     }

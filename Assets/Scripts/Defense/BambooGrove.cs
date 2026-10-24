@@ -195,6 +195,33 @@ public sealed class BambooGrove : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 단계를 다시 연습할 때 잘린 줄기와 물리 조각을 초기 상태로 복원한다.
+    /// 현재 줄기 상태를 사용하며, 원래 대나무 렌더러와 충격 파동 상태를 되돌린다.
+    /// </summary>
+    public void RestoreForOnboardingRepeat()
+    {
+        _animating.Clear();
+        foreach (Stalk stalk in _stalks)
+        {
+            if (stalk.State == StalkState.Standing) continue;
+            foreach (Piece piece in stalk.Pieces)
+                ReleasePiece(piece);
+            stalk.Pieces.Clear();
+            if (stalk.Stump != null) stalk.Stump.gameObject.SetActive(false);
+            if (stalk.CutFace != null) stalk.CutFace.gameObject.SetActive(false);
+            stalk.Renderer.renderingLayerMask = stalk.Mask;
+            stalk.Renderer.SetPropertyBlock(null);
+            stalk.Renderer.enabled = true;
+            stalk.State = StalkState.Standing;
+            stalk.Age = 0f;
+        }
+        System.Array.Clear(_impactSlots, 0, _impactSlots.Length);
+        System.Array.Clear(_impactSlotParams, 0, _impactSlotParams.Length);
+        _impactNext = 0;
+        Shader.SetGlobalInt(_impactRippleCountId, 0);
+    }
+
+    /// <summary>
     /// 검기가 from에서 to로 지난 수평 경로의 좌우 halfWidth 안의 대나무와 날아가는 조각을 벤다.
     /// 베는 평면은 경로를 품고 planeNormal을 법선으로 한다. 서 있거나 복구 중인 대나무는 밑동 위치로, 조각은 평면과 만나는 점으로 범위를 판정한다.
     /// 경로 가운데는 경로 방향으로, 옆은 떨어진 비율 × sideSpread만큼 각자 바깥쪽으로 틀어 쓰러뜨린다. 활성 대숲이 없으면 아무것도 하지 않는다.
