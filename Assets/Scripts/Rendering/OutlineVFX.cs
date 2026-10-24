@@ -12,6 +12,7 @@ using UnityEngine;
 public sealed class OutlineVFX : MonoBehaviour
 {
     private static readonly HashSet<OutlineVFX> _active = new HashSet<OutlineVFX>();
+    private static readonly List<Renderer> _renderers = new List<Renderer>();
 
     [Header("인지 표시")]
     [SerializeField] private bool _ignorePerception;
@@ -22,7 +23,7 @@ public sealed class OutlineVFX : MonoBehaviour
 
     /// <summary>
     /// 활성 컴포넌트의 렌더러를 result에, 인지 예외 렌더러를 alwaysVisible에 모은다.
-    /// 동적 자식도 포함하며 같은 렌더러는 한 번만 등록한다.
+    /// 동적 자식도 포함하며 같은 렌더러는 한 번만 등록한다. 자식 렌더러는 재사용 목록에 모아 매 카메라 GC 할당을 만들지 않는다.
     /// </summary>
     internal static void Collect(HashSet<Renderer> result, HashSet<Renderer> alwaysVisible)
     {
@@ -32,7 +33,8 @@ public sealed class OutlineVFX : MonoBehaviour
         {
             if (marker == null || !marker.isActiveAndEnabled || !marker.gameObject.scene.IsValid())
                 continue;
-            foreach (Renderer renderer in marker.GetComponentsInChildren<Renderer>())
+            marker.GetComponentsInChildren(_renderers);
+            foreach (Renderer renderer in _renderers)
                 if (renderer.enabled)
                 {
                     result.Add(renderer);
