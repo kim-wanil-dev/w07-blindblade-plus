@@ -752,7 +752,7 @@ MonoBehaviour:
   _worldTimeScale: 0.2
   _playerTimeScale: 0.5
   _dashBulletTimeRatio: 0
-  _ultimateChargeDuration: 0.75
+  _ultimateChargeDuration: 1.5
   _chargeWorldTimeScale: 0.1
   _swordWaveFocusDuration: 1.5
   _swordWaveFocusTimeScale: 0.1

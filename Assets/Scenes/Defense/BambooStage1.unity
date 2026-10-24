@@ -55309,7 +55309,7 @@ MonoBehaviour:
   _boss: {fileID: 350192290}
   _warning: {fileID: 132706044}
   _startBossImmediately: 0
-  _requiredKills: 600
+  _requiredKills: 100
   _warningDuration: 2
   _edgeInset: 2
   _spawnSampleRadius: 2
@@ -56658,7 +56658,7 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 600
+  _meleeSpawnsPerMinute: 70
   _meleeSpawnMultiplierPerMinute: 1.35
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4

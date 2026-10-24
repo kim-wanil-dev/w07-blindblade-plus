@@ -53,7 +53,7 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     [Header("거합 홀드 차징")]
     [SerializeField, Min(0.01f), Tooltip("Q를 누르고 있어야 거합이 시전되는 실시간(초)입니다. 같은 시간에 걸쳐 세계 배율이 목표 배율까지 내려갑니다.")]
-    private float _ultimateChargeDuration = 0.75f;
+    private float _ultimateChargeDuration = 1.5f;
     [SerializeField, Range(0.01f, 1f), Tooltip("차징 동안 세계 시간 배율이 천천히 내려가 닿는 목표 배율. 플레이어 배율은 바뀌지 않는다.")]
     private float _chargeWorldTimeScale = 0.1f;
     private bool _charging;

@@ -55300,7 +55300,7 @@ MonoBehaviour:
   _weather: {fileID: 2200000003}
   _rainAudio: {fileID: 2200000100}
   _startBossImmediately: 0
-  _requiredKills: 1000
+  _requiredKills: 100
   _bossDropletCount: 2662
   _warningDuration: 2
   _edgeInset: 2
@@ -56651,7 +56651,7 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 1000
+  _meleeSpawnsPerMinute: 70
   _meleeSpawnMultiplierPerMinute: 1.35
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
