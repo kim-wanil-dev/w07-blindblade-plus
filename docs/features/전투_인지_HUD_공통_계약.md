@@ -66,3 +66,11 @@
 - 사용자 후속 선택으로 표시 방향은 적의 현재 위치를 추적한다. Origin·OccurredAt은 발생 기록으로 고정한다. 현재 수평 거리 20m 안에서 화면 밖에 있는 적만 발소리 UI를 허용한다. 화면 안에서는 월드 표시 여부와 관계없이 숨긴다.
 - 후보는 적마다 최신 하나, 별도 수량 상한 없음이다. 게임 시간 수명 0.8초와 마지막 0.3초 페이드는 발생 시 복사하며 설정 변경은 새 걸음부터 적용한다. 청각 범위·공통 색상 변경은 현재 후보에도 적용한다.
 - 후보 슬롯 미연결인 실제 씬의 기존 2초 실시간 발소리는 유지한다. 상세 구현·연결·확인 상태는 [발소리 후보](발소리_후보.md)를 따른다.
+
+#### 기존 발소리 경로 성능 정리 (2026-10-24)
+
+- 배경: BambooStage1·RainyTwinBoss는 위협·발소리 후보 슬롯이 비어 기존 발소리 경로를 쓰고 `_showEnemyIndicators`가 꺼져 있다. 이때 `CombatThreatPresentationProvider.LateUpdate`가 2초 동안 남는 모든 적 발걸음을 매 프레임 인지 마스크·카메라로 다시 판정했고, 유일한 소비자 `CombatFootstepHud`는 표시가 꺼져 있어 결과를 버렸다. 적 약 100마리에서 이 LateUpdate가 51ms였다.
+- 적 방향 표시가 꺼져 있고 발소리 후보 슬롯이 비어 있으면 `StopLegacyFootsteps`가 발소리 구독을 해제하고 남은 발소리 종료를 발행한다. `ExpireFootsteps`와 `HandleFootstep`의 기존 경로 처리도 하지 않는다. 표시를 다시 켜면 다음 LateUpdate에 바로 구독한다. 후보 슬롯 연결 경로와 수리검 위협 경로는 바꾸지 않았다.
+- 표시가 켜져 있으면 `_activeFootsteps`에 적(EnemyHealth·생성 세대)마다 최신 걸음 하나만 남긴다. 새 걸음을 먼저 발행하고 교체된 이전 걸음의 종료를 뒤에 발행해, D가 순번이 낮은 종료를 무시하고 마커를 유지한다. 같은 적의 Renderer 배열을 재사용하고 카메라 절두체 평면은 프레임당 한 번 계산한다.
+- 표시가 켜진 경우의 남은 비용은 적마다 `PerceptionRevealMap.GetVisibility`가 활성 파동 전체를 훑는 부분이다.
+- 관련 코드: Assets/Scripts/Defense/CombatThreatPresentationProvider.cs의 `LateUpdate`·`StopLegacyFootsteps`·`HandleFootstep`·`FindActiveFootstep`·`CreateSnapshot`. C# 빌드 오류 0개. 수정 후 프로파일러에서 같은 LateUpdate가 0.61ms로 줄어든 것을 확인했다. 표시를 켠 상태의 HUD 마커 동작은 Play 미확인이다.
