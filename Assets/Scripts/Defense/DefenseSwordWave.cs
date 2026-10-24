@@ -26,6 +26,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
     private readonly HashSet<EnemyHealth> _blocked = new HashSet<EnemyHealth>();
     private SharedDamageHitTracker _hitTracker;
     private GameObject _owner;
+    private int _attackId;
     private Vector3 _direction;
     private float _travelled;
     private bool _flying;
@@ -76,6 +77,7 @@ public sealed class DefenseSwordWave : MonoBehaviour
 
     void OnDestroy()
     {
+        MultiKillAttackRuntime.CompleteAttack(_attackId);
         Destroy(_mesh);
     }
 
@@ -116,8 +118,16 @@ public sealed class DefenseSwordWave : MonoBehaviour
     /// </summary>
     internal void Launch(GameObject owner, Vector3 origin, Vector3 direction, SharedDamageHitTracker hitTracker)
     {
+        Launch(owner, origin, direction, hitTracker, 0);
+    }
+
+    /// <summary>owner의 검기를 origin에서 발사하고 hitTracker와 attackId를 비행 중 지연 처치까지 유지한다.</summary>
+    internal void Launch(GameObject owner, Vector3 origin, Vector3 direction,
+        SharedDamageHitTracker hitTracker, int attackId)
+    {
         _hitTracker = hitTracker;
         _owner = owner;
+        _attackId = attackId;
         _direction = direction.normalized;
         _travelled = 0f;
         transform.SetPositionAndRotation(origin, Quaternion.LookRotation(_direction));
@@ -145,7 +155,8 @@ public sealed class DefenseSwordWave : MonoBehaviour
             if (enemy == null || !enemy.IsAlive) continue;
             Vector3 point = _hits[i].distance > 0f ? _hits[i].point : _hits[i].collider.ClosestPoint(transform.position);
             float amount = _damage > 0f ? _damage : Mathf.Max(enemy.CurrentHealth, 1f);
-            _hitTracker.ProcessHit(enemy, new DamageContext(amount, _owner, point, _direction, PATTERN_ID));
+            _hitTracker.ProcessHit(enemy, new DamageContext(amount, _owner, point, _direction,
+                PATTERN_ID, _attackId, 0, BlindBlade.Combat.Contracts.IncomingAttackKind.Unknown));
         }
     }
 

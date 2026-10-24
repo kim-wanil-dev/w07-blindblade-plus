@@ -52104,7 +52104,11 @@ PrefabInstance:
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+      - target: {fileID: 9000000000000000201, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+      propertyPath: _director
+      value: 
+      objectReference: {fileID: 1968806059}
+  m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

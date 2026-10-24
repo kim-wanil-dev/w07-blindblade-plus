@@ -4,6 +4,13 @@
 
 ### 전투 HUD
 
+#### 멀티킬 처치 표시 (2026-10-24)
+
+- 온보딩을 제외한 BambooStage1, BambooDefense, RainyStage_JH, RainyTwinBoss, TestStage, (Legacy) RainyStage의 처치 목표 아래에 일반 공격·일섬·거합 실행별 `+N`을 최신·직전 두 줄로 표시한다. HUD 프리팹에 TMP 슬롯을 저장한다.
+- 공용 설정은 `BambooDefenseHud.prefab` 루트의 `DefenseMultiKillHud` Inspector에서 한 번 조절한다. 등급별 기준 처치 수·글자 색·크기, 유지·퇴장 시간, 갱신 간격, 줄 위치가 모든 연결 씬에 적용된다. 씬에는 해당 HUD 인스턴스의 Director 참조만 저장한다.
+- 두 TMP 슬롯의 검은 바깥 테두리는 전용 `ChosunCentennial_otf SDF - MultiKill Black Outline.mat`의 Underlay를 사용한다. 글자 색은 등급 설정에서, 테두리 색·두께는 이 머티리얼의 Underlay Color·Dilate에서 조절한다. 둘 다 글자 알파와 함께 페이드한다.
+- 상세 동작, 공격 출처 보존과 미확인 Play 항목은 [멀티킬 처치 표시](멀티킬_처치_표시.md)를 따른다.
+
 #### 거합 게이지 프리팹 구성 (2026-10-23)
 
 - `BambooDefenseHud.prefab` 루트의 `PlayerUltimateHint`가 자식 `UltimateGaugeCanvas/UltimateGauge/GaugeCircle`의 `Background`, `ThreadLiquidBody`, `ThreadLiquid`, `Percentage`, `InputLabel`을 제어한다. UI 계층과 `CanvasGroup`·RawImage·실 액체 Graphic·TMP 참조는 프리팹에 직렬화되어 있으며, 플레이 중 새 HUD 오브젝트를 만들지 않는다.
