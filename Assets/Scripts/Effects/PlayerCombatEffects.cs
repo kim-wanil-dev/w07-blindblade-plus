@@ -118,22 +118,22 @@ public sealed class PlayerCombatEffects : MonoBehaviour
     }
 
     /// <summary>request의 적 피해 확정에만 동일한 시각 반동을 한 번 적용한다. 물리 접촉 이펙트와 피해·논리 조준은 변경하지 않는다.</summary>
-    private void HandleHitFeedback(PlayerAttackRequest request, Collider collider, Vector3 point, bool enemyDamaged)
+    private void HandleHitFeedback(PlayerAttackRequest request, bool hasContact, Vector3 point, bool enemyDamaged)
     {
         if (!enemyDamaged || request.ActionId != _player.CurrentActionId) return;
         _motor.AddCombatRecoil(request.Direction, _hitRecoilStrength);
     }
 
     /// <summary>
-    /// request의 실제 collider와 월드 point로 공용 타격을 요청한다.
+    /// request의 실제 접촉 hasContact와 월드 point로 공용 타격을 요청한다.
     /// 같은 행동의 접촉 알림은 한 번만 처리하며 혈흔은 적의 실제 피해 처리에서 재생한다.
     /// </summary>
-    private void HandleContact(PlayerAttackRequest request, Collider collider, Vector3 point, bool enemyDamaged)
+    private void HandleContact(PlayerAttackRequest request, bool hasContact, Vector3 point, bool enemyDamaged)
     {
         if (request.ActionId != _player.CurrentActionId || _lastContactAction == request.ActionId)
             return;
         _lastContactAction = request.ActionId;
-        if (collider == null || _effects == null || !_effects.IsReady)
+        if (!hasContact || _effects == null || !_effects.IsReady)
             return;
         _effects.PlayHit(point);
     }

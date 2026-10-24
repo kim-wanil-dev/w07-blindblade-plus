@@ -579,12 +579,12 @@ public sealed class PlayerController : MonoBehaviour
         if (_counterDashAttack)
         {
             if (!_combatService.TryGetTarget(_preferredTargetId, out PlayerCombatTarget target)
-                || !target.IsAlive || target.HitCollider == null)
+                || !target.IsAlive || target.HitCapsule == null)
             {
                 ApplyAttackResolution(new PlayerAttackResolution(actionId, false, null, false));
                 return;
             }
-            Vector3 direction = (target.HitCollider.bounds.center - _motor.ViewOrigin).normalized;
+            Vector3 direction = (target.HitCapsule.Bounds.center - _motor.ViewOrigin).normalized;
             PlayerAttackRequest counterRequest = new PlayerAttackRequest(actionId, PlayerAttackKind.Normal,
                 _preferredTargetId, _motor.ViewOrigin, direction, _normalAttackRange, Time.time);
             PlayerAttackResolution counterResolution = combat.ResolvePlayerDirectedAttack(counterRequest, finalSample);
@@ -662,7 +662,7 @@ public sealed class PlayerController : MonoBehaviour
         bool began = _motor != null && _motor.BeginIaidoDash(
             _preferredTargetId,
             foundTarget ? perceivedPosition : transform.position,
-            foundTarget ? combatTarget.HitCollider : null,
+            foundTarget ? combatTarget.HitCapsule : null,
             foundTarget ? combatTarget.CollisionRadius : 0f,
             _motor != null ? _motor.IaidoMaxDistance : 0f,
             _targetStandOff);
@@ -712,7 +712,7 @@ public sealed class PlayerController : MonoBehaviour
     {
         if (_state != PlayerActionState.Free
             || !_combatService.TryGetTarget(targetId, out PlayerCombatTarget target)
-            || !target.IsAlive || target.HitCollider == null
+            || !target.IsAlive || target.HitCapsule == null
             || Vector3.ProjectOnPlane(target.WorldPosition - transform.position, Vector3.up).magnitude > _motor.IaidoMaxDistance
             || !_motor.CanDashToTarget(target))
             return false;
@@ -737,7 +737,7 @@ public sealed class PlayerController : MonoBehaviour
 
         // 회피 이동이 끝날 때까지 돌진이 미뤄지면 지금 위치로 정한 방향·거리가 어긋나므로 회피 이동을 먼저 끊는다.
         _motor.CancelDodge();
-        bool began = _motor != null && _motor.BeginIaidoDash(_preferredTargetId, perceivedPosition, target.HitCollider, target.CollisionRadius, maxDistance, _targetStandOff);
+        bool began = _motor != null && _motor.BeginIaidoDash(_preferredTargetId, perceivedPosition, target.HitCapsule, target.CollisionRadius, maxDistance, _targetStandOff);
 
         if (began)
             return true;
@@ -750,7 +750,7 @@ public sealed class PlayerController : MonoBehaviour
 
     /// <summary>
     /// actionId가 현재 발도 행동과 같으면 적 시스템에 한 번의 베기 판정을 요청한다.
-    /// 대상 지정 공격은 현재 대상 충돌체 중심 방향을 사용하며 판정 결과를 공격 상태에 저장한다.
+    /// 대상 지정 공격은 현재 대상 피격 캡슐 중심 방향을 사용하며 판정 결과를 공격 상태에 저장한다.
     /// </summary>
     public void NotifyIaidoSlashImpact(int actionId)
     {
@@ -760,12 +760,12 @@ public sealed class PlayerController : MonoBehaviour
         Vector3 direction = _lockedAttackDirection;
         if (_targetedDashAttack
             && _combatService.TryGetTarget(_preferredTargetId, out PlayerCombatTarget target)
-            && target.IsAlive && target.HitCollider != null)
+            && target.IsAlive && target.HitCapsule != null)
         {
             Vector3 origin = _viewCamera != null
                 ? _viewCamera.transform.position
                 : transform.position + Vector3.up * _attackOriginHeight;
-            direction = (target.HitCollider.bounds.center - origin).normalized;
+            direction = (target.HitCapsule.Bounds.center - origin).normalized;
         }
 
         PlayerAttackResolution resolution = ResolveAttack(
@@ -977,8 +977,8 @@ public sealed class PlayerController : MonoBehaviour
         {
             if (result.Reason == PlayerDashEndReason.WallBlocked
                 || !_combatService.TryGetTarget(_preferredTargetId, out PlayerCombatTarget counterTarget)
-                || !counterTarget.IsAlive || counterTarget.HitCollider == null
-                || Vector3.Distance(transform.position, counterTarget.HitCollider.ClosestPoint(transform.position)) > _normalAttackRange)
+                || !counterTarget.IsAlive || counterTarget.HitCapsule == null
+                || Vector3.Distance(transform.position, counterTarget.HitCapsule.ClosestPoint(transform.position)) > _normalAttackRange)
             {
                 FinishAttackAction(_iaidoWallBlockedRecovery, PlayerAttackOutcome.WallBlocked);
                 return;
@@ -995,8 +995,8 @@ public sealed class PlayerController : MonoBehaviour
                 && _combatService != null
                 && _combatService.TryGetTarget(_preferredTargetId, out PlayerCombatTarget target)
                 && target.IsAlive
-                && target.HitCollider != null
-                && Vector3.Distance(transform.position, target.HitCollider.ClosestPoint(transform.position)) <= _iaidoAttackRange)
+                && target.HitCapsule != null
+                && Vector3.Distance(transform.position, target.HitCapsule.ClosestPoint(transform.position)) <= _iaidoAttackRange)
             {
                 SetState(PlayerActionState.IaidoSlash, PlayerActionStage.DashArrived, PlayerAttackOutcome.None, _preferredTargetId, result.Position);
                 Publish(PlayerActionStage.SlashStarted, PlayerAttackOutcome.None, _preferredTargetId, result.Position);
@@ -1104,13 +1104,13 @@ public sealed class PlayerController : MonoBehaviour
             if (distance > maxDistance || !_motor.CanDashToTarget(combatTarget))
                 continue;
 
-            Collider hitCollider = combatTarget.HitCollider;
-            Vector3 targetPosition = hitCollider != null ? hitCollider.bounds.center : combatTarget.WorldPosition;
+            EnemyHitCapsule hitCapsule = combatTarget.HitCapsule;
+            Vector3 targetPosition = hitCapsule != null ? hitCapsule.Bounds.center : combatTarget.WorldPosition;
             Vector3 screen = camera.WorldToViewportPoint(targetPosition);
 
             if (targetedAttack)
             {
-                if (hitCollider == null || !GeometryUtility.TestPlanesAABB(centerPlanes, hitCollider.bounds) || !IsColliderRevealed(hitCollider, mask))
+                if (hitCapsule == null || !GeometryUtility.TestPlanesAABB(centerPlanes, hitCapsule.Bounds) || !IsHitCapsuleRevealed(hitCapsule, mask))
                     continue;
             }
             else if (screen.z < camera.nearClipPlane
@@ -1145,30 +1145,30 @@ public sealed class PlayerController : MonoBehaviour
     }
 
     /// <summary>
-    /// collider의 중심과 몸체 표면 표본을 mask의 현재 공개도와 비교한다.
+    /// capsule의 중심과 몸체 표면 표본을 mask의 현재 공개도와 비교한다.
     /// 어느 표본이든 밝혀졌으면 true를 반환하며 상태는 변경하지 않는다.
     /// </summary>
-    private static bool IsColliderRevealed(
-        Collider collider,
+    private static bool IsHitCapsuleRevealed(
+        EnemyHitCapsule capsule,
         SensoryPerceptionMask mask)
     {
-        Bounds bounds = collider.bounds;
+        Bounds bounds = capsule.Bounds;
         Vector3 center = bounds.center;
         Vector3 extents = bounds.extents;
 
         return mask.GetVisibility(center) > 0f
             || mask.GetVisibility(
-                collider.ClosestPoint(center + Vector3.up * extents.y)) > 0f
+                capsule.ClosestPoint(center + Vector3.up * extents.y)) > 0f
             || mask.GetVisibility(
-                collider.ClosestPoint(center + Vector3.down * extents.y)) > 0f
+                capsule.ClosestPoint(center + Vector3.down * extents.y)) > 0f
             || mask.GetVisibility(
-                collider.ClosestPoint(center + Vector3.right * extents.x)) > 0f
+                capsule.ClosestPoint(center + Vector3.right * extents.x)) > 0f
             || mask.GetVisibility(
-                collider.ClosestPoint(center + Vector3.left * extents.x)) > 0f
+                capsule.ClosestPoint(center + Vector3.left * extents.x)) > 0f
             || mask.GetVisibility(
-                collider.ClosestPoint(center + Vector3.forward * extents.z)) > 0f
+                capsule.ClosestPoint(center + Vector3.forward * extents.z)) > 0f
             || mask.GetVisibility(
-                collider.ClosestPoint(center + Vector3.back * extents.z)) > 0f;
+                capsule.ClosestPoint(center + Vector3.back * extents.z)) > 0f;
     }
 
     /// <summary>행동 상태, 충전 완료, 웅크리기 여부로 이동 유형을 반환합니다.</summary>

@@ -209,16 +209,16 @@ public struct PlayerCombatTarget
 {
     public string TargetId { get; }
     public Vector3 WorldPosition { get; }
-    public Collider HitCollider { get; }
+    public EnemyHitCapsule HitCapsule { get; }
     public float CollisionRadius { get; }
     public bool IsAlive { get; }
 
-    /// <summary>적 식별자, 위치, 충돌체, 반경, 생존 상태로 전투 대상 데이터를 생성합니다.</summary>
-    public PlayerCombatTarget(string targetId, Vector3 worldPosition, Collider hitCollider, float collisionRadius, bool isAlive)
+    /// <summary>적 식별자, 위치, 피격 캡슐, 반경, 생존 상태로 전투 대상 데이터를 생성합니다.</summary>
+    public PlayerCombatTarget(string targetId, Vector3 worldPosition, EnemyHitCapsule hitCapsule, float collisionRadius, bool isAlive)
     {
         TargetId = targetId;
         WorldPosition = worldPosition;
-        HitCollider = hitCollider;
+        HitCapsule = hitCapsule;
         CollisionRadius = Mathf.Max(0f, collisionRadius);
         IsAlive = isAlive;
     }
@@ -484,6 +484,8 @@ public interface IPlayerCombatService
     bool TryGetTarget(string targetId, out PlayerCombatTarget target);
     /// <summary>식별자 또는 충돌체에 대응하는 적의 전투 정보를 반환합니다.</summary>
     bool TryGetTarget(Collider collider, out PlayerCombatTarget target);
+    /// <summary>충돌체 없는 적 피격 캡슐에 대응하는 적의 전투 정보를 반환합니다.</summary>
+    bool TryGetTarget(EnemyHitCapsule capsule, out PlayerCombatTarget target);
     /// <summary>공격 요청을 판정하고 적중·즉사 결과를 행동 식별자와 함께 반환합니다.</summary>
     PlayerAttackResolution ResolvePlayerAttack(PlayerAttackRequest request);
 }

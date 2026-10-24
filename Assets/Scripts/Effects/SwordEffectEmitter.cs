@@ -24,7 +24,9 @@ public sealed class SwordEffectEmitter : MonoBehaviour
     [SerializeField, Min(0.1f)] private float _teleportDistance = 3f;
     private readonly RaycastHit[] _castHits = new RaycastHit[CONTACT_CAPACITY];
     private readonly Collider[] _overlaps = new Collider[CONTACT_CAPACITY];
-    private readonly HashSet<Collider> _reportedContacts = new HashSet<Collider>();
+    private readonly List<EnemyCapsuleHit> _capsuleHits = new List<EnemyCapsuleHit>();
+    private readonly List<EnemyHitCapsule> _capsuleOverlaps = new List<EnemyHitCapsule>();
+    private readonly HashSet<Object> _reportedContacts = new HashSet<Object>();
     private EffectManager _effects;
     private Vector3 _previousBase;
     private Vector3 _previousTip;
@@ -97,7 +99,7 @@ public sealed class SwordEffectEmitter : MonoBehaviour
         foreach (EnemyHealth enemy in FindObjectsByType<EnemyHealth>(FindObjectsSortMode.None))
         {
             if (enemy.gameObject.scene == gameObject.scene && enemy.IsAlive)
-                _effectiveContactLayers |= 1 << enemy.CreateCombatTarget().HitCollider.gameObject.layer;
+                _effectiveContactLayers |= 1 << enemy.CreateCombatTarget().HitCapsule.gameObject.layer;
         }
         _previousBase = _bladeBase.position;
         _previousTip = _bladeTip.position;
@@ -141,7 +143,7 @@ public sealed class SwordEffectEmitter : MonoBehaviour
 
     /// <summary>
     /// from에서 to까지 구를 이동시켜 감지 레이어의 가장 가까운 외부 접촉점을 찾는다.
-    /// 자기 소유 충돌체를 제외하고 실제 RaycastHit.point에 공용 Hit를 요청한다.
+    /// 장애물은 물리 쿼리로, 적은 피격 캡슐 계산으로 찾고 자기 소유 충돌체를 제외한 실제 접촉 위치에 공용 Hit를 요청한다.
     /// </summary>
     private void SweepContact(Vector3 from, Vector3 to)
     {
@@ -153,21 +155,33 @@ public sealed class SwordEffectEmitter : MonoBehaviour
             _castHits, distance, _effectiveContactLayers, QueryTriggerInteraction.Collide);
         ReportCapacity(count);
         float nearestDistance = float.PositiveInfinity;
-        int nearest = -1;
+        Object nearestContact = null;
+        Vector3 nearestPoint = to;
         for (int i = 0; i < count; i++)
         {
             if (!IsExternalCollider(_castHits[i].collider) || _castHits[i].distance <= 0f
                 || _castHits[i].distance >= nearestDistance)
                 continue;
             nearestDistance = _castHits[i].distance;
-            nearest = i;
+            nearestContact = _castHits[i].collider;
+            nearestPoint = _castHits[i].point;
         }
-        if (nearest >= 0)
-            PlayContact(_castHits[nearest].collider, _castHits[nearest].point);
+        EnemyHitCapsule.SweepAll(from, from, _contactRadius, movement / distance, distance,
+            _effectiveContactLayers, _capsuleHits);
+        foreach (EnemyCapsuleHit hit in _capsuleHits)
+        {
+            if (hit.Distance <= 0f || hit.Distance >= nearestDistance)
+                continue;
+            nearestDistance = hit.Distance;
+            nearestContact = hit.Capsule;
+            nearestPoint = hit.Point;
+        }
+        if (nearestContact != null)
+            PlayContact(nearestContact, nearestPoint);
     }
 
     /// <summary>
-    /// 현재 검 구간과 겹치는 감지 레이어 충돌체를 찾아 시작 중첩과 정지 접촉을 보완한다.
+    /// 현재 검 구간과 겹치는 감지 레이어 장애물과 적 피격 캡슐을 찾아 시작 중첩과 정지 접촉을 보완한다.
     /// 검의 이전 양 끝점·현재 양 끝점 중 가장 가까운 표면 후보 위치에 Hit를 요청한다.
     /// </summary>
     private void DetectOverlaps(Vector3 bladeBase, Vector3 bladeTip)
@@ -182,22 +196,35 @@ public sealed class SwordEffectEmitter : MonoBehaviour
                 continue;
             Vector3 reference = bladeBase;
             float nearestDistance = float.PositiveInfinity;
-            SelectSurfaceReference(collider, _previousBase, ref reference, ref nearestDistance);
-            SelectSurfaceReference(collider, _previousTip, ref reference, ref nearestDistance);
-            SelectSurfaceReference(collider, bladeBase, ref reference, ref nearestDistance);
-            SelectSurfaceReference(collider, bladeTip, ref reference, ref nearestDistance);
+            SelectSurfaceReference(collider.ClosestPoint(_previousBase), _previousBase, ref reference, ref nearestDistance);
+            SelectSurfaceReference(collider.ClosestPoint(_previousTip), _previousTip, ref reference, ref nearestDistance);
+            SelectSurfaceReference(collider.ClosestPoint(bladeBase), bladeBase, ref reference, ref nearestDistance);
+            SelectSurfaceReference(collider.ClosestPoint(bladeTip), bladeTip, ref reference, ref nearestDistance);
             PlayContact(collider, collider.ClosestPoint(reference));
+        }
+        EnemyHitCapsule.OverlapAll(bladeBase, bladeTip, _contactRadius, _effectiveContactLayers, _capsuleOverlaps);
+        foreach (EnemyHitCapsule capsule in _capsuleOverlaps)
+        {
+            if (_reportedContacts.Contains(capsule))
+                continue;
+            Vector3 reference = bladeBase;
+            float nearestDistance = float.PositiveInfinity;
+            SelectSurfaceReference(capsule.ClosestPoint(_previousBase), _previousBase, ref reference, ref nearestDistance);
+            SelectSurfaceReference(capsule.ClosestPoint(_previousTip), _previousTip, ref reference, ref nearestDistance);
+            SelectSurfaceReference(capsule.ClosestPoint(bladeBase), bladeBase, ref reference, ref nearestDistance);
+            SelectSurfaceReference(capsule.ClosestPoint(bladeTip), bladeTip, ref reference, ref nearestDistance);
+            PlayContact(capsule, capsule.ClosestPoint(reference));
         }
     }
 
     /// <summary>
-    /// collider 바깥의 후보 위치에서 가장 가까운 표면 거리를 비교한다.
-    /// candidate를 사용해 reference와 nearestDistance를 갱신하고 내부 후보는 제외한다.
+    /// candidate와 그 위치에서 가장 가까운 표면점 surface 사이 거리를 비교한다.
+    /// 표면 바깥의 candidate가 더 가까우면 reference와 nearestDistance를 갱신하고 내부 후보는 제외한다.
     /// </summary>
-    private void SelectSurfaceReference(Collider collider, Vector3 candidate,
+    private void SelectSurfaceReference(Vector3 surface, Vector3 candidate,
         ref Vector3 reference, ref float nearestDistance)
     {
-        float distance = (candidate - collider.ClosestPoint(candidate)).sqrMagnitude;
+        float distance = (candidate - surface).sqrMagnitude;
         if (distance > 0.000001f && distance < nearestDistance)
         {
             reference = candidate;
@@ -206,24 +233,25 @@ public sealed class SwordEffectEmitter : MonoBehaviour
     }
 
     /// <summary>
-    /// collider가 검 컴포넌트와 소유자 계층 바깥에 있는지 확인한다.
-    /// 유효한 외부 충돌체이면 true를 반환한다.
+    /// collider가 검 컴포넌트와 소유자 계층 바깥에 있고 적 계층이 아닌지 확인한다.
+    /// 적은 몸 충돌체가 남아 있어도 피격 캡슐로 따로 감지하며, 유효한 외부 장애물이면 true를 반환한다.
     /// </summary>
     private bool IsExternalCollider(Collider collider)
     {
         return collider != null && !collider.transform.IsChildOf(transform)
-            && (_ownerRoot == null || !collider.transform.IsChildOf(_ownerRoot));
+            && (_ownerRoot == null || !collider.transform.IsChildOf(_ownerRoot))
+            && collider.GetComponentInParent<EnemyHealth>() == null;
     }
 
     /// <summary>
-    /// collider의 접촉 position에 Library에 등록된 공용 타격 효과를 요청한다.
-    /// 성공한 충돌체를 기록하며 적 혈흔은 EnemyHealth의 실제 피해 처리에 맡긴다.
+    /// 장애물 충돌체 또는 적 피격 캡슐 contact의 접촉 position에 Library에 등록된 공용 타격 효과를 요청한다.
+    /// 성공한 접촉 대상을 기록하며 적 혈흔은 EnemyHealth의 실제 피해 처리에 맡긴다.
     /// </summary>
-    private void PlayContact(Collider collider, Vector3 position)
+    private void PlayContact(Object contact, Vector3 position)
     {
-        if (!_reportedContacts.Contains(collider) && _effects.PlayHit(position))
+        if (!_reportedContacts.Contains(contact) && _effects.PlayHit(position))
         {
-            _reportedContacts.Add(collider);
+            _reportedContacts.Add(contact);
         }
     }
 

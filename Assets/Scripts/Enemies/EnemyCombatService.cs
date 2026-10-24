@@ -17,6 +17,18 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private bool _hasResolution;
     private PlayerAttackResolution _lastResolution;
     private readonly List<PlayerPerceivedTarget> _targetCandidates = new List<PlayerPerceivedTarget>();
+    private readonly List<EnemyHitCapsule> _capsuleOverlaps = new List<EnemyHitCapsule>();
+    private readonly List<EnemyCapsuleHit> _capsuleHits = new List<EnemyCapsuleHit>();
+
+    /// <summary>플레이어 공격의 최초 접촉이다. 장애물은 Obstacle, 적은 Capsule에 저장하며 둘 다 없으면 접촉이 없다.</summary>
+    private struct AttackContact
+    {
+        public Collider Obstacle;
+        public EnemyHitCapsule Capsule;
+        public Vector3 Point;
+        public bool Found => Obstacle != null || Capsule != null;
+        public EnemyHealth Health => Capsule != null ? Capsule.Health : null;
+    }
 
     [Header("플레이어 칼날 궤적")]
     [SerializeField] private Transform _bladeBase;
@@ -48,11 +60,10 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     private readonly HashSet<EnemyHealth> _dashSweepStruck = new HashSet<EnemyHealth>();
     private int _dashSweepActionId;
 
-    /// <summary>부채꼴 판정에 들어온 적과 피격 콜라이더, 시점 원점에서 가장 가까운 접촉 위치와 수평 거리다.</summary>
+    /// <summary>부채꼴 판정에 들어온 적과 피격 캡슐에서 시점 원점에 가장 가까운 접촉 위치와 수평 거리다.</summary>
     private struct FanTarget
     {
         public EnemyHealth Health;
-        public Collider Collider;
         public Vector3 Point;
         public float Distance;
     }
@@ -75,10 +86,10 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
 #endif
 
     /// <summary>
-    /// 새 공격 판정이 끝나면 요청, 최초 접촉체, 접촉 위치, 실제 적 피해 여부를 알린다.
-    /// 접촉이 없으면 Collider는 null이며 동일 ActionId의 캐시 조회에는 다시 알리지 않는다.
+    /// 새 공격 판정이 끝나면 요청, 장애물 또는 적과의 접촉 여부, 접촉 위치, 실제 적 피해 여부를 알린다.
+    /// 동일 ActionId의 캐시 조회에는 다시 알리지 않는다.
     /// </summary>
-    public event Action<PlayerAttackRequest, Collider, Vector3, bool> AttackContactResolved;
+    public event Action<PlayerAttackRequest, bool, Vector3, bool> AttackContactResolved;
 
     void Awake()
     {
@@ -122,6 +133,22 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
     public bool TryGetTarget(Collider collider, out PlayerCombatTarget target)
     {
         EnemyHealth health = collider != null ? collider.GetComponentInParent<EnemyHealth>() : null;
+        if (health != null && health.IsAlive && health.gameObject.scene == gameObject.scene)
+        {
+            target = health.CreateCombatTarget();
+            return true;
+        }
+        target = default;
+        return false;
+    }
+
+    /// <summary>
+    /// capsule의 적 체력을 조회하여 같은 씬의 생존 적이면 target을 반환한다.
+    /// 충돌체 없는 적과의 이동 접촉을 루트의 전투 대상으로 연결하며 유효하지 않으면 false를 반환한다.
+    /// </summary>
+    public bool TryGetTarget(EnemyHitCapsule capsule, out PlayerCombatTarget target)
+    {
+        EnemyHealth health = capsule != null ? capsule.Health : null;
         if (health != null && health.IsAlive && health.gameObject.scene == gameObject.scene)
         {
             target = health.CreateCombatTarget();
@@ -175,24 +202,23 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             return _lastResolution;
 
         PlayerAttackResolution result = new PlayerAttackResolution(request.ActionId, false, null, false);
-        Collider collider = null;
-        Vector3 point = request.Origin;
+        AttackContact contact = new AttackContact { Point = request.Origin };
         bool enemyDamaged = false;
         if (isActiveAndEnabled && request.Range > 0f && request.Direction.sqrMagnitude > 0f)
         {
-            collider = FindFirstContact(request, out point);
-            EnemyHealth health = collider != null ? collider.GetComponentInParent<EnemyHealth>() : null;
+            contact = FindFirstContact(request);
+            EnemyHealth health = contact.Health;
             if (health != null && health.IsAlive && health.gameObject.scene == gameObject.scene &&
                 (string.IsNullOrEmpty(request.PreferredTargetId) || request.PreferredTargetId == health.TargetId))
             {
                 string id = health.TargetId;
-                enemyDamaged = health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
+                enemyDamaged = health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, contact.Point,
                     request.Direction, request.Kind.ToString(), request.ActionId, 1,
                     BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
                 result = new PlayerAttackResolution(request.ActionId, true, id, health.CurrentHealth <= 0f);
             }
         }
-        bool complete = collider != null || finalSample;
+        bool complete = contact.Found || finalSample;
         result = new PlayerAttackResolution(request.ActionId, result.HitConfirmed,
             result.HitTargetId, result.DeathConfirmed, complete);
         if (complete)
@@ -204,56 +230,74 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         _debugBladeSweep = false;
         _debugFan = false;
         _debugRequest = request;
-        _debugContact = collider != null;
+        _debugContact = contact.Found;
         _debugHit = result.HitConfirmed;
         _hasDebugRequest = request.Range > 0f && request.Direction.sqrMagnitude > 0f;
         _debugUntil = Time.time + _gizmoDuration;
 #endif
-        if (complete) AttackContactResolved?.Invoke(request, collider, point, enemyDamaged);
+        if (complete) AttackContactResolved?.Invoke(request, contact.Found, contact.Point, enemyDamaged);
         return result;
     }
 
     /// <summary>
-    /// request의 시작점 겹침과 이동 구간을 검사하여 자기 Collider를 제외한 최초 접촉체와 point를 반환한다.
-    /// 벽도 후보에 포함하여 벽 뒤의 적에게 피해가 전달되지 않게 하며 없으면 null을 반환한다.
+    /// request의 시작점 겹침과 이동 구간을 검사하여 플레이어를 제외한 최초 접촉을 반환한다.
+    /// 장애물은 물리 쿼리로, 적은 피격 캡슐 계산으로 찾는다. 시작점에 장애물이 겹치면 적보다 먼저 반환해
+    /// 벽 뒤의 적에게 피해가 전달되지 않게 하며, 이동 구간에서는 장애물과 적 중 더 가까운 쪽을 고른다. 없으면 Found가 false다.
     /// </summary>
-    private Collider FindFirstContact(PlayerAttackRequest request, out Vector3 point)
+    private AttackContact FindFirstContact(PlayerAttackRequest request)
     {
-        point = request.Origin;
-        Collider closestOverlap = null;
-        float overlapDistance = float.PositiveInfinity;
         foreach (Collider overlap in Physics.OverlapSphere(request.Origin, _hitRadius, _attackMask, QueryTriggerInteraction.Ignore))
         {
-            if (overlap.transform.IsChildOf(_playerRoot))
+            if (IsPlayerOrEnemyCollider(overlap))
                 continue;
-            Vector3 overlapPoint = overlap.ClosestPoint(request.Origin);
-            if (overlap.GetComponentInParent<EnemyHealth>() == null)
-            {
-                point = overlapPoint;
-                return overlap;
-            }
+            return new AttackContact { Obstacle = overlap, Point = overlap.ClosestPoint(request.Origin) };
+        }
+
+        AttackContact contact = new AttackContact { Point = request.Origin };
+        float overlapDistance = float.PositiveInfinity;
+        EnemyHitCapsule.OverlapAll(request.Origin, request.Origin, _hitRadius, _attackMask, _capsuleOverlaps);
+        foreach (EnemyHitCapsule capsule in _capsuleOverlaps)
+        {
+            Vector3 overlapPoint = capsule.ClosestPoint(request.Origin);
             float distance = (overlapPoint - request.Origin).sqrMagnitude;
             if (distance < overlapDistance)
             {
-                closestOverlap = overlap;
+                contact = new AttackContact { Capsule = capsule, Point = overlapPoint };
                 overlapDistance = distance;
-                point = overlapPoint;
             }
         }
-        if (closestOverlap != null)
-            return closestOverlap;
+        if (contact.Found)
+            return contact;
 
-        RaycastHit[] hits = Physics.SphereCastAll(request.Origin, _hitRadius, request.Direction,
-            _unlimitedRange ? Mathf.Infinity : request.Range, _attackMask, QueryTriggerInteraction.Ignore);
-        Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
-        foreach (RaycastHit hit in hits)
+        float range = _unlimitedRange ? Mathf.Infinity : request.Range;
+        float nearest = float.PositiveInfinity;
+        foreach (RaycastHit hit in Physics.SphereCastAll(request.Origin, _hitRadius, request.Direction,
+            range, _attackMask, QueryTriggerInteraction.Ignore))
         {
-            if (hit.transform.IsChildOf(_playerRoot))
+            if (IsPlayerOrEnemyCollider(hit.collider) || hit.distance >= nearest)
                 continue;
-            point = hit.point;
-            return hit.collider;
+            nearest = hit.distance;
+            contact = new AttackContact { Obstacle = hit.collider, Point = hit.point };
         }
-        return null;
+        EnemyHitCapsule.SweepAll(request.Origin, request.Origin, _hitRadius, request.Direction, range,
+            _attackMask, _capsuleHits);
+        foreach (EnemyCapsuleHit hit in _capsuleHits)
+        {
+            if (hit.Distance >= nearest)
+                continue;
+            nearest = hit.Distance;
+            contact = new AttackContact { Capsule = hit.Capsule, Point = hit.Point };
+        }
+        return contact;
+    }
+
+    /// <summary>
+    /// collider가 플레이어 계층이거나 적 계층이면 true를 반환한다.
+    /// 적은 몸 충돌체가 남아 있어도 피격 캡슐 계산으로만 판정하므로 물리 쿼리 결과에서 제외할 때 쓴다.
+    /// </summary>
+    private bool IsPlayerOrEnemyCollider(Collider collider)
+    {
+        return collider.transform.IsChildOf(_playerRoot) || collider.GetComponentInParent<EnemyHealth>() != null;
     }
 
 #if UNITY_EDITOR
@@ -391,8 +435,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             _previousBladeBase = currentBase;
             _previousBladeTip = currentTip;
         }
-        Collider contact = FindBladeContact(_playerRoot, null, _previousBladeBase, _previousBladeTip,
-            currentBase, currentTip, _hitRadius, _attackMask, out Vector3 point);
+        AttackContact contact = FindPlayerBladeContact(_previousBladeBase, _previousBladeTip, currentBase, currentTip);
 #if UNITY_EDITOR
         _debugPreviousBase = _previousBladeBase;
         _debugPreviousTip = _previousBladeTip;
@@ -401,14 +444,14 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
 #endif
         _previousBladeBase = currentBase;
         _previousBladeTip = currentTip;
-        bool complete = contact != null || finalSample;
-        EnemyHealth health = contact != null ? contact.GetComponentInParent<EnemyHealth>() : null;
+        bool complete = contact.Found || finalSample;
+        EnemyHealth health = contact.Health;
         bool hit = health != null && health.IsAlive && health.gameObject.scene == gameObject.scene;
         string id = hit ? health.TargetId : null;
         bool enemyDamaged = false;
         if (hit)
         {
-            enemyDamaged = health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, point,
+            enemyDamaged = health.TryTakeDamage(new DamageContext(_normalDamage, _playerRoot.gameObject, contact.Point,
                 request.Direction, request.Kind.ToString(), request.ActionId, 1,
                 BlindBlade.Combat.Contracts.IncomingAttackKind.Melee));
         }
@@ -417,7 +460,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
 #if UNITY_EDITOR
         _debugBladeSweep = true;
         _debugRequest = request;
-        _debugContact = contact != null;
+        _debugContact = contact.Found;
         _debugHit = hit;
         _hasDebugRequest = true;
         _debugUntil = Time.time + _gizmoDuration;
@@ -426,9 +469,56 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         {
             _hasResolution = true;
             _lastResolution = result;
-            AttackContactResolved?.Invoke(request, contact, point, enemyDamaged);
+            AttackContactResolved?.Invoke(request, contact.Found, contact.Point, enemyDamaged);
         }
         return result;
+    }
+
+    /// <summary>
+    /// 플레이어 칼날의 이전 양 끝점 previousBase·previousTip과 현재 양 끝점 currentBase·currentTip 사이를 _hitRadius로 검사한다.
+    /// 장애물은 물리 쿼리로, 적은 피격 캡슐 계산으로 찾으며 현재 칼날 겹침과 다섯 줄 이동 구간 중 currentBase에 가장 가까운 접촉을 반환한다.
+    /// 거리 비교 규칙은 FindBladeContact와 같고 접촉이 없으면 Found가 false다.
+    /// </summary>
+    private AttackContact FindPlayerBladeContact(Vector3 previousBase, Vector3 previousTip,
+        Vector3 currentBase, Vector3 currentTip)
+    {
+        AttackContact contact = new AttackContact { Point = currentTip };
+        float nearest = float.PositiveInfinity;
+        foreach (Collider collider in Physics.OverlapCapsule(currentBase, currentTip, _hitRadius, _attackMask, QueryTriggerInteraction.Ignore))
+        {
+            if (IsPlayerOrEnemyCollider(collider)) continue;
+            Vector3 candidate = collider.ClosestPoint(currentBase);
+            float distance = (candidate - currentBase).sqrMagnitude;
+            if (distance < nearest) { nearest = distance; contact = new AttackContact { Obstacle = collider, Point = candidate }; }
+        }
+        EnemyHitCapsule.OverlapAll(currentBase, currentTip, _hitRadius, _attackMask, _capsuleOverlaps);
+        foreach (EnemyHitCapsule capsule in _capsuleOverlaps)
+        {
+            Vector3 candidate = capsule.ClosestPoint(currentBase);
+            float distance = (candidate - currentBase).sqrMagnitude;
+            if (distance < nearest) { nearest = distance; contact = new AttackContact { Capsule = capsule, Point = candidate }; }
+        }
+        for (int i = 0; i < 5; i++)
+        {
+            float fraction = i / 4f;
+            Vector3 start = Vector3.Lerp(previousBase, previousTip, fraction);
+            Vector3 end = Vector3.Lerp(currentBase, currentTip, fraction);
+            Vector3 delta = end - start;
+            if (delta.sqrMagnitude < 0.000001f) continue;
+            foreach (RaycastHit hit in Physics.SphereCastAll(start, _hitRadius, delta.normalized, delta.magnitude, _attackMask, QueryTriggerInteraction.Ignore))
+            {
+                if (IsPlayerOrEnemyCollider(hit.collider)) continue;
+                float distance = (hit.point - currentBase).sqrMagnitude;
+                if (distance < nearest) { nearest = distance; contact = new AttackContact { Obstacle = hit.collider, Point = hit.point }; }
+            }
+            EnemyHitCapsule.SweepAll(start, start, _hitRadius, delta.normalized, delta.magnitude, _attackMask, _capsuleHits);
+            foreach (EnemyCapsuleHit hit in _capsuleHits)
+            {
+                float distance = (hit.Point - currentBase).sqrMagnitude;
+                if (distance < nearest) { nearest = distance; contact = new AttackContact { Capsule = hit.Capsule, Point = hit.Point }; }
+            }
+        }
+        return contact;
     }
 
     /// <summary>
@@ -485,7 +575,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         {
             _hasResolution = true;
             _lastResolution = result;
-            AttackContactResolved?.Invoke(request, hit ? nearest.Collider : null,
+            AttackContactResolved?.Invoke(request, hit,
                 hit ? nearest.Point : request.Origin, enemyDamaged);
         }
         return result;
@@ -538,7 +628,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
 
     /// <summary>
     /// origin·forward·range로 같은 씬의 생존 적 중 부채꼴 각도 또는 정면 근접 반경 안에 있고 벽에 가리지 않은 적을 _fanTargets에 모은다.
-    /// 거리와 각도는 적 피격 콜라이더에서 원점에 가장 가까운 점의 수평 위치로 계산한다.
+    /// 거리와 각도는 적 피격 캡슐에서 원점에 가장 가까운 점의 수평 위치로 계산한다.
     /// </summary>
     private void CollectFanTargets(Vector3 origin, Vector3 forward, float range)
     {
@@ -547,11 +637,11 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
         foreach (EnemyHealth enemy in FindObjectsByType<EnemyHealth>(FindObjectsSortMode.None))
         {
             if (!enemy.IsAlive || enemy.gameObject.scene != gameObject.scene) continue;
-            Collider collider = enemy.CreateCombatTarget().HitCollider;
-            if (collider == null || !collider.enabled) continue;
+            EnemyHitCapsule capsule = enemy.CreateCombatTarget().HitCapsule;
+            if (capsule == null || !capsule.IsEnabled) continue;
 
             // 중심 대신 가장 가까운 점을 써서 몸집이 크거나 바로 붙은 적도 거리·각도 조건에 들어오게 한다.
-            Vector3 point = collider.ClosestPoint(origin);
+            Vector3 point = capsule.ClosestPoint(origin);
             Vector3 offset = Vector3.ProjectOnPlane(point - origin, Vector3.up);
             float distance = offset.magnitude;
             if (distance > range) continue;
@@ -559,7 +649,7 @@ public sealed class EnemyCombatService : MonoBehaviour, IPlayerCombatService
             float allowedAngle = distance <= _normalAttackNearbyRadius ? Mathf.Max(halfAngle, 90f) : halfAngle;
             if (angle > allowedAngle || IsFanTargetBlocked(origin, point)) continue;
 
-            _fanTargets.Add(new FanTarget { Health = enemy, Collider = collider, Point = point, Distance = distance });
+            _fanTargets.Add(new FanTarget { Health = enemy, Point = point, Distance = distance });
         }
     }
 

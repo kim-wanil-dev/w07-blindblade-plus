@@ -27,6 +27,8 @@ public sealed class DefenseShuriken : MonoBehaviour
     [SerializeField] private LayerMask _collisionMask = Physics.DefaultRaycastLayers;
     private readonly RaycastHit[] _hits = new RaycastHit[16];
     private readonly Collider[] _contacts = new Collider[16];
+    private readonly List<EnemyHitCapsule> _capsuleContacts = new List<EnemyHitCapsule>();
+    private readonly List<EnemyCapsuleHit> _capsuleHits = new List<EnemyCapsuleHit>();
     private GameObject _instigator;
     private PlayerHealth _target;
     private PlayerMotor _targetMotor;
@@ -66,7 +68,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     private float _reflectSpeedMultiplier = 2f;
     private GameObject _reflectOwner;
     private EnemyHealth _reflectTarget;
-    private Collider _reflectTargetCollider;
+    private EnemyHitCapsule _reflectTargetCapsule;
     private bool _reflected;
 
     public event Action<DefenseShuriken> Released;
@@ -399,13 +401,13 @@ private void ApplyVisualPitch()
 
         _reflectOwner = owner;
         _reflectTarget = null;
-        _reflectTargetCollider = null;
+        _reflectTargetCapsule = null;
         _direction = motor.ViewForward.normalized;
 
         if (_director.TryFindDetectedMelee(transform.position, viewCamera, perceptionMask, out EnemyHealth target))
         {
             _reflectTarget = target;
-            _reflectTargetCollider = target.CreateCombatTarget().HitCollider;
+            _reflectTargetCapsule = target.CreateCombatTarget().HitCapsule;
             AimAtReflectTarget();
         }
         else
@@ -468,35 +470,57 @@ private void ApplyVisualPitch()
         {
             if (!CanHitReflected(_contacts[i]))
                 continue;
-            StrikeReflected(_contacts[i], _contacts[i].ClosestPoint(transform.position));
+            StrikeReflected(null, _contacts[i].ClosestPoint(transform.position));
+            return;
+        }
+        EnemyHitCapsule.OverlapAll(transform.position, transform.position, _hitRadius, reflectedMask, _capsuleContacts);
+        foreach (EnemyHitCapsule capsule in _capsuleContacts)
+        {
+            if (!CanHitReflected(capsule))
+                continue;
+            StrikeReflected(capsule.Health, capsule.ClosestPoint(transform.position));
             return;
         }
 
         float distance = _speed * _reflectSpeedMultiplier * Time.deltaTime;
         int count = Physics.SphereCastNonAlloc(transform.position, _hitRadius, _direction, _hits, distance, reflectedMask, QueryTriggerInteraction.Ignore);
-        int closest = -1;
+        bool found = false;
+        EnemyHealth struckEnemy = null;
+        Vector3 struckPoint = transform.position;
         float closestDistance = float.PositiveInfinity;
         for (int i = 0; i < count; i++)
         {
             if (!CanHitReflected(_hits[i].collider) || _hits[i].distance >= closestDistance)
                 continue;
-            closest = i;
+            found = true;
+            struckPoint = _hits[i].point;
             closestDistance = _hits[i].distance;
         }
+        EnemyHitCapsule.SweepAll(transform.position, transform.position, _hitRadius, _direction, distance,
+            reflectedMask, _capsuleHits);
+        foreach (EnemyCapsuleHit hit in _capsuleHits)
+        {
+            if (!CanHitReflected(hit.Capsule) || hit.Distance >= closestDistance)
+                continue;
+            found = true;
+            struckEnemy = hit.Capsule.Health;
+            struckPoint = hit.Point;
+            closestDistance = hit.Distance;
+        }
 
-        if (closest >= 0)
+        if (found)
         {
             transform.position += _direction * closestDistance;
-            StrikeReflected(_hits[closest].collider, _hits[closest].point);
+            StrikeReflected(struckEnemy, struckPoint);
             return;
         }
         transform.position += _direction * distance;
     }
 
-    /// <summary>반사 대상 충돌체 중심으로 _direction과 수리검 회전을 바꾼다. 이미 중심에 있으면 방향을 유지한다.</summary>
+    /// <summary>반사 대상 피격 캡슐 중심으로 _direction과 수리검 회전을 바꾼다. 이미 중심에 있으면 방향을 유지한다.</summary>
     private void AimAtReflectTarget()
     {
-        Vector3 aim = _reflectTargetCollider.bounds.center - transform.position;
+        Vector3 aim = _reflectTargetCapsule.Bounds.center - transform.position;
         if (aim.sqrMagnitude < 0.0001f)
             return;
         _direction = aim.normalized;
@@ -504,31 +528,34 @@ private void ApplyVisualPitch()
     }
 
     /// <summary>
-    /// collider가 반사 수리검에 맞을 수 있는 생존 적 또는 기존 지형인지 판정한다.
-    /// 자신, 플레이어, 투척수는 제외하고 추가 검색한 레이어의 비적 대상도 통과시킨다.
+    /// collider가 반사 수리검에 맞을 수 있는 기존 지형인지 판정한다.
+    /// 자신, 플레이어, 적 계층은 제외하고 추가 검색한 레이어의 비적 대상도 통과시킨다. 적은 피격 캡슐로 따로 판정한다.
     /// </summary>
     private bool CanHitReflected(Collider collider)
     {
         if (collider.transform.IsChildOf(transform)
             || collider.GetComponentInParent<PlayerHealth>() != null
+            || collider.GetComponentInParent<EnemyHealth>() != null
             || collider.GetComponentInParent<BambooThrower>() != null)
             return false;
-
-        EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
-        if (enemy != null)
-            return enemy.IsAlive;
 
         int layerBit = 1 << collider.gameObject.layer;
         return (_collisionMask.value & layerBit) != 0 && collider.GetComponentInParent<IDamageable>() == null;
     }
 
-    /// <summary>
-    /// collider가 생존 적이면 point에 reflectDamage만큼의 PlayerOwned 피해를 한 번 적용한 뒤 수리검을 파괴한다.
-    /// 지형이면 피해 없이 파괴한다.
-    /// </summary>
-    private void StrikeReflected(Collider collider, Vector3 point)
+    /// <summary>capsule이 반사 수리검에 맞을 수 있는 생존 적이면 true를 반환한다. 투척수는 제외한다.</summary>
+    private bool CanHitReflected(EnemyHitCapsule capsule)
     {
-        EnemyHealth enemy = collider.GetComponentInParent<EnemyHealth>();
+        return capsule.Health != null && capsule.Health.IsAlive
+            && capsule.GetComponentInParent<BambooThrower>() == null;
+    }
+
+    /// <summary>
+    /// enemy가 있으면 point에 reflectDamage만큼의 PlayerOwned 피해를 한 번 적용한 뒤 수리검을 파괴한다.
+    /// 지형에 닿아 enemy가 null이면 피해 없이 파괴한다.
+    /// </summary>
+    private void StrikeReflected(EnemyHealth enemy, Vector3 point)
+    {
         if (enemy != null)
             enemy.TakeDamage(new DamageContext(_reflectDamage, _reflectOwner, point, _direction,
                 REFLECT_PATTERN_ID, _attackId, 1, IncomingAttackKind.PlayerOwned));

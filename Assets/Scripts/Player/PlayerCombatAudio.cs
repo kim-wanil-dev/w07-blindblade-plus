@@ -189,15 +189,15 @@ public sealed class PlayerCombatAudio : MonoBehaviour
     }
 
     /// <summary>
-    /// request의 실제 collider와 point에 일반 충돌음을 한 번 재생한다.
+    /// request의 실제 접촉 hasContact와 point에 일반 충돌음을 한 번 재생한다.
     /// 적 피해음은 EnemyDamageAudio에 맡기고 헛스윙에는 추가 결과음을 재생하지 않는다.
     /// </summary>
-    private void HandleContact(PlayerAttackRequest request, Collider collider, Vector3 point, bool enemyDamaged)
+    private void HandleContact(PlayerAttackRequest request, bool hasContact, Vector3 point, bool enemyDamaged)
     {
         if (request.ActionId != _player.CurrentActionId || _lastContactAction == request.ActionId)
             return;
         _lastContactAction = request.ActionId;
-        if (collider != null && !enemyDamaged)
+        if (hasContact && !enemyDamaged)
         {
             _lastHitAction = request.ActionId;
             if (!QueueCue(CombatSoundCue.Contact, point, false))
