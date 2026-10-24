@@ -91,6 +91,8 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private int _skillActionId;
 
     public float DashDistance => _dashDistance;
+    /// <summary>일섬 출발 대기 또는 몸 돌진이 진행 중이면 true를 반환해 집중 감속의 종료 시점을 알린다.</summary>
+    public bool IsDashSequenceActive => _dashStartDelayRemaining > 0f || _dashing;
     /// <summary>일섬 돌진이 지난 거리 비율(0~1)이다. 출발 대기 중이면 0, 돌진 중이 아니면 1이다.</summary>
     public float DashProgress => _dashStartDelayRemaining > 0f ? 0f : _dashing ? _motor.CombatPushProgress : 1f;
     public bool IsLaunchSlowActive => _launchElapsed >= 0f;

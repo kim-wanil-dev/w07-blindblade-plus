@@ -756,9 +756,8 @@ MonoBehaviour:
   _chargeWorldTimeScale: 0.1
   _chargeSlowDuration: 0.7
   _swordWaveFocusDuration: 1.5
-  _swordWaveFocusDashRatio: 0.25
   _swordWaveFocusTimeScale: 0.1
-  _swordWaveFocusPlayerTimeScale: 0.5
+  _swordWaveFocusPlayerTimeScale: 1
   _swordWaveFocusFadeIn: 0.04
   _swordWaveFocusFadeOut: 0.06
 --- !u!114 &1235757311588725982
