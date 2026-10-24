@@ -80,6 +80,7 @@ namespace BlindBlade.Telemetry
             _flow = GetComponent<OnboardingFlowController>();
             _flow.ObjectiveEntered += HandleObjectiveEntered;
             _flow.ObjectiveCompleted += HandleObjectiveCompleted;
+            _flow.StageCompleted += HandleStageCompleted;
             _flow.StageRetrying += HandleStageRetrying;
             _flow.StageRepeated += HandleStageRepeated;
             _flow.OnboardingCompleted += HandleOnboardingCompleted;
@@ -138,6 +139,12 @@ namespace BlindBlade.Telemetry
             if (_stepOpen && _stage == stepIndex && _objective == objectiveIndex) CloseStep("completed");
         }
 
+        /// <summary>stepIndex 단계의 마지막 목표가 성공하면 해당 구간을 완료로 확정하고 즉시 전송을 요청한다. 완료 선택 화면의 입력은 기다리지 않는다.</summary>
+        private void HandleStageCompleted(int stepIndex)
+        {
+            if (_sectionOpen && _stage == stepIndex) CloseSection("cleared");
+        }
+
         /// <summary>사망 재시도를 구간 종료로 기록하고 해당 단계의 다음 진입 재시도 횟수를 증가시킨다.</summary>
         private void HandleStageRetrying(int stepIndex)
         {
@@ -149,7 +156,7 @@ namespace BlindBlade.Telemetry
             if (stepIndex >= 0 && stepIndex < STAGE_COUNT) _retryCounts[stepIndex]++;
         }
 
-        /// <summary>완료 화면에서 stepIndex 단계를 다시 연습하면 현재 구간을 반복으로 닫고 다음 시도 횟수를 올린다.</summary>
+        /// <summary>stepIndex 단계를 다시 연습하면 열린 구간만 반복으로 닫고 다음 시도 횟수를 올린다. 이미 완료된 도전의 성공 상태는 유지한다.</summary>
         private void HandleStageRepeated(int stepIndex)
         {
             if (_sectionOpen) CloseSection("repeated");
@@ -365,6 +372,7 @@ namespace BlindBlade.Telemetry
             {
                 _flow.ObjectiveEntered -= HandleObjectiveEntered;
                 _flow.ObjectiveCompleted -= HandleObjectiveCompleted;
+                _flow.StageCompleted -= HandleStageCompleted;
                 _flow.StageRetrying -= HandleStageRetrying;
                 _flow.StageRepeated -= HandleStageRepeated;
                 _flow.OnboardingCompleted -= HandleOnboardingCompleted;

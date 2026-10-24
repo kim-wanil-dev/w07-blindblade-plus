@@ -429,14 +429,13 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
     }
 
     /// <summary>
-    /// 후보 유무로 연결 진행도를 deltaTime만큼 늘이거나 줄이고 끝점을 대상 충돌체 중심으로 옮긴다.
+    /// 후보 유무로 연결 진행도를 deltaTime만큼 늘이거나 줄이고 끝점을 대상 피격 캡슐 중심으로 옮긴다.
     /// 새 연결이면 끝점을 대상에 바로 두고 굽이 잦아듦 _linkSettle을 0부터 다시 올리며, 완전히 풀리면 대상과 맥박을 지운다.
     /// </summary>
     private void UpdateLink(float deltaTime)
     {
         // 다음 후보 조회 전에 대상이 풀로 돌아가 비활성화되면 경계가 원점으로 바뀌므로 바로 푼다.
-        bool linkable = _hasCandidate && _candidate.HitCollider != null
-            && _candidate.HitCollider.enabled && _candidate.HitCollider.gameObject.activeInHierarchy;
+        bool linkable = _hasCandidate && _candidate.HitCapsule != null && _candidate.HitCapsule.IsPresent;
         if (!linkable)
         {
             _linkProgress = Mathf.MoveTowards(_linkProgress, 0f, deltaTime / _releaseDuration);
@@ -445,7 +444,7 @@ public sealed class PlayerDashTargetThread : MonoBehaviour
             return;
         }
 
-        Vector3 targetCenter = _candidate.HitCollider.bounds.center;
+        Vector3 targetCenter = _candidate.HitCapsule.Bounds.center;
         if (_linkTargetId == null)
         {
             _linkEnd = targetCenter;

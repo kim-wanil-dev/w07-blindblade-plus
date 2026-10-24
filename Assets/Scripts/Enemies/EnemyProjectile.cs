@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 
@@ -31,6 +32,8 @@ public class EnemyProjectile : MonoBehaviour
     private int _projectileId;
     private bool _hasPassedPlayer;
     private bool _terminalFlight;
+    private readonly List<EnemyHitCapsule> _capsuleContacts = new List<EnemyHitCapsule>();
+    private readonly List<EnemyCapsuleHit> _capsuleHits = new List<EnemyCapsuleHit>();
 
     [Header("공격 판정 기즈모")]
     [SerializeField] private bool _showAttackGizmos = true;
@@ -94,34 +97,69 @@ public class EnemyProjectile : MonoBehaviour
 #if UNITY_EDITOR
             _debugEnd = _debugStart;
 #endif
-            ProcessHit(overlap, overlap.ClosestPoint(transform.position));
+            ProcessHit(overlap, overlap.GetComponentInParent<IDamageable>(), overlap.ClosestPoint(transform.position));
             return;
+        }
+        // 반사된 투사체만 적을 맞히며 적은 피격 캡슐로 판정한다.
+        if (_reflected)
+        {
+            EnemyHitCapsule.OverlapAll(transform.position, transform.position, _hitRadius, _collisionMask, _capsuleContacts);
+            foreach (EnemyHitCapsule capsule in _capsuleContacts)
+            {
+                if (!CanHit(capsule))
+                    continue;
+#if UNITY_EDITOR
+                _debugEnd = _debugStart;
+#endif
+                ProcessHit(null, capsule.Health, capsule.ClosestPoint(transform.position));
+                return;
+            }
         }
 
         float distance = _speed * _speedMultiplier * Time.deltaTime;
         RaycastHit[] hits = Physics.SphereCastAll(transform.position, _hitRadius, _direction,
             distance, _collisionMask, QueryTriggerInteraction.Ignore);
-        int closestIndex = -1;
+        Collider closestCollider = null;
+        EnemyHitCapsule closestCapsule = null;
+        Vector3 closestPoint = transform.position;
         float closestDistance = float.PositiveInfinity;
         for (int index = 0; index < hits.Length; index++)
         {
             if (!CanHit(hits[index].collider) || hits[index].distance >= closestDistance)
                 continue;
 
-            closestIndex = index;
+            closestCollider = hits[index].collider;
+            closestPoint = hits[index].point;
             closestDistance = hits[index].distance;
         }
-
-        if (closestIndex >= 0)
+        if (_reflected)
         {
-            RaycastHit hit = hits[closestIndex];
+            EnemyHitCapsule.SweepAll(transform.position, transform.position, _hitRadius, _direction,
+                distance, _collisionMask, _capsuleHits);
+            foreach (EnemyCapsuleHit hit in _capsuleHits)
+            {
+                if (!CanHit(hit.Capsule) || hit.Distance >= closestDistance)
+                    continue;
+
+                closestCollider = null;
+                closestCapsule = hit.Capsule;
+                closestPoint = hit.Point;
+                closestDistance = hit.Distance;
+            }
+        }
+
+        if (closestCollider != null || closestCapsule != null)
+        {
             if (!_reflected) DodgeAfterimage.ReportSphereSweep(transform.position,
-                transform.position + _direction * hit.distance, _hitRadius, _damage);
-            transform.position += _direction * hit.distance;
+                transform.position + _direction * closestDistance, _hitRadius, _damage);
+            transform.position += _direction * closestDistance;
 #if UNITY_EDITOR
             _debugEnd = transform.position;
 #endif
-            ProcessHit(hit.collider, hit.point);
+            IDamageable receiver = closestCapsule != null
+                ? closestCapsule.Health
+                : closestCollider.GetComponentInParent<IDamageable>();
+            ProcessHit(closestCollider, receiver, closestPoint);
             return;
         }
 
@@ -234,25 +272,35 @@ public class EnemyProjectile : MonoBehaviour
 
     /// <summary>
     /// collider가 자신·공격자 또는 지정 대상 밖의 피해 수신자인지 검사한다.
-    /// 원래 투사체는 다른 적을 제외하고 반사된 투사체는 적과 벽 충돌을 허용한다.
+    /// 적 계층은 몸 충돌체가 남아 있어도 제외하며, 반사된 투사체의 적 충돌은 피격 캡슐로 따로 판정한다.
     /// </summary>
     protected virtual bool CanHit(Collider collider)
     {
         return !collider.transform.IsChildOf(transform) &&
             (_damage.Instigator == null || !collider.transform.IsChildOf(_damage.Instigator.transform)) &&
-            (_reflected || collider.GetComponentInParent<EnemyHealth>() == null) &&
+            collider.GetComponentInParent<EnemyHealth>() == null &&
             (_target == null || collider.GetComponentInParent<IDamageable>() == null || collider.transform.IsChildOf(_target));
     }
 
     /// <summary>
-    /// collider의 피해 수신자에게 point와 저장한 피해 정보를 전달하고 충돌 이벤트를 발생시킨다.
+    /// capsule이 반사된 투사체가 맞힐 수 있는 적인지 검사한다. 공격자와 지정 대상 밖의 적은 제외한다.
+    /// 반사되지 않은 투사체는 적을 맞히지 않는다.
+    /// </summary>
+    protected virtual bool CanHit(EnemyHitCapsule capsule)
+    {
+        return _reflected &&
+            (_damage.Instigator == null || !capsule.transform.IsChildOf(_damage.Instigator.transform)) &&
+            (_target == null || capsule.transform.IsChildOf(_target));
+    }
+
+    /// <summary>
+    /// receiver에게 point와 저장한 피해 정보를 전달하고 충돌 이벤트를 발생시킨다. collider는 물리 충돌일 때만 전달하고 적 피격 캡슐이면 null이다.
     /// 정확한 패링이면 피해 없이 반사하고 그 외 최초 충돌에서는 비행을 중지하고 반환한다.
     /// </summary>
-    protected virtual void ProcessHit(Collider collider, Vector3 point)
+    protected virtual void ProcessHit(Collider collider, IDamageable receiver, Vector3 point)
     {
         DamageContext damage = new DamageContext(_damage.Amount, _damage.Instigator,
             point, _direction, _damage.PatternId, _damage.AttackId, _damage.HitId, _damage.Kind);
-        IDamageable receiver = collider.GetComponentInParent<IDamageable>();
         bool parried = false;
         bool defended = receiver is KatanaDamageReceiver katana
             && katana.TryDefendProjectile(damage, out parried);

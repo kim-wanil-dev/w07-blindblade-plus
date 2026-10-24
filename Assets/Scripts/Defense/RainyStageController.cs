@@ -196,6 +196,7 @@ public sealed class RainyStageController : MonoBehaviour
         _warning.GetComponentInChildren<TMP_Text>(true).text = "강적 출현";
         _phase = StagePhase.Warning;
         _director.StopWave();
+        BlindBlade.Telemetry.CombatTelemetrySignals.Stage("2-1", true);
         _warning.alpha = 1f;
         _warningRoutine = StartCoroutine(ShowWarningThenBoss());
     }
@@ -396,7 +397,7 @@ public sealed class RainyStageController : MonoBehaviour
         _beast.transform.position = destination;
     }
 
-    /// <summary>bossHealth 사망 시 두 보스가 쓰러졌으면 소멸 시간과 1.5초를 기다려 클리어 UI를 표시한다.</summary>
+    /// <summary>bossHealth 사망 시 두 보스가 쓰러졌으면 최종 완료 로그를 즉시 발행하고 소멸 뒤 클리어 UI 표시를 예약한다.</summary>
     private void HandleBossDied(EnemyHealth bossHealth)
     {
         // 사망 사건 시점에 죽은 쪽은 체력 0이므로 남은 쪽의 생존 여부만 확인하면 된다.
@@ -404,7 +405,7 @@ public sealed class RainyStageController : MonoBehaviour
             return;
 
         _phase = StagePhase.Complete;
-        BlindBlade.Telemetry.CombatTelemetrySignals.Stage("2-2", true);
+        BlindBlade.Telemetry.CombatTelemetrySignals.Stage("2-2", complete: true, gameCompleted: true);
         Game.Instance.UIManager.Get<GameClearUI>().SetNextDisplayDelay(
             BossDeathDissolve.DURATION + CLEAR_AFTER_DISSOLVE_DELAY);
         Game.Instance.GameStateManager.RequestGameClear();

@@ -120,6 +120,7 @@ GameObject:
   - component: {fileID: 203}
   - component: {fileID: 204}
   - component: {fileID: 205}
+  - component: {fileID: 2783519461308245103}
   - component: {fileID: 206}
   - component: {fileID: 207}
   - component: {fileID: 208}
@@ -209,9 +210,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 250
+  _maxHealth: 350
   _dieOnAnyHit: 0
-  _hitCollider: {fileID: 205}
+  _hitCapsule: {fileID: 2783519461308245103}
   _cancelAttackOnHit: 0
   _dashTargetable: 1
   _sharedHealth: {fileID: 304}
@@ -243,6 +244,24 @@ CapsuleCollider:
   m_Height: 1.725
   m_Direction: 1
   m_Center: {x: 0, y: 1.15, z: 0}
+--- !u!114 &2783519461308245103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe1549398884f45b69f24870baeda42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _center: {x: 0, y: 0, z: 0}
+  _radius: 0.5
+  _height: 2
+  _direction: 1
+  _blocksPlayer: 0
+  _bodyCollider: {fileID: 205}
 --- !u!54 &206
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -812,6 +831,7 @@ GameObject:
   - component: {fileID: 303}
   - component: {fileID: 304}
   - component: {fileID: 305}
+  - component: {fileID: 3851094726613045287}
   - component: {fileID: 306}
   - component: {fileID: 307}
   - component: {fileID: 330}
@@ -894,9 +914,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b256b4bb12560a41a0634808047e235, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _maxHealth: 250
+  _maxHealth: 350
   _dieOnAnyHit: 0
-  _hitCollider: {fileID: 305}
+  _hitCapsule: {fileID: 3851094726613045287}
   _cancelAttackOnHit: 0
   _dashTargetable: 1
   _sharedHealth: {fileID: 204}
@@ -928,6 +948,24 @@ CapsuleCollider:
   m_Height: 4.8111715
   m_Direction: 2
   m_Center: {x: 0, y: 2, z: 0.10558605}
+--- !u!114 &3851094726613045287
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 300}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe1549398884f45b69f24870baeda42, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _center: {x: 0, y: 0, z: 0}
+  _radius: 0.5
+  _height: 2
+  _direction: 1
+  _blocksPlayer: 0
+  _bodyCollider: {fileID: 305}
 --- !u!54 &306
 Rigidbody:
   m_ObjectHideFlags: 0

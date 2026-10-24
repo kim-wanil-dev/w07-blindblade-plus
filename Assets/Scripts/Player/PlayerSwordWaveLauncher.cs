@@ -44,7 +44,7 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
     private float _dashStartDelay = 0.08f;
     [SerializeField, Tooltip("돌진 중 몸 판정이 검사하는 레이어. 적이 아닌 접촉은 무시한다. 반경과 피해는 검기 프리팹 값을 쓴다.")]
     private LayerMask _dashHitMask = ~(1 << BambooGrove.DEBRIS_LAYER);
-    private readonly RaycastHit[] _dashHits = new RaycastHit[32];
+    private readonly List<EnemyCapsuleHit> _dashHits = new List<EnemyCapsuleHit>();
     private SharedDamageHitTracker _hitTracker;
     private CharacterController _controller;
     private bool _dashing;
@@ -308,14 +308,15 @@ public sealed class PlayerSwordWaveLauncher : MonoBehaviour
         EnemyProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         TwinBossProjectile.ReleaseInSweep(_dashLastCenter, center, _wavePrefab.HitRadius);
         RainStageWeather.RecordDashSweep(_dashLastCenter, center);
-        int count = Physics.SphereCastNonAlloc(_dashLastCenter, _wavePrefab.HitRadius, direction, _dashHits,
-            distance, _dashHitMask, QueryTriggerInteraction.Ignore);
+        // 피해로 적이 비활성화되면 활성 캡슐 목록이 바뀌므로 접촉을 먼저 모두 모은 뒤 피해를 준다.
+        EnemyHitCapsule.SweepAll(_dashLastCenter, _dashLastCenter, _wavePrefab.HitRadius, direction,
+            distance, _dashHitMask, _dashHits);
         int struckBefore = _dashStruck.Count;
-        for (int i = 0; i < count; i++)
+        foreach (EnemyCapsuleHit hit in _dashHits)
         {
-            EnemyHealth enemy = _dashHits[i].collider.GetComponentInParent<EnemyHealth>();
+            EnemyHealth enemy = hit.Capsule.Health;
             if (enemy == null || !enemy.IsAlive) continue;
-            Vector3 point = _dashHits[i].distance > 0f ? _dashHits[i].point : _dashHits[i].collider.ClosestPoint(center);
+            Vector3 point = hit.Distance > 0f ? hit.Point : hit.Capsule.ClosestPoint(center);
             float amount = _wavePrefab.Damage > 0f ? _wavePrefab.Damage : Mathf.Max(enemy.CurrentHealth, 1f);
             _hitTracker.ProcessHit(enemy, new DamageContext(amount, gameObject, point, direction,
                 DASH_PATTERN_ID, _multiKillAttackId, 0, IncomingAttackKind.Unknown));

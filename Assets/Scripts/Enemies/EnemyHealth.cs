@@ -7,6 +7,9 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class EnemyHealth : MonoBehaviour, IDamageable
 {
+    private const string SWORD_WAVE_DASH_PATTERN_ID = "PlayerSwordWaveDash";
+    private const string SWORD_WAVE_PATTERN_ID = "DefenseSwordWave";
+
     private static readonly Dictionary<string, EnemyHealth> _targets = new Dictionary<string, EnemyHealth>();
     private static readonly Dictionary<string, int> _spawnGenerations = new Dictionary<string, int>();
 
@@ -14,7 +17,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     [SerializeField, Min(1f)] private float _maxHealth = 10f;
     [SerializeField, Tooltip("켜면 양수 피해를 주는 유효한 공격 한 번에 사망합니다.")]
     private bool _dieOnAnyHit;
-    [SerializeField] private Collider _hitCollider;
+    [SerializeField] private EnemyHitCapsule _hitCapsule;
     [SerializeField] private bool _cancelAttackOnHit;
     [SerializeField, Tooltip("끄면 플레이어의 대상 돌진 공격 후보에서 제외합니다. 다른 피해 판정은 유지합니다.")]
     private bool _dashTargetable = true;
@@ -125,7 +128,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         return true;
     }
 
-    /// <summary>수락된 피해 context의 플레이어에게 실제 처치와 보스 일반 공격 충전을 지급한다. 공유 체력 묶음의 같은 행동 보상은 한 번만 반영한다.</summary>
+    /// <summary>수락된 피해 context의 플레이어에게 보스 적중 또는 일반 적 처치 보상을 지급한다. 일섬과 일반·대시 공격을 구분하고 공유 체력 보상은 한 번만 반영한다.</summary>
     private void RewardPlayerSkillGauge(DamageContext context)
     {
         if (context.Instigator == null) return;
@@ -140,6 +143,9 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             || GetComponentInParent<TwinBossController>() != null;
         PlayerSwordWaveLauncher wave = gauges.GetComponent<PlayerSwordWaveLauncher>();
         KatanaCombatCoordinator combat = gauges.GetComponent<KatanaCombatCoordinator>();
+        bool swordWaveAttack = wave.IsSkillAction(context.AttackId)
+            || context.PatternId == SWORD_WAVE_DASH_PATTERN_ID
+            || context.PatternId == SWORD_WAVE_PATTERN_ID;
         if (normal && boss && context.AttackId > 0 && !wave.IsSkillAction(context.AttackId)
             && !combat.IsCounterAttack)
         {
@@ -153,7 +159,13 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             }
         }
         // 공유 체력 동기화에서는 이 메서드를 호출하지 않아 처치 보상을 한 번만 지급한다.
-        if (_currentHealth <= 0f) gauges.RewardKill();
+        if (_currentHealth <= 0f && !boss)
+        {
+            if (swordWaveAttack)
+                gauges.RewardUltimateKill();
+            else if (normal && !combat.IsCounterAttack)
+                gauges.RewardKill();
+        }
     }
 
     /// <summary>
@@ -165,7 +177,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         EffectManager effects = Game.Instance.EffectManager;
         effects.Play(EffectId.BloodHit, context.Point);
         if (_currentHealth <= 0f)
-            effects.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+            effects.Play(EffectId.EnemyDeath, _hitCapsule.Bounds.center);
     }
 
     /// <summary>
@@ -179,7 +191,7 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
         if (_currentHealth > 0f) return;
         LethalDamageContext = context;
-        Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCollider.bounds.center);
+        Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCapsule.Bounds.center);
         Dying?.Invoke(this);
         Died?.Invoke(this);
         gameObject.SetActive(false);
@@ -187,11 +199,11 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
 
     /// <summary>
     /// 체력을 함께 쓰는 상대가 대신 맞은 범위 공격에 이 적도 걸렸을 때 point에 혈흔만 재생한다.
-    /// 살아 있고 무적이 아니며 피격 판정 _hitCollider가 켜져 있을 때만 재생하고 HP·피격 반응·Damaged는 바꾸지 않는다.
+    /// 살아 있고 무적이 아니며 피격 캡슐 _hitCapsule이 켜져 있을 때만 재생하고 HP·피격 반응·Damaged는 바꾸지 않는다.
     /// </summary>
     public void PlaySharedHitEffect(Vector3 point)
     {
-        if (!IsAlive || _invulnerable || !_hitCollider.enabled) return;
+        if (!IsAlive || _invulnerable || !_hitCapsule.IsEnabled) return;
         Game.Instance.EffectManager.Play(EffectId.BloodHit, point);
     }
 
@@ -216,13 +228,13 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     }
 
     /// <summary>
-    /// 지정된 Collider와 현재 체력 상태로 플레이어 계약의 전투 대상 정보를 반환한다.
-    /// 식별자는 인스턴스마다 고유하며 반경은 Collider의 수평 크기를 사용한다.
+    /// 지정된 피격 캡슐과 현재 체력 상태로 플레이어 계약의 전투 대상 정보를 반환한다.
+    /// 식별자는 인스턴스마다 고유하며 반경은 피격 캡슐 경계의 수평 크기를 사용한다.
     /// </summary>
     public PlayerCombatTarget CreateCombatTarget()
     {
-        Vector3 extents = _hitCollider.bounds.extents;
-        return new PlayerCombatTarget(TargetId, transform.position, _hitCollider,
+        Vector3 extents = _hitCapsule.Bounds.extents;
+        return new PlayerCombatTarget(TargetId, transform.position, _hitCapsule,
             Mathf.Max(extents.x, extents.z), IsAlive);
     }
 

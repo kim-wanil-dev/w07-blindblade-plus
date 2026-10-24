@@ -785,7 +785,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 83cd9423b5624d523dd69578222640dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _damage: 50
+  _damage: 100
   _blackoutDuration: 1
   _cutAngle: 24
   _cutSlashSize: 2400
@@ -1183,9 +1183,9 @@ MonoBehaviour:
   _swordWavePerfectDodgeReward: 0.5
   _swordWaveKillReward: 0.1
   _maxUltimateGauge: 100
-  _ultimatePerfectDodgeReward: 15
-  _ultimateKillReward: 1
-  _ultimateBossNormalHitReward: 3
+  _ultimatePerfectDodgeReward: 20
+  _ultimateKillReward: 2
+  _ultimateBossNormalHitReward: 5
 --- !u!1001 &2095931565275930154
 PrefabInstance:
   m_ObjectHideFlags: 0
