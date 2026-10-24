@@ -18,7 +18,8 @@
   'stage_clear_time','time_since_stage_start','attempt_session_id','retry_index','previous_attempt_session_id',
   'exit_stage_id','exit_stage_attempt_id','exit_location','game_completed','awareness_radius','normal_enemy_count',
   'boss_count','hostile_shuriken_count','hostile_total_count','awareness_snapshot_collected','skill_name',
-  'skill_source','skill_execution_id','representative_outcome','exit_occurred_at_kst','game_completed_occurred_at_kst'];
+  'skill_source','skill_execution_id','representative_outcome','exit_occurred_at_kst','game_completed_occurred_at_kst',
+  'melee_spawn_multiplier_per_minute'];
 const BASE_METRICS = ['deaths','kills','damageTaken','damageHitCount','dodgeAttempts','dodgeRejected','dodgeStarted',
   'guardAttempts','guardRejected','guardAttemptsWithContact','guardAttemptsWithoutContact','guardHitCount','guardGuardCount',
   'guardNormalParryCount','guardPerfectParryCount','attackAttempts','attackRejected','enemyAttackCount',
@@ -556,7 +557,7 @@ function eventRow(r,key,received) {
     r.eventType === 'game_completed' || p.gameCompleted === true,
     p.awarenessRadius,p.normalEnemyCount,p.bossCount,p.hostileShurikenCount,p.hostileTotalCount,
     p.awarenessSnapshotCollected,p.skillName,p.skillSource,p.skillExecutionId,p.representativeOutcome,
-    p.exitOccurredAtKst,p.gameCompletedOccurredAtKst].map(safeCell);
+    p.exitOccurredAtKst,p.gameCompletedOccurredAtKst,p.meleeSpawnMultiplierPerMinute].map(safeCell);
 }
 
 /** 최신 도전별 누적 스냅샷의 변경 행만 덮어쓴다. 시트의 기존 열 순서를 이름으로 매핑해 유지한다. */

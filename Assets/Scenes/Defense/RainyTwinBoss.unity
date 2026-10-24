@@ -56652,11 +56652,7 @@ MonoBehaviour:
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
   _meleeSpawnsPerMinute: 1000
-  _meleeSpawnGrowthPerMinute: 10
-  _firstMeleeKillThreshold: 0
-  _firstMeleeSpawnsPerMinute: 0
-  _secondMeleeKillThreshold: 0
-  _secondMeleeSpawnsPerMinute: 0
+  _meleeSpawnMultiplierPerMinute: 1.35
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 100
