@@ -8,12 +8,12 @@ using UnityEditor.SceneManagement;
 using BlindBlade.Combat.Contracts;
 using BlindBlade.UI.CombatHud;
 
-/// <summary>방어 HUD 프리팹을 씬의 표시 담당자와 연결한다. 기존 UI 인스턴스와 편집값은 재생성하지 않는다.</summary>
+/// <summary>방어 HUD 프리팹 인스턴스를 씬 담당자와 연결하고 멀티킬 표시 설정은 공용 프리팹에 보존한다.</summary>
 public static class BambooDefenseHudAuthoring
 {
     private const string PREFAB_PATH = "Assets/Scenes/Defense/UI/BambooDefenseHud.prefab";
 
-    /// <summary>director 하위에 HUD 프리팹을 한 번 배치하고 기록 텍스트·방향 마커 참조를 연결한다.</summary>
+    /// <summary>director 하위 HUD의 기록·방향 마커와 프리팹 루트의 멀티킬 표시를 씬에 연결한다.</summary>
     public static void Connect(BambooDefenseDirector director)
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -42,6 +42,21 @@ public static class BambooDefenseHudAuthoring
         DefenseRecordHud record = director.GetComponent<DefenseRecordHud>();
         if (record == null)
             record = Undo.AddComponent<DefenseRecordHud>(director.gameObject);
+        bool isOnboardingScene = false;
+        foreach (OnboardingFlowController candidate in UnityEngine.Object.FindObjectsByType<OnboardingFlowController>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (candidate.gameObject.scene == director.gameObject.scene)
+            {
+                isOnboardingScene = true;
+                break;
+            }
+        }
+        if (references.MultiKillLatestText == null || references.MultiKillPreviousText == null)
+            throw new InvalidOperationException("HUD의 멀티킬 TMP 슬롯 참조를 확인하세요.");
+        DefenseMultiKillHud multiKill = root.GetComponent<DefenseMultiKillHud>();
+        if (multiKill == null)
+            throw new InvalidOperationException("HUD 프리팹의 DefenseMultiKillHud 컴포넌트를 확인하세요.");
         ShurikenDirectionIndicator indicator = director.GetComponent<ShurikenDirectionIndicator>();
         if (indicator == null)
             indicator = Undo.AddComponent<ShurikenDirectionIndicator>(director.gameObject);
@@ -49,6 +64,10 @@ public static class BambooDefenseHudAuthoring
         recordSettings.FindProperty("_director").objectReferenceValue = director;
         recordSettings.FindProperty("_text").objectReferenceValue = text;
         recordSettings.ApplyModifiedProperties();
+        SerializedObject multiKillSettings = new SerializedObject(multiKill);
+        multiKillSettings.FindProperty("_director").objectReferenceValue = director;
+        multiKillSettings.FindProperty("m_Enabled").boolValue = !isOnboardingScene;
+        multiKillSettings.ApplyModifiedProperties();
         SerializedObject indicatorSettings = new SerializedObject(indicator);
         indicatorSettings.FindProperty("_director").objectReferenceValue = director;
         SerializedProperty markers = indicatorSettings.FindProperty("_graphics");

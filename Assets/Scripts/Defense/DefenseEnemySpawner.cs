@@ -109,6 +109,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
     private int _telemetrySpawnOrdinal;
     private bool _waveStopped;
     public event Action EnemyKilled;
+    public event Action<DamageContext> EnemyKilledWithContext;
     public event Action<string, string, int, Vector3, float, float> EnemySpawned;
     public event Action<string, string, double, Vector3> EnemyDefeated;
     public event Action<string, string, double, Vector3, string> EnemyDespawned;
@@ -253,6 +254,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         }
 
         EnemyKilled = null;
+        EnemyKilledWithContext = null;
     }
 
     /// <summary>
@@ -640,7 +642,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         idlePool.Push(unit);
     }
 
-    /// <summary>health 사망의 종류와 생존 시간을 기록하고 처치 수를 올린 뒤 비활성 재사용 풀로 옮긴다.</summary>
+    /// <summary>health 사망의 종류와 생존 시간을 기록하고 처치 수·치명타 문맥 사건을 올린 뒤 비활성 재사용 풀로 옮긴다.</summary>
     private void HandleMeleeDied(EnemyHealth health)
     {
         if (!_meleeByHealth.TryGetValue(health, out MeleeUnit unit) || !_activeMelee.Remove(unit))
@@ -648,6 +650,7 @@ public sealed class DefenseEnemySpawner : MonoBehaviour
         EnemyDefeated?.Invoke(unit.TelemetryId, unit.IsBeast ? "Beast" : "Melee",
             Time.realtimeSinceStartupAsDouble - unit.TelemetrySpawnedAt, health.transform.position);
         EnemyKilled?.Invoke();
+        EnemyKilledWithContext?.Invoke(health.LethalDamageContext);
         ReturnMeleeToPool(unit);
     }
 

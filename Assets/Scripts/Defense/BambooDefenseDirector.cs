@@ -28,6 +28,9 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private float _soundPerceptionDistance = 20f;
     private bool _isOnboardingScene;
 
+    /// <summary>일반 웨이브에서 실제 처치된 적의 치명타 피해 문맥을 표시 담당자에게 전달한다.</summary>
+    public event Action<DamageContext> EnemyKilledWithContext;
+
     [Header("동시 투척 제한")]
     [SerializeField, Min(1), Tooltip("예약과 비행 중인 수리검을 합친 상한")]
     private int _maximumConcurrentShurikens = 3;
@@ -81,6 +84,7 @@ public sealed class BambooDefenseDirector : MonoBehaviour
             return;
         }
         _spawner.EnemyKilled += HandleEnemyKilled;
+        _spawner.EnemyKilledWithContext += HandleEnemyKilledWithContext;
     }
 
     void OnEnable()
@@ -154,7 +158,10 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     void OnDestroy()
     {
         if (_spawner != null)
+        {
             _spawner.EnemyKilled -= HandleEnemyKilled;
+            _spawner.EnemyKilledWithContext -= HandleEnemyKilledWithContext;
+        }
         _throwBudget.Clear();
         _attackTurns.Clear();
     }
@@ -214,6 +221,14 @@ public sealed class BambooDefenseDirector : MonoBehaviour
     private void HandleEnemyKilled()
     {
         _kills++;
+    }
+
+    /// <summary>일반 웨이브의 사망 문맥을 전달하며 온보딩·보스 진입 후에는 새 멀티킬 집계를 만들지 않는다.</summary>
+    private void HandleEnemyKilledWithContext(DamageContext context)
+    {
+        if (_isOnboardingScene || _waveStopped || IsRecordHidden)
+            return;
+        EnemyKilledWithContext?.Invoke(context);
     }
 
     /// <summary>기록 표시에 쓸 목표 처치 수를 goal로 저장한다. 0 이하이면 목표 없이 생존 시간과 처치 수를 표시한다.</summary>

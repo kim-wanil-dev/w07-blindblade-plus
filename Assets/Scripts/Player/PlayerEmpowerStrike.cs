@@ -114,7 +114,8 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     public void Play(Action onFinished)
     {
         Stop();
-        _routine = StartCoroutine(RunSequence(onFinished, false, Color.clear));
+        int attackId = MultiKillAttackRuntime.AllocateAttackId();
+        _routine = StartCoroutine(RunSequence(onFinished, false, Color.clear, attackId));
     }
 
     /// <summary>
@@ -125,7 +126,8 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     public void PlayCounter(Action onFinished, Color enemyCutColor)
     {
         Stop();
-        _routine = StartCoroutine(RunSequence(onFinished, true, enemyCutColor));
+        int attackId = MultiKillAttackRuntime.AllocateAttackId();
+        _routine = StartCoroutine(RunSequence(onFinished, true, enemyCutColor, attackId));
     }
 
     /// <summary>재생 중인 연출을 멈추고 화면 연출과 FOV를 원래대로 돌린다. onFinished는 호출하지 않는다.</summary>
@@ -142,13 +144,13 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
+    /// attackId를 피해 문맥에 보존해 _blackoutDuration 동안 암흑 위에 곡선 검격과 갈라진 선을 긋고 머문다.
     /// 납도 순간 암흑을 걷어 화면을 되돌리며 범위 안의 적을 공격하고 적대 투사체를 가드 소리와 함께 없앤 뒤 선을 흩뜨리고 onFinished를 호출한다.
     /// 적과 투사체는 납도 순간 위치·시선 기준 전방 반경 및 주변 반경의 합집합으로 판정한다. 수락 순간 화면의 갈라진 선에 걸친 대나무는 거리와 상관없이 그 선을 따라 납도 순간 벤다. 같은 선을 따라 땅에 흰 흔적을 남긴다.
     /// RainyStage에서는 암전이 걷히고 _rainBurstDelay 뒤에 같은 사선 평면 주변 빗방울이 카메라 옆·조금 뒤까지 평면 바깥쪽으로 터진다.
     /// counter이면 보스 거합 받아치기로, enemyCutColor의 적 사선 위에 대칭 사선을 덮고 기본 사선을 더한 X자를 _counterLayerDelay 간격으로 긋고 세계도 두 사선으로 벤다.
     /// </summary>
-    private IEnumerator RunSequence(Action onFinished, bool counter, Color enemyCutColor)
+    private IEnumerator RunSequence(Action onFinished, bool counter, Color enemyCutColor, int attackId)
     {
         Vector3 bambooOrigin = transform.position;
         Matrix4x4 bambooView = _camera.projectionMatrix * _camera.worldToCameraMatrix;
@@ -190,7 +192,8 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         Vector3 strikeOrigin = transform.position;
         Vector3 strikeForward = _motor.ViewForward;
         List<EnemyHealth> targets = CollectStrikeTargets(strikeOrigin, strikeForward);
-        StrikeEnemies(targets, strikeOrigin, strikeForward);
+        StrikeEnemies(targets, strikeOrigin, strikeForward, attackId);
+        MultiKillAttackRuntime.CompleteAttack(attackId);
         ReleaseProjectiles(strikeOrigin, strikeForward);
         BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
         _groundMark.Show(bambooCutPoint, bambooCutNormal, bambooView);
@@ -292,11 +295,11 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
     }
 
     /// <summary>
-    /// targets, origin, forward를 사용해 살아 있는 적에게 _damage만큼 피해를 주되 공유 체력 묶음에는 한 번만 적용한다.
+    /// targets, origin, forward, attackId를 사용해 살아 있는 적에게 _damage만큼 피해를 주되 공유 체력 묶음에는 한 번만 적용한다.
     /// 공유 피해 우선(HasSharedDamagePriority) 적을 먼저 처리하고, 무적인 적은 개별적으로 막고 같은 묶음의 다른 적은 계속 검사한다.
     /// 실제 피해는 EnemyHealth.TakeDamage에 전달하며, 묶음 상대가 이미 맞아 피해를 건너뛴 적은 혈흔만 재생한다.
     /// </summary>
-    private void StrikeEnemies(List<EnemyHealth> targets, Vector3 origin, Vector3 forward)
+    private void StrikeEnemies(List<EnemyHealth> targets, Vector3 origin, Vector3 forward, int attackId)
     {
         HashSet<EnemyHealth> struck = new HashSet<EnemyHealth>();
         // 같은 묶음이 함께 걸리면 우선 적이 피격 반응을 받도록 앞에 둔다.
@@ -313,7 +316,7 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
             Vector3 toEnemy = Vector3.ProjectOnPlane(enemy.transform.position - origin, Vector3.up);
             Vector3 direction = toEnemy.sqrMagnitude > 0.0001f ? toEnemy.normalized : forward;
             enemy.TakeDamage(new DamageContext(_damage, gameObject, enemy.transform.position + Vector3.up,
-                direction, PATTERN_ID, 0, 0, IncomingAttackKind.PlayerOwned));
+                direction, PATTERN_ID, attackId, 0, IncomingAttackKind.PlayerOwned));
         }
     }
 

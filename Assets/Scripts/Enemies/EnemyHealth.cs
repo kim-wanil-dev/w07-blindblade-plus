@@ -57,6 +57,8 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     public event Action<float, float> HealthChanged;
     public event Action<EnemyHealth> Dying;
     public event Action<EnemyHealth> Died;
+    /// <summary>마지막으로 체력을 0으로 만든 피해 문맥이다. 사망 구독자는 실행 출처를 이 값에서 읽는다.</summary>
+    public DamageContext LethalDamageContext { get; private set; }
 
     void Awake()
     {
@@ -115,9 +117,10 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
         PlayDamageEffects(context);
         Damaged?.Invoke(context);
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
-        if (_sharedHealth != null) _sharedHealth.SyncSharedHealth(_currentHealth);
+        if (_sharedHealth != null) _sharedHealth.SyncSharedHealth(_currentHealth, context);
         if (_currentHealth <= 0f)
         {
+            LethalDamageContext = context;
             Dying?.Invoke(this);
             Died?.Invoke(this);
             gameObject.SetActive(false);
@@ -178,15 +181,16 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
     }
 
     /// <summary>
-    /// 체력을 함께 쓰는 상대가 맞아 바뀐 체력 current로 이 적의 체력을 맞추고 HealthChanged를 알린다.
-    /// 피격 반응·혈흔·Damaged는 맞은 쪽만 내며, current가 0이면 이 적도 사망 효과와 사망 이벤트 뒤 비활성화된다.
+    /// 체력을 함께 쓰는 상대가 맞아 바뀐 체력 current와 치명타 출처 context로 이 적의 체력을 맞춘다.
+    /// 피격 반응·혈흔·Damaged는 맞은 쪽만 내며, current가 0이면 context를 보존하고 사망 이벤트 뒤 비활성화한다.
     /// </summary>
-    private void SyncSharedHealth(float current)
+    private void SyncSharedHealth(float current, DamageContext context)
     {
         if (!IsAlive || Mathf.Approximately(_currentHealth, current)) return;
         _currentHealth = Mathf.Clamp(current, 0f, _maxHealth);
         HealthChanged?.Invoke(_currentHealth, _maxHealth);
         if (_currentHealth > 0f) return;
+        LethalDamageContext = context;
         Game.Instance.EffectManager.Play(EffectId.EnemyDeath, _hitCapsule.Bounds.center);
         Dying?.Invoke(this);
         Died?.Invoke(this);
