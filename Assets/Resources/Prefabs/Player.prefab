@@ -760,6 +760,7 @@ MonoBehaviour:
   _swordWaveFocusPlayerTimeScale: 1
   _swordWaveFocusFadeIn: 0.04
   _swordWaveFocusFadeOut: 0.06
+  _swordWaveFocusReleaseDistance: 18
 --- !u!114 &1235757311588725982
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -905,16 +906,16 @@ MonoBehaviour:
   _tiltAngle: 75
   _spawnDistance: 1
   _spawnHeightOffset: -0.5
-  _dashDistance: 18
-  _dashDuration: 0.3
-  _dashStartDelay: 0.08
+  _dashDistance: 24
+  _dashDuration: 0.123
+  _dashStartDelay: 0.1
   _dashHitMask:
     serializedVersion: 2
     m_Bits: 55
   _launchFovKick: 30
   _launchRiseRatio: 0.15
-  _hitStopDuration: 0.02
-  _hitStopBulletTimeMaxDuration: 0.03
+  _hitStopDuration: 0.01
+  _hitStopBulletTimeMaxDuration: 0.015
   _hitStopTimeScale: 0.02
 --- !u!114 &6618034975521349126
 MonoBehaviour:

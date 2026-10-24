@@ -66,7 +66,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _presentationSlowProgress;
 
     [Header("스킬 자원")]
-    [SerializeField, Min(0.01f), Tooltip("일섬 돌진 거리가 0일 때 집중 연출을 유지하는 실시간입니다. 돌진이 있으면 이 시간과 무관하게 돌진이 끝날 때까지 집중을 유지합니다.")]
+    [SerializeField, Min(0.01f), Tooltip("일섬 돌진 거리가 0일 때 집중 연출을 유지하는 실시간입니다. 돌진이 있으면 이 시간과 무관하게 해제 거리를 지나거나 돌진이 끝날 때까지 집중을 유지합니다.")]
     private float _swordWaveFocusDuration = 0.2f;
     [SerializeField, Range(0.01f, 1f), Tooltip("일섬 집중 동안 세계 시간 배율입니다.")]
     private float _swordWaveFocusTimeScale = 0.2f;
@@ -76,6 +76,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _swordWaveFocusFadeIn = 0.04f;
     [SerializeField, Min(0.01f), Tooltip("일섬 집중이 풀릴 때 화면 어둠·FOV·소리가 빠지는 실시간(초).")]
     private float _swordWaveFocusFadeOut = 0.06f;
+    [SerializeField, Min(0.01f), Tooltip("일섬 돌진이 이 거리(미터)를 지나면 집중을 풀고 남은 돌진은 원래 시간으로 진행합니다. 돌진 거리 이상이면 돌진이 끝날 때 풉니다.")]
+    private float _swordWaveFocusReleaseDistance = 18f;
     private PlayerSkillGauge _gauges;
     private float _swordWaveFocusRemaining;
     private bool _automaticCharge;
@@ -251,8 +253,10 @@ public sealed class PlayerEmpower : MonoBehaviour
         {
             if (_swordWave.DashDistance > 0f)
             {
-                // 출발 대기와 실제 돌진이 모두 끝날 때까지 집중을 유지한다.
-                if (!_swordWave.IsDashSequenceActive) _swordWaveFocusRemaining = 0f;
+                // 출발 대기 동안 유지하고, 돌진이 해제 거리를 지나거나 끝나면 집중을 푼다.
+                if (!_swordWave.IsDashSequenceActive
+                    || _swordWave.DashProgress * _swordWave.DashDistance >= _swordWaveFocusReleaseDistance)
+                    _swordWaveFocusRemaining = 0f;
             }
             else
             {
