@@ -5,9 +5,9 @@ using UnityEngine;
 using BlindBlade.Combat.Contracts;
 
 /// <summary>
-/// 성공 시 집중, 일섬의 짧은 집중 연출과 거합 자동 차징·공격 수명을 관리한다.
-/// 자원은 PlayerSkillGauge가 보유하며 수동 스킬은 집중 여부와 무관하게 전용 입력으로 시작한다.
-/// 성공 집중 중 좌클릭 발도 돌진이 나가면 돌진 거리 일부까지 불릿 타임을 유지한 뒤 집중을 끝낸다.
+/// 성공 시 집중, 일섬의 짧은 집중 연출과 거합 홀드 차징·공격 수명을 관리한다.
+/// 자원은 PlayerSkillGauge가 보유하며 거합은 집중 여부와 무관하게 전용 입력으로 시작한다.
+/// 패링 집중 중 좌클릭은 게이지 소모 없는 일섬을 시작하고 극한 회피 집중에서는 일섬을 막는다.
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(KatanaCombatCoordinator))]
@@ -27,9 +27,9 @@ public sealed class PlayerEmpower : MonoBehaviour
     private const float CHARGE_SCALE_STEP = 0.001f;
 
     [Header("준비")]
-    [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 시간 제한과 별개입니다.")]
-    private float _readyDuration = 5f;
-    [SerializeField, Range(0.5f, 5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 스킬 사용 가능 조건과 별개입니다.")]
+    [SerializeField, Min(0.1f), Tooltip("퍼펙트 패링 성공 후 좌클릭 무료 일섬을 사용할 수 있는 집중의 실시간입니다.")]
+    private float _readyDuration = 3f;
+    [SerializeField, Range(0.5f, 5f), Tooltip("극한 회피 성공 후 집중을 유지하는 실시간입니다. 대상 돌진과 일섬은 사용할 수 없습니다.")]
     private float _dodgeReadyDuration = 1f;
 
     [Header("히트스톱")]
@@ -51,13 +51,11 @@ public sealed class PlayerEmpower : MonoBehaviour
     [SerializeField, Range(0f, 1f), Tooltip("불릿 타임 중 발도 돌진이 이 비율의 거리를 지날 때까지 불릿 타임을 유지하고 남은 돌진과 베기는 평소 속도로 한다. 0이면 돌진 시작 때 바로 끝낸다.")]
     private float _dashBulletTimeRatio = 0.5f;
 
-    [Header("거합 자동 차징")]
-    [SerializeField, Min(0.01f), Tooltip("Q 한 번으로 거합 시전까지 자동 차징하는 실시간입니다. 세계 감속 시간과 별개입니다.")]
+    [Header("거합 홀드 차징")]
+    [SerializeField, Min(0.01f), Tooltip("Q를 누르고 있어야 거합이 시전되는 실시간(초)입니다. 같은 시간에 걸쳐 세계 배율이 목표 배율까지 내려갑니다.")]
     private float _ultimateChargeDuration = 0.75f;
     [SerializeField, Range(0.01f, 1f), Tooltip("차징 동안 세계 시간 배율이 천천히 내려가 닿는 목표 배율. 플레이어 배율은 바뀌지 않는다.")]
     private float _chargeWorldTimeScale = 0.1f;
-    [SerializeField, Min(0.01f), Tooltip("차징 시작부터 세계 배율이 목표 배율에 닿을 때까지의 실시간(초).")]
-    private float _chargeSlowDuration = 0.7f;
     private bool _charging;
     private float _chargeElapsed;
     private float _appliedChargeScale;
@@ -120,9 +118,9 @@ public sealed class PlayerEmpower : MonoBehaviour
     public bool IsCharging => IsReady && _charging;
     public bool IsUltimateChargeComplete => IsCharging && _chargeElapsed >= _ultimateChargeDuration;
     public float ChargeProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : _presentationProgress;
-    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration) : _presentationSlowProgress;
+    public float ChargeSlowProgress => IsCharging ? Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration) : _presentationSlowProgress;
     public float UltimateChargeDuration => _ultimateChargeDuration;
-    public float ChargeSlowDuration => _chargeSlowDuration;
+    public float ChargeSlowDuration => _ultimateChargeDuration;
     public float ChargeWorldTimeScale => _chargeWorldTimeScale;
     public bool IsSwordWaveFocusing => _swordWaveFocusRemaining > 0f;
     public float SwordWaveFocusPlayerTimeScale => _swordWaveFocusPlayerTimeScale;
@@ -144,14 +142,32 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
-    /// 잔량과 현재 행동을 검사해 일섬을 즉시 시작한다. 수락 시 한 칸을 소비하고 첫 집중 시간을 설정하며 성공 여부를 반환한다.
-    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// 이전 Shift 전용 일섬 요청을 거부하고 false를 반환한다.
+    /// 일섬은 패링 집중 중 좌클릭의 TryBeginParrySwordWave 경로에서만 시작한다.
     /// </summary>
     public bool TryBeginSwordWave()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseSwordWave || !_combat.PrepareManualSkill()) return false;
+        return false;
+    }
+
+    /// <summary>
+    /// 패링 집중 중 좌클릭으로 일섬을 요청하고 실제 시작 여부를 반환한다.
+    /// 일섬 게이지를 검사하거나 소비하지 않으며 극한 회피 집중·일섬 연출·거합 차징에서는 시작하지 않는다.
+    /// </summary>
+    public bool TryBeginParrySwordWave()
+    {
+        if (!IsSwordWaveReady || IsSwordWaveFocusing || IsCharging) return false;
+        return BeginSwordWave();
+    }
+
+    /// <summary>
+    /// 현재 행동을 일섬으로 전환하고 집중 연출과 실행 ID를 설정한 뒤 성공 여부를 반환한다.
+    /// 일섬 잔량을 검사하거나 소비하지 않으며 극한 회피 집중에서는 항상 거부한다.
+    /// </summary>
+    private bool BeginSwordWave()
+    {
+        if (IsDodgeReady || !CanBeginManualSkill() || !_combat.PrepareManualSkill()) return false;
         if (!_combat.RequestSwordWaveAttack()) return false;
-        if (!_gauges.TryConsumeSwordWave()) return false;
         if (_active) End(PlayerEmpowerEndReason.SwordWave);
         _active = true;
         _dodgeReady = false;
@@ -168,8 +184,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
-    /// 집중 여부와 무관하게 거합 완충 자원으로 자동 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.
-    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다.
+    /// 집중 여부와 무관하게 거합 완충 자원으로 홀드 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.
+    /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다. 다 차기 전에 입력을 떼면 InputManager가 CancelCharge로 취소한다.
     /// </summary>
     public bool TryBeginAutomaticCharge()
     {
@@ -455,7 +471,7 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>
     /// 진행 중인 거합 차징을 발동 없이 취소하고 소비되지 않은 게이지를 유지한다.
-    /// 자동 차징은 준비와 시간 요청을 끝내며, 온보딩 차징은 기존 준비 상태로 복귀한다.
+    /// 홀드 차징은 준비와 시간 요청을 끝내며, 온보딩 차징은 기존 준비 상태로 복귀한다.
     /// </summary>
     public void CancelCharge()
     {
@@ -617,12 +633,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     }
 
     /// <summary>
-    /// _chargeElapsed를 _chargeSlowDuration으로 나눈 진행도로 세계 배율을 준비 배율에서 차징 목표 배율까지 부드럽게 내린다.
+    /// _chargeElapsed를 _ultimateChargeDuration으로 나눈 진행도로 세계 배율을 준비 배율에서 차징 목표 배율까지 부드럽게 내린다.
     /// 배율이 CHARGE_SCALE_STEP 이상 바뀐 경우에만 두 차징 소유자를 번갈아 써서 시간 요청을 바꾸고 _appliedChargeScale을 갱신한다.
     /// </summary>
     private void UpdateChargeSlow()
     {
-        float t = Mathf.Clamp01(_chargeElapsed / _chargeSlowDuration);
+        float t = Mathf.Clamp01(_chargeElapsed / _ultimateChargeDuration);
         float scale = Mathf.Lerp(_worldTimeScale, _chargeWorldTimeScale, Mathf.SmoothStep(0f, 1f, t));
         // 끝에 닿은 순간에는 남은 작은 차이도 한 번 반영해 목표 배율에 정확히 멈춘다.
         if (Mathf.Abs(scale - _appliedChargeScale) < CHARGE_SCALE_STEP && t < 1f) return;

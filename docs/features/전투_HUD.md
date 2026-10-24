@@ -4,6 +4,11 @@
 
 ### 전투 HUD
 
+#### 일섬 게이지 비활성화 (2026-10-24)
+
+- 공용 `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`의 `PerfectParryTokens` 오브젝트를 비활성화했다. 실행 중 토글이 아니라 프리팹의 기본 활성 상태를 껐으므로 세 칸 일섬 게이지와 자식 액체 표현이 생성·표시되지 않는다. 거합 원형 게이지는 유지한다.
+- 패링 집중 3초 동안 좌클릭 무료 일섬, 극한 회피 집중 1초 동안 대상 돌진·일섬 금지, Shift 일섬 비활성화 규칙은 [특수 스킬 게이지](특수스킬_게이지.md)를 따른다. 온보딩 안내 문구와 단계는 이번 작업에서 수정하지 않았다.
+
 #### 멀티킬 처치 표시 (2026-10-24)
 
 - 온보딩을 제외한 BambooStage1, BambooDefense, RainyStage_JH, RainyTwinBoss, TestStage, (Legacy) RainyStage의 처치 목표 아래에 일반 공격·일섬·거합 실행별 `+N`을 최신·직전 두 줄로 표시한다. HUD 프리팹에 TMP 슬롯을 저장한다.
@@ -14,7 +19,7 @@
 #### 거합 게이지 프리팹 구성 (2026-10-23)
 
 - `BambooDefenseHud.prefab` 루트의 `PlayerUltimateHint`가 자식 `UltimateGaugeCanvas/UltimateGauge/GaugeCircle`의 `Background`, `ThreadLiquidBody`, `ThreadLiquid`, `Percentage`, `InputLabel`을 제어한다. UI 계층과 `CanvasGroup`·RawImage·실 액체 Graphic·TMP 참조는 프리팹에 직렬화되어 있으며, 플레이 중 새 HUD 오브젝트를 만들지 않는다.
-- 게이지 값은 실 액체로 아래에서 위로 차오르고 중앙에 내림 정수 퍼센트를 표시한다. 입력 안내는 키보드에서 `Q:거합`, 게임패드에서 `Y:거합`으로 바뀌며, 자동 차징·시전 중 HUD 전체가 페이드 아웃된다. 컴포넌트는 플레이어의 `PlayerSkillGauge.Changed` 이벤트를 구독하고, 플레이어가 준비되기 전까지 찾기를 반복한다.
+- 게이지 값은 실 액체로 아래에서 위로 차오르고 중앙에 내림 정수 퍼센트를 표시한다. 입력 안내는 키보드에서 `Q:거합`, 게임패드에서 `Y:거합`으로 바뀌며, 홀드 차징·시전 중 HUD 전체가 페이드 아웃된다. 홀드 진행도는 화면 중앙 수리검 인디케이터 원 안쪽의 `UltimateHoldProgress` 원형 바가 표시한다(2026-10-24, [특수 스킬 게이지](특수스킬_게이지.md)). 컴포넌트는 플레이어의 `PlayerSkillGauge.Changed` 이벤트를 구독하고, 플레이어가 준비되기 전까지 찾기를 반복한다.
 - 관련 파일: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`, `Assets/Scripts/Player/PlayerUltimateHint.cs`. 프리팹 직렬화 참조와 Unity 재컴파일은 확인했고, Play 화면 렌더링은 아직 확인하지 않았다.
 
 #### 수리검·적 방향 인디케이터 Inspector 토글 (2026-10-22)
