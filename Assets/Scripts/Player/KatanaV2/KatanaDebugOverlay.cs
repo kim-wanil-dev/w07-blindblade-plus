@@ -13,8 +13,8 @@ public sealed class KatanaDebugOverlay : MonoBehaviour
     private const float HIT_AFTER_DODGE_LOG_RANGE = 1f;
 
     [Header("Debug switches")]
-    [SerializeField] private bool _showOverlay = true;
-    [SerializeField] private bool _logEvents = true;
+    [SerializeField] private bool _showOverlay;
+    [SerializeField] private bool _logEvents;
 
     [Header("전투 성공 피드백")]
     [SerializeField] private bool _showCombatFeedback = true;

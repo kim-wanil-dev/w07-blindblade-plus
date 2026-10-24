@@ -100,8 +100,6 @@ public sealed class RainyStageController : MonoBehaviour
             : BambooStage1Progress.RainyBossCheckpointReached ? "checkpoint_retry" : CombatTelemetryRunContext.EntryMode;
         if (_startBossImmediately || BambooStage1Progress.RainyBossCheckpointReached)
         {
-            string startReason = _startBossImmediately ? "Inspector 설정" : "저장된 보스 체크포인트";
-            Debug.Log($"RainyStage {startReason}으로 일반 적 웨이브를 건너뛰고 보스전을 시작합니다.", this);
             PlayerController player = Game.Player;
             if (!TryFindBossPosition(out Vector3 retryPosition))
             {

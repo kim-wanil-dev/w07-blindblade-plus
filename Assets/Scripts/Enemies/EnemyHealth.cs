@@ -110,7 +110,6 @@ public sealed class EnemyHealth : MonoBehaviour, IDamageable
             DamageBlocked?.Invoke(context);
             return false;
         }
-        Debug.Log($"Take Damage {context.Amount} ");
         _currentHealth = _dieOnAnyHit ? 0f : Mathf.Max(0f, _currentHealth - context.Amount);
         RewardPlayerSkillGauge(context);
         if (_currentHealth > 0f && _cancelAttackOnHit) ApplyHitReaction(context);

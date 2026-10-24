@@ -98,7 +98,6 @@ public sealed class CombatTelemetryService : MonoBehaviour
 
 	private bool _quitNotified;
 
-	private bool _reportedUploadSuccess;
 
 	private string _lastError;
 
@@ -546,11 +545,6 @@ public sealed class CombatTelemetryService : MonoBehaviour
 			}
 		}
 		_lastError = null;
-		if (!_reportedUploadSuccess)
-		{
-			_reportedUploadSuccess = true;
-			Debug.Log((object)("CombatTelemetry upload acknowledged. Configuration=" + _configurationSource), (UnityEngine.Object)(object)this);
-		}
 		_uploading = false;
 		_nextUpload = Time.realtimeSinceStartupAsDouble + 0.5;
 	}
@@ -768,7 +762,6 @@ public sealed class CombatTelemetryService : MonoBehaviour
 		}
 		if (readyPath != null && File.Exists(readyPath))
 		{
-			Debug.Log("CombatTelemetry: 종료 후 업로더가 현재 실행의 우선 사건과 나머지 로그 전송을 이어받았습니다.", this);
 		}
 		else if (!_diskDrained && _allowUpload && !_uploadDisabled)
 		{
@@ -962,7 +955,6 @@ internal static class CombatTelemetryEditorUploader
 
 	private static bool _running;
 
-	private static bool _reportedSuccess;
 
 	/// <summary>
 	/// 에디터 업로더의 플레이 모드 콜백을 등록하고 기존 요청을 확인한다.
@@ -1167,7 +1159,6 @@ internal static class CombatTelemetryEditorUploader
 		_timeout = Math.Max(5, Math.Min(120, timeout));
 		_retryNotBefore = 0.0;
 		_acknowledgedEvents = 0;
-		_reportedSuccess = false;
 		_lastError = null;
 		_running = true;
 		EditorApplication.update = (EditorApplication.CallbackFunction)Delegate.Remove((Delegate?)(object)EditorApplication.update, (Delegate?)new EditorApplication.CallbackFunction(Pump));
@@ -1259,11 +1250,6 @@ internal static class CombatTelemetryEditorUploader
 			_checkpoint = null;
 			_batch = null;
 			_lastError = null;
-			if (!_reportedSuccess)
-			{
-				_reportedSuccess = true;
-				Debug.Log((object)"CombatTelemetry Editor upload acknowledged.");
-			}
 			_retryNotBefore = EditorApplication.timeSinceStartup + 0.5;
 		}
 		else if (!(EditorApplication.timeSinceStartup < _retryNotBefore))
@@ -1388,10 +1374,6 @@ internal static class CombatTelemetryEditorUploader
 		if (File.Exists(_requestPath))
 		{
 			File.Delete(_requestPath);
-		}
-		if (_acknowledgedEvents > 0)
-		{
-			Debug.Log((object)("CombatTelemetry Editor upload drained. Acknowledged events=" + _acknowledgedEvents + "."));
 		}
 		_store = null;
 		_configuration = null;
