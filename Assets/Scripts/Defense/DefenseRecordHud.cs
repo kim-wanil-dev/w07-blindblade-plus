@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 
 using TMPro;
 
@@ -32,8 +33,8 @@ public sealed class DefenseRecordHud : MonoBehaviour
             return;
         _shownStarted = started;
         _shownSeconds = seconds;
-        _shownKills = kills;
         int goal = _director.KillGoal;
+        _shownKills = Math.Clamp(kills, 0, goal);
         if (!started)
             _text.text = "준비 " + seconds;
         else
