@@ -163,7 +163,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _playerCamera = null;
     }
 
-    /// <summary>Director의 누적 처치가 목표에 도달하면 웨이브를 끝내고 경고 표시를 시작한다.</summary>
+    /// <summary>Director의 처치 목표 달성 시 웨이브를 끝내고 1-1 완료 로그를 발행한 뒤 보스 경고를 시작한다.</summary>
     private void BeginBossWarning()
     {
         if (_actTitleRoutine != null)
@@ -174,6 +174,7 @@ public sealed class BambooStage1Controller : MonoBehaviour
         _warning.GetComponentInChildren<TMP_Text>(true).text = "강적 출현";
         _phase = StagePhase.Warning;
         _director.StopWave();
+        BlindBlade.Telemetry.CombatTelemetrySignals.Stage("1-1", true);
         _warning.alpha = 1f;
         _warningRoutine = StartCoroutine(ShowWarningThenBoss());
     }
