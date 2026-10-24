@@ -14,7 +14,7 @@
 #### 거합 게이지 프리팹 구성 (2026-10-23)
 
 - `BambooDefenseHud.prefab` 루트의 `PlayerUltimateHint`가 자식 `UltimateGaugeCanvas/UltimateGauge/GaugeCircle`의 `Background`, `ThreadLiquidBody`, `ThreadLiquid`, `Percentage`, `InputLabel`을 제어한다. UI 계층과 `CanvasGroup`·RawImage·실 액체 Graphic·TMP 참조는 프리팹에 직렬화되어 있으며, 플레이 중 새 HUD 오브젝트를 만들지 않는다.
-- 게이지 값은 실 액체로 아래에서 위로 차오르고 중앙에 내림 정수 퍼센트를 표시한다. 입력 안내는 키보드에서 `Q:거합`, 게임패드에서 `Y:거합`으로 바뀌며, 자동 차징·시전 중 HUD 전체가 페이드 아웃된다. 컴포넌트는 플레이어의 `PlayerSkillGauge.Changed` 이벤트를 구독하고, 플레이어가 준비되기 전까지 찾기를 반복한다.
+- 게이지 값은 실 액체로 아래에서 위로 차오르고 중앙에 내림 정수 퍼센트를 표시한다. 입력 안내는 키보드에서 `Q:거합`, 게임패드에서 `Y:거합`으로 바뀌며, 홀드 차징·시전 중 HUD 전체가 페이드 아웃된다. 홀드 진행도는 화면 중앙 수리검 인디케이터 원 안쪽의 `UltimateHoldProgress` 원형 바가 표시한다(2026-10-24, [특수 스킬 게이지](특수스킬_게이지.md)). 컴포넌트는 플레이어의 `PlayerSkillGauge.Changed` 이벤트를 구독하고, 플레이어가 준비되기 전까지 찾기를 반복한다.
 - 관련 파일: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`, `Assets/Scripts/Player/PlayerUltimateHint.cs`. 프리팹 직렬화 참조와 Unity 재컴파일은 확인했고, Play 화면 렌더링은 아직 확인하지 않았다.
 
 #### 수리검·적 방향 인디케이터 Inspector 토글 (2026-10-22)
