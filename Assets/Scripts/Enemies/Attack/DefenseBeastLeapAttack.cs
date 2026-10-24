@@ -60,6 +60,8 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     [SerializeField] private LayerMask _obstacleMask = Physics.DefaultRaycastLayers;
     [SerializeField, Tooltip("돌진 경로에서 대상 충돌체를 찾는 레이어")]
     private LayerMask _landingMask = ~0;
+    [SerializeField, Min(0f), Tooltip("교전 중 돌진 경로 검사 결과를 재사용하는 시간(초). 0이면 같은 프레임 안에서만 재사용한다. 실제 돌진 시작 때는 항상 다시 검사한다.")]
+    private float _lungeCheckInterval = 0.1f;
 
     [Header("공격 소리")]
     [SerializeField] private SoundId _heartbeatSound = SoundId.None;
@@ -91,6 +93,10 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private float _biteEndsAt;
     private float _repositionStartedAt;
     private float _bounceElapsed;
+    private float _nextLungeCheckTime;
+    private int _lungeCheckFrame = -1;
+    private Transform _lungeCheckTarget;
+    private bool _hasClearLunge;
     private float _previousAgentSpeed;
     private float _previousStoppingDistance;
     private bool _previousUpdatePosition;
@@ -150,6 +156,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _lungeAir = 0f;
         _attackMotionComplete = false;
         _navigationCaptured = false;
+        _lungeCheckTarget = null;
     }
 
     protected override void Update()
@@ -176,10 +183,20 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
     /// <summary>
     /// target 앞 _biteStopDistance 지점까지 NavMesh와 직선 장애물 검사를 통과해 지금 뛰어들 수 있으면 true를 반환한다.
+    /// 같은 target의 검사 결과는 같은 프레임 또는 _lungeCheckInterval 동안 _hasClearLunge에 저장해 재사용한다.
     /// </summary>
     public bool HasClearLunge(Transform target)
     {
-        return target != null && TryFindLungeDestination(target, out _);
+        if (target == null)
+            return false;
+        if (_lungeCheckTarget == target && (_lungeCheckFrame == Time.frameCount || Time.time < _nextLungeCheckTime))
+            return _hasClearLunge;
+
+        _lungeCheckTarget = target;
+        _lungeCheckFrame = Time.frameCount;
+        _nextLungeCheckTime = Time.time + _lungeCheckInterval;
+        _hasClearLunge = TryFindLungeDestination(target, out _);
+        return _hasClearLunge;
     }
 
     /// <summary>

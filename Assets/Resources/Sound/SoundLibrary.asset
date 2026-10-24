@@ -759,3 +759,4 @@ MonoBehaviour:
   _cinematicBusPath: bus:/Cinematic_Bus
   _combatFocusDuration: 0.35
   _combatFootstepVolume: 0.35
+  _maxEnemyFootsteps: 8

@@ -55,6 +55,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     private readonly HashSet<CombatEntityKey> _seenFootstepEmitters = new HashSet<CombatEntityKey>();
     private readonly List<CombatEntityKey> _endedFootstepEmitters = new List<CombatEntityKey>();
     private readonly Plane[] _cameraPlanes = new Plane[6];
+    private int _cameraPlanesFrame = -1;
     private CombatSessionRuntime _sessionRuntime;
     private SensoryPerceptionMask _perceptionMask;
     private Camera _playerCamera;
@@ -128,10 +129,14 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
                 PublishEndedFootsteps();
             return;
         }
-        RefreshFootstepSubscriptions();
+        // 기존 발소리 경로의 결과는 적 방향 표시에만 쓰이므로 표시가 꺼져 있으면 수집하지 않는다.
+        if (_footstepCandidateSource != null || _showEnemyIndicators)
+            RefreshFootstepSubscriptions();
+        else
+            StopLegacyFootsteps();
         if (_threatPresentationSource == null)
             PublishThreatSnapshots();
-        if (_footstepCandidateSource == null)
+        if (_footstepCandidateSource == null && _showEnemyIndicators)
             ExpireFootsteps();
     }
 
@@ -231,6 +236,19 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         if (source != null)
             source.Footstep -= handler;
         _footstepHandlers.Remove(source);
+    }
+
+    /// <summary>
+    /// 적 방향 표시가 꺼진 기존 발소리 경로에서 발소리 구독을 해제하고 남은 발소리의 종료를 발행한다.
+    /// 표시를 다시 켜면 바로 구독하도록 _nextFootstepRefreshTime을 초기화한다.
+    /// </summary>
+    private void StopLegacyFootsteps()
+    {
+        if (_footstepHandlers.Count > 0)
+            UnsubscribeFootsteps();
+        if (_activeFootsteps.Count > 0)
+            PublishEndedFootsteps();
+        _nextFootstepRefreshTime = 0f;
     }
 
     /// <summary>모든 적 발걸음 발행자에서 이 공급자가 등록한 이벤트 처리기만 해제한다.</summary>
@@ -352,7 +370,10 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         }
     }
 
-    /// <summary>적 발소리 위치에 발행자 세대·사건 순번·세션 시각을 붙여 C의 표시 결과를 발행한다.</summary>
+    /// <summary>
+    /// 적 발소리 위치에 발행자 세대·사건 순번·세션 시각을 붙여 C의 표시 결과를 발행한다.
+    /// 같은 적의 이전 활성 발소리는 새 발소리로 교체하고 종료를 발행해 _activeFootsteps에 적별 최신 걸음 하나만 남긴다.
+    /// </summary>
     private void HandleFootstep(EnemyFootsteps source, Vector3 position)
     {
         if (source == null || _sessionRuntime == null || !_sessionRuntime.IsInitialized)
@@ -366,6 +387,8 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             _footstepCandidateSource.RecordFootstep(health, position);
             return;
         }
+        if (!_showEnemyIndicators)
+            return;
 
         CombatEntityKey emitter = new CombatEntityKey(health.TargetId, health.SpawnGeneration);
         _footstepSequences.TryGetValue(emitter, out long sequence);
@@ -375,14 +398,40 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         CombatTimestamp timestamp = _sessionRuntime.CaptureTimestamp();
         CombatEntityKey pulseTarget = new CombatEntityKey(
             emitter.EntityId + "/footstep/" + sequence, emitter.SpawnGeneration);
-        Renderer[] renderers = health.GetComponentsInChildren<Renderer>();
+        int activeIndex = FindActiveFootstep(health);
+        Renderer[] renderers = activeIndex >= 0
+            ? _activeFootsteps[activeIndex].Renderers : health.GetComponentsInChildren<Renderer>();
         ThreatPresentationSnapshot presentation = CreateSnapshot(pulseTarget, health.transform.position,
             true, true, 1f, renderers);
         FootstepPresentationSnapshot snapshot = new FootstepPresentationSnapshot(
             identity, emitter, position, timestamp, presentation);
-        _activeFootsteps.Add(new ActiveFootstep(snapshot,
-            Time.realtimeSinceStartupAsDouble + _footstepLifetime, health, renderers));
+        ActiveFootstep activeFootstep = new ActiveFootstep(snapshot,
+            Time.realtimeSinceStartupAsDouble + _footstepLifetime, health, renderers);
+        if (activeIndex < 0)
+        {
+            _activeFootsteps.Add(activeFootstep);
+            FootstepChanged?.Invoke(snapshot);
+            return;
+        }
+
+        // 새 걸음을 먼저 발행해야 D가 순번이 낮은 이전 걸음의 종료를 무시하고 마커를 유지한다.
+        FootstepPresentationSnapshot replaced = _activeFootsteps[activeIndex].Snapshot;
+        _activeFootsteps[activeIndex] = activeFootstep;
         FootstepChanged?.Invoke(snapshot);
+        PublishEndedFootstep(replaced);
+    }
+
+    /// <summary>health의 현재 생성 세대로 등록된 활성 발소리의 _activeFootsteps 인덱스를 반환한다. 없으면 -1을 반환한다.</summary>
+    private int FindActiveFootstep(EnemyHealth health)
+    {
+        for (int i = 0; i < _activeFootsteps.Count; i++)
+        {
+            ActiveFootstep activeFootstep = _activeFootsteps[i];
+            if (activeFootstep.Emitter == health
+                && activeFootstep.Snapshot.Emitter.SpawnGeneration == health.SpawnGeneration)
+                return i;
+        }
+        return -1;
     }
 
     /// <summary>C의 최신 발소리 후보를 재판정 없이 복사하고 교체·만료·비활성화된 이전 걸음의 종료를 발행한다.</summary>
@@ -443,7 +492,11 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             && viewport.y >= 0f && viewport.y <= 1f;
         if (footstepRenderers != null)
         {
-            GeometryUtility.CalculateFrustumPlanes(_playerCamera, _cameraPlanes);
+            if (_cameraPlanesFrame != Time.frameCount)
+            {
+                GeometryUtility.CalculateFrustumPlanes(_playerCamera, _cameraPlanes);
+                _cameraPlanesFrame = Time.frameCount;
+            }
             foreach (Renderer renderer in footstepRenderers)
             {
                 if (renderer != null && renderer.enabled && renderer.gameObject.activeInHierarchy

@@ -19,6 +19,7 @@ public sealed class DefenseBeastEyes : MonoBehaviour
 
     private static readonly int _intensityId = Shader.PropertyToID("_Intensity");
     private static readonly int _dotModeId = Shader.PropertyToID("_DotMode");
+    private static Texture2D _sharedGlintShape;
 
     [Header("연결")]
     [SerializeField, Tooltip("몸 연기의 붉은 전조 세기를 읽는 경고 표시")]
@@ -234,11 +235,15 @@ public sealed class DefenseBeastEyes : MonoBehaviour
     /// 몸 연기 재질·_glintColor·_glintSize(가로 _glintWidthScale배, 세로 _glintHeightScale배)를 쓴다. _glintPopDuration 동안 _glintEmphasisScale배로 터진 뒤
     /// _glintEmphasisDuration 시점에 원래 크기로 돌아오고 _glintDuration 동안 사라진다.
     /// _warningVisual의 두꺼운 하늘색 윤곽선 대상으로 더해 붉은 전조 테두리와 겹쳐도 분리해 보인다. 만든 파티클을 _glints에 저장한다.
+    /// 섬광 모양 텍스처는 처음 한 번만 _sharedGlintShape에 만들어 모든 늑대가 함께 쓴다.
     /// </summary>
     private void CreateGlints()
     {
         _glints = new ParticleSystem[_eyeOffsets.Length];
-        Texture2D glintShape = TwinBeastEyes.CreateGlintShape();
+        // 섬광 모양은 모든 늑대가 같으므로 큰 텍스처를 한 번만 만들어 함께 쓴다.
+        if (_sharedGlintShape == null)
+            _sharedGlintShape = TwinBeastEyes.CreateGlintShape();
+        Texture2D glintShape = _sharedGlintShape;
         Material smokeMaterial = _warningVisual.WarningRenderers[0].sharedMaterial;
         float lifetime = _glintEmphasisDuration + _glintDuration;
         float popTime = Mathf.Min(_glintPopDuration, _glintEmphasisDuration * 0.5f) / lifetime;
