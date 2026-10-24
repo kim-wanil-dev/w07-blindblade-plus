@@ -157,10 +157,11 @@ namespace BlindBlade.Telemetry
             Raised?.Invoke("enemy_attack_contact", context.AttackId, payload);
         }
 
-        /// <summary>stage의 시작 또는 complete 완료를 알리고 기록 구간을 전환한다.</summary>
-        public static void Stage(string stage, bool complete = false)
+        /// <summary>stage의 시작 또는 complete 완료를 알린다. gameCompleted가 참인 완료는 최종 게임 클리어로 기록하도록 전달한다.</summary>
+        public static void Stage(string stage, bool complete = false, bool gameCompleted = false)
         {
-            Raised?.Invoke(complete ? "stage_complete" : "stage_change", 0, new JObject { ["stageId"] = stage });
+            Raised?.Invoke(complete ? "stage_complete" : "stage_change", 0, new JObject {
+                ["stageId"] = stage, ["gameCompleted"] = complete && gameCompleted });
         }
     }
 }

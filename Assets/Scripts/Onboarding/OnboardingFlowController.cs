@@ -139,6 +139,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     public event Action<int, int> ObjectiveEntered;
     public event Action<int, int> ObjectiveCompleted;
+    public event Action<int> StageCompleted;
     public event Action<int> StageRetrying;
     public event Action<int> StageRepeated;
     public event Action OnboardingCompleted;
@@ -1202,8 +1203,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 단계의 중복 완료를 막고 다음 단계 전환을 예약한다.
-    /// 극한 회피 단계의 남은 수리검은 무해화하고 마지막 단계의 수리검은 정리한다.
+    /// 현재 단계·목표 인덱스로 중복 완료를 막고 목표와 단계 완료 사건을 발행한다.
+    /// 남은 수리검을 무해화하거나 정리한 뒤 완료 선택 화면으로 전환을 예약한다.
     /// </summary>
     private void QueueAdvance()
     {
@@ -1215,6 +1216,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_stage == FINAL_STAGE)
             ClearRangedPractice();
         ObjectiveCompleted?.Invoke(_stage, _objectiveIndex);
+        StageCompleted?.Invoke(_stage);
         StartCoroutine(AdvanceAfterResolvedEvent());
     }
 

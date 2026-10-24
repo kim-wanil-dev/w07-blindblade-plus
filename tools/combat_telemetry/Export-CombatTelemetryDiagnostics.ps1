@@ -1,6 +1,9 @@
 $ErrorActionPreference = 'Stop'
 
-$logRoot = Join-Path $env:USERPROFILE 'AppData\LocalLow\DefaultCompany\w07-blindblade+'
+$logRoot = Join-Path $env:USERPROFILE 'AppData\LocalLow\DefaultCompany\w08-HyakkiYagyo-b4'
+if (-not (Test-Path -LiteralPath $logRoot)) {
+    $logRoot = Join-Path $env:USERPROFILE 'AppData\LocalLow\DefaultCompany\w07-blindblade+'
+}
 $telemetryRoot = Join-Path $logRoot 'CombatTelemetry'
 $playerLog = Join-Path $logRoot 'Player.log'
 
@@ -10,7 +13,7 @@ if (-not (Test-Path -LiteralPath $logRoot)) {
 }
 
 Write-Host '이 도구는 Player.log와 CombatTelemetry 기록을 ZIP으로 묶습니다.'
-Write-Host '플레이 기록과 익명 식별자가 포함될 수 있습니다. upload-config.json은 제외합니다.'
+Write-Host '플레이 기록과 익명 식별자가 포함될 수 있습니다. 전송 인증 설정과 백그라운드 요청 원본은 제외합니다.'
 $answer = Read-Host '진단 파일을 내보낼까요? (Y/N)'
 if ($answer -notin @('Y', 'y')) { exit 0 }
 
@@ -28,7 +31,8 @@ try {
         $destination = Join-Path $temporary 'CombatTelemetry'
         New-Item -ItemType Directory -Path $destination | Out-Null
         Get-ChildItem -LiteralPath $telemetryRoot -File |
-            Where-Object { $_.Name -ne 'upload-config.json' -and $_.Extension -in @('.jsonl', '.json', '.cursor', '.txt') } |
+            Where-Object { $_.Name -ne 'upload-config.json' -and $_.Name -notlike 'background-upload-*.request.json' `
+                -and $_.Extension -in @('.jsonl', '.json', '.cursor', '.txt', '.log', '.ready') } |
             Copy-Item -Destination $destination
     }
     Compress-Archive -Path (Join-Path $temporary '*') -DestinationPath $archive -CompressionLevel Optimal
