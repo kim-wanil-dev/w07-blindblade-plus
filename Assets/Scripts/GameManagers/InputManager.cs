@@ -110,6 +110,8 @@ public sealed class InputManager : MonoBehaviour
             }
         }
         if (!IsGameplayInputEnabled || player == null || player.IsPaused) return;
+        // 거합 차징은 Q·Y를 누르고 있는 동안만 이어지며, 다 차기 전에 떼면 게이지를 쓰지 않고 취소한다.
+        if (_empower.IsAutomaticCharging && !_ultimateInput.IsPressed()) _empower.CancelCharge();
         if (!Application.isFocused) return;
         if (_lockCursorOnClick && !InputDeviceDisplay.IsGamepad && Cursor.lockState != CursorLockMode.Locked)
         {
