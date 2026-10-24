@@ -84,6 +84,7 @@ MonoBehaviour:
   _layerMaskShader: {fileID: 4800000, guid: 250a1a1f07798ef49bdfc7a908c6c983, type: 3}
   _forcedRevealShader: {fileID: 4800000, guid: 3c49ba37317a45faa9b52e681afef212, type: 3}
   _meleeWarningMaskShader: {fileID: 4800000, guid: 4ef1b625fb575da42ad6a8da8d51d143, type: 3}
+  _sharedBodySmokeShader: {fileID: 4800000, guid: dfe93f67009e419f800100faad8d3826, type: 3}
 --- !u!114 &7833122117494664109
 MonoBehaviour:
   m_ObjectHideFlags: 0

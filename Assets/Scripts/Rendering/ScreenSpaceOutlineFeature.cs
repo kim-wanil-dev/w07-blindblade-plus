@@ -54,6 +54,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     [SerializeField] private Shader _layerMaskShader;
     [SerializeField] private Shader _forcedRevealShader;
     [SerializeField] private Shader _meleeWarningMaskShader;
+    [SerializeField] private Shader _sharedBodySmokeShader;
     private Material _material;
     private Material _depthMaterial;
     private Material _sceneryMaskMaterial;
@@ -63,6 +64,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     private Material _swordOutlineMaskMaterial;
     private Material _beastOutlineExclusionMaskMaterial;
     private readonly OutlineVFXRouting _routing = new OutlineVFXRouting();
+    private SharedBodySmokeRenderer _sharedBodySmoke;
     private CapturePass _capture;
     private CapturePass _alwaysVisibleCapture;
     private TransparentDepthPass _depth;
@@ -116,6 +118,14 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             Debug.LogError("ScreenSpaceOutlineFeature에 근접 공격 전조 마스크 셰이더를 연결해야 합니다.", this);
             return;
         }
+        if (_sharedBodySmokeShader == null)
+            _sharedBodySmokeShader = Shader.Find("Hidden/BlindBlade/SharedBodySmoke");
+        if (_sharedBodySmokeShader == null)
+        {
+            Debug.LogError("ScreenSpaceOutlineFeature에 공유 몸 연기 셰이더를 연결해야 합니다.", this);
+            return;
+        }
+        _sharedBodySmoke = new SharedBodySmokeRenderer(_sharedBodySmokeShader);
         _material = CoreUtils.CreateEngineMaterial(_shader);
         _depthMaterial = CoreUtils.CreateEngineMaterial(_transparentDepthShader);
         _depthMaterial.SetFloat("_DepthBlendOp", SystemInfo.usesReversedZBuffer ? 4f : 3f);
@@ -124,9 +134,9 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _sceneryMaskMaterial.SetFloat("_MaskZTest", (float)CompareFunction.LessEqual);
         _threatMaskMaterial = CoreUtils.CreateEngineMaterial(_layerMaskShader);
         _threatMaskMaterial.SetFloat("_MaskZTest", (float)CompareFunction.Always);
-        _capture = new CapturePass(OutlineVFXRouting.SELECTED_MASK, false);
-        _alwaysVisibleCapture = new CapturePass(OutlineVFXRouting.ALWAYS_VISIBLE_MASK, true);
-        _depth = new TransparentDepthPass(_depthMaterial);
+        _capture = new CapturePass(OutlineVFXRouting.SELECTED_MASK, false, _sharedBodySmoke);
+        _alwaysVisibleCapture = new CapturePass(OutlineVFXRouting.ALWAYS_VISIBLE_MASK, true, _sharedBodySmoke);
+        _depth = new TransparentDepthPass(_depthMaterial, _sharedBodySmoke);
         _sceneryMask = new LayerMaskPass(OutlineLayer.SCENERY_MASK, _sceneryMaskMaterial, false);
         _threatMask = new LayerMaskPass(OutlineLayer.THREAT_MASK, _threatMaskMaterial, true);
         _forcedRevealMaterial = CoreUtils.CreateEngineMaterial(_forcedRevealShader);
@@ -134,7 +144,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _threatRouting = new ThreatPresentationRouting(Resources.Load<Material>("Perception/ThreatPresentationMask"));
         _presentation = new ThreatPresentationPass(_threatRouting);
         _meleeWarningMaskMaterial = CoreUtils.CreateEngineMaterial(_meleeWarningMaskShader);
-        _meleeWarningMask = new MeleeWarningMaskPass(_meleeWarningMaskMaterial);
+        _meleeWarningMask = new MeleeWarningMaskPass(_meleeWarningMaskMaterial, _sharedBodySmoke);
         _swordOutlineMaskMaterial = CoreUtils.CreateEngineMaterial(_meleeWarningMaskShader);
         _swordOutlineMaskMaterial.SetFloat("_SwordOutlineMask", 1f);
         _swordOutlineMask = new SwordOutlineMaskPass(_swordOutlineMaskMaterial);
@@ -148,7 +158,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     }
 
     /// <summary>
-    /// 지원 카메라의 컬링 전에 선택 VFX와 위협의 임시 재질·표시 경로를 준비한다.
+    /// 지원 카메라의 컬링 전에 선택 VFX와 위협의 임시 재질·표시 경로를 준비하고 공유 몸 연기 입자를 올린다.
     /// 기능 비활성 상태에서는 원본 URP 렌더링을 유지한다.
     /// </summary>
     private void BeginCamera(ScriptableRenderContext context, Camera camera)
@@ -162,6 +172,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _threatRouting.Restore();
         _routing.Prepare();
         _threatRouting.Prepare(camera);
+        _sharedBodySmoke.Prepare();
     }
 
     /// <summary>
@@ -189,6 +200,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         _material.SetFloat(_normalSensitivityId, _normalSensitivity);
         _material.SetFloat(_transparentThresholdId, _transparentThreshold);
         _meleeWarningMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
+        _sharedBodySmoke.SetTransparentThreshold(_transparentThreshold);
         _swordOutlineMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
         _sceneryMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
         _threatMaskMaterial.SetFloat(_transparentThresholdId, _transparentThreshold);
@@ -227,6 +239,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         RenderPipelineManager.endCameraRendering -= EndCamera;
         _threatRouting?.Dispose();
         _routing.Dispose();
+        _sharedBodySmoke?.Dispose();
+        _sharedBodySmoke = null;
         CoreUtils.Destroy(_material);
         CoreUtils.Destroy(_depthMaterial);
         CoreUtils.Destroy(_sceneryMaskMaterial);
@@ -607,17 +621,25 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             };
         private readonly FilteringSettings _filter;
         private readonly bool _alwaysVisible;
-        private sealed class ColorData { public RendererListHandle Renderers { get; set; } }
+        private readonly SharedBodySmokeRenderer _sharedBodySmoke;
+        private sealed class ColorData
+        {
+            public RendererListHandle Renderers { get; set; }
+            public SharedBodySmokeRenderer SharedBodySmoke { get; set; }
+            public bool DrawSharedBodySmoke { get; set; }
+        }
         private RTHandle _legacyColor;
         public RTHandle LegacyColor => _legacyColor;
 
         /// <summary>
         /// renderingMask와 alwaysVisible로 캡처 대상을 구분하고 중간 카메라 타깃을 요청한다.
+        /// 인지 마스크를 따르는 선택 캡처만 sharedBodySmoke의 공유 몸 연기를 함께 그린다.
         /// </summary>
-        public CapturePass(uint renderingMask, bool alwaysVisible)
+        public CapturePass(uint renderingMask, bool alwaysVisible, SharedBodySmokeRenderer sharedBodySmoke)
         {
             _filter = new FilteringSettings(RenderQueueRange.all, -1, renderingMask);
             _alwaysVisible = alwaysVisible;
+            _sharedBodySmoke = sharedBodySmoke;
             renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
             requiresIntermediateTexture = true;
         }
@@ -640,6 +662,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             var parameters = new RendererListParams(frameData.Get<UniversalRenderingData>().cullResults, drawing, _filter);
             using var builder = graph.AddRasterRenderPass<ColorData>(desc.name, out var data);
             data.Renderers = graph.CreateRendererList(parameters);
+            data.SharedBodySmoke = _sharedBodySmoke;
+            data.DrawSharedBodySmoke = !_alwaysVisible;
             builder.UseRendererList(data.Renderers);
             builder.AllowPassCulling(false);
             builder.UseAllGlobalTextures(true);
@@ -654,11 +678,13 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 선택한 VFX를 원래 셰이더로 별도 투명 타깃에 그려 알파 모양을 보관한다.
+        /// 선택한 VFX를 원래 셰이더로 별도 투명 타깃에 그려 알파 모양을 보관하고, 선택 캡처에는 공유 몸 연기를 더한다.
         /// </summary>
         private static void DrawColor(ColorData data, RasterGraphContext context)
         {
             context.cmd.DrawRendererList(data.Renderers);
+            if (data.DrawSharedBodySmoke)
+                data.SharedBodySmoke.Draw(context.cmd, SharedBodySmokeRenderer.COLOR_PASS);
         }
 
         /// <summary>
@@ -668,7 +694,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 
 #pragma warning disable CS0618, CS0672
         /// <summary>
-        /// 호환 모드에서 선택 VFX만 원래 셰이더로 기록한다.
+        /// 호환 모드에서 선택 VFX만 원래 셰이더로 기록하고, 선택 캡처에는 공유 몸 연기를 더한다.
         /// </summary>
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
@@ -685,6 +711,12 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             var drawing = CreateDrawingSettings(_tags, ref renderingData, SortingCriteria.CommonTransparent);
             var filter = _filter;
             context.DrawRenderers(renderingData.cullResults, ref drawing, ref filter);
+            if (_alwaysVisible || !_sharedBodySmoke.HasInstances)
+                return;
+            var smokeCmd = CommandBufferPool.Get("Shared Body Smoke Capture");
+            _sharedBodySmoke.Draw(smokeCmd, SharedBodySmokeRenderer.COLOR_PASS);
+            context.ExecuteCommandBuffer(smokeCmd);
+            CommandBufferPool.Release(smokeCmd);
         }
 #pragma warning restore CS0618, CS0672
     }
@@ -699,17 +731,23 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             };
         private readonly FilteringSettings _filter = new FilteringSettings(RenderQueueRange.all,
             -1, OutlineVFXRouting.SELECTED_MASK);
+        private readonly SharedBodySmokeRenderer _sharedBodySmoke;
         private RTHandle _legacyDepth;
         public RTHandle LegacyDepth => _legacyDepth;
 
-        private sealed class DepthData { public RendererListHandle Renderers { get; set; } }
+        private sealed class DepthData
+        {
+            public RendererListHandle Renderers { get; set; }
+            public SharedBodySmokeRenderer SharedBodySmoke { get; set; }
+        }
 
         /// <summary>
-        /// material로 투명 기하 깊이를 수집하도록 합성 후 실행 순서를 지정한다.
+        /// material로 투명 기하 깊이를 수집하도록 합성 후 실행 순서를 지정하고 sharedBodySmoke의 공유 몸 연기 깊이도 함께 기록한다.
         /// </summary>
-        public TransparentDepthPass(Material material)
+        public TransparentDepthPass(Material material, SharedBodySmokeRenderer sharedBodySmoke)
         {
             _material = material;
+            _sharedBodySmoke = sharedBodySmoke;
             renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
         }
 
@@ -734,6 +772,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             var parameters = new RendererListParams(frameData.Get<UniversalRenderingData>().cullResults, drawing, _filter);
             using var builder = graph.AddRasterRenderPass<DepthData>("Outline Transparent Depth", out var data);
             data.Renderers = graph.CreateRendererList(parameters);
+            data.SharedBodySmoke = _sharedBodySmoke;
             builder.UseRendererList(data.Renderers);
             builder.AllowPassCulling(false);
             builder.SetRenderAttachment(target, 0, AccessFlags.Write);
@@ -743,11 +782,12 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 현재 카메라의 투명 렌더러 목록을 깊이 전용 머티리얼로 출력한다.
+        /// 현재 카메라의 투명 렌더러 목록을 깊이 전용 머티리얼로 출력하고 공유 몸 연기 깊이를 같은 방식으로 더한다.
         /// </summary>
         private static void DrawDepth(DepthData data, RasterGraphContext context)
         {
             context.cmd.DrawRendererList(data.Renderers);
+            data.SharedBodySmoke.Draw(context.cmd, SharedBodySmokeRenderer.DEPTH_PASS);
         }
 
         /// <summary>
@@ -757,7 +797,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 
 #pragma warning disable CS0618, CS0672
         /// <summary>
-        /// 호환 모드에서 불투명 표면 앞의 투명 기하 깊이를 별도 색상 타깃에 기록한다.
+        /// 호환 모드에서 불투명 표면 앞의 투명 기하 깊이를 별도 색상 타깃에 기록하고 공유 몸 연기 깊이를 더한다.
         /// </summary>
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
@@ -775,6 +815,12 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
             drawing.overrideMaterialPassIndex = 0;
             var filter = _filter;
             context.DrawRenderers(renderingData.cullResults, ref drawing, ref filter);
+            if (!_sharedBodySmoke.HasInstances)
+                return;
+            var smokeCmd = CommandBufferPool.Get("Shared Body Smoke Depth");
+            _sharedBodySmoke.Draw(smokeCmd, SharedBodySmokeRenderer.DEPTH_PASS);
+            context.ExecuteCommandBuffer(smokeCmd);
+            CommandBufferPool.Release(smokeCmd);
         }
 #pragma warning restore CS0618, CS0672
     }
@@ -782,6 +828,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
     private sealed class MeleeWarningMaskPass : ScriptableRenderPass
     {
         private readonly Material _material;
+        private readonly SharedBodySmokeRenderer _sharedBodySmoke;
         private RTHandle _legacyMask;
 
         public RTHandle LegacyMask => _legacyMask;
@@ -790,15 +837,17 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         {
             public Material WarningMaterial { get; set; }
             public Renderer[] WarningRenderers { get; set; }
+            public SharedBodySmokeRenderer SharedBodySmoke { get; set; }
         }
 
         /// <summary>
         /// material은 붉은 전조를 R/G 채널, 독립된 눈 섬광을 B 채널에 기록한다.
-        /// material은 공격 중 렌더러 배열에서 사용한다.
+        /// material은 공격 중 렌더러 배열에서 사용하고, sharedBodySmoke는 전조 중인 근접 잡몹의 공유 몸 연기를 같은 R 채널에 더한다.
         /// </summary>
-        public MeleeWarningMaskPass(Material material)
+        public MeleeWarningMaskPass(Material material, SharedBodySmokeRenderer sharedBodySmoke)
         {
             _material = material;
+            _sharedBodySmoke = sharedBodySmoke;
             renderPassEvent = RenderPassEvent.BeforeRenderingTransparents;
         }
 
@@ -900,6 +949,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 
             data.WarningMaterial = _material;
             data.WarningRenderers = CollectRenderers();
+            data.SharedBodySmoke = _sharedBodySmoke;
 
             builder.SetRenderAttachment(mask, 0, AccessFlags.Write);
             builder.SetRenderAttachmentDepth(
@@ -911,7 +961,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
         }
 
         /// <summary>
-        /// 전조 중인 입자·몸체·검의 모든 서브메시 및 별도 눈 섬광을 경고 마스크에 기록한다.
+        /// 전조 중인 입자·몸체·검의 모든 서브메시 및 별도 눈 섬광과 전조 중인 공유 몸 연기를 경고 마스크에 기록한다.
         /// 원본 머티리얼과 GameObject 상태는 변경하지 않는다.
         /// </summary>
         private static void DrawMask(
@@ -923,6 +973,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     for (int submesh = 0; submesh < renderer.sharedMaterials.Length; submesh++)
                         context.cmd.DrawRenderer(renderer, data.WarningMaterial, submesh, 0);
             }
+            if (data.SharedBodySmoke.HasWarning)
+                data.SharedBodySmoke.Draw(context.cmd, SharedBodySmokeRenderer.WARNING_PASS);
         }
 
         /// <summary>
@@ -936,7 +988,7 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
 
 #pragma warning disable CS0618, CS0672
         /// <summary>
-        /// 호환 모드에서 전조 파티클·몸체·검의 모든 서브메시 및 별도 눈 섬광을 경고 마스크에 기록한다.
+        /// 호환 모드에서 전조 파티클·몸체·검의 모든 서브메시 및 별도 눈 섬광과 전조 중인 공유 몸 연기를 경고 마스크에 기록한다.
         /// 카메라 깊이를 읽어 가려진 표면은 마스크에서 제외한다.
         /// </summary>
         public override void Execute(
@@ -966,6 +1018,8 @@ public sealed class ScreenSpaceOutlineFeature : ScriptableRendererFeature
                     for (int submesh = 0; submesh < renderer.sharedMaterials.Length; submesh++)
                         cmd.DrawRenderer(renderer, _material, submesh, 0);
             }
+            if (_sharedBodySmoke.HasWarning)
+                _sharedBodySmoke.Draw(cmd, SharedBodySmokeRenderer.WARNING_PASS);
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
         }
