@@ -460,7 +460,7 @@ MonoBehaviour:
   _meleeSpawnMaximumRadius: 14
   _meleeStartTime: 0
   _meleeSpawnsPerMinute: 12
-  _meleeSpawnGrowthPerMinute: 0
+  _meleeSpawnMultiplierPerMinute: 1
   _chargeTypeStartTime: 0
   _chargeTypeChance: 0
   _maximumMelee: 1
@@ -924,7 +924,7 @@ MonoBehaviour:
   _meleeSpawnMaximumRadius: 22
   _meleeStartTime: 0
   _meleeSpawnsPerMinute: 15
-  _meleeSpawnGrowthPerMinute: 0
+  _meleeSpawnMultiplierPerMinute: 1
   _chargeTypeStartTime: 0
   _chargeTypeChance: 0
   _maximumMelee: 3
@@ -2825,8 +2825,8 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 24
   _meleeSpawnMaximumRadius: 28.6
   _meleeStartTime: 100000
-  _meleeSpawnsPerMinute: 15
-  _meleeSpawnGrowthPerMinute: 9
+  _meleeSpawnsPerMinute: 19.5
+  _meleeSpawnMultiplierPerMinute: 1.6
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 30
@@ -3042,7 +3042,7 @@ MonoBehaviour:
   _meleeSpawnMaximumRadius: 14
   _meleeStartTime: 0
   _meleeSpawnsPerMinute: 12
-  _meleeSpawnGrowthPerMinute: 0
+  _meleeSpawnMultiplierPerMinute: 1
   _chargeTypeStartTime: 0
   _chargeTypeChance: 1
   _maximumMelee: 1

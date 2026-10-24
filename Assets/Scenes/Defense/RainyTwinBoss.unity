@@ -56652,15 +56652,11 @@ MonoBehaviour:
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
   _meleeSpawnsPerMinute: 1000
-  _meleeSpawnGrowthPerMinute: 10
-  _firstMeleeKillThreshold: 0
-  _firstMeleeSpawnsPerMinute: 0
-  _secondMeleeKillThreshold: 0
-  _secondMeleeSpawnsPerMinute: 0
+  _meleeSpawnMultiplierPerMinute: 1.35
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
   _maximumMelee: 100
-  _meleeSpawnLimit: 200
+  _meleeSpawnLimit: 0
   _beastPrefab: {fileID: 338732699294267485, guid: a9a7067fcf07e7b419232bda780c8248, type: 3}
   _beastDeathSound: 47
   _weightBlendStartSpawnCount: 0
