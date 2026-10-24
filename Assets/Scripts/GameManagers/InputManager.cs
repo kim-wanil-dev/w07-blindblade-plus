@@ -140,11 +140,6 @@ public sealed class InputManager : MonoBehaviour
             RequestSkill(true);
             return;
         }
-        if (_swordWaveInput.WasPressedThisFrame())
-        {
-            RequestSkill(false);
-            return;
-        }
 
         // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
         // 계속 누르는 우클릭은 가드가 끝나 자유 상태가 되면 다시 가드와 패링 창을 연다.
@@ -185,19 +180,22 @@ public sealed class InputManager : MonoBehaviour
     }
 
     /// <summary>
-    /// player의 대상 실과 불릿 타임 상태를 확인해 새 InputId로 일반 공격 또는 발도 돌진을 요청한다.
+    /// 패링 집중이면 게이지 소모 없는 일섬을, 그 외에는 player의 일반 공격을 새 InputId로 요청한다.
     /// 수락 결과를 입력 기록으로 발행한다.
     /// </summary>
     private void RequestAttack(PlayerController player)
     {
         int inputId = ++_nextInputId;
-        RequestNormalAttack(player, inputId, _attackPressTime, HasBulletTimeDashTarget(player));
-    }
-
-    /// <summary>player가 불릿 타임 발도를 쓸 수 있고 대상 실이 연결될 적이 있으면 true를 반환한다. 상태는 바꾸지 않는다.</summary>
-    private static bool HasBulletTimeDashTarget(PlayerController player)
-    {
-        return player.IsBulletTimeDashReady && player.TryGetTargetedDashCandidate(out _);
+        if (_empower.IsSwordWaveReady && !_empower.IsSwordWaveFocusing && !_empower.IsCharging)
+        {
+            bool accepted = _empower.TryBeginParrySwordWave();
+            PublishInput(inputId, PlayerInputKind.SwordWave,
+                accepted ? PlayerInputStatus.Started : PlayerInputStatus.Rejected,
+                accepted ? PlayerInputRejectReason.None : PlayerInputRejectReason.ActionBusy,
+                accepted ? player.CurrentActionId : 0, _attackPressTime);
+            return;
+        }
+        RequestNormalAttack(player, inputId, _attackPressTime);
     }
 
     /// <summary>
@@ -224,15 +222,12 @@ public sealed class InputManager : MonoBehaviour
     /// <summary>
     /// inputId로 일반 공격을 요청하고 행동 ID 변화로 즉시 시작·예약·거부를 구분해 pressTime 시각의 입력 기록으로 발행한다.
     /// 즉시 시작된 경우에만 player의 새 행동 ID를, 거부된 경우에만 Coordinator의 거부 이유를 기록한다.
-    /// bulletTimeDash가 참이면 대상 발도를 시도해 수락 시 집중을 돌진 규칙대로 끝내고, 일반 공격은 회피 집중을 끝낸다.
+    /// 집중 중에는 대상 돌진 없는 제자리 공격만 요청하며 극한 회피 집중의 남은 시간은 유지한다.
     /// </summary>
-    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime, bool bulletTimeDash)
+    private void RequestNormalAttack(PlayerController player, int inputId, double pressTime)
     {
         int previousActionId = player.CurrentActionId;
-        bool dodgeReady = _empower.IsDodgeReady;
-        bool accepted = bulletTimeDash ? _combat.RequestBulletTimeAttack() : _combat.RequestAttack();
-        if (accepted && bulletTimeDash) _empower.CompleteReadyWithDash();
-        else if (accepted && dodgeReady) _empower.CompleteDodgeReadyWithAttack();
+        bool accepted = _empower.IsReady ? _combat.RequestInPlaceAttack() : _combat.RequestAttack();
         bool started = accepted && player.CurrentActionId != previousActionId;
         PlayerInputStatus status = started ? PlayerInputStatus.Started
             : accepted ? PlayerInputStatus.Buffered : PlayerInputStatus.Rejected;

@@ -4,6 +4,11 @@
 
 ### 전투 HUD
 
+#### 일섬 게이지 비활성화 (2026-10-24)
+
+- 공용 `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`의 `PerfectParryTokens` 오브젝트를 비활성화했다. 실행 중 토글이 아니라 프리팹의 기본 활성 상태를 껐으므로 세 칸 일섬 게이지와 자식 액체 표현이 생성·표시되지 않는다. 거합 원형 게이지는 유지한다.
+- 패링 집중 3초 동안 좌클릭 무료 일섬, 극한 회피 집중 1초 동안 대상 돌진·일섬 금지, Shift 일섬 비활성화 규칙은 [특수 스킬 게이지](특수스킬_게이지.md)를 따른다. 온보딩 안내 문구와 단계는 이번 작업에서 수정하지 않았다.
+
 #### 멀티킬 처치 표시 (2026-10-24)
 
 - 온보딩을 제외한 BambooStage1, BambooDefense, RainyStage_JH, RainyTwinBoss, TestStage, (Legacy) RainyStage의 처치 목표 아래에 일반 공격·일섬·거합 실행별 `+N`을 최신·직전 두 줄로 표시한다. HUD 프리팹에 TMP 슬롯을 저장한다.
