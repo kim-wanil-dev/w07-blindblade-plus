@@ -56655,7 +56655,7 @@ MonoBehaviour:
   _meleeSpawnMultiplierPerMinute: 1.35
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
-  _maximumMelee: 100
+  _maximumMelee: 200
   _meleeSpawnLimit: 0
   _beastPrefab: {fileID: 338732699294267485, guid: a9a7067fcf07e7b419232bda780c8248, type: 3}
   _beastDeathSound: 47
