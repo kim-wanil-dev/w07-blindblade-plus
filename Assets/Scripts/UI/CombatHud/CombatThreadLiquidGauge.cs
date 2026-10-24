@@ -112,7 +112,8 @@ namespace BlindBlade.UI.CombatHud
                 _level = fill;
 
             _fullBlend = Mathf.MoveTowards(_fullBlend, full ? 1f : 0f, deltaTime / _style.FullTransitionDuration);
-            _filledBlend = Mathf.MoveTowards(_filledBlend, _level >= 1f - MIN_LEVEL ? 1f : 0f, deltaTime / _style.FullTransitionDuration);
+            // 차오르는 수면은 1에 지수적으로 다가가 늦으므로 끝까지 찬 상태는 실제 게이지 양으로 판단한다.
+            _filledBlend = Mathf.MoveTowards(_filledBlend, fill >= 1f - MIN_LEVEL ? 1f : 0f, deltaTime / _style.FullTransitionDuration);
             // 출렁이는 동안에는 액체 실과 물결이 함께 빨라진다.
             float flowDelta = deltaTime * Mathf.Lerp(1f, _style.FullFlowMultiplier, _fullBlend) * (1f + _slosh * _style.SloshSwirl);
             _time += flowDelta;

@@ -99,6 +99,8 @@ public sealed class PlayerMotor : MonoBehaviour
     private float _combatPushDuration;
     private float _combatPushElapsed;
     private float _combatPushProgress;
+    private bool _combatPushIgnoresEnemies;
+    private readonly List<Collider> _combatPushIgnoredColliders = new List<Collider>();
 
     [Header("기본 공격 전진")]
     [SerializeField, Min(0f), InspectorName("공격 도약 거리 (m)")] private float _attackLungeDistance = 0.45f;
@@ -380,6 +382,7 @@ private Vector3 _attackLungeDirection;
     public void ClearInput()
     {
         _combatPushDistance = 0f;
+        RestoreEnemyBodyCollisions();
         _isAttackLunging = false;
         _attackAdvanceActive = false;
         CancelDodge();
@@ -593,17 +596,57 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
 
     /// <summary>
     /// direction의 수평 방향으로 distance만큼 duration 동안 밀리는 이동을 시작한다.
+    /// ignoreEnemyBodies가 참이면 밀림이 끝날 때까지 적 캡슐 몸 막힘과 적 몸 충돌체를 무시하고 벽에서만 멈춘다.
     /// 회피와 평면 속도를 정리하고 공격 상태와 체력은 유지한다.
     /// </summary>
-    public void ApplyCombatPush(Vector3 direction, float distance, float duration)
+    public void ApplyCombatPush(Vector3 direction, float distance, float duration, bool ignoreEnemyBodies = false)
     {
         CancelDodge();
+        RestoreEnemyBodyCollisions();
         _combatPushDirection = Vector3.ProjectOnPlane(direction, Vector3.up).normalized;
         _combatPushDistance = Mathf.Max(0f, distance);
         _combatPushDuration = Mathf.Max(0.01f, duration);
         _combatPushElapsed = 0f;
         _combatPushProgress = 0f;
+        _combatPushIgnoresEnemies = ignoreEnemyBodies;
+        if (ignoreEnemyBodies)
+            IgnoreEnemyBodyCollisions();
         AddCombatRecoil(direction, 1f);
+    }
+
+    /// <summary>
+    /// 현재 있는 적 중 몸 충돌체를 가진 적의 충돌체와 플레이어 CharacterController의 충돌을 끈다.
+    /// EnemyHitCapsule.Active를 사용하며, 끈 충돌체를 _combatPushIgnoredColliders에 저장한다.
+    /// </summary>
+    private void IgnoreEnemyBodyCollisions()
+    {
+        IReadOnlyList<EnemyHitCapsule> capsules = EnemyHitCapsule.Active;
+        for (int i = 0; i < capsules.Count; i++)
+        {
+            EnemyHitCapsule capsule = capsules[i];
+            if (!capsule.HasBodyCollider || !capsule.IsPresent)
+                continue;
+            Physics.IgnoreCollision(_characterController, capsule.BodyCollider, true);
+            _combatPushIgnoredColliders.Add(capsule.BodyCollider);
+        }
+    }
+
+    /// <summary>
+    /// _combatPushIgnoredColliders에 저장한 적 몸 충돌체와 플레이어의 충돌을 다시 켜고 목록과 _combatPushIgnoresEnemies를 비운다.
+    /// 비활성화된 충돌체는 무시 상태가 이미 풀렸으므로 다시 켜지 않는다.
+    /// </summary>
+    private void RestoreEnemyBodyCollisions()
+    {
+        _combatPushIgnoresEnemies = false;
+        if (_combatPushIgnoredColliders.Count == 0)
+            return;
+        bool playerActive = _characterController.enabled && _characterController.gameObject.activeInHierarchy;
+        foreach (Collider body in _combatPushIgnoredColliders)
+        {
+            if (playerActive && body != null && body.enabled && body.gameObject.activeInHierarchy)
+                Physics.IgnoreCollision(_characterController, body, false);
+        }
+        _combatPushIgnoredColliders.Clear();
     }
 
     /// <summary>공격 시작 시 고정된 방향으로 짧게 전진하고 공격 뒤의 부드러운 재가속을 예약합니다.</summary>
@@ -649,7 +692,7 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
 
     /// <summary>
     /// deltaTime으로 쳐내기 밀림을 감속시키며 CharacterController 충돌과 중력을 적용한다.
-    /// 벽 또는 밀림 시간 종료 시 이동을 정리하며 공격 행동은 취소하지 않는다.
+    /// 적 몸을 무시하는 밀림은 적 캡슐 막힘 없이 움직인다. 벽 또는 밀림 시간 종료 시 이동과 적 몸 충돌 무시를 정리하며 공격 행동은 취소하지 않는다.
     /// </summary>
     private void TickCombatPush(float deltaTime)
     {
@@ -658,13 +701,16 @@ public void Tick(PlayerLocomotionMode locomotionMode, bool movementLocked, bool 
         float normalized = _combatPushElapsed / _combatPushDuration;
         float progress = 1f - (1f - normalized) * (1f - normalized);
         _verticalVelocity = _characterController.isGrounded ? -2f : _verticalVelocity - _gravity * deltaTime;
-        CollisionFlags flags = MoveCharacter(
-            _combatPushDirection * (_combatPushDistance * (progress - _combatPushProgress))
-            + Vector3.up * (_verticalVelocity * deltaTime));
+        Vector3 motion = _combatPushDirection * (_combatPushDistance * (progress - _combatPushProgress))
+            + Vector3.up * (_verticalVelocity * deltaTime);
+        CollisionFlags flags = _combatPushIgnoresEnemies ? _characterController.Move(motion) : MoveCharacter(motion);
         _combatPushProgress = progress;
         _lastHorizontalSpeed = 0f;
         if (normalized >= 1f || (flags & CollisionFlags.Sides) != 0)
+        {
             _combatPushDistance = 0f;
+            RestoreEnemyBodyCollisions();
+        }
     }
 
     /// <summary>짧은 공격 전진을 부드럽게 진행하고 CharacterController 충돌과 중력을 반영합니다.</summary>
@@ -1357,6 +1403,7 @@ private void TickDash(float deltaTime)
     private void OnDisable()
     {
         RestoreDashSlowMotion();
+        RestoreEnemyBodyCollisions();
         _isDashing = false;
         _isDodging = false;
         _isAttackLunging = false;
