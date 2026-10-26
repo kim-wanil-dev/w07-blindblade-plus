@@ -295,6 +295,39 @@ public sealed class BambooGrove : MonoBehaviour
     }
 
     /// <summary>
+    /// planePoint를 함께 지나는 firstNormal·secondNormal 두 평면(화면의 X자 갈라진 선)으로 서 있거나 복구 중인 대나무와 날아가는 조각을 거리와 상관없이 벤다.
+    /// 두 평면이 모두 가로지르는 대나무는 낮은 교차점에서 줄기를 베고, 잘린 윗부분을 높은 교차점에서 다시 나눠 X자로 베이게 한다.
+    /// 범위 판정과 origin 반대쪽으로 쓰러뜨리는 방향은 CutInView와 같으며, 활성 대숲이 없으면 아무것도 하지 않는다.
+    /// </summary>
+    public static void CutInViewCross(Matrix4x4 viewProjection, float margin, Vector3 origin, Vector3 planePoint,
+        Vector3 firstNormal, Vector3 secondNormal)
+    {
+        if (_active == null)
+            return;
+        // 이미 날아가던 조각과 그 조각이 첫 평면에 나뉜 조각까지만 두 번째 평면으로 다시 검사한다.
+        _active.SplitPiecesInView(_active._flyingPieces.Count, viewProjection, margin, origin, planePoint, firstNormal);
+        _active.SplitPiecesInView(_active._flyingPieces.Count, viewProjection, margin, origin, planePoint, secondNormal);
+        for (int i = 0; i < _active._stalks.Length; i++)
+        {
+            Stalk stalk = _active._stalks[i];
+            if (stalk.State == StalkState.Falling || !TryGetAwayDirection(stalk.Base, origin, out Vector3 away))
+                continue;
+            bool first = TryGetStalkCrossing(stalk, viewProjection, margin, planePoint, firstNormal, out float firstCrossing);
+            bool second = TryGetStalkCrossing(stalk, viewProjection, margin, planePoint, secondNormal, out float secondCrossing);
+            if (!first && !second)
+                continue;
+            // 높은 평면이 밑동이 아니라 잘린 윗부분을 지나도록 낮은 평면으로 줄기를 먼저 벤다.
+            bool firstLower = first && (!second || firstCrossing <= secondCrossing);
+            _active.Cut(i, planePoint, firstLower ? firstNormal : secondNormal, away);
+            if (!first || !second || stalk.State != StalkState.Falling)
+                continue;
+            Piece top = stalk.Pieces[stalk.Pieces.Count - 1];
+            if (_active.TryGetPlaneCrossing(top, planePoint, firstLower ? secondNormal : firstNormal, out float crossing, out _))
+                _active.SplitPiece(top, crossing, away);
+        }
+    }
+
+    /// <summary>
     /// 칼날이 이전 프레임(previousBase→previousTip)에서 지금(currentBase→currentTip)까지 쓸고 지난 면이 가로지르는 대나무와 날아가는 조각을 벤다.
     /// 베는 평면은 칼날 방향과 칼날이 움직인 방향을 품고, 칼날이 움직인 수평 방향으로 쓰러뜨린다. 활성 대숲이 없으면 아무것도 하지 않는다.
     /// </summary>
@@ -409,6 +442,40 @@ public sealed class BambooGrove : MonoBehaviour
             return false;
         away.Normalize();
         return true;
+    }
+
+    /// <summary>
+    /// planePoint·planeNormal 평면이 stalk 줄기의 밑동과 끝 사이를 지나고, 그 점이 viewProjection 카메라 앞이며 화면 가장자리에서 margin만큼 넓힌 범위 안이면 true를 반환한다.
+    /// 밑동에서 교차점까지의 줄기 길이를 crossing으로 반환한다.
+    /// </summary>
+    private static bool TryGetStalkCrossing(Stalk stalk, Matrix4x4 viewProjection, float margin,
+        Vector3 planePoint, Vector3 planeNormal, out float crossing)
+    {
+        crossing = 0f;
+        float facing = Vector3.Dot(stalk.Up, planeNormal);
+        if (Mathf.Abs(facing) < 0.0001f)
+            return false;
+        crossing = Vector3.Dot(planePoint - stalk.Base, planeNormal) / facing;
+        return crossing >= 0f && crossing <= stalk.Height
+            && IsInView(stalk.Base + stalk.Up * crossing, viewProjection, margin);
+    }
+
+    /// <summary>
+    /// 날아가는 조각 목록의 앞 count개 중 planePoint·planeNormal 평면이 viewProjection 화면 안(margin 여유)에서 가로지르는 조각을 그 점에서 나눈다.
+    /// 나뉜 위 조각은 origin 반대쪽 수평 방향으로 더 밀리며 날아가는 조각 목록 끝에 더해진다.
+    /// </summary>
+    private void SplitPiecesInView(int count, Matrix4x4 viewProjection, float margin, Vector3 origin,
+        Vector3 planePoint, Vector3 planeNormal)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            Piece piece = _flyingPieces[i];
+            if (!TryGetPlaneCrossing(piece, planePoint, planeNormal, out float crossing, out Vector3 point)
+                || !IsInView(point, viewProjection, margin)
+                || !TryGetAwayDirection(point, origin, out Vector3 away))
+                continue;
+            SplitPiece(piece, crossing, away);
+        }
     }
 
     /// <summary>
