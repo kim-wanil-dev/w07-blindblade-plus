@@ -95,7 +95,10 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     [Tooltip("우클릭으로 가드가 열린 시각부터 잽니다. 퍼펙트 패링 구간 밖의 방어는 가드입니다.")]
     private float _perfectParryStart = 0f;
     [SerializeField, Min(0f), InspectorName("퍼펙트 패링 끝 (초)")]
-    private float _perfectParryEnd = 0.1f;
+    private float _perfectParryEnd = 0.2f;
+    [SerializeField, Min(0f), InspectorName("퍼펙트 패링 해제 유예 (초)")]
+    [Tooltip("퍼펙트 패링 구간 중 우클릭을 떼면 이 시간 동안 칼을 내리는 중에도 퍼펙트 패링으로 판정합니다. 퍼펙트 패링 끝을 넘지 않습니다.")]
+    private float _perfectParryReleaseGrace = 0.05f;
     [SerializeField, Min(0f)] private float _blockInputRecovery = 0.18f;
     [SerializeField, Min(0f), InspectorName("일반 적 가드 밀림 거리 (m)")] private float _guardPushDistance = 0.9f;
     [SerializeField, Min(0.01f), InspectorName("일반 적 가드 밀림 시간 (초)")] private float _guardPushDuration = 0.12f;
@@ -132,6 +135,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private PlayerClock _playerClock;
     private float _parryOpenedAt;
     private float _parryUntil;
+    private float _parryGraceUntil;
     private float _parryMotionUntil;
     private float _sheatheUntil;
     private float _waitStarted;
@@ -179,15 +183,19 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
         && (_player.CurrentState == PlayerActionState.Guarding || _player.CurrentState == PlayerActionState.Free);
     public bool IsParryWindowOpen => _parryOpen && _playerClock.Now < _parryUntil
         && _player.IsGuarding;
+    // 우클릭을 뗀 뒤 유예 시각 전이고 다른 행동을 시작하지 않았으면 칼을 내리는 중에도 퍼펙트 패링으로 판정한다.
+    private bool IsParryGraceActive => _playerClock.Now < _parryGraceUntil
+        && (_player.CurrentState == PlayerActionState.Free || _player.CurrentState == PlayerActionState.Recovery);
 
     /// <summary>
     /// 지금 가드에 공격이 닿으면 받을 결과를 가드가 열린 뒤 지난 시간으로 반환한다.
-    /// 퍼펙트 패링 구간이면 PerfectParry, 그 외와 패링 창이 닫힌 경우는 Guard다.
+    /// 퍼펙트 패링 구간이거나 우클릭 해제 유예 중이면 PerfectParry, 그 외와 패링 창이 닫힌 경우는 Guard다.
     /// </summary>
     public DefenseOutcome GuardContactOutcome
     {
         get
         {
+            if (IsParryGraceActive) return DefenseOutcome.PerfectParry;
             if (!IsParryWindowOpen) return DefenseOutcome.Guard;
             float elapsed = _playerClock.Now - _parryOpenedAt;
             if (elapsed >= _perfectParryStart && elapsed < _perfectParryEnd) return DefenseOutcome.PerfectParry;
@@ -698,12 +706,13 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
 
     /// <summary>
     /// 현재 게임 시간을 _parryOpenedAt에 저장하고 퍼펙트 패링 구간이 끝나는 시각까지 패링 창을 연다.
-    /// 시각화 이벤트를 발행한다.
+    /// 이전 가드의 우클릭 해제 유예(_parryGraceUntil)는 새 패링 창으로 대체하며 시각화 이벤트를 발행한다.
     /// </summary>
     private void OpenDefenseWindow()
     {
         _parryOpenedAt = _playerClock.Now;
         _parryUntil = _parryOpenedAt + _perfectParryEnd;
+        _parryGraceUntil = 0f;
         _parryOpen = true;
         Publish(KatanaStage.ParryAttempted, "Guard started: timed parry window");
     }
@@ -1054,17 +1063,30 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     }
 
     /// <summary>
-    /// incoming이 eligible인 전방 근접 접촉이고 가드 중이면 피해를 차단한다.
+    /// 우클릭을 떼어 EndDefense로 가드를 끝낸다. 뗀 순간이 퍼펙트 패링 구간이면 지금부터 _perfectParryReleaseGrace 뒤와
+    /// 퍼펙트 패링 끝(_parryOpenedAt + _perfectParryEnd) 중 이른 시각을 _parryGraceUntil에 저장해 칼을 내리는 중에도 퍼펙트 패링으로 판정한다.
+    /// </summary>
+    public void ReleaseDefense()
+    {
+        bool perfect = GuardContactOutcome == DefenseOutcome.PerfectParry;
+        EndDefense();
+        if (perfect)
+            _parryGraceUntil = Mathf.Min(_playerClock.Now + _perfectParryReleaseGrace, _parryOpenedAt + _perfectParryEnd);
+    }
+
+    /// <summary>
+    /// incoming이 eligible인 전방 근접 접촉이고 가드 중이거나 우클릭 해제 유예 중이면 피해를 차단하고 유예를 소모한다.
     /// GuardContactOutcome의 가드·퍼펙트 패링에 따라 적 회복·반동·방어 피드백을 적용하고 일반 적의 근접 베기·돌진 가드에 수평 밀림을 추가하여 성공 여부를 반환한다.
     /// 퍼펙트 패링은 쳐내기 피드백과 경직을 적용한 뒤 가드를 끝내고 퍼펙트 패링 모션을 시작한다. 패링 뒤 반격은 예약하지 않는다.
     /// allowCounter가 false이면 패링에도 경직을 만들지 않으며 공격자가 사라진 접촉도 처리한다.
     /// </summary>
     public bool TryDefendIncoming(DamageContext incoming, bool eligible, bool allowCounter = true)
     {
-        if (!isActiveAndEnabled || !eligible || !_player.IsGuarding || _player.IsPaused
+        if (!isActiveAndEnabled || !eligible || (!_player.IsGuarding && !IsParryGraceActive) || _player.IsPaused
             || incoming.Amount <= 0f || Time.timeScale <= 0f) return false;
         DefenseOutcome outcome = GuardContactOutcome;
         bool parry = outcome != DefenseOutcome.Guard;
+        _parryGraceUntil = 0f;
         GameObject instigator = incoming.Instigator;
         EnemyHealth parriedEnemy = parry && allowCounter && instigator != null
             ? instigator.GetComponentInParent<EnemyHealth>() : null;
