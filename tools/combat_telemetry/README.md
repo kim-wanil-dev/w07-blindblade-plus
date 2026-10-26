@@ -176,10 +176,11 @@ Events와 OnboardingSteps는 헤더 순서가 다르면 `header_mismatch`로 거
 ## 분석 대시보드
 
 - 분석 대시보드: https://blindblade-combat-analysis.wan1k.chatgpt.site
-- 현재 운영 Sites v26은 선택한 구간에 속한 모든 도전의 합계·통계를 전체요약 기본 화면에 표시한다. 도전별·피격별 세부 내역은 접힌 영역에서 확인하고 플레이어별 누적 시간 표는 기본 화면에 유지한다. 이번 로그 정합성 개선은 로컬 소스에 반영했으며 Sites에 아직 배포하지 않았다. 버전·배포 검증 정보는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에 기록한다.
+- Sites 프로젝트 버전 29를 운영 URL에 배포했으며 public 접근을 유지한다. CSV 누적 가져오기와 중복 제거, 빌드별 수치 비교를 제공한다. 소스 커밋은 1db690225dcd3816d87a0ae33aa38ab22deda2d9, 배포 상태는 succeeded다. 브라우저 상호작용 QA는 실행하지 않았다. [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에 기록한다.
 - 사이트 프로젝트 소스는 `tools/combat_telemetry/dashboard_site`에 있다. Sites 프로젝트 접근은 `public`이다. Google Spreadsheet 자체는 비공개이며 Worker 서버가 Apps Script의 읽기 전용 API를 호출한다. 최신 페이지 버전과 스프레드시트 연결 상태는 [대시보드 기능 명세](../../docs/features/전투_텔레메트리_분석_대시보드.md)에서 확인한다.
-- Google Sheets에서 Events, Sessions, OnboardingSteps 탭을 각각 CSV로 다운로드하고, 사이트에서 파일을 한 번에 선택한다. Patterns, Heatmaps, Diagnostics 탭도 선택 입력할 수 있다.
-- CSV 파일은 브라우저 안에서만 처리되며 사이트 서버로 업로드되지 않는다. 한 파일만 가져와도 보이지만 전체 분석에는 Events·Sessions·OnboardingSteps를 함께 불러온다.
+- Google Sheets에서 Events, Sessions, OnboardingSteps 탭을 각각 CSV로 다운로드하고, 사이트에서 파일을 한 번에 선택하거나 같은 탭에서 나눠 추가한다. Patterns, Heatmaps, Diagnostics 탭도 선택 입력할 수 있다. 데이터 상태 탭에서 파일별 신규 행과 중복 제외 행을 확인한다.
+- CSV 파일은 브라우저 안에서만 처리되며 사이트 서버로 업로드되지 않는다. 파일을 추가하면 이전 CSV 행을 유지하며 이벤트 키·도전 ID·단계 키·격자 키 등 안정 식별자로 중복 행을 한 번만 집계한다. 전체 분석에는 Events·Sessions·OnboardingSteps를 함께 불러오는 것을 권장한다.
+- `수치 비교` 탭에서 빌드 버전과 비교 지표를 고른다. 상단 구간·날짜·Editor 조건을 반영해 도전당 평균 또는 비율과 표본 수를 표시하며, 여러 빌드 버전을 선택하면 바로 앞 빌드와의 변화도 함께 표시한다.
 - 로컬 JSONL을 분석하려면 위의 `Export-Telemetry.ps1` 명령으로 동일한 CSV 묶음을 생성한다.
 - 자동 연결 설정: 같은 `DASHBOARD_READ_TOKEN`을 Apps Script Script Properties와 Sites 런타임 secret 양쪽에 저장한다. 현재 둘 다 설정되어 있고 자동 연결을 확인했다. 토큰을 바꿀 때는 두 값을 함께 갱신하고 Apps Script 웹 앱과 사이트를 다시 배포한다. 게임 업로드 `UPLOAD_TOKEN`은 재사용하지 않는다.
 - 서버 공유 캐시: R2 `BUCKET`에 완성 스냅샷과 Events 진행 위치를 보관한다. 여러 탭이 같은 전역 임대를 사용하므로 한 번만 시트를 읽는다. 최초 전체 준비 뒤에는 1분마다 core(Sessions·OnboardingSteps·Events 행 상한)를 확인하고 마지막 행 다음의 Events만 읽는다. 같은 브라우저에서는 이미 받은 이벤트 조각도 재사용한다. 재배포가 캐시를 초기화하지 않는다.
