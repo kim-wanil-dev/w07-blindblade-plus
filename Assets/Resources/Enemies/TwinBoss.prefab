@@ -59,8 +59,7 @@ MonoBehaviour:
   _cooperationArc: 170
   _breakRecovery: 0.75
   _fallbackArenaRadius: 12
-  _harassFirstDelay: 1.5
-  _harassInterval: 1.8
+  _harassFirstDelay: 2.25
   _alternatingRounds: 2
   _humanSlashesPerRound: 3
   _humanSlashInterval: 2.5
@@ -496,8 +495,8 @@ MonoBehaviour:
   _placementObstacleMask:
     serializedVersion: 2
     m_Bits: 51
-  _chargeDuration: 10
-  _pulseInterval: 3
+  _chargeDuration: 4.5
+  _pulseInterval: 2.25
   _chargeStartSound: 0
   _chargeStartPitch: 0.8
   _pulseSound: 43
@@ -1031,6 +1030,8 @@ MonoBehaviour:
   _pounceBarkLeadTime: 0.9
   _pounceOvershoot: 3
   _pounceLift: 0.5
+  _pounceHomingTurnRate: 50
+  _pounceHomingStopDistance: 3
   _parryRecoilDistance: 15
   _parryRecoilDuration: 0.15
   _chargeSound: 0

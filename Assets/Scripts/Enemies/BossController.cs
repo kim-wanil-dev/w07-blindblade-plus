@@ -117,6 +117,10 @@ public sealed class BossController : MonoBehaviour
     private float _barrageSpeedMultiplierMax = 3.5f;
     [SerializeField, Min(0f), Tooltip("난사 수리검 속도 배율이 유도 세기에 반영되는 비율. 1이면 속도 배율만큼 유도가 강해지고 0이면 프리팹 유도를 그대로 씁니다.")]
     private float _barrageHomingSpeedScale = 1f;
+    [SerializeField, Min(0f), Tooltip("난사 수리검의 상하 유도 각속도(도/초). 좌우는 프리팹 유도와 속도 비례 배율로 따라가고, 상하만 이 값으로 천천히 꺾어 묶음별 높이 차이를 유지합니다.")]
+    private float _barrageVerticalHomingTurnRate = 12f;
+    [SerializeField, Min(0f), Tooltip("난사 수리검이 발사 후 유도 없이 부채꼴로 흩뿌려지며 직진하는 시간(초). 이후 좌우·상하 유도를 시작합니다.")]
+    private float _barrageHomingDelay = 0.3f;
     private int[] _barrageAttackIds;
     private bool[] _barrageAttackLaunched;
     private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
@@ -532,6 +536,7 @@ public sealed class BossController : MonoBehaviour
     /// volley 순번으로 위에서 아래로 낮아지는 조준 높이를 정하고 왼쪽·가운데·오른쪽 수리검 3발을 동시에 발사한다.
     /// _barrageSpreadAngle과 기존 원거리 피해 _rangedDamage를 사용하며 보스를 플레이어 쪽으로 회전시킨다.
     /// 수리검마다 _barrageSpeedMultiplierMin~Max 사이의 비행 속도 배율을 랜덤으로 고르고 _barrageHomingSpeedScale로 유도 세기도 함께 키운다.
+    /// 발사 후 _barrageHomingDelay초 동안은 유도 없이 흩뿌려지고, 이후 상하 유도는 _barrageVerticalHomingTurnRate로 따로 제한해 묶음별 조준 높이 차이가 유지되게 한다.
     /// </summary>
     private void FireBarrageVolley(int volley)
     {
@@ -561,6 +566,8 @@ public sealed class BossController : MonoBehaviour
             projectile.SetSpeedMultiplier(speedMultiplier);
             // 빠른 수리검일수록 유도도 강해지며 비례 1이면 휘는 반경이 속도와 무관하게 같다.
             projectile.SetHomingMultiplier(1f + (speedMultiplier - 1f) * _barrageHomingSpeedScale);
+            projectile.SetVerticalHomingTurnRate(_barrageVerticalHomingTurnRate);
+            projectile.SetHomingDelay(_barrageHomingDelay);
         }
     }
 

@@ -72,10 +72,8 @@ public sealed class TwinBossController : MonoBehaviour
     private float _arenaInset;
 
     [Header("거합 차징 방해")]
-    [SerializeField, Min(0f), Tooltip("차징 시작부터 짐승의 첫 물기까지의 시간(초)")]
-    private float _harassFirstDelay = 1.5f;
-    [SerializeField, Min(0.1f), Tooltip("짐승이 물고 난 뒤 다음 물기까지의 시간(초)")]
-    private float _harassInterval = 1.8f;
+    [SerializeField, Min(0f), Tooltip("차징 시작부터 짐승이 한 번 덮쳐 날아오는 순간까지의 시간(초). 튀어나오기와 덮치기 전조 시간보다 짧으면 그만큼 늦게 덮친다.")]
+    private float _harassFirstDelay = 2.25f;
 
     [Header("교대 근접")]
     [SerializeField, Min(1), Tooltip("인간 연속 돌진 베기와 짐승 가장자리 덮치기를 한 번씩 하는 차례 수")]
@@ -438,44 +436,35 @@ public sealed class TwinBossController : MonoBehaviour
     }
 
     /// <summary>
-    /// 인간이 공터 먼 곳에서 거합을 차징하는 동안 짐승이 잠수 기습으로 플레이어를 방해한다.
+    /// 인간이 공터 먼 곳에서 거합을 차징하는 동안 짐승이 잠수 기습으로 한 번 플레이어를 방해한다.
     /// 거합이 끝나면 방해를 멈추고 잠수 중인 짐승을 그 자리에서 땅 위로 돌린다.
     /// </summary>
     private IEnumerator ChargeIai()
     {
         GetArenaCircle(out Vector3 center, out float radius);
-        _beastRoutine = StartCoroutine(HarassPlayer(_harassFirstDelay));
+        _beastRoutine = StartCoroutine(HarassOnce(_harassFirstDelay));
         yield return _iai.Charge(_player, center, radius);
         StopSideRoutines();
         _beast.InterruptAmbush();
         yield return _beast.Resurface();
     }
 
-    /// <summary>인간이 차징을 시작한 시각에 firstDelay를 더한 첫 공격 기준 시각부터 짐승이 그 주변에서 잠수 기습을 반복한다.</summary>
-    private IEnumerator HarassPlayer(float firstDelay)
+    /// <summary>
+    /// 인간이 차징 자리로 순간이동하는 동안 짐승을 미리 잠수시키고, 차징 시작 시각(TwinHumanIai.ChargeStartedAt)에 firstDelay를 더한 순간 덮쳐 날아오도록 잠수 기습을 한 번만 한다.
+    /// 짐승은 평소와 같은 튀어나오기·덮치기 전조를 거치며 끝나면 실행 참조를 비운다.
+    /// </summary>
+    private IEnumerator HarassOnce(float firstDelay)
     {
+        yield return _beast.Dive();
         while (!_iai.IsCharging && BothAlive() && _player.IsAlive) yield return null;
-        float strikeAt = Time.time + firstDelay;
-        while (BothAlive() && _player.IsAlive)
+        if (BothAlive() && _player.IsAlive)
         {
             GetArenaCircle(out Vector3 center, out float radius);
             // 거합 차징의 붉은 파동과 섞이지 않도록 방해 덮치기는 전조 파동을 내지 않는다.
-            yield return _beast.Ambush(_player, strikeAt, center, radius,
+            yield return _beast.Ambush(_player, _iai.ChargeStartedAt + firstDelay, center, radius,
                 _arena != null ? _arena.Radius : radius, false, _human.transform);
-            strikeAt = Time.time + _harassInterval;
-            yield return null;
         }
         _beastRoutine = null;
-    }
-
-    /// <summary>
-    /// 거합 차징 중 맞은 짐승이 무적 잠수로 피해 다른 곳에서 나올 때까지(HandleBossDamaged가 시작한 BeginBeastEscape) 기다린 뒤 방해를 이어가게 한다.
-    /// 인간의 차징은 그대로 둔다.
-    /// </summary>
-    private IEnumerator EscapeThenHarass()
-    {
-        while (_beast.IsEscaping) yield return null;
-        yield return HarassPlayer(_harassInterval);
     }
 
     /// <summary>
@@ -867,12 +856,12 @@ public sealed class TwinBossController : MonoBehaviour
         }
         if (_hitRequested || _pattern == TwinBossPattern.Evading || _pattern == TwinBossPattern.Finished
             || _pattern == TwinBossPattern.Countering) return;
-        // 거합 차징은 인간을 맞혀야만 끊기고, 맞은 짐승은 잠수해 피한 뒤 방해를 이어간다.
+        // 거합 차징은 인간을 맞혀야만 끊기고, 맞은 짐승은 잠수해 피하며 이번 차징에는 다시 덮치지 않는다.
         if (_pattern == TwinBossPattern.IaiCharge && health == _beast.Health)
         {
             if (_beastRoutine != null) StopCoroutine(_beastRoutine);
             _beast.InterruptAmbush();
-            _beastRoutine = health.IsAlive && _iai.IsCharging ? StartCoroutine(EscapeThenHarass()) : null;
+            _beastRoutine = null;
             return;
         }
         _hitRequested = true;

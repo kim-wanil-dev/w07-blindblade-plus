@@ -28,6 +28,9 @@ public class EnemyProjectile : MonoBehaviour
     private Vector3 _direction;
     private float _speedMultiplier = 1f;
     private float _homingMultiplier = 1f;
+    private bool _separateVerticalHoming;
+    private float _verticalHomingTurnRate;
+    private float _homingDelay;
     private float _elapsedTime;
     private bool _isFlying;
     private bool _reflected;
@@ -199,7 +202,7 @@ public class EnemyProjectile : MonoBehaviour
     }
 
     /// <summary>
-    /// damage와 direction 및 target을 저장하고 이동 방향, 수명 누적, 속도·유도 배율 및 비행 상태를 초기화한다.
+    /// damage와 direction 및 target을 저장하고 이동 방향, 수명 누적, 속도·유도 배율, 유도 시작 지연, 상하 유도 설정 및 비행 상태를 초기화한다.
     /// 풀에서 재사용하는 경우에도 호출하며 초기 방향으로 이동을 시작하고 _flightSound가 있으면 비행음을 반복 재생한다.
     /// </summary>
     public virtual void Initialize(DamageContext damage, Vector3 direction, Transform target = null)
@@ -208,6 +211,8 @@ public class EnemyProjectile : MonoBehaviour
         _damage = damage;
         _speedMultiplier = 1f;
         _homingMultiplier = 1f;
+        _homingDelay = 0f;
+        _separateVerticalHoming = false;
         _reflected = false;
         _hasPassedPlayer = false;
         _terminalFlight = false;
@@ -252,18 +257,58 @@ public class EnemyProjectile : MonoBehaviour
     }
 
     /// <summary>
+    /// 이번 비행의 상하 유도 각속도를 degreesPerSecond(도/초)로 따로 정한다. 좌우 유도는 프리팹 Homing Turn Rate와 유도 배율을 그대로 쓴다.
+    /// Initialize 뒤에 호출하며 다음 Initialize에서 상하·좌우를 함께 꺾는 기본 유도로 돌아간다.
+    /// </summary>
+    public void SetVerticalHomingTurnRate(float degreesPerSecond)
+    {
+        _verticalHomingTurnRate = Mathf.Max(0f, degreesPerSecond);
+        _separateVerticalHoming = true;
+    }
+
+    /// <summary>
+    /// 이번 비행에서 발사 후 seconds초 동안은 유도하지 않고 초기 방향으로 직진하게 한다.
+    /// Initialize 뒤에 호출하며 다음 Initialize에서 지연 없이 바로 유도하도록 돌아간다.
+    /// </summary>
+    public void SetHomingDelay(float seconds)
+    {
+        _homingDelay = Mathf.Max(0f, seconds);
+    }
+
+    /// <summary>
     /// 비행 중 target의 시점과 현재 위치를 사용해 설정 각속도만큼 진행 방향을 보정한다.
-    /// 반사 후, 종단 비행 시작 후, 근거리에서는 방향을 유지하며 유도할 때 _direction과 회전을 갱신한다.
+    /// 상하 유도를 따로 정한 비행은 좌우와 상하를 각각의 각속도로 꺾는다.
+    /// 반사 후, 종단 비행 시작 후, 유도 시작 지연 전, 근거리에서는 방향을 유지하며 유도할 때 _direction과 회전을 갱신한다.
     /// </summary>
     private void SteerTowardsTarget()
     {
-        if (_reflected || _terminalFlight || _homingTurnRate <= 0f || _target == null) return;
+        if (_reflected || _terminalFlight || _homingTurnRate <= 0f || _target == null
+            || _elapsedTime < _homingDelay) return;
         Vector3 aim = _targetMotor != null ? _targetMotor.ViewOrigin - Vector3.up * 0.1f : _target.position;
         Vector3 toTarget = aim - transform.position;
         if (toTarget.sqrMagnitude <= _homingStopDistance * _homingStopDistance) return;
-        _direction = Vector3.RotateTowards(_direction, toTarget.normalized,
-            _homingTurnRate * _homingMultiplier * Mathf.Deg2Rad * Time.deltaTime, 0f).normalized;
+        float turn = _homingTurnRate * _homingMultiplier * Mathf.Deg2Rad * Time.deltaTime;
+        _direction = _separateVerticalHoming
+            ? SteerSeparately(toTarget.normalized, turn, _verticalHomingTurnRate * Mathf.Deg2Rad * Time.deltaTime)
+            : Vector3.RotateTowards(_direction, toTarget.normalized, turn, 0f).normalized;
         transform.rotation = Quaternion.LookRotation(_direction);
+    }
+
+    /// <summary>
+    /// 현재 진행 방향을 수평 방위와 상하 각도로 나눠 targetDirection 쪽으로 각각 꺾은 방향을 반환한다.
+    /// 수평 방위는 horizontalTurn, 상하 각도는 verticalTurn(라디안)까지만 바꾼다.
+    /// </summary>
+    private Vector3 SteerSeparately(Vector3 targetDirection, float horizontalTurn, float verticalTurn)
+    {
+        Vector3 flat = Vector3.ProjectOnPlane(_direction, Vector3.up);
+        if (flat.sqrMagnitude < 0.000001f) return _direction;
+        Vector3 targetFlat = Vector3.ProjectOnPlane(targetDirection, Vector3.up);
+        // 대상이 바로 위아래에 있으면 수평 방위는 그대로 두고 상하 각도만 꺾는다.
+        if (targetFlat.sqrMagnitude > 0.000001f)
+            flat = Vector3.RotateTowards(flat.normalized, targetFlat.normalized, horizontalTurn, 0f);
+        float pitch = Mathf.MoveTowards(Mathf.Asin(Mathf.Clamp(_direction.y, -1f, 1f)),
+            Mathf.Asin(Mathf.Clamp(targetDirection.y, -1f, 1f)), verticalTurn);
+        return (flat.normalized * Mathf.Cos(pitch) + Vector3.up * Mathf.Sin(pitch)).normalized;
     }
 
     /// <summary>

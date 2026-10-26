@@ -108,6 +108,10 @@ public sealed class BeastBossAttack : MonoBehaviour
     private float _pounceOvershoot = 3f;
     [SerializeField, Min(0f), Tooltip("덮치기 돌진 가운데에서 몸이 뜨는 최대 높이(미터). 시작과 끝은 땅 높이다.")]
     private float _pounceLift = 0.5f;
+    [SerializeField, Min(0f), Tooltip("덮치기 중 플레이어 쪽으로 수평 방향을 꺾는 최대 각도(도/초). 0이면 출발 방향으로 직진한다.")]
+    private float _pounceHomingTurnRate = 50f;
+    [SerializeField, Min(0f), Tooltip("덮치는 경로가 플레이어에 이 수평 거리(미터) 안으로 들어오거나 플레이어를 지나치면 유도를 영구히 멈추고 직진한다.")]
+    private float _pounceHomingStopDistance = 3f;
     [SerializeField, Min(0f), Tooltip("돌진이 퍼펙트 패링에 막혔을 때 뒤로 튕겨 물러나는 거리(미터)")]
     private float _parryRecoilDistance = 5f;
     [SerializeField, Min(0.01f), Tooltip("퍼펙트 패링에 막혀 물러나는 시간(초)")]
@@ -596,8 +600,10 @@ public sealed class BeastBossAttack : MonoBehaviour
     }
 
     /// <summary>
-    /// 그 순간 플레이어 쪽으로 방향을 고정해 공터 안쪽 가장자리까지, 공간이 허락하면 플레이어 너머 _pounceOvershoot만큼
-    /// 최소 _biteDuration 동안 _pounceSpeed 이하로 가운데에서 _pounceLift만큼 살짝 뜨는 직선으로 돌진한다.
+    /// 그 순간 플레이어 쪽으로 출발해 공터 안쪽 가장자리까지, 공간이 허락하면 플레이어 너머 _pounceOvershoot만큼
+    /// 최소 _biteDuration 동안 _pounceSpeed 이하로 가운데에서 _pounceLift만큼 살짝 뜨며 돌진한다.
+    /// 돌진 중에는 _pounceHomingTurnRate로 플레이어 쪽으로 수평 방향을 꺾고, 경로가 플레이어 _pounceHomingStopDistance 안을 지나거나 플레이어를 지나치면 유도를 멈추고 직진한다.
+    /// 꺾인 경로가 공터 안쪽 경계에 닿으면 그 자리에서 돌진을 끝낸다.
     /// 플레이어가 수평 반경 _pounceGlintRadius·높이 _pounceGlintHeight 원기둥 안에 들어오면 이동 중 PounceGlint를 한 번 알린다.
     /// 첫 접촉에서 한 번만 전방 막기·쳐내기를 확인해 damage·pattern 피해를 주며,
     /// 퍼펙트 패링에 막히면 그 자리에서 멈추고 ParryRecoil로 물러난다. 멈춘 자리를 다음 덮치기 출발점으로 기록하고 NavMesh 위치를 복원한 뒤 붉은색을 되돌린다.
@@ -608,13 +614,15 @@ public sealed class BeastBossAttack : MonoBehaviour
         Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - transform.position, Vector3.up);
         Vector3 direction = toPlayer.sqrMagnitude > 0.0001f ? toPlayer.normalized : transform.forward;
         // 공터 끝 플레이어에게 접촉 반경이 닿되 늑대 몸은 공터 밖으로 나가지 않게 한다.
-        float available = Mathf.Max(0f, GetCircleExitDistance(transform.position, direction,
-            center, Mathf.Max(1f, radius - Mathf.Max(_contactRadius, _agent.radius) - 0.1f)));
+        float bodyRadius = Mathf.Max(1f, radius - Mathf.Max(_contactRadius, _agent.radius) - 0.1f);
+        float available = Mathf.Max(0f, GetCircleExitDistance(transform.position, direction, center, bodyRadius));
         float length = Mathf.Min(Mathf.Max(toPlayer.magnitude + _pounceOvershoot,
             GetCircleExitDistance(transform.position, direction, center, radius) - _edgeMargin), available);
         Vector3 start = transform.position;
-        Vector3 landing = start + direction * length;
         float travelDuration = Mathf.Max(_biteDuration, length / Mathf.Max(0.1f, _pounceSpeed));
+        float travelSpeed = length / travelDuration;
+        Vector3 ground = start;
+        bool homingEnded = _pounceHomingTurnRate <= 0f;
         _navigationPosition = _agent.nextPosition;
         _previousUpdatePosition = _agent.updatePosition;
         _previousUpdateRotation = _agent.updateRotation;
@@ -641,10 +649,24 @@ public sealed class BeastBossAttack : MonoBehaviour
         }
         while (elapsed < travelDuration && CanAttack(player) && !_lastAttackParried)
         {
-            elapsed += Time.deltaTime;
+            float delta = Mathf.Min(Time.deltaTime, travelDuration - elapsed);
+            elapsed += delta;
             float progress = Mathf.Clamp01(elapsed / travelDuration);
-            // 직선 돌진 가운데에서 _pounceLift만큼 살짝 떠올랐다가 끝에서 땅에 닿는다.
-            Vector3 next = Vector3.Lerp(start, landing, progress) + Vector3.up * (_pounceLift * Mathf.Sin(progress * Mathf.PI));
+            if (!homingEnded) direction = SteerPounce(player, ground, direction, delta);
+            Vector3 nextGround = ground + direction * (travelSpeed * delta);
+            // 플레이어 쪽으로 꺾인 경로가 공터 안쪽 경계에 닿으면 경계에서 돌진을 끝낸다.
+            Vector3 offset = Vector3.ProjectOnPlane(nextGround - center, Vector3.up);
+            if (offset.sqrMagnitude > bodyRadius * bodyRadius)
+            {
+                nextGround = center + offset.normalized * bodyRadius + Vector3.up * (start.y - center.y);
+                elapsed = travelDuration;
+                progress = 1f;
+            }
+            if (!homingEnded) homingEnded = HasReachedPounceTarget(player, ground, nextGround, direction);
+            ground = nextGround;
+            facing = Quaternion.LookRotation(direction);
+            // 돌진 가운데에서 _pounceLift만큼 살짝 떠올랐다가 끝에서 땅에 닿는다.
+            Vector3 next = ground + Vector3.up * (_pounceLift * Mathf.Sin(progress * Mathf.PI));
             transform.SetPositionAndRotation(next, facing);
             TryShowPounceGlint(player, ref glinted, telemetryAttackId);
             Vector3 step = next - previous;
@@ -665,6 +687,34 @@ public sealed class BeastBossAttack : MonoBehaviour
         _warning.EndWarning();
         if (telemetryAttackId != 0)
             EndTelemetryAttack(_health.IsAlive && player.IsAlive ? "Miss" : "Cancelled");
+    }
+
+    /// <summary>
+    /// 덮치기 지면 경로 위치 position에서 player 쪽으로 direction을 delta초 동안 _pounceHomingTurnRate만큼 수평으로 꺾은 방향을 반환한다.
+    /// 플레이어가 _pounceHomingStopDistance 안에 있으면 방향을 그대로 반환한다.
+    /// </summary>
+    private Vector3 SteerPounce(KatanaDamageReceiver player, Vector3 position, Vector3 direction, float delta)
+    {
+        Vector3 toPlayer = Vector3.ProjectOnPlane(player.transform.position - position, Vector3.up);
+        if (toPlayer.sqrMagnitude <= _pounceHomingStopDistance * _pounceHomingStopDistance) return direction;
+        return Vector3.RotateTowards(direction, toPlayer.normalized,
+            _pounceHomingTurnRate * Mathf.Deg2Rad * delta, 0f).normalized;
+    }
+
+    /// <summary>
+    /// 덮치기 지면 이동 구간 from→to가 player의 수평 _pounceHomingStopDistance 안을 지나거나 direction 기준으로 player를 지나쳤는지 반환한다.
+    /// 참이면 호출자가 남은 돌진의 유도를 영구히 끈다.
+    /// </summary>
+    private bool HasReachedPounceTarget(KatanaDamageReceiver player, Vector3 from, Vector3 to, Vector3 direction)
+    {
+        Vector3 playerPoint = Vector3.ProjectOnPlane(player.transform.position - from, Vector3.up);
+        Vector3 travel = Vector3.ProjectOnPlane(to - from, Vector3.up);
+        float travelLengthSquared = travel.sqrMagnitude;
+        float progress = travelLengthSquared > 0f
+            ? Mathf.Clamp01(Vector3.Dot(playerPoint, travel) / travelLengthSquared) : 0f;
+        if ((playerPoint - travel * progress).sqrMagnitude <= _pounceHomingStopDistance * _pounceHomingStopDistance)
+            return true;
+        return Vector3.Dot(playerPoint - travel, direction) <= 0f;
     }
 
     /// <summary>
