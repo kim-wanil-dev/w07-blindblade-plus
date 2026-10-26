@@ -5281,7 +5281,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _firstHeartbeatDelay
-      value: 0.5
+      value: 0.6
       objectReference: {fileID: 0}
     - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _postHeartbeatAttackDelay

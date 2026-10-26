@@ -72,6 +72,39 @@ namespace BlindBlade.Combat.Contracts
         }
     }
 
+    public enum AttackIndicatorKind
+    {
+        CrossedKatana,
+        Fangs
+    }
+
+    /// <summary>한 공격 시도의 진행도와 공격자 방향 표시를 HUD에 전달한다.</summary>
+    public readonly struct AttackTelegraphPresentationSnapshot
+    {
+        public CombatEntityKey Attacker { get; }
+        public int AttackId { get; }
+        public AttackIndicatorKind Kind { get; }
+        public float Progress { get; }
+        public bool IsCommitted { get; }
+        public ThreatPresentationSnapshot Presentation { get; }
+
+        /// <summary>
+        /// attacker와 attackId의 공격에 kind·progress·isCommitted 및 presentation을 묶는다.
+        /// 생성된 값은 해당 공격 시도의 현재 방향 UI 상태를 나타낸다.
+        /// </summary>
+        public AttackTelegraphPresentationSnapshot(CombatEntityKey attacker, int attackId,
+            AttackIndicatorKind kind, float progress, bool isCommitted,
+            ThreatPresentationSnapshot presentation)
+        {
+            Attacker = attacker;
+            AttackId = attackId;
+            Kind = kind;
+            Progress = Mathf.Clamp01(progress);
+            IsCommitted = isCommitted;
+            Presentation = presentation;
+        }
+    }
+
     public interface IThreatPresentationProvider
     {
         event Action<ThreatPresentationSnapshot> ThreatChanged;

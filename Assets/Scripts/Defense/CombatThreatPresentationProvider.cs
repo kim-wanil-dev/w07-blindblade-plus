@@ -1,15 +1,27 @@
-using BlindBlade.Combat.Contracts;
 using System;
 using System.Collections.Generic;
+
 using UnityEngine;
+
+using BlindBlade.Combat.Contracts;
+
 using CFootstepCandidates = BlindBlade.Perception.EnemyFootstepCandidates;
 using CThreatAdapter = BlindBlade.Perception.ThreatPresentationContractAdapter;
 
-/// <summary>연결된 C 위협·발소리 결과를 공통 계약으로 HUD에 제공한다. 미연결 슬롯은 각각 기존 경로를 사용한다.</summary>
+public enum EnemyDirectionIndicatorMode
+{
+    Footstep,
+    AttackTelegraph
+}
+
+/// <summary>연결된 C 위협·발소리와 일반 적의 공격 시도를 방향 HUD에 제공한다.</summary>
 [DefaultExecutionOrder(-5)]
 [DisallowMultipleComponent]
 public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPresentationProvider
 {
+    private const float ATTACK_SOURCE_REFRESH_INTERVAL = 0.1f;
+    private const float COMMITTED_MARKER_DURATION = 0.1f;
+
     [Header("C 위협 판정 연결")]
     [SerializeField, Tooltip("연결하면 C의 월드/UI·색상·Alpha를 그대로 사용한다. 비워 두면 기존 수리검 정책을 유지한다.")]
     private CThreatAdapter _threatPresentationSource;
@@ -21,8 +33,10 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     [Header("방향 인디케이터 표시")]
     [SerializeField, InspectorName("수리검 방향 인디케이터 표시"), Tooltip("끄면 수리검의 투척 전조와 비행 방향 UI만 숨긴다. 투척과 위협 판정은 유지한다.")]
     private bool _showShurikenIndicators = true;
-    [SerializeField, InspectorName("적 방향 인디케이터 표시"), Tooltip("끄면 화면 밖 적의 발소리 방향 UI만 숨긴다. 발소리와 인지 판정은 유지한다.")]
+    [SerializeField, InspectorName("적 방향 인디케이터 표시"), Tooltip("끄면 선택한 발소리 또는 공격 전조 방향 UI만 숨긴다.")]
     private bool _showEnemyIndicators = false;
+    [SerializeField, InspectorName("적 방향 표시 모드"), Tooltip("발걸음 표시를 유지하거나 검 적·작은 늑대의 공격 전조로 대체한다.")]
+    private EnemyDirectionIndicatorMode _enemyIndicatorMode;
 
     [Header("위협 표시 정책")]
     [SerializeField, Min(0f)] private float _visibilityThreshold;
@@ -32,6 +46,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     [SerializeField] private Color _concealedThreatColor = new Color(1f, 0.55f, 0.2f, 1f);
     [SerializeField, Range(0f, 1f)] private float _perceivedThreatAlpha = 0.7f;
     [SerializeField, Range(0f, 1f)] private float _concealedThreatAlpha = 1f;
+
+    [Header("공격 전조 표시 정책")]
+    [SerializeField, InspectorName("시작 색")] private Color _attackReadyColor = Color.white;
+    [SerializeField, InspectorName("준비 색")] private Color _attackWarningColor = new Color(1f, 0.82f, 0.2f, 1f);
+    [SerializeField, InspectorName("임박 색")] private Color _attackDangerColor = new Color(1f, 0.22f, 0.18f, 1f);
+    [SerializeField, InspectorName("강조 크기"), Range(1f, 1.5f)] private float _attackEmphasisScale = 1.15f;
 
     [Header("발소리 사건")]
     [SerializeField, Min(0.1f)] private float _footstepLifetime = 2f;
@@ -54,23 +74,53 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         new Dictionary<CombatEntityKey, FootstepPresentationSnapshot>();
     private readonly HashSet<CombatEntityKey> _seenFootstepEmitters = new HashSet<CombatEntityKey>();
     private readonly List<CombatEntityKey> _endedFootstepEmitters = new List<CombatEntityKey>();
+    private readonly HashSet<EnemyAttackBehaviour> _attackSources = new HashSet<EnemyAttackBehaviour>();
+    private readonly HashSet<EnemyAttackBehaviour> _seenAttackSources = new HashSet<EnemyAttackBehaviour>();
+    private readonly List<EnemyAttackBehaviour> _removedAttackSources = new List<EnemyAttackBehaviour>();
+    private readonly Dictionary<CombatEntityKey, ActiveAttackTelegraph> _activeAttackTelegraphs =
+        new Dictionary<CombatEntityKey, ActiveAttackTelegraph>();
+    private readonly List<AttackTelegraphPresentationSnapshot> _currentAttackTelegraphs =
+        new List<AttackTelegraphPresentationSnapshot>();
+    private readonly List<CombatEntityKey> _endedAttackers = new List<CombatEntityKey>();
     private readonly Plane[] _cameraPlanes = new Plane[6];
     private int _cameraPlanesFrame = -1;
     private CombatSessionRuntime _sessionRuntime;
     private SensoryPerceptionMask _perceptionMask;
     private Camera _playerCamera;
     private float _nextFootstepRefreshTime;
+    private float _nextAttackSourceRefreshTime;
     private long _revision;
     private CombatSessionKey _sessionKey;
     private bool _hasSessionKey;
 
     public event Action<ThreatPresentationSnapshot> ThreatChanged;
     public event Action<FootstepPresentationSnapshot> FootstepChanged;
+    public event Action<AttackTelegraphPresentationSnapshot> AttackTelegraphChanged;
     public float VisibilityThreshold => _visibilityThreshold;
     /// <summary>Inspector의 수리검 표시 설정을 반환한다.</summary>
     public bool ShowShurikenIndicators => _showShurikenIndicators;
     /// <summary>Inspector의 적 표시 설정을 반환한다.</summary>
     public bool ShowEnemyIndicators => _showEnemyIndicators;
+    public EnemyDirectionIndicatorMode EnemyIndicatorMode => _enemyIndicatorMode;
+    public Color AttackReadyColor => _attackReadyColor;
+    public Color AttackWarningColor => _attackWarningColor;
+    public Color AttackDangerColor => _attackDangerColor;
+    public float AttackEmphasisScale => _attackEmphasisScale;
+
+    private sealed class ActiveAttackTelegraph
+    {
+        public EnemyAttackBehaviour Source;
+        public EnemyHealth Health;
+        public CombatEntityKey Attacker;
+        public int AttackId;
+        public AttackIndicatorKind Kind;
+        public float StartedAt;
+        public float Duration;
+        public float CommittedAt = -1f;
+        public Renderer[] Renderers;
+        public EnemyHitCapsule BodyCapsule;
+        public AttackTelegraphPresentationSnapshot Snapshot;
+    }
     private readonly struct ActiveFootstep
     {
         public FootstepPresentationSnapshot Snapshot { get; }
@@ -94,6 +144,7 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     void OnEnable()
     {
         _nextFootstepRefreshTime = 0f;
+        _nextAttackSourceRefreshTime = 0f;
     }
 
     void LateUpdate()
@@ -106,6 +157,8 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             {
                 PublishEndedFootsteps();
                 PublishEndedForwardedFootsteps();
+                PublishEndedAttackTelegraphs();
+                UnsubscribeAttackSources();
                 _footstepSequences.Clear();
                 _hasSessionKey = false;
             }
@@ -128,17 +181,29 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
             UnsubscribeFootsteps();
             if (_footstepCandidateSource == null)
                 PublishEndedFootsteps();
+            PublishEndedAttackTelegraphs();
+            UnsubscribeAttackSources();
             return;
         }
         // 기존 발소리 경로의 결과는 적 방향 표시에만 쓰이므로 표시가 꺼져 있으면 수집하지 않는다.
-        if (_footstepCandidateSource != null || _showEnemyIndicators)
+        if (_footstepCandidateSource != null || (_showEnemyIndicators && _enemyIndicatorMode == EnemyDirectionIndicatorMode.Footstep))
             RefreshFootstepSubscriptions();
         else
             StopLegacyFootsteps();
         if (_threatPresentationSource == null)
             PublishThreatSnapshots();
-        if (_footstepCandidateSource == null && _showEnemyIndicators)
+        if (_footstepCandidateSource == null && _showEnemyIndicators && _enemyIndicatorMode == EnemyDirectionIndicatorMode.Footstep)
             ExpireFootsteps();
+        if (_showEnemyIndicators && _enemyIndicatorMode == EnemyDirectionIndicatorMode.AttackTelegraph)
+        {
+            RefreshAttackSources();
+            PublishAttackTelegraphs();
+        }
+        else
+        {
+            PublishEndedAttackTelegraphs();
+            UnsubscribeAttackSources();
+        }
     }
 
     void OnDisable()
@@ -147,6 +212,8 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
         PublishEndedThreats();
         PublishEndedFootsteps();
         PublishEndedForwardedFootsteps();
+        PublishEndedAttackTelegraphs();
+        UnsubscribeAttackSources();
     }
 
     /// <summary>현재 C 연결 또는 기존 수리검 경로가 제공한 위협 스냅샷 목록을 읽기 전용으로 반환한다.</summary>
@@ -159,6 +226,12 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     public IReadOnlyList<FootstepPresentationSnapshot> GetCurrentFootsteps()
     {
         return _currentFootsteps;
+    }
+
+    /// <summary>현재 세션에서 진행 중인 공격 시도의 표시 목록을 반환한다.</summary>
+    public IReadOnlyList<AttackTelegraphPresentationSnapshot> GetCurrentAttackTelegraphs()
+    {
+        return _currentAttackTelegraphs;
     }
 
     /// <summary>활성 D 세션을 연결하고 새 세션이면 이전 위협·발소리를 종료한 뒤 표시 순번을 초기화한다.</summary>
@@ -176,8 +249,10 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
                 PublishEndedThreats();
                 PublishEndedFootsteps();
                 PublishEndedForwardedFootsteps();
+                PublishEndedAttackTelegraphs();
             }
             UnsubscribeFootsteps();
+            UnsubscribeAttackSources();
             _activeFootsteps.Clear();
             _currentFootsteps.Clear();
             _footstepSequences.Clear();
@@ -261,6 +336,184 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
                 subscription.Key.Footstep -= subscription.Value;
         }
         _footstepHandlers.Clear();
+    }
+
+    /// <summary>현재 씬의 검 적·작은 늑대 공격 컴포넌트를 찾아 공격 시도 사건 구독을 갱신한다.</summary>
+    private void RefreshAttackSources()
+    {
+        if (Time.unscaledTime < _nextAttackSourceRefreshTime)
+            return;
+        _nextAttackSourceRefreshTime = Time.unscaledTime + ATTACK_SOURCE_REFRESH_INTERVAL;
+        _seenAttackSources.Clear();
+
+        foreach (EnemyMeleeAttack source in FindObjectsByType<EnemyMeleeAttack>(FindObjectsSortMode.None))
+        {
+            if (source.GetComponent<DefenseMeleeSwordAnimator>() != null)
+                TrackAttackSource(source);
+        }
+        foreach (DefenseBeastLeapAttack source in FindObjectsByType<DefenseBeastLeapAttack>(FindObjectsSortMode.None))
+            TrackAttackSource(source);
+
+        _removedAttackSources.Clear();
+        foreach (EnemyAttackBehaviour source in _attackSources)
+        {
+            if (source == null || !_seenAttackSources.Contains(source))
+                _removedAttackSources.Add(source);
+        }
+        foreach (EnemyAttackBehaviour source in _removedAttackSources)
+            RemoveAttackSource(source);
+    }
+
+    /// <summary>source가 현재 씬의 살아 있는 일반 적이면 공격 사건을 구독하고 감시 목록에 추가한다.</summary>
+    private void TrackAttackSource(EnemyAttackBehaviour source)
+    {
+        if (source.gameObject.scene != gameObject.scene)
+            return;
+        EnemyHealth health = source.GetComponent<EnemyHealth>();
+        if (health == null || !health.IsAlive || health.IsBoss)
+            return;
+        _seenAttackSources.Add(source);
+        if (!_attackSources.Add(source))
+            return;
+        source.TelegraphStarted += HandleAttackStarted;
+        source.AttackCommitted += HandleAttackCommitted;
+        source.AttackCancelled += HandleAttackStopped;
+        source.AttackEnded += HandleAttackStopped;
+    }
+
+    /// <summary>source의 공격 사건 구독을 해제하고 감시 목록에서 제거한다.</summary>
+    private void RemoveAttackSource(EnemyAttackBehaviour source)
+    {
+        if (source != null)
+        {
+            source.TelegraphStarted -= HandleAttackStarted;
+            source.AttackCommitted -= HandleAttackCommitted;
+            source.AttackCancelled -= HandleAttackStopped;
+            source.AttackEnded -= HandleAttackStopped;
+        }
+        _attackSources.Remove(source);
+    }
+
+    /// <summary>현재 공급자가 구독한 검 적·작은 늑대의 공격 사건을 모두 해제한다.</summary>
+    private void UnsubscribeAttackSources()
+    {
+        _removedAttackSources.Clear();
+        foreach (EnemyAttackBehaviour source in _attackSources)
+            _removedAttackSources.Add(source);
+        foreach (EnemyAttackBehaviour source in _removedAttackSources)
+            RemoveAttackSource(source);
+        _nextAttackSourceRefreshTime = 0f;
+    }
+
+    /// <summary>context의 공격 ID와 공격자 생성 세대를 묶어 실제 전조 길이 동안 표시할 시도를 저장한다.</summary>
+    private void HandleAttackStarted(EnemyAttackContext context)
+    {
+        if (!_showEnemyIndicators || _enemyIndicatorMode != EnemyDirectionIndicatorMode.AttackTelegraph
+            || context.TelegraphDuration <= 0f || !TryGetSession())
+            return;
+        EnemyHealth health = context.Pattern.GetComponent<EnemyHealth>();
+        if (health == null || !health.IsAlive || health.IsBoss)
+            return;
+        CombatEntityKey attacker = new CombatEntityKey(health.TargetId, health.SpawnGeneration);
+        ReleaseAttackTelegraph(attacker);
+        _activeAttackTelegraphs[attacker] = new ActiveAttackTelegraph
+        {
+            Source = context.Pattern,
+            Health = health,
+            Attacker = attacker,
+            AttackId = context.AttackId,
+            Kind = context.Pattern is DefenseBeastLeapAttack ? AttackIndicatorKind.Fangs : AttackIndicatorKind.CrossedKatana,
+            StartedAt = Time.time,
+            Duration = context.TelegraphDuration,
+            Renderers = health.GetComponentsInChildren<Renderer>(),
+            BodyCapsule = health.GetComponent<EnemyHitCapsule>()
+        };
+    }
+
+    /// <summary>context의 공격이 실제로 실행되면 같은 공격 ID의 마커에 짧은 확정 펄스 시각을 기록한다.</summary>
+    private void HandleAttackCommitted(EnemyAttackContext context)
+    {
+        EnemyHealth health = context.Pattern.GetComponent<EnemyHealth>();
+        if (health == null)
+            return;
+        CombatEntityKey attacker = new CombatEntityKey(health.TargetId, health.SpawnGeneration);
+        if (_activeAttackTelegraphs.TryGetValue(attacker, out ActiveAttackTelegraph active)
+            && active.AttackId == context.AttackId)
+            active.CommittedAt = Time.time;
+    }
+
+    /// <summary>context의 취소 또는 공격 종료가 현재 공격 ID와 일치하면 해당 방향 마커를 해제한다.</summary>
+    private void HandleAttackStopped(EnemyAttackContext context)
+    {
+        EnemyHealth health = context.Pattern.GetComponent<EnemyHealth>();
+        if (health == null)
+            return;
+        CombatEntityKey attacker = new CombatEntityKey(health.TargetId, health.SpawnGeneration);
+        if (_activeAttackTelegraphs.TryGetValue(attacker, out ActiveAttackTelegraph active)
+            && active.AttackId == context.AttackId)
+            ReleaseAttackTelegraph(attacker);
+    }
+
+    /// <summary>활성 공격자의 현재 위치로 방향·가시성·진행도를 매 프레임 갱신하고 종료 대상은 반환한다.</summary>
+    private void PublishAttackTelegraphs()
+    {
+        _currentAttackTelegraphs.Clear();
+        _endedAttackers.Clear();
+        foreach (KeyValuePair<CombatEntityKey, ActiveAttackTelegraph> pair in _activeAttackTelegraphs)
+        {
+            ActiveAttackTelegraph active = pair.Value;
+            if (active.Source == null || !active.Source.isActiveAndEnabled || active.Health == null
+                || !active.Health.IsAlive || active.Health.SpawnGeneration != active.Attacker.SpawnGeneration
+                || (active.CommittedAt >= 0f && Time.time - active.CommittedAt >= COMMITTED_MARKER_DURATION)
+                || Time.time - active.StartedAt > active.Duration + COMMITTED_MARKER_DURATION + 0.2f)
+            {
+                _endedAttackers.Add(pair.Key);
+                continue;
+            }
+
+            ThreatPresentationSnapshot presentation = CreateSnapshot(active.Attacker,
+                active.Health.transform.position, true, true, 1f, active.Renderers, active.BodyCapsule);
+            float progress = active.CommittedAt >= 0f ? 1f
+                : Mathf.Clamp01((Time.time - active.StartedAt) / active.Duration);
+            active.Snapshot = new AttackTelegraphPresentationSnapshot(active.Attacker, active.AttackId,
+                active.Kind, progress, active.CommittedAt >= 0f, presentation);
+            _currentAttackTelegraphs.Add(active.Snapshot);
+            AttackTelegraphChanged?.Invoke(active.Snapshot);
+        }
+        foreach (CombatEntityKey attacker in _endedAttackers)
+            ReleaseAttackTelegraph(attacker);
+    }
+
+    /// <summary>attacker의 현재 공격 표시를 종료 발행하고 목록과 HUD 초기 조회에서 제거한다.</summary>
+    private void ReleaseAttackTelegraph(CombatEntityKey attacker)
+    {
+        if (!_activeAttackTelegraphs.TryGetValue(attacker, out ActiveAttackTelegraph active))
+            return;
+        if (active.Snapshot.Presentation.Revision > 0)
+        {
+            AttackTelegraphChanged?.Invoke(new AttackTelegraphPresentationSnapshot(attacker,
+                active.AttackId, active.Kind, 1f, active.CommittedAt >= 0f,
+                CreateEndedSnapshot(active.Snapshot.Presentation)));
+        }
+        _activeAttackTelegraphs.Remove(attacker);
+        for (int i = _currentAttackTelegraphs.Count - 1; i >= 0; i--)
+        {
+            if (_currentAttackTelegraphs[i].Attacker.Equals(attacker))
+                _currentAttackTelegraphs.RemoveAt(i);
+        }
+    }
+
+    /// <summary>모든 공격 시도의 종료를 발행하고 현재 공격 표시 목록을 비운다.</summary>
+    private void PublishEndedAttackTelegraphs()
+    {
+        if (_activeAttackTelegraphs.Count == 0)
+            return;
+        _endedAttackers.Clear();
+        foreach (CombatEntityKey attacker in _activeAttackTelegraphs.Keys)
+            _endedAttackers.Add(attacker);
+        foreach (CombatEntityKey attacker in _endedAttackers)
+            ReleaseAttackTelegraph(attacker);
+        _currentAttackTelegraphs.Clear();
     }
 
     /// <summary>C 연결 결과 또는 일반·보스 수리검 판정을 발행하고 현재 목록에 없는 대상의 종료를 전달한다.</summary>
