@@ -138,11 +138,7 @@ public sealed class OnboardingHud : MonoBehaviour
             "일섬: 좌클릭",
             "일섬: RB", null, 1, "다시 쳐낸 뒤 집중 중 좌클릭으로 일섬을 발동합니다.",
             "다시 쳐낸 뒤 집중 중 RB로 일섬을 발동합니다."),
-        new Prompt("막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)", "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)", null,
-            new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" },
-            "거합: Q 홀드", "거합: Y 홀드", null, 1,
-            "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다.",
-            "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다.")
+        new Prompt("거합: Q 홀드", "거합: Y 홀드", null, "거합으로 적 처치")
     };
 
     [Header("단계 완료 선택")]
@@ -153,12 +149,10 @@ public sealed class OnboardingHud : MonoBehaviour
     [Header("집중 안내")]
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.";
     [SerializeField, TextArea(2, 4)] private string _movementWaveTutorialGamepadText = "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialText = "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다.";
-    [SerializeField, TextArea(2, 4)] private string _parryHudTutorialGamepadText = "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다.";
     [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialText = "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 좌클릭으로 일섬을 발동합니다.";
     [SerializeField, TextArea(2, 4)] private string _swordWaveTutorialGamepadText = "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 RB로 일섬을 발동합니다.";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "거합 게이지를 모두 채웠습니다.\nQ를 홀드해 거합을 발동합니다.";
-    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "거합 게이지를 모두 채웠습니다.\nY를 홀드해 거합을 발동합니다.";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialText = "적 처치, 극한 회피, 쳐내기로 거합 게이지를 채울 수 있습니다.\n거합 게이지를 모두 채운 뒤 Q를 홀드해 거합을 발동합니다.";
+    [SerializeField, TextArea(2, 4)] private string _ultimateReadyTutorialGamepadText = "적 처치, 극한 회피, 쳐내기로 거합 게이지를 채울 수 있습니다.\n거합 게이지를 모두 채운 뒤 Y를 홀드해 거합을 발동합니다.";
     [SerializeField, TextArea(1, 2)] private string _idleMovementText = "WASD키로 이동하기";
     [SerializeField, TextArea(1, 2)] private string _idleMovementGamepadText = "왼쪽 스틱으로 이동하기";
 
@@ -230,8 +224,6 @@ public sealed class OnboardingHud : MonoBehaviour
     public bool IsInformationNoteVisible => _informationNoteActive;
     public string MovementWaveTutorialText => _movementWaveTutorialText;
     public string MovementWaveTutorialGamepadText => _movementWaveTutorialGamepadText;
-    public string ParryHudTutorialText => _parryHudTutorialText;
-    public string ParryHudTutorialGamepadText => _parryHudTutorialGamepadText;
     public string SwordWaveTutorialText => _swordWaveTutorialText;
     public string SwordWaveTutorialGamepadText => _swordWaveTutorialGamepadText;
     public string UltimateReadyTutorialText => _ultimateReadyTutorialText;
@@ -360,14 +352,6 @@ public sealed class OnboardingHud : MonoBehaviour
     {
         if (_currentStage != 0 || _currentObjective != 0) return;
         _objectiveText.text = $"전방의 적 처치 {Mathf.Clamp(count, 0, total)}/{total}";
-    }
-
-    /// <summary>normalized 거합 게이지를 현재 수집 목표의 실제 정수 백분율로 표시한다.</summary>
-    public void SetUltimateGaugeProgress(float normalized)
-    {
-        if (_currentStage != 4 || _currentObjective != 0) return;
-        int percent = Mathf.FloorToInt(Mathf.Clamp01(normalized) * 100f);
-        _objectiveText.text = $"거합 게이지 채우기 {percent}%";
     }
 
     /// <summary>진행 중인 목표 갱신 카드 코루틴을 멈춰 중앙 패널을 다른 카드가 이어서 쓰게 한다.</summary>

@@ -52193,7 +52193,7 @@ PrefabInstance:
       propertyPath: m_AdditionalShaderChannelsFlag
       value: 25
       objectReference: {fileID: 0}
-      - target: {fileID: 9000000000000000201, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
+    - target: {fileID: 9000000000000000201, guid: 4fa9eb7340da5624ca64e8c9f59e836b, type: 3}
       propertyPath: _director
       value: 
       objectReference: {fileID: 1968806059}
@@ -52201,7 +52201,7 @@ PrefabInstance:
       propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
-  m_RemovedComponents: []
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -56343,6 +56343,11 @@ MonoBehaviour:
   _farScale: 0.8
   _nearScale: 3
   _telegraphColor: {r: 1, g: 1, b: 1, a: 1}
+  _warningLeadTime: 0.6
+  _dangerLeadTime: 0.2
+  _flightReadyColor: {r: 1, g: 1, b: 1, a: 1}
+  _flightWarningColor: {r: 1, g: 0.82, b: 0.2, a: 1}
+  _flightDangerColor: {r: 1, g: 0.22, b: 0.18, a: 1}
 --- !u!114 &1968806062
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -56404,6 +56409,7 @@ MonoBehaviour:
   _footstepCandidateSource: {fileID: 0}
   _showShurikenIndicators: 1
   _showEnemyIndicators: 0
+  _enemyIndicatorMode: 0
   _visibilityThreshold: 0
   _nearDistance: 4
   _farDistance: 30
@@ -56411,6 +56417,10 @@ MonoBehaviour:
   _concealedThreatColor: {r: 1, g: 0.55, b: 0.2, a: 1}
   _perceivedThreatAlpha: 0.7
   _concealedThreatAlpha: 1
+  _attackReadyColor: {r: 1, g: 1, b: 1, a: 1}
+  _attackWarningColor: {r: 1, g: 0.82, b: 0.2, a: 1}
+  _attackDangerColor: {r: 1, g: 0.22, b: 0.18, a: 1}
+  _attackEmphasisScale: 1.15
   _footstepLifetime: 2
   _footstepFadeDuration: 0.5
   _footstepRefreshInterval: 0.5
@@ -58905,7 +58915,7 @@ MonoBehaviour:
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
     _followUpNote: 
-    _followUpGamepadNote: ""
+    _followUpGamepadNote: 
     _objectives:
     - "\uC804\uBC29\uC758 \uC801 \uCC98\uCE58 0/3"
     _stageStartTitle: "\uB2E8\uACC4 1/5 \uC2DC\uC791"
@@ -58925,7 +58935,7 @@ MonoBehaviour:
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
     _followUpNote: 
-    _followUpGamepadNote: ""
+    _followUpGamepadNote: 
     _objectives:
     - "\uC218\uB9AC\uAC80 \uADF9\uD55C \uD68C\uD53C 1\uD68C"
     _stageStartTitle: "\uB2E8\uACC4 2/5 \uC2DC\uC791"
@@ -58946,7 +58956,7 @@ MonoBehaviour:
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
     _followUpNote: 
-    _followUpGamepadNote: ""
+    _followUpGamepadNote: 
     _objectives:
     - "\uC801\uC758 \uACF5\uACA9 \uB9C9\uAE30 1\uD68C"
     - "\uACF5\uACA9 \uC9C1\uC804\uC5D0 \uB9C9\uC544 \uCCD0\uB0B4\uAE30 1\uD68C"
@@ -58958,58 +58968,74 @@ MonoBehaviour:
       \uCCD0\uB0C5\uB2C8\uB2E4."
     _stageCompleteGamepadDetail: "LB\uB97C \uD640\uB4DC\uD574 \uB9C9\uACE0, \uACF5\uACA9
       \uC9C1\uC804\uC5D0 \uB9C9\uC73C\uBA74 \uACF5\uACA9\uC744 \uCCD0\uB0C5\uB2C8\uB2E4."
-  - _keyboardHint: "\uCCD0\uB0B4\uAE30: \uC801\uC774 \uACF5\uACA9\uD560 \uB54C \uB9C9\uAE30 (\uC6B0\uD074\uB9AD)"
-    _gamepadHint: "\uCCD0\uB0B4\uAE30: \uC801\uC774 \uACF5\uACA9\uD560 \uB54C \uB9C9\uAE30 (LB)"
+  - _keyboardHint: "\uCCD0\uB0B4\uAE30: \uC801\uC774 \uACF5\uACA9\uD560 \uB54C \uB9C9\uAE30
+      (\uC6B0\uD074\uB9AD)"
+    _gamepadHint: "\uCCD0\uB0B4\uAE30: \uC801\uC774 \uACF5\uACA9\uD560 \uB54C \uB9C9\uAE30
+      (LB)"
     _keyboardIcon: {fileID: 0}
     _followUpKeyboardHint: "\uC77C\uC12C: \uC88C\uD074\uB9AD"
     _followUpGamepadHint: "\uC77C\uC12C: RB"
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
-    _followUpNote: "\uB2E4\uC2DC \uCCD0\uB0B8 \uB4A4 \uC9D1\uC911 \uC911 \uC88C\uD074\uB9AD\uC73C\uB85C \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
-    _followUpGamepadNote: "다시 쳐낸 뒤 집중 중 RB로 일섬을 발동합니다."
+    _followUpNote: "\uB2E4\uC2DC \uCCD0\uB0B8 \uB4A4 \uC9D1\uC911 \uC911 \uC88C\uD074\uB9AD\uC73C\uB85C
+      \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+    _followUpGamepadNote: "\uB2E4\uC2DC \uCCD0\uB0B8 \uB4A4 \uC9D1\uC911 \uC911 RB\uB85C
+      \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
     _objectives:
     - "\uC218\uB9AC\uAC80 \uCCD0\uB0B4\uAE30 1\uD68C"
     - "\uC77C\uC12C \uBC1C\uB3D9 1\uD68C"
     _stageStartTitle: "\uB2E8\uACC4 4/5 \uC2DC\uC791"
     _stageStartDetail: "\uAC15\uB825\uD55C \uAE30\uC220 - \uC77C\uC12C"
     _stageCompleteTitle: "\uB2E8\uACC4 4/5 \uC644\uB8CC"
-    _stageCompleteKeyboardDetail: "\uCCD0\uB0B4\uAE30 \uD6C4 \uC9D1\uC911 \uC911 \uC88C\uD074\uB9AD\uC73C\uB85C \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
-    _stageCompleteGamepadDetail: "\uCCD0\uB0B4\uAE30 \uD6C4 \uC9D1\uC911 \uC911 RB\uB85C \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
-  - _keyboardHint: "\uB9C9\uAE30: \uB9C8\uC6B0\uC2A4 \uC624\uB978\uCABD \uBC84\uD2BC
-      \uD640\uB4DC\n\uCCD0\uB0B4\uAE30: \uC801\uC774 \uACF5\uACA9\uD560 \uB54C \uB9C9\uAE30
-      (\uC6B0\uD074\uB9AD)"
-    _gamepadHint: "\uB9C9\uAE30: LB \uD640\uB4DC\n\uCCD0\uB0B4\uAE30: \uC801\uC774
-      \uACF5\uACA9\uD560 \uB54C \uB9C9\uAE30 (LB)"
+    _stageCompleteKeyboardDetail: "\uCCD0\uB0B4\uAE30 \uD6C4 \uC9D1\uC911 \uC911
+      \uC88C\uD074\uB9AD\uC73C\uB85C \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+    _stageCompleteGamepadDetail: "\uCCD0\uB0B4\uAE30 \uD6C4 \uC9D1\uC911 \uC911 RB\uB85C
+      \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+  - _keyboardHint: "\uAC70\uD569: Q \uD640\uB4DC"
+    _gamepadHint: "\uAC70\uD569: Y \uD640\uB4DC"
     _keyboardIcon: {fileID: 0}
-    _followUpKeyboardHint: "\uAC70\uD569: Q \uD640\uB4DC"
-    _followUpGamepadHint: "\uAC70\uD569: Y \uD640\uB4DC"
+    _followUpKeyboardHint: 
+    _followUpGamepadHint: 
     _followUpKeyboardIcon: {fileID: 0}
     _followUpObjective: 1
-    _followUpNote: "\uC911\uC559\uC758 \uC6D0\uC774 \uB2E4 \uCC28\uBA74 \uAC70\uD569\uC774 \uBC1C\uB3D9\uD569\uB2C8\uB2E4. \uB3C4\uC911\uC5D0 \uBC84\uD2BC\uC744 \uB5BC\uBA74 \uCDE8\uC18C\uB429\uB2C8\uB2E4."
-    _followUpGamepadNote: "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다."
+    _followUpNote: 
+    _followUpGamepadNote: 
     _objectives:
-    - "\uAC70\uD569 \uAC8C\uC774\uC9C0 \uCC44\uC6B0\uAE30 0%"
     - "\uAC70\uD569\uC73C\uB85C \uC801 \uCC98\uCE58"
     _stageStartTitle: "\uB2E8\uACC4 5/5 \uC2DC\uC791"
     _stageStartDetail: "\uAC15\uB825\uD55C \uAE30\uC220 - \uAC70\uD569"
     _stageCompleteTitle: "\uB2E8\uACC4 5/5 \uC644\uB8CC"
-    _stageCompleteKeyboardDetail: "\uAC70\uD569 \uAC8C\uC774\uC9C0\uB97C \uBAA8\uB450 \uCC44\uC6B4 \uB4A4 Q\uB97C \uD640\uB4DC\uD574 \uAC70\uD569\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
-    _stageCompleteGamepadDetail: "\uAC70\uD569 \uAC8C\uC774\uC9C0\uB97C \uBAA8\uB450 \uCC44\uC6B4 \uB4A4 Y\uB97C \uD640\uB4DC\uD574 \uAC70\uD569\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+    _stageCompleteKeyboardDetail: "\uAC70\uD569 \uAC8C\uC774\uC9C0\uB97C \uBAA8\uB450
+      \uCC44\uC6B4 \uB4A4 Q\uB97C \uD640\uB4DC\uD574 \uAC70\uD569\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+    _stageCompleteGamepadDetail: "\uAC70\uD569 \uAC8C\uC774\uC9C0\uB97C \uBAA8\uB450
+      \uCC44\uC6B4 \uB4A4 Y\uB97C \uD640\uB4DC\uD574 \uAC70\uD569\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
   _nextStageButtonText: "\uB2E4\uC74C \uB2E8\uACC4"
   _finalStageButtonText: "1\uB9C9 \uC2DC\uC791"
   _repeatStageButtonText: "\uB2E4\uC2DC \uC5F0\uC2B5"
-  _informationNoteDuration: 4
-  _informationNoteFadeDuration: 0.2
-  _movementWaveTutorialText: "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다."
-  _movementWaveTutorialGamepadText: "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다."
-  _parryHudTutorialText: "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다."
-  _parryHudTutorialGamepadText: "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다."
-  _swordWaveTutorialText: "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 좌클릭으로 일섬을 발동합니다."
-  _swordWaveTutorialGamepadText: "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 RB로 일섬을 발동합니다."
-  _ultimateReadyTutorialText: "거합 게이지를 모두 채웠습니다.\nQ를 홀드해 거합을 발동합니다."
-  _ultimateReadyTutorialGamepadText: "거합 게이지를 모두 채웠습니다.\nY를 홀드해 거합을 발동합니다."
+  _movementWaveTutorialText: "\uB2F9\uC2E0\uC744 \uD3EC\uD568\uD55C \uBB34\uC5B8\uAC00
+    \uC6C0\uC9C1\uC77C \uB54C \uD30C\uB3D9\uC774 \uC0DD\uACA8 \uC8FC\uBCC0\uC744
+    \uBC1D\uD799\uB2C8\uB2E4."
+  _movementWaveTutorialGamepadText: "\uB2F9\uC2E0\uC744 \uD3EC\uD568\uD55C \uBB34\uC5B8\uAC00
+    \uC6C0\uC9C1\uC77C \uB54C \uD30C\uB3D9\uC774 \uC0DD\uACA8 \uC8FC\uBCC0\uC744
+    \uBC1D\uD799\uB2C8\uB2E4."
+  _swordWaveTutorialText: "\uCCD0\uB0B4\uAE30\uC5D0 \uC131\uACF5\uD558\uBA74 \uC2DC\uAC04\uC774
+    \uB290\uB824\uC9D1\uB2C8\uB2E4.\n\uC9D1\uC911 \uC911 \uC88C\uD074\uB9AD\uC73C\uB85C
+    \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+  _swordWaveTutorialGamepadText: "\uCCD0\uB0B4\uAE30\uC5D0 \uC131\uACF5\uD558\uBA74
+    \uC2DC\uAC04\uC774 \uB290\uB824\uC9D1\uB2C8\uB2E4.\n\uC9D1\uC911 \uC911 RB\uB85C
+    \uC77C\uC12C\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+  _ultimateReadyTutorialText: "\uC801 \uCC98\uCE58, \uADF9\uD55C \uD68C\uD53C, \uCCD0\uB0B4\uAE30\uB85C
+    \n\uAC70\uD569 \uAC8C\uC774\uC9C0\uB97C \uCC44\uC6B8 \uC218 \uC788\uC2B5\uB2C8\uB2E4.\n\uAC8C\uC774\uC9C0\uB97C
+    \uBAA8\uB450 \uCC44\uC6B4 \uB4A4 Q\uB97C \uD640\uB4DC\uD574 \uAC70\uD569\uC744
+    \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
+  _ultimateReadyTutorialGamepadText: "\uC801 \uCC98\uCE58, \uADF9\uD55C \uD68C\uD53C,
+    \uCCD0\uB0B4\uAE30\uB85C \n\uAC70\uD569 \uAC8C\uC774\uC9C0\uB97C \uCC44\uC6B8
+    \uC218 \uC788\uC2B5\uB2C8\uB2E4.\n\uAC8C\uC774\uC9C0\uB97C \uBAA8\uB450 \uCC44\uC6B4
+    \uB4A4 Y\uB97C \uD640\uB4DC\uD574 \uAC70\uD569\uC744 \uBC1C\uB3D9\uD569\uB2C8\uB2E4."
   _idleMovementText: "WASD\uD0A4\uB85C \uC774\uB3D9"
   _idleMovementGamepadText: "\uC67C\uCABD \uC2A4\uD2F1\uC73C\uB85C \uC774\uB3D9"
+  _informationNoteDuration: 4
+  _informationNoteFadeDuration: 0.2
 --- !u!4 &2058950797
 Transform:
   m_ObjectHideFlags: 0
@@ -59037,7 +59063,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3cf5a20e5afc64d49ab501c26551c16c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.OnboardingTelemetryRecorder
-  _configVersion: "onboarding-2026-10-24-action-guides"
+  _configVersion: onboarding-2026-10-26-ready-ultimate
   _summaryIntervalSeconds: 15
   _recordingEnabled: 1
   _allowAutomaticUpload: 1
