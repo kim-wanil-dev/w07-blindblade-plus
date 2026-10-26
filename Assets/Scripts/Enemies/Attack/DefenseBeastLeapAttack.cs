@@ -103,6 +103,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     private bool _previousUpdateRotation;
     private bool _previousAgentStopped;
     private bool _navigationCaptured;
+    private bool _restoreStoppedWhenReady;
     private bool _preparing;
     private bool _contactResolved;
     private bool _bounceBackOnBlock;
@@ -157,10 +158,12 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _attackMotionComplete = false;
         _navigationCaptured = false;
         _lungeCheckTarget = null;
+        RestoreStoppedWhenReady();
     }
 
     protected override void Update()
     {
+        RestoreStoppedWhenReady();
         base.Update();
         // 웅크린 전조 동안 대상을 향해 몸을 돌려 돌진 방향을 맞춘다.
         if (_preparing && Context.Target != null)
@@ -218,6 +221,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
     /// </summary>
     protected override void PerformAttack(EnemyAttackContext context)
     {
+        RestoreStoppedWhenReady();
         _preparing = false;
         if (!_health.IsAlive || !_motor.IsReady
             || !TryFindLungeDestination(context.Target, out _lungeDestination))
@@ -562,7 +566,7 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
 
     /// <summary>
     /// cancelled 여부와 _navigationCaptured를 사용하여 이동 속도·회전 갱신·NavMesh 위치를 복원한다.
-    /// 현재 위치를 NavMesh에 맞추고, 맞출 수 없으면 돌진 시작 때 저장한 NavMesh 위치로 Warp한다.
+    /// 활성 에이전트는 현재 위치 또는 저장 위치로 Warp하고, 비활성 에이전트의 정지 상태는 NavMesh 복귀 때 복원한다.
     /// </summary>
     protected override void OnAttackEnded(EnemyAttackContext context, bool cancelled)
     {
@@ -596,8 +600,24 @@ public sealed class DefenseBeastLeapAttack : EnemyAttackBehaviour
         _agent.speed = _previousAgentSpeed;
         _agent.stoppingDistance = _previousStoppingDistance;
         if (cancelled || !moving)
-            _agent.isStopped = _previousAgentStopped;
+        {
+            _restoreStoppedWhenReady = true;
+            RestoreStoppedWhenReady();
+        }
         _navigationCaptured = false;
+    }
+
+    /// <summary>
+    /// 취소 중 비활성화된 에이전트의 정지 상태를 NavMesh 복귀 후 복원한다.
+    /// 저장된 _previousAgentStopped를 사용하며 복원하면 _restoreStoppedWhenReady를 해제한다.
+    /// </summary>
+    private void RestoreStoppedWhenReady()
+    {
+        if (!_restoreStoppedWhenReady || !_agent.isActiveAndEnabled || !_agent.isOnNavMesh)
+            return;
+
+        _agent.isStopped = _previousAgentStopped;
+        _restoreStoppedWhenReady = false;
     }
 
     /// <summary>
