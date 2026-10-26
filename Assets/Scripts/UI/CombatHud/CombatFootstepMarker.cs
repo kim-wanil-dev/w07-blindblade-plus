@@ -8,7 +8,7 @@ namespace BlindBlade.UI.CombatHud
     [DisallowMultipleComponent]
     public sealed class CombatFootstepMarker : MonoBehaviour
     {
-        private const float KATANA_VISIBLE_FRACTION = 0.58f;
+        private const float KATANA_VISIBLE_FRACTION = 0.70f;
         private const float FANGS_VISIBLE_FRACTION = 0.70f;
 
         [Header("표시 연결")]
@@ -70,7 +70,7 @@ namespace BlindBlade.UI.CombatHud
             }
         }
 
-        /// <summary>presentation의 방향과 radius·size·visibleSize로 아이콘·원호를 놓고 배지를 화면 위쪽으로 유지하며 color를 적용한다.</summary>
+        /// <summary>presentation 방향에 아이콘과 원호를 놓고, 위험 배지를 원호 중앙에 화면 고정 방향으로 배치하며 color를 적용한다.</summary>
         private void ShowMarker(ThreatPresentationSnapshot presentation, float radius, float size,
             float visibleSize, Color color)
         {
@@ -78,14 +78,6 @@ namespace BlindBlade.UI.CombatHud
             _rect.sizeDelta = Vector2.one * size;
             _rect.localRotation = Quaternion.Euler(0f, 0f,
                 Mathf.Atan2(presentation.UiDirection.y, presentation.UiDirection.x) * Mathf.Rad2Deg - 90f);
-            if (_warningBadge != null)
-            {
-                Quaternion inverse = Quaternion.Inverse(_rect.localRotation);
-                Vector3 badgeOffset = inverse * new Vector3(visibleSize * 0.47f, visibleSize * 0.47f, 0f);
-                _warningBadge.rectTransform.anchoredPosition = new Vector2(badgeOffset.x, badgeOffset.y);
-                _warningBadge.rectTransform.localRotation = inverse;
-                _warningBadge.rectTransform.sizeDelta = Vector2.one * Mathf.Max(12f, visibleSize * 0.28f);
-            }
             _icon.color = color;
             _icon.enabled = true;
             float arcRadius = Mathf.Max(0f, radius - visibleSize * 0.5f - _iconArcGap - _arcThickness * 0.5f);
@@ -94,6 +86,13 @@ namespace BlindBlade.UI.CombatHud
             _arc.Configure(arcRadius, 1f, _arcThickness, _arcAngle);
             _arc.color = color * _arcTint;
             _arc.enabled = true;
+            if (_warningBadge != null)
+            {
+                Quaternion inverse = Quaternion.Inverse(_rect.rotation);
+                _warningBadge.rectTransform.anchoredPosition = new Vector2(0f, -radius + arcRadius);
+                _warningBadge.rectTransform.localRotation = inverse;
+                _warningBadge.rectTransform.sizeDelta = Vector2.one * (Mathf.Max(12f, visibleSize * 0.28f) * 1.5f);
+            }
         }
 
         /// <summary>입력 없이 아이콘과 원호를 함께 숨긴다. 재사용할 이미지·원호 연결은 유지한다.</summary>

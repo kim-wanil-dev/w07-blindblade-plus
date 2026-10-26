@@ -18,11 +18,37 @@ namespace BlindBlade.UI.CombatHud
         [SerializeField] private CombatPlayerHud _playerHud;
         [SerializeField] private CombatFootstepHud _footstepHud;
 
+        [Header("수리검 방향 인디케이터")]
+        [SerializeField, InspectorName("수리검 인디케이터 이미지"), Tooltip("모든 방향 마커가 공유하는 흰색 Sprite입니다.")]
+        private Sprite _shurikenDirectionSprite;
+
         public TextMeshProUGUI RecordText => _recordText;
         public DefenseDirectionMarker[] DirectionMarkers => _directionMarkers;
         public TextMeshProUGUI MultiKillLatestText => _multiKillLatestText;
         public TextMeshProUGUI MultiKillPreviousText => _multiKillPreviousText;
         public CombatPlayerHud PlayerHud => _playerHud;
         public CombatFootstepHud FootstepHud => _footstepHud;
+
+        void Awake()
+        {
+            ApplyDirectionMarkerSprite();
+        }
+
+        void OnValidate()
+        {
+            ApplyDirectionMarkerSprite();
+        }
+
+        /// <summary>Inspector의 공유 Sprite를 각 방향 마커의 자식 Image에 적용한다.</summary>
+        private void ApplyDirectionMarkerSprite()
+        {
+            if (_directionMarkers == null)
+                return;
+            foreach (DefenseDirectionMarker marker in _directionMarkers)
+            {
+                if (marker != null)
+                    marker.SetShurikenIconSprite(_shurikenDirectionSprite);
+            }
+        }
     }
 }
