@@ -195,13 +195,14 @@ public sealed class PlayerEmpowerStrike : MonoBehaviour
         StrikeEnemies(targets, strikeOrigin, strikeForward, attackId);
         MultiKillAttackRuntime.CompleteAttack(attackId);
         ReleaseProjectiles(strikeOrigin, strikeForward);
-        BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
+        // 받아치기는 두 사선을 한 번에 넘겨 화면 양쪽 대나무가 모두 X자로 베이게 한다.
+        if (counter)
+            BambooGrove.CutInViewCross(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal, mirrorCutNormal);
+        else
+            BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, bambooCutNormal);
         _groundMark.Show(bambooCutPoint, bambooCutNormal, bambooView);
         if (counter)
-        {
-            BambooGrove.CutInView(bambooView, _bambooViewMargin, bambooOrigin, bambooCutPoint, mirrorCutNormal);
             _groundMark.Show(bambooCutPoint, mirrorCutNormal, bambooView);
-        }
         _overlay.ScatterCutLine(_scatterCount, _scatterLifetime);
         _overlay.Flash(_sheatheFlash, 0.2f);
         PunchFov();
