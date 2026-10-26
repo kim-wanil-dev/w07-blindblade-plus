@@ -121,8 +121,13 @@ public sealed class BossController : MonoBehaviour
     private float _barrageVerticalHomingTurnRate = 12f;
     [SerializeField, Min(0f), Tooltip("난사 수리검이 발사 후 유도 없이 부채꼴로 흩뿌려지며 직진하는 시간(초). 이후 좌우·상하 유도를 시작합니다.")]
     private float _barrageHomingDelay = 0.3f;
+    [SerializeField, Tooltip("발사 상하 각도를 정하는 거리 구간의 대표 수평 거리(미터). 플레이어와의 실제 거리에 가장 가까운 구간의 거리로 묶음별 조준 각도를 계산합니다.")]
+    private float[] _barrageAimBandDistances = { 10f, 18.75f, 27.5f, 36.25f, 45f };
+    [SerializeField, Range(0f, 90f), Tooltip("난사 발사 방향의 최대 상하 각도(도). 위·아래 모두 이 각도를 넘지 않습니다.")]
+    private float _barrageMaxLaunchPitch = 5f;
     private int[] _barrageAttackIds;
     private bool[] _barrageAttackLaunched;
+    private bool _barrageLocked;
     private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
 
     [Header("돌진")]
@@ -375,10 +380,12 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// 패턴 시작 시 플레이어에게서 멀어지는 위치로 한 번 백스텝한 뒤 설정 횟수와 준비 시간을 사용해 플레이어 시점보다 0.1m 아래로 투사체를 발사한다.
     /// 비행 유도는 투사체 프리팹이 설정하며 비행 속도는 _rangedProjectileSpeedMultiplier배로 바꾼다.
+    /// 패턴을 시작하면 도주 난사 재발동 잠금(_barrageLocked)을 푼다.
     /// </summary>
     private IEnumerator Ranged()
     {
         ChangeState(BossState.Ranged);
+        _barrageLocked = false;
         _motor.Stop();
         if (TryGetBackstepDestination(out Vector3 backstep))
             yield return Backstep(backstep);
@@ -534,6 +541,7 @@ public sealed class BossController : MonoBehaviour
 
     /// <summary>
     /// volley 순번으로 위에서 아래로 낮아지는 조준 높이를 정하고 왼쪽·가운데·오른쪽 수리검 3발을 동시에 발사한다.
+    /// 상하 발사 각도는 GetBarrageLaunchPitch로 플레이어와의 거리 구간에 맞춰 고정하고 _barrageMaxLaunchPitch로 제한한다.
     /// _barrageSpreadAngle과 기존 원거리 피해 _rangedDamage를 사용하며 보스를 플레이어 쪽으로 회전시킨다.
     /// 수리검마다 _barrageSpeedMultiplierMin~Max 사이의 비행 속도 배율을 랜덤으로 고르고 _barrageHomingSpeedScale로 유도 세기도 함께 키운다.
     /// 발사 후 _barrageHomingDelay초 동안은 유도 없이 흩뿌려지고, 이후 상하 유도는 _barrageVerticalHomingTurnRate로 따로 제한해 묶음별 조준 높이 차이가 유지되게 한다.
@@ -544,11 +552,14 @@ public sealed class BossController : MonoBehaviour
         float progress = _barrageVolleys > 1 ? volley / (float)(_barrageVolleys - 1) : 0f;
         Vector3 aim = _player.transform.position
             + Vector3.up * Mathf.Lerp(_barrageTopAimHeight, _barrageBottomAimHeight, progress);
-        Vector3 center = aim - origin;
-        if (center.sqrMagnitude < 0.0001f) return;
-        center.Normalize();
-        Vector3 facing = Vector3.ProjectOnPlane(center, Vector3.up);
-        if (facing.sqrMagnitude > 0.000001f) transform.rotation = Quaternion.LookRotation(facing);
+        Vector3 toAim = Vector3.ProjectOnPlane(aim - origin, Vector3.up);
+        // 플레이어가 바로 위아래에 있으면 지금 바라보는 쪽으로 던진다.
+        Vector3 facing = toAim.sqrMagnitude > 0.000001f
+            ? toAim.normalized : Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+        if (facing.sqrMagnitude < 0.0001f) return;
+        transform.rotation = Quaternion.LookRotation(facing);
+        float pitch = GetBarrageLaunchPitch(toAim.magnitude, aim.y - origin.y) * Mathf.Deg2Rad;
+        Vector3 center = facing * Mathf.Cos(pitch) + Vector3.up * Mathf.Sin(pitch);
         RangedFiring?.Invoke();
         for (int shot = -1; shot <= 1; shot++)
         {
@@ -569,6 +580,25 @@ public sealed class BossController : MonoBehaviour
             projectile.SetVerticalHomingTurnRate(_barrageVerticalHomingTurnRate);
             projectile.SetHomingDelay(_barrageHomingDelay);
         }
+    }
+
+    /// <summary>
+    /// 수평 거리 distance에 가장 가까운 _barrageAimBandDistances 구간의 대표 거리에서 높이 차 height를 겨누는 상하 각도(도)를 구한다.
+    /// 구간이 비어 있으면 실제 거리를 쓰며, 결과는 ±_barrageMaxLaunchPitch로 제한해 반환한다.
+    /// </summary>
+    private float GetBarrageLaunchPitch(float distance, float height)
+    {
+        float bandDistance = distance;
+        float closestGap = float.PositiveInfinity;
+        foreach (float band in _barrageAimBandDistances)
+        {
+            float gap = Mathf.Abs(band - distance);
+            if (gap >= closestGap) continue;
+            closestGap = gap;
+            bandDistance = band;
+        }
+        float pitch = Mathf.Atan2(height, Mathf.Max(0.01f, bandDistance)) * Mathf.Rad2Deg;
+        return Mathf.Clamp(pitch, -_barrageMaxLaunchPitch, _barrageMaxLaunchPitch);
     }
 
     /// <summary>
@@ -622,9 +652,11 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// 준비 시간 뒤 목표 방향을 고정하고, 실제로 내려치며 돌진하는 순간 피격 후 방어 상태와 무적을 끝내 가드 자세 칼을 숨긴다.
     /// 시작 사건을 알린 뒤 장애물 경계까지 돌진하며 접촉 피해를 한 번 적용한다.
+    /// 패턴을 시작하면 도주 난사 재발동 잠금(_barrageLocked)을 푼다.
     /// </summary>
     private IEnumerator Charge()
     {
+        _barrageLocked = false;
         _motor.Stop();
         _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BossCharge", "Charge",
             transform.position, _player.transform.position);
@@ -829,6 +861,7 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고, 플레이어 일반 베기·발도면 _hitInvulnerableDelay 뒤 무적 방어를 예약하며 다음 패턴을 준비한다.
     /// 짧은 시간의 누적 피해가 기준 이상이면 기존 회복 대신 무적 없이 도주 난사를 시작한다.
+    /// 도주 난사 뒤 돌진·원거리 패턴을 시작하기 전(_barrageLocked)에는 누적 피해를 세지 않아 난사가 다시 나오지 않는다.
     /// 일섬 등 다른 공격이거나 불릿 타임(강화 준비·강화 공격) 중이면 무적과 방어 상태 없이 회복한다.
     /// </summary>
     private void HandleBossDamaged(DamageContext context)
@@ -850,8 +883,10 @@ public sealed class BossController : MonoBehaviour
         _motor.Stop();
         IsRepositioning = false;
         ChangeState(BossState.Idle);
-        if (RegisterBurstDamage(context.Amount))
+        if (!_barrageLocked && RegisterBurstDamage(context.Amount))
         {
+            // 다른 패턴을 시작할 때까지 도주 난사가 연달아 나오지 않게 잠근다.
+            _barrageLocked = true;
             // 도주 난사는 무적 없이 진행하므로 피격 무적과 쳐내기 창을 바로 해제한다.
             RestoreAfterDisappearance(true);
             _routine = StartCoroutine(EscapeBarrage());
@@ -1330,6 +1365,7 @@ public sealed class BossController : MonoBehaviour
         PreparationCancelled?.Invoke();
         IsRepositioning = false;
         _recentDamage.Clear();
+        _barrageLocked = false;
         RestoreAfterDisappearance(true);
         _motor.Stop();
         _health.Damaged -= HandleBossDamaged;
