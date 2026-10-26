@@ -56,12 +56,15 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _ultimateChargeDuration = 1.5f;
     [SerializeField, Range(0.01f, 1f), Tooltip("차징 동안 세계 시간 배율이 천천히 내려가 닿는 목표 배율. 플레이어 배율은 바뀌지 않는다.")]
     private float _chargeWorldTimeScale = 0.1f;
+    [SerializeField, Min(0f), Tooltip("Q를 떼서 거합 차징이 취소된 뒤 다시 차징을 시작할 수 있을 때까지의 실시간(초)입니다. 연타로 감속을 이어 붙이는 것을 막습니다.")]
+    private float _ultimateRecastCooldown = 0.53f;
     private bool _charging;
     private float _chargeElapsed;
     private float _appliedChargeScale;
     private bool _useChargeOwnerB;
     private float _presentationProgress;
     private float _presentationSlowProgress;
+    private float _ultimateRecastAvailableAt = float.NegativeInfinity;
 
     [Header("스킬 자원")]
     [SerializeField, Min(0.01f), Tooltip("일섬 돌진 거리가 0일 때 집중 연출을 유지하는 실시간입니다. 돌진이 있으면 이 시간과 무관하게 해제 거리를 지나거나 돌진이 끝날 때까지 집중을 유지합니다.")]
@@ -127,6 +130,7 @@ public sealed class PlayerEmpower : MonoBehaviour
     public float SwordWaveFocusFadeIn => _swordWaveFocusFadeIn;
     public float SwordWaveFocusFadeOut => _swordWaveFocusFadeOut;
     public bool IsAutomaticCharging => IsCharging && _automaticCharge;
+    public bool IsUltimateRecastCoolingDown => Time.unscaledTime < _ultimateRecastAvailableAt;
     public bool IsSwordWaveCasting => _swordWave.IsSkillActive;
     public float CounterChargeDuration => 1.5f;
 
@@ -186,10 +190,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     /// <summary>
     /// 집중 여부와 무관하게 거합 완충 자원으로 홀드 차징을 시작한다. 입력값 없이 시전 상태와 시간을 설정하고 수락 여부를 반환한다.
     /// 가드·퍼펙트 패링 모션·납도 중이면 이를 끊고 시작한다. 다 차기 전에 입력을 떼면 InputManager가 CancelCharge로 취소한다.
+    /// 취소 후 _ultimateRecastCooldown이 지나기 전이면 거부한다.
     /// </summary>
     public bool TryBeginAutomaticCharge()
     {
-        if (!CanBeginManualSkill() || !_gauges.CanUseUltimate || !_combat.PrepareManualSkill()) return false;
+        if (IsUltimateRecastCoolingDown || !CanBeginManualSkill() || !_gauges.CanUseUltimate
+            || !_combat.PrepareManualSkill()) return false;
         if (_active) End(PlayerEmpowerEndReason.Cancelled);
         _active = true;
         _stage = PlayerEmpowerStage.Ready;
@@ -471,13 +477,15 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>
     /// 진행 중인 거합 차징을 발동 없이 취소하고 소비되지 않은 게이지를 유지한다.
-    /// 홀드 차징은 준비와 시간 요청을 끝내며, 온보딩 차징은 기존 준비 상태로 복귀한다.
+    /// 홀드 차징은 준비와 시간 요청을 끝내고 _ultimateRecastAvailableAt에 재사용 가능 시각을 저장하며, 온보딩 차징은 기존 준비 상태로 복귀한다.
     /// </summary>
     public void CancelCharge()
     {
         if (!IsCharging) return;
         if (_automaticCharge)
         {
+            // 연타로 감속을 이어 붙이지 못하도록 취소 시점부터 재사용 대기시간을 둔다.
+            _ultimateRecastAvailableAt = Time.unscaledTime + _ultimateRecastCooldown;
             End(PlayerEmpowerEndReason.Cancelled);
             return;
         }
