@@ -56627,6 +56627,11 @@ MonoBehaviour:
   _farScale: 0.8
   _nearScale: 3
   _telegraphColor: {r: 1, g: 1, b: 1, a: 1}
+  _warningLeadTime: 0.6
+  _dangerLeadTime: 0.2
+  _flightReadyColor: {r: 1, g: 1, b: 1, a: 1}
+  _flightWarningColor: {r: 1, g: 0.82, b: 0.2, a: 1}
+  _flightDangerColor: {r: 1, g: 0.22, b: 0.18, a: 1}
 --- !u!114 &1968806062
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -56658,16 +56663,16 @@ MonoBehaviour:
   _meleeSpawnMinimumRadius: 22.5
   _meleeSpawnMaximumRadius: 23.4
   _meleeStartTime: 0
-  _meleeSpawnsPerMinute: 70
+  _meleeSpawnsPerMinute: 100
   _meleeSpawnMultiplierPerMinute: 1.35
   _chargeTypeStartTime: 90
   _chargeTypeChance: 0.4
-  _maximumMelee: 200
+  _maximumMelee: 100
   _meleeSpawnLimit: 0
   _beastPrefab: {fileID: 0}
   _beastDeathSound: 0
   _weightBlendStartSpawnCount: 0
-  _weightBlendEndSpawnCount: 30
+  _weightBlendEndSpawnCount: 100
   _meleeWeightAtStart: 1
   _beastWeightAtStart: 0
   _meleeWeightAtEnd: 1
@@ -56696,6 +56701,10 @@ MonoBehaviour:
   _concealedThreatColor: {r: 1, g: 0.55, b: 0.2, a: 1}
   _perceivedThreatAlpha: 0.7
   _concealedThreatAlpha: 1
+  _attackReadyColor: {r: 1, g: 1, b: 1, a: 1}
+  _attackWarningColor: {r: 1, g: 0.82, b: 0.2, a: 1}
+  _attackDangerColor: {r: 1, g: 0.22, b: 0.18, a: 1}
+  _attackEmphasisScale: 1.15
   _footstepLifetime: 2
   _footstepFadeDuration: 0.5
   _footstepRefreshInterval: 0.5
