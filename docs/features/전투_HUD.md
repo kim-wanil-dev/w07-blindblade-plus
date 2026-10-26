@@ -3,16 +3,42 @@
 > 2026-10-23 일섬 토큰 표시 변경: PerfectParryTokens의 칸 표시는 실행 중 각 Token_i 자식 `Token_i_LiquidBody`·`Token_i_Liquid`가 그리는 실 액체다. 아래 `Token_i_Orbit`·"실 공전" 묶음 기록은 이전 표시이며 현재 설정은 [실 액체 게이지](실_액체_게이지.md)를 따른다.
 
 ### 전투 HUD
+#### 수리검 방향 인디케이터 Sprite 설정 (2026-10-26)
+
+- 흰색 네 날 수리검 Sprite를 `Assets/Scenes/Defense/UI/Indicators/AttackIndicator-shuriken-white.png`에 저장했다. 투명 배경이며, 기존 마커의 도형을 Sprite로 옮겼다.
+- `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`의 `BambooDefenseHud > CombatHudReferences > 수리검 방향 인디케이터 > 수리검 인디케이터 이미지` 한 필드가 모든 방향 마커의 Sprite를 지정한다. 변경은 `OnValidate`에서 프리팹 편집 화면에 반영되고, `Awake`에서 실행 시에도 각 마커에 적용된다.
+- 각 `DirectionMarkers/Marker_n`에는 저장된 `ShurikenIcon` 자식 `Image`가 있다. 런타임 생성 없이 방향 원호와 아이콘을 별도 그래픽으로 그리며, 기존 거리별 배율·알파·흰색/노란색/빨간색 경고 색을 아이콘에도 적용한다. `_showIcon`은 기존처럼 아이콘 표시 여부를 조절한다.
+- 아이콘 크기·원호 배치는 각 `DefenseDirectionMarker`의 `_iconSize`, `_radius`, `_arcThickness`로 유지한다. HUD 공용 프리팹이 적용되는 씬에서 공유 설정을 사용한다.
+- 관련 코드: `Assets/Scripts/Defense/DefenseDirectionMarker.cs` / `SetShurikenIconSprite`, `SetIconScale`, `Configure`, `ApplyIconLayout`; `Assets/Scripts/UI/CombatHud/CombatHudReferences.cs` / `ApplyDirectionMarkerSprite`.
+- 검증: Unity 재컴파일 오류 0개·경고 0개. Editor에서 Sprite 로드, Inspector 필드 연결, 12개 방향 마커 모두의 자식 Image 참조를 확인했다. 실제 Play 화면은 미확인이다.
+#### 수리검 도달 예상 시간 경고색 (2026-10-26)
+
+- 비행 중 수리검은 도달 예상 시간이 0.6초 초과이면 흰색, 0.2초 초과~0.6초 이하이면 노란색, 0.2초 이하이면 빨간색으로 방향 인디케이터를 표시한다. 발사 전 흰색 점멸은 유지한다.
+- 연속 위협 스냅샷의 위치 변화와 게임 시간으로 실제 비행 속도를 구한다. 현재 플레이어 CharacterController의 월드 경계 상자에서 가장 가까운 지점까지의 거리와 접근 속도로 남은 시간을 추정하고, 플레이어 이동에 따라 매 프레임 갱신한다. 정지한 수리검은 임박 경고를 표시하지 않는다. 속도와 현재 플레이어 중심 방향의 내적이 0 이하인 수리검은 지나쳐 멀어지는 것으로 보고 인디케이터를 즉시 숨긴다. 위치 추적은 유지하여 플레이어가 이동해 다시 접근 관계가 되면 표시를 재평가한다.
+- 정확한 충돌 예측은 아니며 플레이어의 미래 이동을 예측하지 않는다. 첫 위치 표본만 있으면 속도를 알 수 없어 흰색을 사용한다. 게임 시간 기준이므로 불릿타임을 반영한다.
+- 일반 수리검·1막 보스·2막 보스 및 C 위협 스냅샷 경로에 공통 적용한다. 기존 화면 안/밖·소리 인지 반경·표시 토글·알파 정책을 유지하며, 비활성·표시 자격 상실·플레이어 통과로 공급자가 위협을 종료하면 페이드 없이 즉시 마커를 반환한다. 그 외 비표시 전환의 페이드는 마지막 경고색을 유지한다.
+- Inspector: 씬의 `DefenseDirector > ShurikenDirectionIndicator > 비행 적중 예상 경고`에서 `Warning Lead Time`(0.6), `Danger Lead Time`(0.2), 세 비행 색상을 설정한다. 위험 시간은 경고 시간 이하로 제한하여 계산한다.
+- 관련 코드: `Assets/Scripts/Defense/ShurikenDirectionIndicator.cs`의 `UpdateFlightMotion`(비행 속도 표본), `IsMovingAway`(지나쳐 멀어지는 비행 표시 제외), `EstimateImpactTime`(현재 몸체까지 접근 시간), `GetFlightColor`·`UpdateMarker`(경고색 갱신), `Hide`(표본 초기화).
+- 검증: Unity Editor 재컴파일 오류 0개·경고 0개. 실제 Play에서 경고색 전환과 경계 시간 확인은 미확인이다. 테스트 코드는 추가하지 않았다.
+
 
 #### 1·2스테이지 공격 전조 방향 인디케이터 (2026-10-26, 최신 규칙)
 
-- `BambooStage1`과 `RainyTwinBoss`의 `DefenseDirector/CombatThreatPresentationProvider`는 `적 방향 표시 모드=AttackTelegraph`를 저장한다. 이 모드에서 기존 화면 밖 발걸음 방향 UI는 그리지 않고, `DefenseMelee`의 근접 공격 시도에는 가는 카타나 쌍검, `DefenseBeast`의 물기 돌진 시도에는 이빨을 표시한다. 실제 적 발소리와 월드 발자국 효과는 유지한다. 다른 씬은 기본 `Footstep` 모드다.
+- `BambooStage1`과 `RainyTwinBoss`의 `DefenseDirector/CombatThreatPresentationProvider`는 `적 방향 표시 모드=AttackTelegraph`를 저장한다. 이 모드에서 기존 화면 밖 발걸음 방향 UI는 그리지 않고, `DefenseMelee`의 근접 공격 시도에는 카타나 아이콘, `DefenseBeast`의 물기 돌진 시도에는 이빨을 표시한다. 실제 적 발소리와 월드 발자국 효과는 유지한다. 다른 씬은 기본 `Footstep` 모드다.
 - 공급자는 `EnemyAttackBehaviour.TelegraphStarted`의 `AttackId`와 `EnemyHealth`의 대상 ID·생성 세대를 묶는다. 현재 적 위치로 방향과 화면 진입을 매 프레임 갱신하고, 취소·공격 종료·사망·재사용·세션 종료 시 마커를 반환한다. 기존 `CombatFootstepHud`의 24개 슬롯과 방향 원호를 재사용한다. 화면 안 적은 기존 몸체 경고를 보며 방향 UI는 숨긴다.
-- 실제 전조 0.8초 중 처음 0.6초는 흰색에서 노란색으로 변하고, 남은 0.2초는 붉은색·`!` 배지·1회 크기 펄스로 강조한다. 공격 확정 때 0.1초 이내의 붉은 확인 펄스 후 표시를 정리한다. 지속 점멸은 쓰지 않는다.
-- Inspector: 씬 `DefenseDirector > CombatThreatPresentationProvider`의 기존 `위협 표시 정책`에서 가시성 임계값·거리·투명도를 조절한다. `공격 전조 표시 정책`에서 시작/준비/임박 색과 강조 크기를 조절한다. 공용 `Assets/Scenes/Defense/UI/CombatFootstepMarker.prefab`의 `공격 전조 이미지`에서 쌍검·이빨 Sprite와 위험 배지 Image를 바꾼다. PNG 원본은 `Assets/Scenes/Defense/UI/Indicators/`에 있다.
-- 크기 조정: 공용 `BambooDefenseHud.prefab > FootstepMarkers > CombatFootstepHud > 공격 전조 크기`의 `먼 거리 크기`와 `가까운 거리 크기`를 조절한다. 기본값은 44/160이며 기존 발걸음 크기 24/36과 분리돼 있다. PNG 내부 여백을 제외한 쌍검의 실제 그림 폭은 약 26~93으로, 수리검 방향 아이콘의 약 26~96과 비슷하다. 거리에 따른 변화는 수리검과 같이 근접도의 제곱을 사용한다. `!` 배지와 방향 원호도 실제 그림 크기를 기준으로 배치한다.
-- 관련 코드: `Assets/Scripts/Combat/Contracts/ThreatPresentationContracts.cs` / `AttackTelegraphPresentationSnapshot`; `Assets/Scripts/Defense/CombatThreatPresentationProvider.cs` / `HandleAttackStarted`, `PublishAttackTelegraphs`; `Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs` / `HandleAttackTelegraph`; `Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs` / `ShowAttack`.
+- 실제 전조 0.8초 중 처음 0.6초는 흰색에서 노란색으로 변하고, 남은 0.2초는 붉은색·`!` 배지·1회 크기 펄스로 강조한다. 공격 확정 때 0.1초 이내의 붉은 확인 펄스 후 표시를 정리한다. 지속 점멸은 쓰지 않는다. 카타나·Beast·수리검 표시 모두 배지를 방향 원호의 중앙에 놓으며, 배지 자체는 화면에서 회전하지 않는다. 수리검은 도달 예상 시간이 `Danger Lead Time` 이하가 되어 빨간색일 때 배지를 표시한다.
+- Inspector: 씬 `DefenseDirector > CombatThreatPresentationProvider`의 기존 `위협 표시 정책`에서 가시성 임계값·거리·투명도를 조절한다. `공격 전조 표시 정책`에서 시작/준비/임박 색과 강조 크기를 조절한다. 공용 `Assets/Scenes/Defense/UI/CombatFootstepMarker.prefab`의 `공격 전조 이미지`에서 카타나·이빨 Sprite와 위험 배지 Image를 바꾼다. 수리검 위험 배지는 `BambooDefenseHud.prefab`의 `DirectionMarkers/Marker_n/AttackWarningBadge` Image에 같은 Sprite를 연결한다. PNG 원본은 `Assets/Scenes/Defense/UI/Indicators/`에 있다.
+- 근접 공격 전조 아이콘은 `Assets/Scenes/Defense/UI/Indicators/AttackIndicator-katana-white-256.png`를 사용한다. 256×256 투명 캔버스에서 기존 흰색 카타나 실루엣 전체를 1.2배 확대해 최대 길이를 캔버스의 약 58%에서 70%로 높였다. 투명 여백은 좌우 43~44px, 상하 39px이며, `KATANA_VISIBLE_FRACTION`도 0.70으로 맞춰 방향 원호와 위험 배지 간격을 계산한다. 기존 흰색·노랑·빨강 경고색 전환은 유지한다.
+- Beast 물기 공격 전조는 `Assets/Scenes/Defense/UI/Indicators/AttackIndicator-fangs.png`를 사용한다. 256×256 투명 Sprite에 위쪽 4개·아래쪽 4개의 분리된 흰색 이빨을 배치했다. `_fangsSprite` 연결을 유지해 Beast 공격 전조에 적용한다.
+- 크기 조정: 공용 `BambooDefenseHud.prefab > FootstepMarkers > CombatFootstepHud > 공격 전조 크기`의 `먼 거리 크기`와 `가까운 거리 크기`를 조절한다. 기본값은 44/160이며 기존 발걸음 크기 24/36과 분리돼 있다. PNG 내부 여백을 제외한 카타나 실루엣의 최대 길이는 먼 거리 약 31, 가까운 거리 약 112이며 이빨 아이콘도 같은 0.70 비율로 계산한다. 거리에 따른 변화는 수리검과 같이 근접도의 제곱을 사용한다. 위험 배지는 각도에 관계없이 방향 원호 중앙점에 정렬하고 화면 기준으로 똑바로 유지한다.
+- 관련 코드: `Assets/Scripts/Combat/Contracts/ThreatPresentationContracts.cs` / `AttackTelegraphPresentationSnapshot`; `Assets/Scripts/Defense/CombatThreatPresentationProvider.cs` / `HandleAttackStarted`, `PublishAttackTelegraphs`; `Assets/Scripts/Defense/DefenseDirectionMarker.cs` / `SetWarningBadge`; `Assets/Scripts/Defense/ShurikenDirectionIndicator.cs` / `GetFlightColor`; `Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs` / `HandleAttackTelegraph`; `Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs` / `ShowAttack`.
 - 검증: Unity가 저장한 Roslyn 응답 파일로 전체 `Assembly-CSharp` 컴파일 성공, 새 오류 0건. 기존 파일 경고 16건이 출력됐다. Unity 배치 실행은 LicensingClient/WMI 오류로 프로젝트 로드 전에 종료되어 실제 1·2스테이지 Play 화면·청취는 미확인이다. 테스트 코드는 추가하지 않았다.
+
+#### 2026-10-26 위험 배지 위치·수리검 표시 통일
+
+- 카타나·Beast 공격 배지를 화면 오른쪽 위 대신 방향 원호 중앙점에 배치한다. 배지 이미지는 공격 방향에 따라 기울지 않게 화면 기준 회전을 상쇄한다.
+- `BambooDefenseHud.prefab`의 수리검 방향 마커 12개에도 같은 배지 Sprite를 자식 Image로 연결한다. 비행체가 `Danger Lead Time` 이내로 접근해 빨간색이 되면 배지를 표시하고, 경고색 단계·발사 전조·비위험 페이드에서는 숨긴다. 빨간색 페이드 중에는 배지도 같은 알파로 함께 사라진다.
+- Unity Play 화면은 확인하지 않았다. 프리팹 직렬화 참조와 코드 경로만 정적으로 확인했다. 테스트 코드는 추가하지 않았다.
 
 #### Beast 발소리 인디케이터 화면 판정 보정 (2026-10-25)
 
@@ -90,9 +116,10 @@
 | Assets/Scripts/UI/CombatHud/CombatPlayerHud.cs | BindSources | HP·스태미너 초기 조회와 구독 수명 |
 | Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs | HandleFootstep | 세션·발행자 ID/세대별 표시 풀, 최신 걸음 순번/Revision 비교 |
 | Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs | Show, Hide | 교체 가능한 Image와 그 아래 방향 원호에 C 표시 결과 적용 |
-| Assets/Scripts/Defense/DefenseDirectionMarker.cs | Configure, OnPopulateMesh | 기존 수리검/원호 도형 재사용, 발소리에서는 아이콘 없이 원호만 그리기 |
-| Assets/Scripts/UI/CombatHud/CombatHudReferences.cs | RecordText, DirectionMarkers, PlayerHud, FootstepHud | HUD 내부의 명시적 직렬화 참조 |
+| Assets/Scripts/Defense/DefenseDirectionMarker.cs | Configure, SetIconScale, SetShurikenIconSprite, OnPopulateMesh | 원호 메시와 자식 수리검 Sprite Image의 배치·크기·색·알파 갱신 |
+| Assets/Scripts/UI/CombatHud/CombatHudReferences.cs | RecordText, DirectionMarkers, PlayerHud, FootstepHud, ApplyDirectionMarkerSprite | HUD 내부 참조와 공용 수리검 Sprite의 Inspector 설정·마커 적용 |
 | Assets/Scripts/Defense/CombatThreatPresentationProvider.cs | ShowShurikenIndicators, ShowEnemyIndicators, PublishThreatSnapshots, AddProjectileThreat, ExpireFootsteps, PublishEndedFootsteps | 수리검·적 방향 표시의 공통 Inspector 설정, 일반·보스 수리검 공통 위협 스냅샷, C의 감쇠·만료·발행자 종료 사건 |
+| Assets/Scripts/Defense/ShurikenDirectionIndicator.cs | HandleTelegraph, HandleThreatChanged, UpdateMarker, Hide | 위협 진행에 맞춘 수리검 Sprite 방향·색·크기·알파·표시 상태 갱신 |
 | Assets/Scripts/Enemies/EnemyProjectile.cs, TwinBossProjectile.cs | IsHostileFlying, HasPassedPlayer, ProjectileId | 보스 수리검의 적대 비행·통과 상태와 세션 고유 식별자 제공 |
 | Assets/Scripts/UI/PlayerLowHealthVignette.cs | HandleDamageReceived, ApplyVignette, ResetPulse | 실제 피해 구독, 고정 두께·강도의 짧은 피격 펄스 |
 | Assets/Scripts/UI/CombatHud/CombatPerfectParryTokenHud.cs | ApplyTokens, Update, CreateOrbitThreads, UpdateOrbitThreads | 퍼펙트 패링 토큰 3칸 표시(2026-10-15). 2026-10-16 찬 토큰을 실 두 가닥이 감싸는 구체로 표시, 토큰 크기 2배, 빈 토큰 이미지 추가. 규칙과 이미지 교체는 [퍼펙트 패링 토큰](퍼펙트_패링_토큰.md) |
@@ -171,3 +198,8 @@ HUD 프리팹: `Assets/Scenes/Defense/UI/BambooDefenseHud.prefab`.
 - 정식 BambooDefense의 공급자 C 연결 슬롯 두 개가 비어 있어 기존 발소리·수리검 경로를 수정했다. 기존 발소리 사건은 적 Renderer 배열을 보관하고 매 갱신마다 카메라 화면 교차를 확인한다. 화면 안 적의 발자국 아이콘·원호는 숨기고, 화면 밖에서만 최신 걸음을 표시한다. C 후보 경로도 동일한 화면 진입 규칙을 사용한다.
 - 기존 공급자, C 발소리 후보, C 수리검 어댑터의 `UiDirection`은 현재 카메라의 수평 회전과 대상의 현재 위치로 계산한다. 뒤 정중앙=아래, 앞=위, 오른쪽=오른쪽이다. 기존 수리검 발사 전조는 PlayerMotor의 수평 시선으로 이미 같은 기준을 사용한다.
 - Unity Editor 재컴파일 완료, 오류·경고 0건. 현재 열린 씬은 IntroScene이며 실제 BambooDefense Play에서 적이 화면 경계를 넘는 순간의 시각 확인은 아직 수행하지 않았다.
+
+#### 위험 배지 지름 확대 (2026-10-26)
+
+- 근접·Beast 공격과 수리검 경고에 표시되는 느낌표 배지 지름을 기존 계산값의 1.5배로 확대했다. 최소 지름도 포함해 기존 최종 크기에 1.5를 곱한다.
+- `CombatFootstepMarker`와 `DefenseDirectionMarker`의 런타임 크기 계산을 갱신하고, `CombatFootstepMarker.prefab` 및 `BambooDefenseHud.prefab`에 저장된 기본 크기도 15×15에서 22.5×22.5로 맞췄다.
