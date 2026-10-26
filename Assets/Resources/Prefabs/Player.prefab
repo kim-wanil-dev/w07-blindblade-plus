@@ -461,6 +461,8 @@ MonoBehaviour:
   _perfectParryStart: 0
   _perfectParryEnd: 0.2
   _perfectParryReleaseGrace: 0.05
+  _repeatedGuardWindowScale: 0.5
+  _repeatedGuardResetTime: 0.2
   _blockInputRecovery: 0
   _guardPushDistance: 0.9
   _guardPushDuration: 0.12

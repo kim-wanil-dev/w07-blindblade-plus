@@ -99,6 +99,12 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     [SerializeField, Min(0f), InspectorName("퍼펙트 패링 해제 유예 (초)")]
     [Tooltip("퍼펙트 패링 구간 중 우클릭을 떼면 이 시간 동안 칼을 내리는 중에도 퍼펙트 패링으로 판정합니다. 퍼펙트 패링 끝을 넘지 않습니다.")]
     private float _perfectParryReleaseGrace = 0.05f;
+    [SerializeField, Range(0f, 1f), InspectorName("재가드 구간 배율")]
+    [Tooltip("재가드 구간 원복 시간 안에 다시 가드하면, 연속된 횟수만큼 퍼펙트 패링 구간과 해제 유예에 이 배율을 거듭 곱합니다.")]
+    private float _repeatedGuardWindowScale = 0.5f;
+    [SerializeField, Min(0f), InspectorName("재가드 구간 원복 시간 (초)")]
+    [Tooltip("직전 가드를 누른 시각부터 잽니다. 이 시간 안에 다시 가드하면 구간이 줄어들고, 지난 뒤 가드하면 누르고 있던 중에 지났더라도 원래 구간으로 돌아갑니다. 퍼펙트 패링에 성공하면 바로 원래 구간으로 돌아갑니다.")]
+    private float _repeatedGuardResetTime = 0.2f;
     [SerializeField, Min(0f)] private float _blockInputRecovery = 0.18f;
     [SerializeField, Min(0f), InspectorName("일반 적 가드 밀림 거리 (m)")] private float _guardPushDistance = 0.9f;
     [SerializeField, Min(0.01f), InspectorName("일반 적 가드 밀림 시간 (초)")] private float _guardPushDuration = 0.12f;
@@ -106,6 +112,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private PlayerHealth _health;
     private float _defenseReadyUntil;
     private int _guardInputId;
+    private int _repeatedGuardCount;
+    private float _repeatedGuardUntil;
 
     [Header("패링 반격")]
     [SerializeField, Min(0f), InspectorName("패링 적 경직 시간 (초)")] private float _parryStaggerDuration = 0.9f;
@@ -136,6 +144,8 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     private float _parryOpenedAt;
     private float _parryUntil;
     private float _parryGraceUntil;
+    private float _currentPerfectParryEnd;
+    private float _currentReleaseGrace;
     private float _parryMotionUntil;
     private float _sheatheUntil;
     private float _waitStarted;
@@ -162,7 +172,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     public PlayerCombatEvents Events => _events;
     public int GuardInputId => _guardInputId;
     public float GuardHeldTime => _player.IsGuarding ? Mathf.Max(0f, _playerClock.Now - _parryOpenedAt) : 0f;
-    public float GuardTimingWindow => _perfectParryEnd;
+    public float GuardTimingWindow => _currentPerfectParryEnd;
     public PlayerController Player => _player;
     public KatanaWeaponState WeaponState => _weaponState;
     public int Strike => _strike;
@@ -198,7 +208,7 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
             if (IsParryGraceActive) return DefenseOutcome.PerfectParry;
             if (!IsParryWindowOpen) return DefenseOutcome.Guard;
             float elapsed = _playerClock.Now - _parryOpenedAt;
-            if (elapsed >= _perfectParryStart && elapsed < _perfectParryEnd) return DefenseOutcome.PerfectParry;
+            if (elapsed >= _perfectParryStart && elapsed < _currentPerfectParryEnd) return DefenseOutcome.PerfectParry;
             return DefenseOutcome.Guard;
         }
     }
@@ -706,12 +716,16 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
 
     /// <summary>
     /// 현재 게임 시간을 _parryOpenedAt에 저장하고 퍼펙트 패링 구간이 끝나는 시각까지 패링 창을 연다.
+    /// _repeatedGuardCount만큼 _repeatedGuardWindowScale을 거듭 곱한 퍼펙트 패링 끝과 해제 유예를 이번 가드 값으로 저장한다.
     /// 이전 가드의 우클릭 해제 유예(_parryGraceUntil)는 새 패링 창으로 대체하며 시각화 이벤트를 발행한다.
     /// </summary>
     private void OpenDefenseWindow()
     {
+        float scale = Mathf.Pow(_repeatedGuardWindowScale, _repeatedGuardCount);
+        _currentPerfectParryEnd = _perfectParryEnd * scale;
+        _currentReleaseGrace = _perfectParryReleaseGrace * scale;
         _parryOpenedAt = _playerClock.Now;
-        _parryUntil = _parryOpenedAt + _perfectParryEnd;
+        _parryUntil = _parryOpenedAt + _currentPerfectParryEnd;
         _parryGraceUntil = 0f;
         _parryOpen = true;
         Publish(KatanaStage.ParryAttempted, "Guard started: timed parry window");
@@ -840,9 +854,11 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     /// <summary>
     /// 퍼펙트 패링 직후 납도 없이 가드를 끝내고 _perfectParryMotionDuration 동안 퍼펙트 패링 모션을 시작한다.
     /// 패링한 가드의 _guardInputId를 저장해 같은 우클릭을 계속 누른 가드 재진입을 모션이 끝날 때까지 막는다.
+    /// 재가드 원복 시각(_repeatedGuardUntil)을 비워 모션 중 새 가드가 원래 퍼펙트 패링 구간을 쓰게 한다.
     /// </summary>
     private void BeginPerfectParryMotion()
     {
+        _repeatedGuardUntil = 0f;
         _suppressSheatheOnGuardEnd = true;
         EndDefense();
         _suppressSheatheOnGuardEnd = false;
@@ -1063,15 +1079,15 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
     }
 
     /// <summary>
-    /// 우클릭을 떼어 EndDefense로 가드를 끝낸다. 뗀 순간이 퍼펙트 패링 구간이면 지금부터 _perfectParryReleaseGrace 뒤와
-    /// 퍼펙트 패링 끝(_parryOpenedAt + _perfectParryEnd) 중 이른 시각을 _parryGraceUntil에 저장해 칼을 내리는 중에도 퍼펙트 패링으로 판정한다.
+    /// 우클릭을 떼어 EndDefense로 가드를 끝낸다. 뗀 순간이 퍼펙트 패링 구간이면 지금부터 이번 가드의 해제 유예(_currentReleaseGrace) 뒤와
+    /// 이번 가드의 퍼펙트 패링 끝(_parryUntil) 중 이른 시각을 _parryGraceUntil에 저장해 칼을 내리는 중에도 퍼펙트 패링으로 판정한다.
     /// </summary>
     public void ReleaseDefense()
     {
         bool perfect = GuardContactOutcome == DefenseOutcome.PerfectParry;
         EndDefense();
         if (perfect)
-            _parryGraceUntil = Mathf.Min(_playerClock.Now + _perfectParryReleaseGrace, _parryOpenedAt + _perfectParryEnd);
+            _parryGraceUntil = Mathf.Min(_playerClock.Now + _currentReleaseGrace, _parryUntil);
     }
 
     /// <summary>
@@ -1130,12 +1146,18 @@ public sealed class KatanaCombatCoordinator : MonoBehaviour
 
 
 
-    /// <summary>자유 상태로 가드에 들어가 inputId를 GuardInputId에 저장하고 패링 창을 연다. 가드 시작 여부를 반환한다.</summary>
+    /// <summary>
+    /// 자유 상태로 가드에 들어가 inputId를 GuardInputId에 저장하고 패링 창을 연다. 가드 시작 여부를 반환한다.
+    /// 직전 가드를 누른 뒤 원복 시각(_repeatedGuardUntil) 전이면 _repeatedGuardCount를 하나 늘리고, 지났으면 0으로 되돌린 뒤
+    /// 지금부터 _repeatedGuardResetTime 뒤를 새 원복 시각으로 저장한다. 누르고 있는 동안에도 원복 시각은 지나간다.
+    /// </summary>
     private bool StartDefense(int inputId)
     {
         if (_player.CurrentState != PlayerActionState.Free || !_player.BeginGuard())
             return false;
 
+        _repeatedGuardCount = _playerClock.Now < _repeatedGuardUntil ? _repeatedGuardCount + 1 : 0;
+        _repeatedGuardUntil = _playerClock.Now + _repeatedGuardResetTime;
         _guardInputId = inputId;
         _waiting = false;
         OpenDefenseWindow();
