@@ -576,9 +576,14 @@ namespace BlindBlade.Telemetry
             _service.RequestFlushImmediately();
         }
 
-        /// <summary>게임 상태 변경 때 마지막 위치 표본을 닫고 일시정지 진입 시 로그 저장·전송을 앞당긴다.</summary>
+        /// <summary>게임 상태 변경을 받아 재도전 시 현재 세션을 retry로 닫고, 일시정지 시 최신 표본의 저장·전송을 요청한다.</summary>
         private void HandleState(GameplayState state)
         {
+            if (state == GameplayState.Restarting)
+            {
+                Close("retry");
+                return;
+            }
             if (state == GameplayState.Paused)
             {
                 if (!_stageClosed)

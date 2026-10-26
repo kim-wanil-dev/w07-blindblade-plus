@@ -1,10 +1,12 @@
 using System;
 using System.Collections;
-using TMPro;
+
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
 using UnityEngine.UI;
+
+using TMPro;
 
 /// <summary>인트로와 전투에서 공유하는 영속 설정 팝업과 입력·음량·시점 감도 적용을 관리한다.</summary>
 public sealed class GameSettingsPopupUI : MonoBehaviour
@@ -22,7 +24,8 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     [Header("영속 설정 UI")]
     [SerializeField] private GameObject _modalRoot;
     [SerializeField] private Button _closeButton;
-    [SerializeField] private IntroBambooButtonSliceEffect _closeButtonSliceEffect;
+    [SerializeField] private Button _retryButton;
+    [SerializeField] private IntroBambooButtonSliceEffect _retryButtonSliceEffect;
     [SerializeField] private Button _quitButton;
     [SerializeField] private IntroBambooButtonSliceEffect _quitButtonSliceEffect;
     [SerializeField] private TMP_Text _controlsText;
@@ -30,6 +33,7 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     [SerializeField] private Slider _sensitivitySlider;
     [SerializeField] private GameObject _previewAudioOwner;
     [SerializeField, TextArea] private string keyboardControls;
+    private Button _boundCloseButton;
     private Coroutine _previewRoutine;
     private bool _bgmPausedForPreview;
     private Button _introButton;
@@ -52,7 +56,9 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         }
 
         _instance = this;
-        _closeButton.onClick.AddListener(RequestClose);
+        _modalRoot.SetActive(false);
+        BindCloseButton();
+        _retryButton.onClick.AddListener(RequestRetry);
         _quitButton.onClick.AddListener(RequestQuit);
         DontDestroyOnLoad(gameObject);
     }
@@ -98,7 +104,9 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     void OnDestroy()
     {
         InputDeviceDisplay.DeviceChanged -= HandleDeviceChanged;
-        _closeButton.onClick.RemoveListener(RequestClose);
+        if (_boundCloseButton != null)
+            _boundCloseButton.onClick.RemoveListener(RequestClose);
+        _retryButton.onClick.RemoveListener(RequestRetry);
         _quitButton.onClick.RemoveListener(RequestQuit);
         StopShurikenPreviewImmediately();
         if (_instance == this)
@@ -224,9 +232,12 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
     /// <summary>60% 검은 배경과 설정 카드를 표시하고 전투 메뉴 입력을 차단한다.</summary>
     private void OpenPopup()
     {
+        BindCloseButton();
         _isCloseAnimating = false;
         _closeButton.interactable = true;
-        _closeButtonSliceEffect.RestoreOriginal();
+        _retryButton.gameObject.SetActive(_openedForGameplay);
+        _retryButton.interactable = true;
+        _retryButtonSliceEffect.RestoreOriginal();
         _quitButton.gameObject.SetActive(_openedForGameplay);
         _quitButton.interactable = true;
         _quitButtonSliceEffect.RestoreOriginal();
@@ -278,27 +289,62 @@ public sealed class GameSettingsPopupUI : MonoBehaviour
         PanelClosed?.Invoke();
     }
 
-    /// <summary>닫기 버튼 입력을 받아 절단 연출을 끝낸 뒤 팝업을 닫는다.</summary>
+    /// <summary>X 버튼 입력으로 설정 팝업을 닫고 인트로 메뉴 또는 일시정지 게임을 복원한다.</summary>
     private void RequestClose()
     {
         if (!IsVisible || _isCloseAnimating)
             return;
 
-        if (_closeButtonSliceEffect != null && _closeButtonSliceEffect.Play(CompleteCloseSlice))
-        {
-            _isCloseAnimating = true;
-            _closeButton.interactable = false;
-            return;
-        }
-
         ClosePopup();
     }
 
-    /// <summary>닫기 버튼 절단 연출을 마친 뒤 팝업을 숨기고 저장된 상태를 정리한다.</summary>
-    private void CompleteCloseSlice()
+    /// <summary>
+    /// Inspector의 현재 _closeButton을 클릭 리스너에 연결한다.
+    /// 이전 버튼의 리스너를 해제하고 새 버튼이 설정 팝업을 닫도록 한다.
+    /// </summary>
+    private void BindCloseButton()
     {
+        if (_boundCloseButton == _closeButton)
+            return;
+
+        if (_boundCloseButton != null)
+            _boundCloseButton.onClick.RemoveListener(RequestClose);
+
+        _boundCloseButton = _closeButton;
+        _boundCloseButton.onClick.AddListener(RequestClose);
+    }
+
+    /// <summary>전투 중 재도전 버튼을 누르면 대나무 절단 연출을 시작하고 현재 스테이지 재시작을 예약한다.</summary>
+    private void RequestRetry()
+    {
+        if (!IsVisible || !_openedForGameplay || _isCloseAnimating)
+            return;
+
+        if (_retryButtonSliceEffect.Play(RetryStage))
+        {
+            _isCloseAnimating = true;
+            _retryButton.interactable = false;
+            return;
+        }
+
+        RetryStage();
+    }
+
+    /// <summary>일시정지 팝업의 미리듣기와 설정을 정리하고 현재 씬의 새 도전을 시작한다.</summary>
+    private void RetryStage()
+    {
+        GameStateManager state = Game.Instance != null ? Game.Instance.GameStateManager : null;
+        if (state == null || state.State != GameplayState.Paused)
+            return;
+
+        StopShurikenPreviewImmediately();
+        PlayerPrefs.Save();
+        _modalRoot.SetActive(false);
+        RestoreMenuInput();
+        _openedForGameplay = false;
         _isCloseAnimating = false;
-        ClosePopup();
+        PanelClosed?.Invoke();
+        state.Restart();
     }
 
     /// <summary>

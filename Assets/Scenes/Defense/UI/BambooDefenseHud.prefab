@@ -4785,12 +4785,15 @@ MonoBehaviour:
   - _minimumKills: 5
     _sizeScale: 1.15
     _color: {r: 1, g: 0.84, b: 0.48, a: 1}
-  - _minimumKills: 8
+  - _minimumKills: 7
     _sizeScale: 1.3
     _color: {r: 1, g: 0.69, b: 0.2, a: 1}
   - _minimumKills: 10
-    _sizeScale: 1.5
+    _sizeScale: 2
     _color: {r: 1, g: 0.325142, b: 0, a: 1}
+  - _minimumKills: 15
+    _sizeScale: 3
+    _color: {r: 0.7987421, g: 0, b: 0.007785362, a: 1}
   _entryLifetime: 1.5
   _largeEntryLifetime: 2
   _largeEntryMinimumKills: 30

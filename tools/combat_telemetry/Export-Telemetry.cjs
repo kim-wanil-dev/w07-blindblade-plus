@@ -10,7 +10,7 @@ const mapping = vm.runInNewContext(code + '\n({eventRow,stepRow,EVENT_HEADERS,SE
 const events=[], sessions=new Map(), terminalFacts=new Map(), statusFacts=new Map(), deathFacts=new Map(), steps=new Map(), seen=new Set(), heat=new Map(), diagnostics=[];
 const lifecycle=new Map(), arenaCenters=new Map();
 const statusRank=status=>['death','final_clear','cleared'].includes(String(status||''))?3
-  :['scene_unloaded','application_quit','unclean_exit'].includes(String(status||''))?2
+  :['scene_unloaded','application_quit','unclean_exit','retry'].includes(String(status||''))?2
   :['in_progress','started'].includes(String(status||''))?1:0;
 const recordStatus=(r,status)=>{
   const previous=statusFacts.get(r.stageAttemptId);
@@ -65,7 +65,7 @@ for (const file of fs.readdirSync(source).filter(f=>f.endsWith('.jsonl')).sort()
         recordStatus(r,String(p.reason||'application_quit').toLowerCase());
       }
       if (r.eventType==='session_ended'
-          && ['application_quit','scene_unloaded','unclean_exit'].includes(String(p.reason||'').toLowerCase())) {
+          && ['application_quit','scene_unloaded','unclean_exit','retry'].includes(String(p.reason||'').toLowerCase())) {
         const facts=terminalFacts.get(r.stageAttemptId)||{};
         if(!facts.exit||facts.exit.eventSequence<r.eventSequence) facts.exit=r;
         terminalFacts.set(r.stageAttemptId,facts);
