@@ -121,6 +121,10 @@ public sealed class BossController : MonoBehaviour
     private float _barrageVerticalHomingTurnRate = 12f;
     [SerializeField, Min(0f), Tooltip("난사 수리검이 발사 후 유도 없이 부채꼴로 흩뿌려지며 직진하는 시간(초). 이후 좌우·상하 유도를 시작합니다.")]
     private float _barrageHomingDelay = 0.3f;
+    [SerializeField, Tooltip("발사 상하 각도를 정하는 거리 구간의 대표 수평 거리(미터). 플레이어와의 실제 거리에 가장 가까운 구간의 거리로 묶음별 조준 각도를 계산합니다.")]
+    private float[] _barrageAimBandDistances = { 10f, 18.75f, 27.5f, 36.25f, 45f };
+    [SerializeField, Range(0f, 90f), Tooltip("난사 발사 방향의 최대 상하 각도(도). 위·아래 모두 이 각도를 넘지 않습니다.")]
+    private float _barrageMaxLaunchPitch = 5f;
     private int[] _barrageAttackIds;
     private bool[] _barrageAttackLaunched;
     private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
@@ -534,6 +538,7 @@ public sealed class BossController : MonoBehaviour
 
     /// <summary>
     /// volley 순번으로 위에서 아래로 낮아지는 조준 높이를 정하고 왼쪽·가운데·오른쪽 수리검 3발을 동시에 발사한다.
+    /// 상하 발사 각도는 GetBarrageLaunchPitch로 플레이어와의 거리 구간에 맞춰 고정하고 _barrageMaxLaunchPitch로 제한한다.
     /// _barrageSpreadAngle과 기존 원거리 피해 _rangedDamage를 사용하며 보스를 플레이어 쪽으로 회전시킨다.
     /// 수리검마다 _barrageSpeedMultiplierMin~Max 사이의 비행 속도 배율을 랜덤으로 고르고 _barrageHomingSpeedScale로 유도 세기도 함께 키운다.
     /// 발사 후 _barrageHomingDelay초 동안은 유도 없이 흩뿌려지고, 이후 상하 유도는 _barrageVerticalHomingTurnRate로 따로 제한해 묶음별 조준 높이 차이가 유지되게 한다.
@@ -544,11 +549,14 @@ public sealed class BossController : MonoBehaviour
         float progress = _barrageVolleys > 1 ? volley / (float)(_barrageVolleys - 1) : 0f;
         Vector3 aim = _player.transform.position
             + Vector3.up * Mathf.Lerp(_barrageTopAimHeight, _barrageBottomAimHeight, progress);
-        Vector3 center = aim - origin;
-        if (center.sqrMagnitude < 0.0001f) return;
-        center.Normalize();
-        Vector3 facing = Vector3.ProjectOnPlane(center, Vector3.up);
-        if (facing.sqrMagnitude > 0.000001f) transform.rotation = Quaternion.LookRotation(facing);
+        Vector3 toAim = Vector3.ProjectOnPlane(aim - origin, Vector3.up);
+        // 플레이어가 바로 위아래에 있으면 지금 바라보는 쪽으로 던진다.
+        Vector3 facing = toAim.sqrMagnitude > 0.000001f
+            ? toAim.normalized : Vector3.ProjectOnPlane(transform.forward, Vector3.up).normalized;
+        if (facing.sqrMagnitude < 0.0001f) return;
+        transform.rotation = Quaternion.LookRotation(facing);
+        float pitch = GetBarrageLaunchPitch(toAim.magnitude, aim.y - origin.y) * Mathf.Deg2Rad;
+        Vector3 center = facing * Mathf.Cos(pitch) + Vector3.up * Mathf.Sin(pitch);
         RangedFiring?.Invoke();
         for (int shot = -1; shot <= 1; shot++)
         {
@@ -569,6 +577,25 @@ public sealed class BossController : MonoBehaviour
             projectile.SetVerticalHomingTurnRate(_barrageVerticalHomingTurnRate);
             projectile.SetHomingDelay(_barrageHomingDelay);
         }
+    }
+
+    /// <summary>
+    /// 수평 거리 distance에 가장 가까운 _barrageAimBandDistances 구간의 대표 거리에서 높이 차 height를 겨누는 상하 각도(도)를 구한다.
+    /// 구간이 비어 있으면 실제 거리를 쓰며, 결과는 ±_barrageMaxLaunchPitch로 제한해 반환한다.
+    /// </summary>
+    private float GetBarrageLaunchPitch(float distance, float height)
+    {
+        float bandDistance = distance;
+        float closestGap = float.PositiveInfinity;
+        foreach (float band in _barrageAimBandDistances)
+        {
+            float gap = Mathf.Abs(band - distance);
+            if (gap >= closestGap) continue;
+            closestGap = gap;
+            bandDistance = band;
+        }
+        float pitch = Mathf.Atan2(height, Mathf.Max(0.01f, bandDistance)) * Mathf.Rad2Deg;
+        return Mathf.Clamp(pitch, -_barrageMaxLaunchPitch, _barrageMaxLaunchPitch);
     }
 
     /// <summary>
