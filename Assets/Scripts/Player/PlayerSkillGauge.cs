@@ -153,6 +153,15 @@ public sealed class PlayerSkillGauge : MonoBehaviour
     }
 
     /// <summary>
+    /// 온보딩 거합 연습을 위해 거합 게이지만 최대치로 채운다.
+    /// 입력은 없으며 일섬 게이지를 유지하고 거합 게이지 변경 이벤트를 발생시킨다.
+    /// </summary>
+    internal void FillUltimateForOnboarding()
+    {
+        SetGaugeValues(_swordWaveGauge, MaxUltimateGauge);
+    }
+
+    /// <summary>
     /// 두 보상량을 현재 게이지에 더해 각 최대값으로 제한한다.
     /// swordWaveReward와 ultimateReward를 사용하며, 변경된 상태를 이벤트로 알린다.
     /// </summary>
