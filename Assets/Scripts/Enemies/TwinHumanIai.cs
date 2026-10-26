@@ -28,9 +28,9 @@ public sealed class TwinHumanIai : MonoBehaviour
 
     [Header("차징")]
     [SerializeField, Min(0.1f), Tooltip("거합을 차징하는 게임 시간(초)")]
-    private float _chargeDuration = 10f;
-    [SerializeField, Min(0.1f), Tooltip("붉은 파동을 내는 간격(초). 차징 시작 뒤 이 간격마다 낸다(10초 차징이면 3·6·9초).")]
-    private float _pulseInterval = 3f;
+    private float _chargeDuration = 4.5f;
+    [SerializeField, Min(0.1f), Tooltip("붉은 파동을 내는 간격(초). 차징 시작 순간부터 이 간격마다 낸다(4.5초 차징이면 0·2.25초).")]
+    private float _pulseInterval = 2.25f;
     [SerializeField, Tooltip("차징을 시작할 때 소리. 기 모으는 소리는 파동 때만 내도록 기본값은 None이다.")]
     private SoundId _chargeStartSound = SoundId.None;
     [SerializeField, Range(0.1f, 3f)] private float _chargeStartPitch = 0.8f;
@@ -143,6 +143,7 @@ public sealed class TwinHumanIai : MonoBehaviour
     public bool IsReleasing => _releasing;
     public event System.Action CounterStarted;
     public float ChargeProgress { get; private set; }
+    public float ChargeStartedAt { get; private set; }
 
     /// <summary>
     /// 부모 패턴 ID와 인스턴스 ID를 저장해 이후 거합 공격을 해당 패턴에 연결한다.
@@ -178,7 +179,8 @@ public sealed class TwinHumanIai : MonoBehaviour
 
     /// <summary>
     /// arenaCenter·arenaRadius 공터에서 player와 가장 먼 빈 지면으로 물속을 지나 순간이동(HumanBossAttack.TeleportThroughWater)해 _chargeDuration 동안 거합을 차징한다.
-    /// 차징 시작부터 _pulseInterval마다 점점 넓고 진한 붉은 파동을 내고 연기를 점차 붉게 물들이며, 끝나면 거합을 낸다.
+    /// 차징을 시작한 순간과 이후 _pulseInterval마다 점점 넓고 진한 붉은 파동을 내고 연기를 점차 붉게 물들이며, 끝나면 거합을 낸다.
+    /// 차징 시작 시각을 ChargeStartedAt에 기록해 짐승 방해가 같은 기준으로 덮치게 한다.
     /// </summary>
     public IEnumerator Charge(KatanaDamageReceiver player, Vector3 arenaCenter, float arenaRadius)
     {
@@ -189,15 +191,17 @@ public sealed class TwinHumanIai : MonoBehaviour
         FacePlayer();
         IsCharging = true;
         ChargeProgress = 0f;
+        ChargeStartedAt = Time.time;
         _warning.BeginWarning(_chargeDuration);
         if (_chargeStartSound != SoundId.None)
             Managers.Sound.Play(_chargeStartSound, transform.position, 1f, gameObject, true, _chargeStartPitch);
-        int pulseCount = Mathf.Max(1, Mathf.FloorToInt((_chargeDuration - 0.0001f) / _pulseInterval));
+        // 첫 파동은 차징을 시작한 순간에 내고 차징 끝 전까지 간격마다 낸다.
+        int pulseCount = Mathf.FloorToInt((_chargeDuration - 0.0001f) / _pulseInterval) + 1;
         int pulse = 0;
-        float startedAt = Time.time;
+        float startedAt = ChargeStartedAt;
         while (Time.time < startedAt + _chargeDuration && CanStrike())
         {
-            if (pulse < pulseCount && Time.time >= startedAt + (pulse + 1) * _pulseInterval)
+            if (pulse < pulseCount && Time.time >= startedAt + pulse * _pulseInterval)
             {
                 StartPulse(pulseCount > 1 ? pulse / (pulseCount - 1f) : 1f, pulse == pulseCount - 1);
                 pulse++;
