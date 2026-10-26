@@ -241,3 +241,9 @@ DefenseBeastLeapAttack은 EnemyAttackBehaviour를 상속하고 공격 로그 종
 - 전투 판정 계약: 근접 전방 방어와 도약 결과 처리
 - 감각 표현: 도약 박동·확정 리플과 Wolf 시각 상태
 - 쌍둥이 보스: 기존 Beast 공격 및 보스 동작은 범위 밖이며 변경하지 않음
+## 2026-10-26 작은 늑대 공격 전조음 (최신 규칙)
+
+- 붉은 전조 시작에 `DefenseBeastWarning(52)`을 재생한다. `BossMonsterDog/Idle`의 1.655초 GrowlBreathAndRoar 음원만 1.2배속으로 사용하고 0.9초에서 끝낸다. 마지막 0.14초는 페이드한다. 보스의 기존 Idle 이벤트와 4.25초 선택지는 유지한다.
+- 첫 박동 `EnemyHeartbeat(26)`은 공격 0.5초 전, 돌진 `DefenseBeastLeap(48)`은 공격 실행 시점이다. 전조 총 0.9초와 붉은 표시 타이밍은 그대로다. 설정은 `DefenseBeast.prefab`의 `DefenseBeastLeapAttack._telegraphStartSound`에 저장한다.
+- FMOD 진단·Desktop 뱅크 빌드 성공. Unity Play 청취는 미확인이다.
+

@@ -55,6 +55,7 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     private float _attackVoiceTime;
 
     [Header("공격 청각 신호")]
+    [SerializeField] private SoundId _telegraphStartSound = SoundId.None;
     [SerializeField, Min(0f)] private float _telegraphVolume = 1f;
     [SerializeField, Min(0f)] private float _actionVolume = 1f;
     private SoundId _playingActionSound;
@@ -204,6 +205,8 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
             _nextHeartbeatTime = Time.time + FirstHeartbeatDelay;
             FirstHeartbeatAt = _nextHeartbeatTime;
             _attackVoiceTime = _phaseEndTime - Mathf.Clamp(_attackVoiceLeadTime, 0f, PostHeartbeatAttackDelay * 0.5f);
+            if (_telegraphStartSound != SoundId.None)
+                PlayActionSound(EnemySoundStage.Telegraph);
         }
         else
             PlayActionSound(EnemySoundStage.Telegraph);
@@ -344,11 +347,13 @@ public abstract class EnemyAttackBehaviour : MonoBehaviour
     }
 
     /// <summary>
-    /// stage에 맞는 공통 공격 소리 ID를 반환한다.
-    /// 파생 공격이 특정 단계의 소리를 교체해도 기존 재생·취소 처리를 사용한다.
+    /// stage에 맞는 전조 시작 소리 또는 공통 공격 소리 ID를 반환한다.
+    /// _telegraphStartSound가 있으면 전조 시작에 사용하고 나머지 단계는 기존 설정을 따른다.
     /// </summary>
     protected virtual SoundId ResolveActionSound(EnemySoundStage stage)
     {
+        if (stage == EnemySoundStage.Telegraph && _telegraphStartSound != SoundId.None)
+            return _telegraphStartSound;
         return EnemySoundSettings.GetSound(SoundAction, stage);
     }
 
