@@ -210,6 +210,7 @@ public sealed class BeastBossAttack : MonoBehaviour
     public event Action PounceStarted;
     public event Action PounceGlint;
     public event Action Landed;
+    public event Action<Collider> BodyColliderEnabled;
 
     void Awake()
     {
@@ -890,12 +891,13 @@ public sealed class BeastBossAttack : MonoBehaviour
 
     /// <summary>
     /// burrowed로 잠수 상태를 바꾸고 피격 판정 _hitCollider를 끄거나 켠다.
-    /// 잠수하면 BurrowDepth를 1, 땅 위로 돌아오면 지금 깊이를 그대로 두어 출현 동작이 이어지게 한다.
+    /// 잠수하면 BurrowDepth를 1로 바꾸고, 출현하면 켜진 충돌체를 BodyColliderEnabled로 알린다.
     /// </summary>
     private void SetBurrowed(bool burrowed)
     {
         _burrowed = burrowed;
         _hitCollider.enabled = !burrowed;
+        if (!burrowed) BodyColliderEnabled?.Invoke(_hitCollider);
         if (burrowed) BurrowDepth = 1f;
     }
 

@@ -354,6 +354,7 @@ public sealed class TwinBossController : MonoBehaviour
         _beast.Health.DamageBlocked += HandleBeastDamageBlocked;
         _human.Health.Died += HandleBossDied;
         _beast.Health.Died += HandleBossDied;
+        _beast.BodyColliderEnabled += HandleBeastBodyColliderEnabled;
         SetPlayerCollisionIgnored(true);
         _subscribed = true;
         _battle = StartCoroutine(RunBattle());
@@ -1118,6 +1119,15 @@ public sealed class TwinBossController : MonoBehaviour
             if (!body.isTrigger) Physics.IgnoreCollision(controller, body, ignored);
     }
 
+    /// <summary>
+    /// 짐승이 잠복 후 다시 켠 body와 플레이어 CharacterController의 충돌 무시를 재설정한다.
+    /// body를 사용하며 전투 중 플레이어가 출현하는 짐승 몸에 밀리지 않게 한다.
+    /// </summary>
+    private void HandleBeastBodyColliderEnabled(Collider body)
+    {
+        if (_subscribed) Physics.IgnoreCollision(_player.GetComponent<CharacterController>(), body, true);
+    }
+
     /// <summary>실제 피해·사망 사건의 전투 구독을 해제하고 플레이어와의 물리 충돌을 되돌린다.</summary>
     private void Unsubscribe()
     {
@@ -1130,6 +1140,7 @@ public sealed class TwinBossController : MonoBehaviour
         _humanDefendAt = 0f;
         _beastDefendAt = 0f;
         if (_player != null && _human != null && _beast != null) SetPlayerCollisionIgnored(false);
+        if (_beast != null) _beast.BodyColliderEnabled -= HandleBeastBodyColliderEnabled;
         if (_human != null)
         {
             _human.Health.Damaged -= HandleHumanDamaged;
