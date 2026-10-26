@@ -127,6 +127,7 @@ public sealed class BossController : MonoBehaviour
     private float _barrageMaxLaunchPitch = 5f;
     private int[] _barrageAttackIds;
     private bool[] _barrageAttackLaunched;
+    private bool _barrageLocked;
     private readonly Queue<(float At, float Amount)> _recentDamage = new Queue<(float At, float Amount)>();
 
     [Header("돌진")]
@@ -379,10 +380,12 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// 패턴 시작 시 플레이어에게서 멀어지는 위치로 한 번 백스텝한 뒤 설정 횟수와 준비 시간을 사용해 플레이어 시점보다 0.1m 아래로 투사체를 발사한다.
     /// 비행 유도는 투사체 프리팹이 설정하며 비행 속도는 _rangedProjectileSpeedMultiplier배로 바꾼다.
+    /// 패턴을 시작하면 도주 난사 재발동 잠금(_barrageLocked)을 푼다.
     /// </summary>
     private IEnumerator Ranged()
     {
         ChangeState(BossState.Ranged);
+        _barrageLocked = false;
         _motor.Stop();
         if (TryGetBackstepDestination(out Vector3 backstep))
             yield return Backstep(backstep);
@@ -649,9 +652,11 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// 준비 시간 뒤 목표 방향을 고정하고, 실제로 내려치며 돌진하는 순간 피격 후 방어 상태와 무적을 끝내 가드 자세 칼을 숨긴다.
     /// 시작 사건을 알린 뒤 장애물 경계까지 돌진하며 접촉 피해를 한 번 적용한다.
+    /// 패턴을 시작하면 도주 난사 재발동 잠금(_barrageLocked)을 푼다.
     /// </summary>
     private IEnumerator Charge()
     {
+        _barrageLocked = false;
         _motor.Stop();
         _telemetryAttackId = BlindBlade.Telemetry.CombatTelemetrySignals.Begin("BossCharge", "Charge",
             transform.position, _player.transform.position);
@@ -856,6 +861,7 @@ public sealed class BossController : MonoBehaviour
     /// <summary>
     /// context의 실제 피격 시 진행 중인 행동·반격을 취소하고, 플레이어 일반 베기·발도면 _hitInvulnerableDelay 뒤 무적 방어를 예약하며 다음 패턴을 준비한다.
     /// 짧은 시간의 누적 피해가 기준 이상이면 기존 회복 대신 무적 없이 도주 난사를 시작한다.
+    /// 도주 난사 뒤 돌진·원거리 패턴을 시작하기 전(_barrageLocked)에는 누적 피해를 세지 않아 난사가 다시 나오지 않는다.
     /// 일섬 등 다른 공격이거나 불릿 타임(강화 준비·강화 공격) 중이면 무적과 방어 상태 없이 회복한다.
     /// </summary>
     private void HandleBossDamaged(DamageContext context)
@@ -877,8 +883,10 @@ public sealed class BossController : MonoBehaviour
         _motor.Stop();
         IsRepositioning = false;
         ChangeState(BossState.Idle);
-        if (RegisterBurstDamage(context.Amount))
+        if (!_barrageLocked && RegisterBurstDamage(context.Amount))
         {
+            // 다른 패턴을 시작할 때까지 도주 난사가 연달아 나오지 않게 잠근다.
+            _barrageLocked = true;
             // 도주 난사는 무적 없이 진행하므로 피격 무적과 쳐내기 창을 바로 해제한다.
             RestoreAfterDisappearance(true);
             _routine = StartCoroutine(EscapeBarrage());
@@ -1357,6 +1365,7 @@ public sealed class BossController : MonoBehaviour
         PreparationCancelled?.Invoke();
         IsRepositioning = false;
         _recentDamage.Clear();
+        _barrageLocked = false;
         RestoreAfterDisappearance(true);
         _motor.Stop();
         _health.Damaged -= HandleBossDamaged;
