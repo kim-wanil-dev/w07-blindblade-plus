@@ -156,8 +156,8 @@ MonoBehaviour:
   _collisionMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  _homingTurnRate: 20
-  _homingStopDistance: 5
+  _homingTurnRate: 180
+  _homingStopDistance: 2
   _flightSound: 36
 --- !u!114 &2285517556864344113
 MonoBehaviour:

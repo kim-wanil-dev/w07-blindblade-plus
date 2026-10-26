@@ -339,6 +339,8 @@ MonoBehaviour:
   _barrageSpeedMultiplierMin: 1
   _barrageSpeedMultiplierMax: 2.0833333
   _barrageHomingSpeedScale: 1
+  _barrageVerticalHomingTurnRate: 12
+  _barrageHomingDelay: 0.3
   _chargePreparation: 0.9
   _chargeSpeed: 14
   _chargeDistance: 12
