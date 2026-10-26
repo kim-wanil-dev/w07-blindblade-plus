@@ -58,6 +58,12 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _chargeWorldTimeScale = 0.1f;
     [SerializeField, Min(0f), Tooltip("Q를 떼서 거합 차징이 취소된 뒤 다시 차징을 시작할 수 있을 때까지의 실시간(초)입니다. 연타로 감속을 이어 붙이는 것을 막습니다.")]
     private float _ultimateRecastCooldown = 0.53f;
+    [SerializeField, Min(0f), Tooltip("거합 암전(차징 완료)보다 몇 실시간 초 먼저 퍼펙트 패링 파동을 내 암전 뒤 베인 대나무가 보이게 할지 정합니다. 차징을 취소하면 파동을 바로 지웁니다.")]
+    private float _chargePulseLead = 0.5f;
+    [SerializeField, Min(0f), Tooltip("차징 파동 반경을 퍼펙트 패링 파동 반경(Player Perfect Pulse의 Radius)의 몇 배로 할지 정합니다. 1.5배면 40m에서 60m입니다.")]
+    private float _chargePulseRadiusScale = 1.5f;
+    [SerializeField, Min(0f), Tooltip("거합이 끝난 뒤 차징 파동이 밝힌 실루엣이 흐려지는 시간에 더할 실시간(초)입니다. 퍼펙트 패링 파동의 Fade Duration(0.8초)과 같으면 2배인 1.6초에 걸쳐 흐려집니다.")]
+    private float _chargePulseExtraFade = 0.8f;
     private bool _charging;
     private float _chargeElapsed;
     private float _appliedChargeScale;
@@ -65,6 +71,8 @@ public sealed class PlayerEmpower : MonoBehaviour
     private float _presentationProgress;
     private float _presentationSlowProgress;
     private float _ultimateRecastAvailableAt = float.NegativeInfinity;
+    // 이번 홀드 차징이 낸 파동 번호다. 0이면 아직 내지 않았다.
+    private int _chargePulseId;
 
     [Header("스킬 자원")]
     [SerializeField, Min(0.01f), Tooltip("일섬 돌진 거리가 0일 때 집중 연출을 유지하는 실시간입니다. 돌진이 있으면 이 시간과 무관하게 해제 거리를 지나거나 돌진이 끝날 때까지 집중을 유지합니다.")]
@@ -267,6 +275,8 @@ public sealed class PlayerEmpower : MonoBehaviour
         {
             _chargeElapsed += dt;
             if (_hitStopRemaining <= 0f) UpdateChargeSlow();
+            if (_automaticCharge && _chargePulseId == 0 && _chargeElapsed >= _ultimateChargeDuration - _chargePulseLead)
+                BeginChargePulse();
             if (_automaticCharge && IsUltimateChargeComplete && !TryBeginStrike())
                 End(PlayerEmpowerEndReason.Cancelled);
             return;
@@ -621,11 +631,14 @@ public sealed class PlayerEmpower : MonoBehaviour
 
     /// <summary>
     /// 진행 중인 준비나 강화 공격을 reason으로 끝내고 시간 요청을 해제한 뒤 Ended를 발행한다.
-    /// _active를 거짓으로 바꾸며 이미 끝났으면 호출하지 않는다.
+    /// _active를 거짓으로 바꾸며 이미 끝났으면 호출하지 않는다. 거합으로 이어지지 못한 홀드 차징이 낸 파동은 지우고 _chargePulseId를 비운다.
     /// </summary>
     private void End(PlayerEmpowerEndReason reason)
     {
         if (IsStriking && reason != PlayerEmpowerEndReason.Completed) _strike.Stop();
+        // 거합으로 이어지지 못한 홀드 차징의 파동은 지워 게이지 없이 넓은 시야만 얻지 못하게 한다.
+        if (_charging && _automaticCharge && _chargePulseId != 0) _pulse.Cancel(_chargePulseId);
+        _chargePulseId = 0;
         _active = false;
         _dodgeReady = false;
         _onboardingReadyHeld = false;
@@ -638,6 +651,16 @@ public sealed class PlayerEmpower : MonoBehaviour
         _swordWaveFocusRemaining = 0f;
         ReleaseTimeRequest();
         Publish(PlayerEmpowerStage.Ended, reason);
+    }
+
+    /// <summary>
+    /// 발밑에서 퍼펙트 패링 파동을 _chargePulseRadiusScale배 반경으로 내고 그 파동 번호를 _chargePulseId에 저장한다.
+    /// 파동은 차징과 거합 동안 공개를 유지하며 거합이 끝나면 퍼펙트 패링 파동보다 _chargePulseExtraFade초 더 길게 흐려진다.
+    /// </summary>
+    private void BeginChargePulse()
+    {
+        _pulse.Begin(_chargePulseRadiusScale, _chargePulseExtraFade);
+        _chargePulseId = _pulse.PulseId;
     }
 
     /// <summary>
