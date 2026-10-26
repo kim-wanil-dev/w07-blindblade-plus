@@ -69,8 +69,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private readonly HashSet<int> _launchedShurikenAttackIds = new HashSet<int>();
     private readonly List<DefenseShuriken> _hintShurikens = new List<DefenseShuriken>();
     private readonly HashSet<int> _trainingEnemyAttackIds = new HashSet<int>();
-    private readonly HashSet<int> _perfectDodgeAttackIds = new HashSet<int>();
-    private readonly HashSet<int> _pendingPerfectDodgeAttackIds = new HashSet<int>();
+    private DefenseShuriken _perfectDodgePracticeShuriken;
+    private DefenseShuriken _successfullyDodgedPracticeShuriken;
     private readonly HashSet<EnemyHealth> _openingTargets = new HashSet<EnemyHealth>();
     private readonly HashSet<EnemyHealth> _ultimateTargetHealths = new HashSet<EnemyHealth>();
     private readonly HashSet<EnemyHealth> _defeatedUltimateTargets = new HashSet<EnemyHealth>();
@@ -104,6 +104,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private int _stage;
     private int _objectiveIndex;
     private int _activeDodgeId;
+    private int _pendingPerfectDodgeDodgeId;
     private int _pendingRangedParryAttackId;
     private float _stageEntrySwordWaveGauge;
     private float _stageEntryUltimateGauge;
@@ -204,6 +205,13 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
 
         if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked) return;
+        if (_stage == PERFECT_DODGE_STAGE && _pendingPerfectDodgeDodgeId != 0 && !_motor.IsDodging)
+        {
+            if (_activeDodgeId == _pendingPerfectDodgeDodgeId) _activeDodgeId = 0;
+            _pendingPerfectDodgeDodgeId = 0;
+            CompleteCurrentObjective();
+            return;
+        }
         if (_stage == 0) UpdateOpeningStage();
 
         MaintainTrainingEnemy();
@@ -305,6 +313,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _advanceQueued = false;
         _rangedSwordWaveFocusObserved = false;
         _activeDodgeId = 0;
+        _pendingPerfectDodgeDodgeId = 0;
         _pendingRangedParryAttackId = 0;
         _openingKillCount = 0;
         _movementIdleElapsed = 0f;
@@ -319,8 +328,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _meleeHintNearby = false;
         _lastMeleeHintEmphasisAt = Time.unscaledTime - MELEE_HINT_REPEAT_DELAY;
         _hud.SetDefenseHint(false, false, false);
-        _perfectDodgeAttackIds.Clear();
-        _pendingPerfectDodgeAttackIds.Clear();
         _resolvedHitIds.Clear();
         _launchedShurikenAttackIds.Clear();
 
@@ -624,6 +631,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private void UpdateRangedThrower()
     {
         if (_stage != PERFECT_DODGE_STAGE && _stage != RANGED_STAGE) return;
+        if (_stage == PERFECT_DODGE_STAGE && _perfectDodgePracticeShuriken != null) return;
         if (_stage == RANGED_STAGE && _objectiveIndex == RANGED_SWORD_WAVE_OBJECTIVE)
         {
             bool swordWaveActive = _empower.IsSwordWaveCasting || _empower.IsStriking;
@@ -646,8 +654,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             return;
         }
         if (Time.unscaledTime < _nextThrowAt) return;
-        int shotCount = _stage == PERFECT_DODGE_STAGE || _stage == RANGED_STAGE
-            ? RANGED_THROW_BURST_COUNT : 1;
+        int shotCount = _stage == RANGED_STAGE ? RANGED_THROW_BURST_COUNT : 1;
         if (_trainingThrower.TryThrowForOnboarding(_director, shotCount, RANGED_THROW_BURST_GAP))
             _nextThrowAt = Time.unscaledTime + THROW_INTERVAL;
         else
@@ -664,17 +671,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
             if (!_resolvedHitIds.Add(hitKey)) return;
         }
         ObjectiveDefenseResolved?.Invoke(resolution);
-
-        if (_stage == PERFECT_DODGE_STAGE && _activeDodgeId != 0
-            && _launchedShurikenAttackIds.Contains(resolution.AttackId))
-        {
-            if (resolution.Outcome == DefenseOutcome.DodgeAvoided)
-            {
-                _pendingPerfectDodgeAttackIds.Add(resolution.AttackId);
-                if (_perfectDodgeAttackIds.Contains(resolution.AttackId)) CompleteCurrentObjective();
-            }
-            return;
-        }
 
         if ((_stage == MELEE_STAGE || (_stage == RANGED_STAGE && _objectiveIndex <= GetParryObjective()))
             && IsCurrentStageAttack(resolution.AttackId))
@@ -720,7 +716,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         return _objectiveIndex > GetParryObjective();
     }
 
-    /// <summary>현재 회피 ID를 저장하고 실제 극한 회피 사건으로 회피 목표를 진행한다.</summary>
+    /// <summary>현재 회피 ID를 저장하고 성공한 0-2 수리검을 무해화한 뒤 이동 종료까지 목표 완료를 보류한다.</summary>
     private void HandleDodgeChanged(PlayerDodgeEvent dodgeEvent)
     {
         if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked) return;
@@ -734,12 +730,16 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
         else if (dodgeEvent.Stage == PlayerDodgeStage.PerfectDodge)
         {
-            _perfectDodgeAttackIds.Add(dodgeEvent.AttackId);
             if (_stage == PERFECT_DODGE_STAGE
                 && _launchedShurikenAttackIds.Contains(dodgeEvent.AttackId))
             {
-                _pendingPerfectDodgeAttackIds.Remove(dodgeEvent.AttackId);
-                CompleteCurrentObjective();
+                if (_perfectDodgePracticeShuriken != null
+                    && _perfectDodgePracticeShuriken.AttackId == dodgeEvent.AttackId)
+                {
+                    _successfullyDodgedPracticeShuriken = _perfectDodgePracticeShuriken;
+                    _successfullyDodgedPracticeShuriken.ContinueAfterOnboardingPerfectDodge();
+                }
+                _pendingPerfectDodgeDodgeId = dodgeEvent.DodgeId;
             }
         }
     }
@@ -805,8 +805,21 @@ public sealed class OnboardingFlowController : MonoBehaviour
             _hintShurikens.Add(shuriken);
             shuriken.Released += HandleHintShurikenReleased;
         }
+        else
+        {
+            _perfectDodgePracticeShuriken = shuriken;
+            shuriken.Released += HandlePerfectDodgePracticeShurikenReleased;
+        }
         if (_stage == PERFECT_DODGE_STAGE && _advanceQueued)
             shuriken.MakeHarmlessForOnboarding();
+    }
+
+    /// <summary>해제된 0-2 연습 수리검을 추적에서 제거하고 다음 수리검 발사를 허용한다.</summary>
+    private void HandlePerfectDodgePracticeShurikenReleased(DefenseShuriken released)
+    {
+        released.Released -= HandlePerfectDodgePracticeShurikenReleased;
+        if (_perfectDodgePracticeShuriken == released) _perfectDodgePracticeShuriken = null;
+        if (_successfullyDodgedPracticeShuriken == released) _successfullyDodgedPracticeShuriken = null;
     }
 
     /// <summary>released 수리검을 안내 추적 목록에서 제거하고 현재 안내 대상이면 다시 선택하도록 비운다.</summary>
@@ -858,7 +871,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             && viewport.y >= 0f && viewport.y <= 1f;
     }
 
-    /// <summary>극한 회피 목표가 끝난 뒤 이미 비행 중인 훈련 수리검을 무해화해 남은 감속 연출 동안 피해를 막는다.</summary>
+    /// <summary>극한 회피 목표가 끝난 뒤 이미 비행 중인 훈련 수리검을 무해화하고 성공 수리검은 계속 비행시킨다.</summary>
     private void MakePerfectDodgeShurikensHarmless()
     {
         DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
@@ -1166,7 +1179,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     /// <summary>
     /// 현재 단계의 중복 완료를 막고 다음 단계 전환을 예약한다.
-    /// 극한 회피 단계의 남은 수리검은 판정이 끝날 때까지 무해화하고 마지막 단계의 수리검은 정리한다.
+    /// 극한 회피 단계의 수리검은 무해화하고 마지막 단계의 수리검은 정리한다.
     /// </summary>
     private void QueueAdvance()
     {
@@ -1184,7 +1197,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     /// <summary>
     /// 실제 판정 호출이 끝난 프레임 말에 입력을 잠그고 완료 선택에 따라 단계 반복·다음 단계·첫 막 전환을 진행한다.
-    /// 극한 회피 단계는 남은 수리검을 없애고 첫 성공 설명·파동을 마친 뒤, 완료 선택 카드가 있는 단계에서 1초 기다린다.
+    /// 극한 회피 단계는 성공 수리검의 비행을 유지하고 첫 성공 파동을 마친 뒤, 완료 선택 카드가 있는 단계에서 1초 기다린다.
     /// </summary>
     private IEnumerator AdvanceAfterResolvedEvent()
     {
@@ -1353,7 +1366,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _defeatedUltimateTargets.Clear();
     }
 
-    /// <summary>현재 연습 투척 예약과 비행 수리검을 정리해 다음 목표에 남지 않도록 한다.</summary>
+    /// <summary>연습 투척수와 비행 수리검을 정리하되, 극한 회피 성공 수리검은 수명이 끝날 때까지 유지한다.</summary>
     private void ClearRangedPractice()
     {
         _hud.HideShurikenHint();
@@ -1369,7 +1382,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
         DefenseShuriken[] shurikens = FindObjectsByType<DefenseShuriken>(FindObjectsSortMode.None);
         foreach (DefenseShuriken shuriken in shurikens)
-            if (shuriken != null && shuriken.gameObject.scene == gameObject.scene && shuriken.IsFlying)
+            if (shuriken != null && shuriken != _successfullyDodgedPracticeShuriken
+                && shuriken.gameObject.scene == gameObject.scene && shuriken.IsFlying)
                 shuriken.Release();
     }
 

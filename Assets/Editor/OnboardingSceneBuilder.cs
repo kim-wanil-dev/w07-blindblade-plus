@@ -22,7 +22,7 @@ public static class OnboardingSceneBuilder
     private const string TORCH_AUDIO = "Assets/Onboarding/Media/횃불 소리.wav";
     private const string LEFT_MOUSE = "Assets/Onboarding/Media/MouseLeft.png";
     private const string RIGHT_MOUSE = "Assets/Onboarding/Media/MouseRight.png";
-    private const string ONBOARDING_CONFIG_VERSION = "onboarding-2026-10-26-ready-ultimate";
+    private const string ONBOARDING_CONFIG_VERSION = "onboarding-2026-10-26-dodge-movement-end";
     private static readonly string[] STAGE_CARD_FIELDS =
     {
         "_stageStartTitle", "_stageStartDetail", "_stageCompleteTitle",
