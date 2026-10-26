@@ -18,7 +18,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private const int MELEE_STAGE = 2;
     private const int RANGED_SWORD_WAVE_OBJECTIVE = 1;
     private const int RANGED_THROW_BURST_COUNT = 3;
-    private const int FINAL_STAGE_ULTIMATE_OBJECTIVE = 1;
+    private const int FINAL_STAGE_ULTIMATE_OBJECTIVE = 0;
     private const float ARENA_RADIUS = 23.6f;
     private const float MOVEMENT_IDLE_HINT_DELAY = 3f;
     private const float MOVEMENT_WAVE_GUIDE_MINIMUM_RADIUS = 2.5f;
@@ -53,7 +53,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
     private static int _restartStage;
     private static bool _retryPending;
     private static bool _movementWaveTutorialSeen;
-    private static bool _ultimateMeterTutorialSeen;
     private static bool _swordWaveTutorialSeen;
 
     [Header("씬 연습 자산")]
@@ -157,7 +156,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _restartStage = 0;
         _retryPending = false;
         _movementWaveTutorialSeen = false;
-        _ultimateMeterTutorialSeen = false;
         _swordWaveTutorialSeen = false;
         PlayerPerfectPulse.ResetOnboardingStartPulseFade();
         OnboardingTelemetryRecorder.BeginNewRun();
@@ -206,21 +204,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
 
         if (_advanceQueued || _restartQueued || _recoveryQueued || _transitionInputLocked) return;
-        if (_stage == FINAL_STAGE && _objectiveIndex == 0)
-        {
-            if (!_ultimateMeterTutorialSeen && _skillGauge.UltimateGauge > 0f)
-            {
-                _ultimateMeterTutorialSeen = true;
-                _hud.ShowInformationNote(_hud.ParryHudTutorialText, _hud.ParryHudTutorialGamepadText);
-            }
-            if (_hud.IsInformationNoteVisible) _hud.SetTutorialTarget(_ultimateHint.GaugeRect);
-            if (_skillGauge.CanUseUltimate)
-            {
-                _ultimateTutorialPending = true;
-                CompleteCurrentObjective();
-                return;
-            }
-        }
         if (_stage == 0) UpdateOpeningStage();
 
         MaintainTrainingEnemy();
@@ -280,7 +263,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _combat.Events.DefenseResolved += HandleDefenseResolved;
         _combat.Events.DodgeChanged += HandleDodgeChanged;
         _combat.Events.EmpowerChanged += HandleEmpowerChanged;
-        _skillGauge.Changed += HandleSkillGaugeChanged;
         _swordWave.SwordWaveLaunched += HandleSwordWaveLaunched;
         _director.ShurikenLaunched += HandleShurikenLaunched;
     }
@@ -305,7 +287,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         }
         if (_footstepRipple != null) _footstepRipple.PlayerRippleEmitted -= HandlePlayerRippleEmitted;
         if (_swordWave != null) _swordWave.SwordWaveLaunched -= HandleSwordWaveLaunched;
-        if (_skillGauge != null) _skillGauge.Changed -= HandleSkillGaugeChanged;
         if (_director != null)
         {
             _director.ShurikenLaunched -= HandleShurikenLaunched;
@@ -332,7 +313,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _hud.SetIdleMovementHint(false);
         _hud.SetMovementControls(false);
         _tutorialActionPromptReceived = false;
-        _ultimateTutorialPending = false;
+        _ultimateTutorialPending = _stage == FINAL_STAGE;
         _ultimateStrikeStarted = false;
         _swordWaveCompletionPending = false;
         _meleeHintNearby = false;
@@ -344,9 +325,10 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _launchedShurikenAttackIds.Clear();
 
         PositionPlayerForStage(_stage);
+        if (_stage == FINAL_STAGE)
+            _skillGauge.FillUltimateForOnboarding();
         _hud.ShowObjective(_stage, _objectiveIndex);
         if (_stage == 0) _hud.SetOpeningKillProgress(0, OPENING_TARGET_COUNT);
-        if (_stage == FINAL_STAGE) _hud.SetUltimateGaugeProgress(_skillGauge.UltimateNormalized);
         _stageEntrySwordWaveGauge = _skillGauge.SwordWaveGauge;
         _stageEntryUltimateGauge = _skillGauge.UltimateGauge;
         ObjectiveEntered?.Invoke(_stage, _objectiveIndex);
@@ -366,7 +348,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         else if (_stage == PERFECT_DODGE_STAGE)
             CreateTrainingThrower();
         else if (_stage == FINAL_STAGE)
-            CreateTrainingThrower();
+            CreateUltimateTargets();
     }
 
     /// <summary>필요한 연습 위치를 NavMesh에서 찾고 플레이어와 시점을 단계에 맞게 배치한다.</summary>
@@ -638,13 +620,10 @@ public sealed class OnboardingFlowController : MonoBehaviour
             _combat.GuardContactOutcome, _combat.GuardTimingWindow);
     }
 
-    /// <summary>현재 2초 간격 시각에 연습 단계별 전조·투척을 시작한다. 극한 회피와 원거리 연계 단계는 3발을 연속 발사한다.</summary>
+    /// <summary>극한 회피·일섬 단계에서 다음 투척 시각을 확인하고 연습 수리검을 발사한다.</summary>
     private void UpdateRangedThrower()
     {
-        bool followUpStage = _stage == RANGED_STAGE || _stage == FINAL_STAGE;
-        if (_stage != PERFECT_DODGE_STAGE && !followUpStage) return;
-        if (_stage == FINAL_STAGE && (_empower.IsStriking || _empower.IsAutomaticCharging)) return;
-        bool waitingForUltimateGauge = _stage == FINAL_STAGE && !_skillGauge.CanUseUltimate;
+        if (_stage != PERFECT_DODGE_STAGE && _stage != RANGED_STAGE) return;
         if (_stage == RANGED_STAGE && _objectiveIndex == RANGED_SWORD_WAVE_OBJECTIVE)
         {
             bool swordWaveActive = _empower.IsSwordWaveCasting || _empower.IsStriking;
@@ -661,7 +640,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
             }
             if (swordWaveActive || swordWaveReady) return;
         }
-        if (_stage == FINAL_STAGE && IsFollowUpObjective() && !waitingForUltimateGauge) return;
         if (_trainingThrower == null)
         {
             CreateTrainingThrower();
@@ -736,7 +714,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         return 0;
     }
 
-    /// <summary>현재 목표가 패링 뒤의 검기·궁극기 연계 목표인지 반환한다.</summary>
+    /// <summary>현재 목표가 방어 뒤의 일섬 목표인지 반환한다.</summary>
     private bool IsFollowUpObjective()
     {
         return _objectiveIndex > GetParryObjective();
@@ -763,25 +741,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
                 _pendingPerfectDodgeAttackIds.Remove(dodgeEvent.AttackId);
                 CompleteCurrentObjective();
             }
-        }
-    }
-
-    /// <summary>실제 독립 게이지 변경을 마지막 단계의 백분율 목표 표시에 반영한다.</summary>
-    private void HandleSkillGaugeChanged()
-    {
-        if (_stage != FINAL_STAGE || _objectiveIndex != 0) return;
-        _hud.SetUltimateGaugeProgress(_skillGauge.UltimateNormalized);
-        if (!_ultimateMeterTutorialSeen && _skillGauge.UltimateGauge > 0f
-            && !_transitionInputLocked && !_restartQueued)
-        {
-            _ultimateMeterTutorialSeen = true;
-            _hud.ShowInformationNote(_hud.ParryHudTutorialText, _hud.ParryHudTutorialGamepadText);
-        }
-        if (_skillGauge.CanUseUltimate && _ultimateMeterTutorialSeen && !_advanceQueued
-            && !_restartQueued && !_recoveryQueued && !_transitionInputLocked)
-        {
-            _ultimateTutorialPending = true;
-            CompleteCurrentObjective();
         }
     }
 
@@ -836,16 +795,12 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (!_transitionInputLocked && _stage == RANGED_STAGE && IsFollowUpObjective()) QueueAdvance();
     }
 
-    /// <summary>
-    /// 극한 회피·원거리 방어·거합 연습 중 실제 발사된 수리검 공격 ID를 기록한다.
-    /// 목표 전환 중 발사된 수리검도 기록하고, 완료된 극한 회피 단계의 후속탄은 무해화한다.
-    /// </summary>
+    /// <summary>극한 회피·원거리 방어 중 발사된 수리검의 공격 ID를 기록하고 필요한 표시·무해화를 연결한다.</summary>
     private void HandleShurikenLaunched(DefenseShuriken shuriken)
     {
-        if ((_stage != PERFECT_DODGE_STAGE && _stage != RANGED_STAGE
-            && _stage != FINAL_STAGE) || shuriken == null) return;
+        if ((_stage != PERFECT_DODGE_STAGE && _stage != RANGED_STAGE) || shuriken == null) return;
         _launchedShurikenAttackIds.Add(shuriken.AttackId);
-        if (_stage == RANGED_STAGE || _stage == FINAL_STAGE)
+        if (_stage == RANGED_STAGE)
         {
             _hintShurikens.Add(shuriken);
             shuriken.Released += HandleHintShurikenReleased;
@@ -862,11 +817,10 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_hintShuriken == released) _hintShuriken = null;
     }
 
-    /// <summary>4·5단계에서 화면에 보이는 적대 수리검 하나를 추적해 목표에 맞는 막기·쳐내기 문구를 표시한다.</summary>
+    /// <summary>4단계에서 화면에 보이는 적대 수리검 하나를 추적해 쳐내기 문구를 표시한다.</summary>
     private void UpdateShurikenHint()
     {
-        bool rangedDefense = _stage == RANGED_STAGE;
-        if (!rangedDefense && _stage != FINAL_STAGE)
+        if (_stage != RANGED_STAGE)
         {
             _hud.HideShurikenHint();
             return;
@@ -891,7 +845,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
             return;
         }
         _hud.SetShurikenHint(_hintShuriken.transform.position, _viewCamera,
-            _stage == FINAL_STAGE || _stage == RANGED_STAGE || _objectiveIndex > 0);
+            true);
     }
 
     /// <summary>shuriken이 현재 씬에서 플레이어를 향해 비행 중이고 화면에 보이면 true를 반환한다.</summary>
@@ -1129,7 +1083,7 @@ public sealed class OnboardingFlowController : MonoBehaviour
         _inputManager.ExecuteOnboardingPromptAction(action, pressTime);
     }
 
-    /// <summary>거합으로 대상 8명을 처치하지 못하면 표적만 복구하고 실제 게이지를 다시 채우게 한다.</summary>
+    /// <summary>거합으로 대상 8명을 처치하지 못하면 표적과 거합 게이지를 복구해 같은 목표를 재시도한다.</summary>
     private IEnumerator RecoverFailedUltimate()
     {
         _recoveryQueued = true;
@@ -1141,10 +1095,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
             yield return null;
         }
         ResetUltimateTargets();
-        _objectiveIndex = 0;
-        _hud.ShowObjective(_stage, _objectiveIndex, true);
-        _hud.SetUltimateGaugeProgress(_skillGauge.UltimateNormalized);
-        CreateTrainingThrower();
+        _skillGauge.FillUltimateForOnboarding();
+        CreateUltimateTargets();
         yield return ReadyStageAndUnlockInput();
         _recoveryQueued = false;
     }
@@ -1171,14 +1123,12 @@ public sealed class OnboardingFlowController : MonoBehaviour
 
     /// <summary>
     /// nextObjective의 목표로 넘어가며 단계 완료 카드 없이 안내를 갱신한다.
-    /// 첫 일섬 목표와 거합 목표에는 해당 전용 입력 설명을 보여 준다.
+    /// 첫 일섬 목표에는 해당 전용 입력 설명을 보여 준다.
     /// </summary>
     private IEnumerator AdvanceToNextObjective(int nextObjective)
     {
         yield return new WaitForEndOfFrame();
         LockTransitionInput();
-        if (_stage == FINAL_STAGE && nextObjective > GetParryObjective())
-            ClearRangedPractice();
         bool showSwordWaveTutorial = _stage == RANGED_STAGE
             && nextObjective == RANGED_SWORD_WAVE_OBJECTIVE && !_swordWaveTutorialSeen;
         _objectiveIndex = nextObjective;
@@ -1189,9 +1139,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
         if (_stage == RANGED_STAGE && _objectiveIndex == RANGED_SWORD_WAVE_OBJECTIVE
             && _swordWaveTargets.Count == 0)
             CreateSwordWaveTargets();
-        if (_stage == FINAL_STAGE && _objectiveIndex == FINAL_STAGE_ULTIMATE_OBJECTIVE
-            && _ultimateTargets.Count == 0)
-            CreateUltimateTargets();
         _hud.ShowObjective(_stage, _objectiveIndex, !showSwordWaveTutorial);
         _hud.SetFollowUpNoteVisible(_stage != RANGED_STAGE
             || _objectiveIndex != RANGED_SWORD_WAVE_OBJECTIVE);
@@ -1214,9 +1161,6 @@ public sealed class OnboardingFlowController : MonoBehaviour
             UnlockTransitionInput();
             _inputManager.ExecuteOnboardingPromptAction(action, pressTime);
         }
-        if (_stage == FINAL_STAGE && _objectiveIndex == FINAL_STAGE_ULTIMATE_OBJECTIVE
-            && _ultimateTutorialPending)
-            yield return ShowUltimateTutorial();
         yield return ReadyStageAndUnlockInput();
     }
 
@@ -1344,6 +1288,8 @@ public sealed class OnboardingFlowController : MonoBehaviour
             yield return null;
         }
         if (_advanceQueued || _restartQueued) yield break;
+        if (_stage == FINAL_STAGE && _ultimateTutorialPending)
+            yield return ShowUltimateTutorial();
         UnlockTransitionInput();
         _hud.SetMovementControls(_stage == 0);
     }

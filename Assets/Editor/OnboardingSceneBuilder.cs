@@ -22,7 +22,7 @@ public static class OnboardingSceneBuilder
     private const string TORCH_AUDIO = "Assets/Onboarding/Media/횃불 소리.wav";
     private const string LEFT_MOUSE = "Assets/Onboarding/Media/MouseLeft.png";
     private const string RIGHT_MOUSE = "Assets/Onboarding/Media/MouseRight.png";
-    private const string ONBOARDING_CONFIG_VERSION = "onboarding-2026-10-24-action-guides";
+    private const string ONBOARDING_CONFIG_VERSION = "onboarding-2026-10-26-ready-ultimate";
     private static readonly string[] STAGE_CARD_FIELDS =
     {
         "_stageStartTitle", "_stageStartDetail", "_stageCompleteTitle",
@@ -40,7 +40,6 @@ public static class OnboardingSceneBuilder
     private static readonly string[] HUD_TUTORIAL_TEXT_FIELDS =
     {
         "_movementWaveTutorialText", "_movementWaveTutorialGamepadText",
-        "_parryHudTutorialText", "_parryHudTutorialGamepadText",
         "_swordWaveTutorialText", "_swordWaveTutorialGamepadText",
         "_ultimateReadyTutorialText", "_ultimateReadyTutorialGamepadText",
         "_idleMovementText", "_idleMovementGamepadText"
@@ -289,7 +288,7 @@ public static class OnboardingSceneBuilder
             "극한 회피 - 적의 공격에 맞춰 Space로 회피",
             "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)",
             "쳐내기: 적이 공격할 때 막기 (우클릭)",
-            "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)"
+            "거합: Q 홀드"
         };
         string[] gamepadHints =
         {
@@ -297,25 +296,25 @@ public static class OnboardingSceneBuilder
             "극한 회피 - 적의 공격에 맞춰 A 버튼으로 회피",
             "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)",
             "쳐내기: 적이 공격할 때 막기 (LB)",
-            "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)"
+            "거합: Y 홀드"
         };
         string[] followUpKeyboardHints =
         {
-            "", "", "", "일섬: 좌클릭", "거합: Q 홀드"
+            "", "", "", "일섬: 좌클릭", ""
         };
         string[] followUpGamepadHints =
         {
-            "", "", "", "일섬: RB", "거합: Y 홀드"
+            "", "", "", "일섬: RB", ""
         };
         string[] followUpKeyboardNotes =
         {
             "", "", "", "다시 쳐낸 뒤 집중 중 좌클릭으로 일섬을 발동합니다.",
-            "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다."
+            ""
         };
         string[] followUpGamepadNotes =
         {
             "", "", "", "다시 쳐낸 뒤 집중 중 RB로 일섬을 발동합니다.",
-            "중앙의 원이 다 차면 거합이 발동합니다. 도중에 버튼을 떼면 취소됩니다."
+            ""
         };
         string[][] objectives =
         {
@@ -323,23 +322,21 @@ public static class OnboardingSceneBuilder
             new[] { "수리검 극한 회피 1회" },
             new[] { "적의 공격 막기", "공격 직전에 막아 쳐내기" },
             new[] { "수리검 쳐내기 1회", "일섬 발동 1회" },
-            new[] { "거합 게이지 채우기 0%", "거합으로 적 처치" }
+            new[] { "거합으로 적 처치" }
         };
         string[] tutorialDefaults =
         {
             "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.",
             "당신을 포함한 무언가 움직일 때 파동이 생겨 주변을 밝힙니다.",
-            "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다.",
-            "화면의 원형 표시가 거합 게이지입니다.\n쳐내기는 극한 회피보다 많은 양을 채웁니다.",
             "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 좌클릭으로 일섬을 발동합니다.",
             "쳐내기에 성공하면 시간이 느려집니다.\n집중 중 RB로 일섬을 발동합니다.",
-            "거합 게이지를 모두 채웠습니다.\nQ를 홀드해 거합을 발동합니다.",
-            "거합 게이지를 모두 채웠습니다.\nY를 홀드해 거합을 발동합니다.",
+            "적 처치, 극한 회피, 쳐내기로 거합 게이지를 채울 수 있습니다.\n거합 게이지를 모두 채운 뒤 Q를 홀드해 거합을 발동합니다.",
+            "적 처치, 극한 회피, 쳐내기로 거합 게이지를 채울 수 있습니다.\n거합 게이지를 모두 채운 뒤 Y를 홀드해 거합을 발동합니다.",
             "WASD키로 이동하기",
             "왼쪽 스틱으로 이동하기"
         };
         Sprite rightMouse = AssetDatabase.LoadAssetAtPath<Sprite>(RIGHT_MOUSE);
-        int[] rightIconStages = { 2, 3, 4 };
+        int[] rightIconStages = { 2, 3 };
         int[] followUpObjectives = { 1, 1, 1, 1, 1 };
 
         for (int i = 0; i < prompts.arraySize; i++)
@@ -358,6 +355,13 @@ public static class OnboardingSceneBuilder
                 savedPrompt.Hints[4], followUpKeyboardNotes[i], string.Empty);
             prompt.FindPropertyRelative("_followUpGamepadNote").stringValue = MigrateText(
                 savedPrompt.Hints[5], followUpGamepadNotes[i], string.Empty);
+            if (i == 4)
+            {
+                prompt.FindPropertyRelative("_followUpKeyboardHint").stringValue = string.Empty;
+                prompt.FindPropertyRelative("_followUpGamepadHint").stringValue = string.Empty;
+                prompt.FindPropertyRelative("_followUpNote").stringValue = string.Empty;
+                prompt.FindPropertyRelative("_followUpGamepadNote").stringValue = string.Empty;
+            }
             prompt.FindPropertyRelative("_followUpObjective").intValue = followUpObjectives[i];
             for (int field = 0; field < STAGE_CARD_FIELDS.Length; field++)
                 prompt.FindPropertyRelative(STAGE_CARD_FIELDS[field]).stringValue = MigrateStageCardText(
@@ -393,6 +397,12 @@ public static class OnboardingSceneBuilder
     /// <summary>저장된 입력 안내가 이전 4단계 기본값이면 새 입력 안내로 바꾸고 Inspector 사용자 문구는 유지한다.</summary>
     private static string MigratePromptHint(int stageIndex, int hintIndex, string savedText, string newDefault)
     {
+        if (stageIndex == 4 && hintIndex == 0)
+            return MigrateText(savedText, newDefault,
+                "막기: 마우스 오른쪽 버튼 홀드\n쳐내기: 적이 공격할 때 막기 (우클릭)");
+        if (stageIndex == 4 && hintIndex == 1)
+            return MigrateText(savedText, newDefault,
+                "막기: LB 홀드\n쳐내기: 적이 공격할 때 막기 (LB)");
         if (stageIndex == 4 && hintIndex == 2)
             return MigrateText(savedText, newDefault, "거합: Q");
         if (stageIndex == 4 && hintIndex == 3)
@@ -418,10 +428,12 @@ public static class OnboardingSceneBuilder
         return savedText;
     }
 
-    /// <summary>4단계의 이전 목표 배열을 두 목표로 접고 다른 단계의 Inspector 목표 문구는 그대로 반환한다.</summary>
+    /// <summary>4단계와 5단계의 이전 목표 배열에서 현재 목표 문구를 선택하고 Inspector 문구를 반환한다.</summary>
     private static string GetObjectiveText(int stageIndex, int objectiveIndex, string[] savedObjectives,
         string[] newDefaults)
     {
+        if (stageIndex == 4 && savedObjectives != null && savedObjectives.Length == 2)
+            return savedObjectives[1];
         if (stageIndex != 3)
             return savedObjectives != null && savedObjectives.Length == newDefaults.Length
                 ? savedObjectives[objectiveIndex] : newDefaults[objectiveIndex];
@@ -470,14 +482,12 @@ public static class OnboardingSceneBuilder
         if (savedText == null) return newDefault;
         savedText = savedText.Replace("\n마우스 좌클릭으로 계속 진행", string.Empty)
             .Replace("\nRB 버튼으로 계속 진행", string.Empty);
-        bool obsolete = fieldName.StartsWith("_parryHudTutorial", StringComparison.Ordinal)
-            ? savedText.Contains("15%") || savedText.Contains("33%")
-                || savedText.Contains("극한 회피보다 쳐내기가 많은 양을 채웁니다")
-            : fieldName.StartsWith("_swordWaveTutorial", StringComparison.Ordinal)
-                ? savedText.Contains("일섬 게이지") || savedText.Contains("Shift") || savedText.Contains("RT")
-                : fieldName.StartsWith("_ultimateReadyTutorial", StringComparison.Ordinal)
-                    && (savedText.Contains("Q를 눌러") || savedText.Contains("Y를 눌러")
-                        || savedText.Contains("거합 게이지를 모두 채운 뒤"));
+        bool obsolete = fieldName.StartsWith("_swordWaveTutorial", StringComparison.Ordinal)
+            ? savedText.Contains("일섬 게이지") || savedText.Contains("Shift") || savedText.Contains("RT")
+            : fieldName.StartsWith("_ultimateReadyTutorial", StringComparison.Ordinal)
+                && (savedText == "거합 게이지를 모두 채웠습니다.\nQ를 홀드해 거합을 발동합니다."
+                    || savedText == "거합 게이지를 모두 채웠습니다.\nY를 홀드해 거합을 발동합니다."
+                    || savedText.Contains("Q를 눌러") || savedText.Contains("Y를 눌러"));
         return obsolete ? newDefault : savedText;
     }
 
