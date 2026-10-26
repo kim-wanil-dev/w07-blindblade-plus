@@ -95,9 +95,11 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
     private bool _running;
     private bool _perfectRunning;
     private bool _dodgeRunning;
+    private int _pulseId;
 
     public static float ThreatSilhouetteWeight { get; private set; }
     public bool IsRunning => _running;
+    public int PulseId => _pulseId;
     public bool IsPerfectRunning => _running && _perfectRunning;
     public Vector3 Center => _center;
     public float CurrentRadius { get; private set; }
@@ -353,7 +355,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
 
     /// <summary>
     /// point 지면과 normal에서 radius·expandDuration·fadeDuration·ringColor를 복사해 파동을 시작하고 바닥 링을 켠다.
-    /// perfect가 참이면 강화 동안 공개를 유지하는 퍼펙트 파동으로 표시하며, 진행 상태와 지면 중심을 갱신한다.
+    /// perfect가 참이면 강화 동안 공개를 유지하는 퍼펙트 파동으로 표시하며, 진행 상태와 지면 중심을 갱신하고 _pulseId를 올린다.
     /// 감각 매니저가 준비되지 않았으면 시야 공개 없이 링만 보인다.
     /// </summary>
     private void StartPulse(Vector3 point, Vector3 normal, float radius, float expandDuration, float fadeDuration,
@@ -373,6 +375,7 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         _session = _hasSession ? _sessionRuntime.Session : default;
         _perfectRunning = perfect;
         _dodgeRunning = false;
+        _pulseId++;
         _elapsed = 0f;
         _fadeElapsed = 0f;
         _rememberedRadius = 0f;
@@ -381,6 +384,15 @@ public sealed class PlayerPerfectPulse : MonoBehaviour
         CurrentVisibility = 1f;
         if (_mask != null) _mask.ClearPulseRegion();
         PrepareRing(point, normal);
+    }
+
+    /// <summary>
+    /// pulseId가 지금 진행 중인 파동의 PulseId와 같으면 파동 영역과 바닥 링을 바로 지운다. 지형 기억에 남은 바닥은 그대로 둔다.
+    /// 그 뒤 다른 호출이 새로 시작한 파동은 번호가 달라 건드리지 않는다.
+    /// </summary>
+    public void Cancel(int pulseId)
+    {
+        if (_running && pulseId == _pulseId) Stop();
     }
 
     /// <summary>진행 중인 파동을 멈추고 퍼펙트 파동 영역과 바닥 링을 감춘다. 지형 기억에 남은 바닥은 그대로 둔다.</summary>

@@ -758,6 +758,9 @@ MonoBehaviour:
   _ultimateChargeDuration: 1.5
   _chargeWorldTimeScale: 0.1
   _ultimateRecastCooldown: 0.53
+  _chargePulseLead: 0.5
+  _chargePulseRadiusScale: 1.5
+  _chargePulseExtraFade: 0.8
   _swordWaveFocusDuration: 1.5
   _swordWaveFocusTimeScale: 0.1
   _swordWaveFocusPlayerTimeScale: 1
