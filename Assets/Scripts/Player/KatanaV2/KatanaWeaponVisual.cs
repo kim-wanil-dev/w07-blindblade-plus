@@ -469,7 +469,7 @@ public sealed class KatanaWeaponVisual : MonoBehaviour
                 _parry = false;
                 _finishingInsertion = false;
                 Play("GuardEnter", _guardTransitionBlendTime);
-                _duration = 0.12f;
+                _duration = 0.05f;
                 break;
             case KatanaStage.GuardSucceeded:
                 _flash = 0.6f;

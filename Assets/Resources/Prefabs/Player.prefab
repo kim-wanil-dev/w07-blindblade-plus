@@ -459,7 +459,10 @@ MonoBehaviour:
   _comboResetDelay: 0.65
   _targetedAttackMinimumDuration: 0.45
   _perfectParryStart: 0
-  _perfectParryEnd: 0.1
+  _perfectParryEnd: 0.2
+  _perfectParryReleaseGrace: 0.05
+  _repeatedGuardWindowScale: 0.5
+  _repeatedGuardResetTime: 0.2
   _blockInputRecovery: 0
   _guardPushDistance: 0.9
   _guardPushDuration: 0.12
@@ -524,7 +527,7 @@ MonoBehaviour:
   _secondAttackReturnsToIdle: 1
   _showWeapon: 1
   _blendTime: 0.025
-  _guardTransitionBlendTime: 0.1
+  _guardTransitionBlendTime: 0.05
   _iaidoImpactProgress: 0.88461536
   _normal1ImpactProgress: 0.75
   _counterImpactProgress: 0.75
