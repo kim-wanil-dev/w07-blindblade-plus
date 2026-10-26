@@ -8,7 +8,8 @@ using BlindBlade.Combat.Contracts;
 /// <summary>
 /// 투척수가 던진 수리검의 예측 조준 비행과 플레이어 적중을 처리한다.
 /// 접촉은 회피 중에도 플레이어 방어 판정에 그대로 전달한다. 일반 패링이면 가장 가까운 근접 적에게 반사하고,
-/// 퍼펙트 패링·가드·회피면 수리검만 소멸한다. 반사한 수리검은 빨간 위협 실루엣 대신 인지와 무관한 흰 윤곽선으로 보인다.
+/// 퍼펙트 패링·가드·회피면 일반 수리검은 소멸한다. 온보딩 극한 회피 성공 수리검은 피해 없이 비행을 이어간다.
+/// 반사한 수리검은 빨간 위협 실루엣 대신 인지와 무관한 흰 윤곽선으로 보인다.
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class DefenseShuriken : MonoBehaviour
@@ -35,6 +36,7 @@ public sealed class DefenseShuriken : MonoBehaviour
     private BambooDefenseDirector _director;
     private float _damage;
     private bool _onboardingHarmless;
+    private bool _continueAfterOnboardingPerfectDodge;
     private Vector3 _direction;
     private float _elapsed;
     private bool _flying;
@@ -203,6 +205,7 @@ public sealed class DefenseShuriken : MonoBehaviour
         _director = director;
         _damage = damage;
         _onboardingHarmless = false;
+        _continueAfterOnboardingPerfectDodge = false;
         _direction = direction.normalized;
         CombatSessionRuntime session = CombatSessionRuntime.Active;
         _attackId = attackId != 0 ? attackId : BlindBlade.Telemetry.CombatTelemetrySignals.Begin(PATTERN_ID, "Projectile", transform.position, target.transform.position);
@@ -222,6 +225,15 @@ public sealed class DefenseShuriken : MonoBehaviour
     public void MakeHarmlessForOnboarding()
     {
         _onboardingHarmless = true;
+    }
+
+    /// <summary>극한 회피를 성공한 온보딩 수리검의 피해·위협 판정을 끄고 기존 방향으로 비행을 계속한다.</summary>
+    public void ContinueAfterOnboardingPerfectDodge()
+    {
+        _onboardingHarmless = true;
+        _continueAfterOnboardingPerfectDodge = true;
+        _terminalFlight = true;
+        _hasPassedPlayer = true;
     }
 
     /// <summary>motor의 현재 시점보다 _aimDrop만큼 낮은 위치를 발사·유도 공통 조준점으로 반환한다.</summary>
@@ -361,25 +373,29 @@ private void ApplyVisualPitch()
     /// <summary>
     /// collider가 자신과 적을 제외한 대상 플레이어 또는 지형이면 true를 반환한다.
     /// 다른 피해 수신자는 통과하여 대상 플레이어에게만 피해를 전달한다.
+    /// 온보딩에서 극한 회피를 마친 수리검은 플레이어를 통과시킨다.
     /// </summary>
     private bool CanHit(Collider collider)
     {
         if (collider.transform.IsChildOf(transform) || collider.GetComponentInParent<EnemyHealth>() != null)
             return false;
         PlayerHealth player = collider.GetComponentInParent<PlayerHealth>();
-        return player == null ? collider.GetComponentInParent<IDamageable>() == null : player == _target;
+        return player == null ? collider.GetComponentInParent<IDamageable>() == null
+            : player == _target && !_continueAfterOnboardingPerfectDodge;
     }
 
     /// <summary>
     /// collider의 point에 공격 ID와 Projectile 종류를 붙여 A의 단일 방어 판정에 전달한다.
-    /// 퍼펙트 패링이면 반사 비행으로 바꾸고, 그 외 결과나 반사할 적이 없으면 수리검을 소멸한다.
-    /// 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
+    /// 퍼펙트 패링이면 반사 비행으로 바꾸고, 온보딩의 극한 회피 성공이면 무해한 상태로 비행을 잇는다.
+    /// 나머지 판정은 수리검을 소멸하며 처리기가 없을 때만 기존 체력 API로 피해를 적용한다.
     /// </summary>
     private void ProcessHit(Collider collider, Vector3 point)
     {
         PlayerHealth player = collider.GetComponentInParent<PlayerHealth>();
         if (player != null)
         {
+            if (_continueAfterOnboardingPerfectDodge)
+                return;
             if (_onboardingHarmless)
             {
                 Release();
@@ -391,6 +407,9 @@ private void ApplyVisualPitch()
             if (resolver != null)
             {
                 DefenseResolution resolution = resolver.ResolveIncomingAttack(context);
+                if (resolution.Outcome == DefenseOutcome.DodgeAvoided
+                    && _continueAfterOnboardingPerfectDodge)
+                    return;
                 if (resolution.Outcome == DefenseOutcome.PerfectParry && TryReflect(player.gameObject))
                     return;
             }

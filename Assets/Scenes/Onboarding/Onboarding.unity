@@ -59063,7 +59063,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3cf5a20e5afc64d49ab501c26551c16c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlindBlade.Telemetry.OnboardingTelemetryRecorder
-  _configVersion: onboarding-2026-10-26-ready-ultimate
+  _configVersion: onboarding-2026-10-26-dodge-movement-end
   _summaryIntervalSeconds: 15
   _recordingEnabled: 1
   _allowAutomaticUpload: 1
