@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 490" role="img" aria-label="공격 전조 방향 인디케이터 시안: 검 적 쌍검과 늑대 이빨의 흰색, 노란색, 붉은색 상태">
+  <rect width="1000" height="490" rx="24" fill="#111820"/>
+  <text x="44" y="47" fill="#f3f6f8" font-family="Arial, sans-serif" font-size="25" font-weight="700">ATTACK TELEGRAPH · ICON CONCEPT</text>
+  <text x="44" y="75" fill="#91a0ad" font-family="Arial, sans-serif" font-size="14">화면 밖 공격자 방향 마커 · 원호는 기존 배치 재사용</text>
+  <g font-family="Arial, sans-serif" text-anchor="middle" font-size="16" font-weight="700">
+    <text x="275" y="122" fill="#e8eef2">시작 · 흰색</text>
+    <text x="540" y="122" fill="#f7d34b">준비 · 노란색</text>
+    <text x="805" y="122" fill="#f65b52">임박 · 붉은색</text>
+  </g>
+  <text x="44" y="218" fill="#b4c0c8" font-family="Arial, sans-serif" font-size="18" font-weight="700">검 적</text>
+  <text x="44" y="366" fill="#b4c0c8" font-family="Arial, sans-serif" font-size="18" font-weight="700">작은 늑대</text>
+  <defs>
+    <g id="swords" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <g transform="rotate(-42)">
+        <path d="M-3 11 Q-8 -17 -7 -35 Q-6 -46 -2 -53 Q-1 -44 0 -36 Q3 -15 3 11 Z" fill="currentColor" stroke="none"/>
+        <path d="M0 9 L0 42 M-4 21 L4 26 M-4 30 L4 35" stroke-width="5"/>
+        <circle cx="0" cy="44" r="3" fill="currentColor" stroke="none"/>
+      </g>
+      <g transform="rotate(42) scale(-1 1)">
+        <path d="M-3 11 Q-8 -17 -7 -35 Q-6 -46 -2 -53 Q-1 -44 0 -36 Q3 -15 3 11 Z" fill="currentColor" stroke="none"/>
+        <path d="M0 9 L0 42 M-4 21 L4 26 M-4 30 L4 35" stroke-width="5"/>
+        <circle cx="0" cy="44" r="3" fill="currentColor" stroke="none"/>
+      </g>
+    </g>
+    <g id="fangs" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M-42 -27 Q0 -42 42 -27 L34 -6 L24 -21 L14 -3 L4 -24 L-4 -24 L-14 -3 L-24 -21 L-34 -6 Z"/>
+      <path d="M-42 26 Q0 41 42 26 L32 6 L21 24 L10 7 L0 27 L-10 7 L-21 24 L-32 6 Z"/>
+    </g>
+    <g id="arc" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round">
+      <path d="M-37 60 Q0 43 37 60"/>
+    </g>
+  </defs>
+  <g transform="translate(275 212)" style="color:#f2f5f7"><use href="#swords"/><use href="#arc"/></g>
+  <g transform="translate(540 212)" style="color:#f7d34b"><use href="#swords"/><use href="#arc"/></g>
+  <g transform="translate(805 212)" style="color:#f65b52">
+    <circle r="70" fill="none" stroke="currentColor" stroke-width="3" opacity=".42"/>
+    <g transform="scale(1.12)"><use href="#swords"/><use href="#arc"/></g>
+    <circle cx="58" cy="-47" r="17" fill="#f65b52"/>
+    <text x="58" y="-39" text-anchor="middle" fill="#111820" font-family="Arial, sans-serif" font-size="24" font-weight="900">!</text>
+  </g>
+  <g transform="translate(275 358)" style="color:#f2f5f7"><use href="#fangs"/><use href="#arc"/></g>
+  <g transform="translate(540 358)" style="color:#f7d34b"><use href="#fangs"/><use href="#arc"/></g>
+  <g transform="translate(805 358)" style="color:#f65b52">
+    <circle r="70" fill="none" stroke="currentColor" stroke-width="3" opacity=".42"/>
+    <g transform="scale(1.12)"><use href="#fangs"/><use href="#arc"/></g>
+    <circle cx="58" cy="-47" r="17" fill="#f65b52"/>
+    <text x="58" y="-39" text-anchor="middle" fill="#111820" font-family="Arial, sans-serif" font-size="24" font-weight="900">!</text>
+  </g>
+  <text x="500" y="465" text-anchor="middle" fill="#91a0ad" font-family="Arial, sans-serif" font-size="14">붉은 상태: 1회 크기 펄스 · 원호 붉게 전환 · 작은 ! 배지</text>
+</svg>

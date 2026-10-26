@@ -567,7 +567,7 @@ MonoBehaviour:
         Data4: -380512219
       Path: event:/Enemy/DefenseMeleeWarning
     _enabled: 1
-    _volumeMultiplier: 2
+    _volumeMultiplier: 5
     _pitchMultiplier: 1
     _useCallerLabel: 0
     _combatCue: 1
@@ -754,6 +754,38 @@ MonoBehaviour:
     _combatCue: 1
     _spatialize2D: 0
     _finishNaturally: 1
+  - _id: 51
+    _type: 1
+    _event:
+      Guid:
+        Data1: -1392570147
+        Data2: 1330546139
+        Data3: -1434409803
+        Data4: 1002649900
+      Path: event:/Enemy/DefenseMeleeDraw
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 1
+    _spatialize2D: 0
+    _finishNaturally: 0
+  - _id: 52
+    _type: 1
+    _event:
+      Guid:
+        Data1: -395878082
+        Data2: 1100771576
+        Data3: 761300634
+        Data4: 975170411
+      Path: event:/Enemy/DefenseBeastWarning
+    _enabled: 1
+    _volumeMultiplier: 1
+    _pitchMultiplier: 1
+    _useCallerLabel: 0
+    _combatCue: 1
+    _spatialize2D: 0
+    _finishNaturally: 0
   _bgmBusPath: bus:/BGM_Bus
   _effectBusPath: bus:/SFX_Bus
   _cinematicBusPath: bus:/Cinematic_Bus

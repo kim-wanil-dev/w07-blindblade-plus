@@ -4528,6 +4528,7 @@ MonoBehaviour:
   _maximumHeartbeatInterval: 0.55
   _postHeartbeatAttackDelay: 0.5
   _attackVoiceLeadTime: 0.05
+  _telegraphStartSound: 52
   _telegraphVolume: 1
   _actionVolume: 1
   _attackRange: 9

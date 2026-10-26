@@ -71,7 +71,6 @@ public sealed class CombatThreatPresentationProvider : MonoBehaviour, IThreatPre
     public bool ShowShurikenIndicators => _showShurikenIndicators;
     /// <summary>Inspector의 적 표시 설정을 반환한다.</summary>
     public bool ShowEnemyIndicators => _showEnemyIndicators;
-
     private readonly struct ActiveFootstep
     {
         public FootstepPresentationSnapshot Snapshot { get; }

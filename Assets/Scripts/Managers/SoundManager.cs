@@ -1112,6 +1112,8 @@ public class SoundManager
             case SoundId.DefenseBeastDie:
             case SoundId.DefenseBeastLeap:
             case SoundId.EnemyMeleeWarning:
+            case SoundId.DefenseMeleeDraw:
+            case SoundId.DefenseBeastWarning:
                 return true;
             default:
                 return false;
@@ -1125,6 +1127,8 @@ public class SoundManager
     private bool CanPlayDuringMovement(SoundId soundId, GameObject source, bool playDuringMovement)
     {
         return _footstepOnlyOwner == null || playDuringMovement || soundId == SoundId.WarCry
+            || soundId == SoundId.EnemyMeleeWarning || soundId == SoundId.DefenseMeleeDraw
+            || soundId == SoundId.DefenseBeastWarning
             || (source == _footstepOnlyOwner && (soundId == SoundId.Footstep || soundId == SoundId.RainFootstep
                 || soundId == SoundId.SwordSwing
                 || soundId == SoundId.SwordHit || soundId == SoundId.SwordUnsheath));

@@ -5268,6 +5268,10 @@ PrefabInstance:
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
+      propertyPath: _telegraphStartSound
+      value: 51
+      objectReference: {fileID: 0}
+    - target: {fileID: 3519979018492637563, guid: 037f6be151a515745a6193a2a06100f0, type: 3}
       propertyPath: _warningSound
       value: 39
       objectReference: {fileID: 0}

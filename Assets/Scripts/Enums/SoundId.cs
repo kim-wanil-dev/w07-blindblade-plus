@@ -55,4 +55,6 @@ public enum SoundId
     DefenseBeastLeap = 48,
     EnemyWaterFootstep = 49,
     HumanEnemyDie = 50,
+    DefenseMeleeDraw = 51,
+    DefenseBeastWarning = 52,
 }
