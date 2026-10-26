@@ -176,7 +176,7 @@ public sealed class InputManager : MonoBehaviour
 
         if (_guard.WasReleasedThisFrame())
         {
-            _combat.EndDefense();
+            _combat.ReleaseDefense();
             PublishInput(_guardInputId, PlayerInputKind.GuardRelease, PlayerInputStatus.Started,
                 PlayerInputRejectReason.None, 0, _guardReleaseTime);
         }
