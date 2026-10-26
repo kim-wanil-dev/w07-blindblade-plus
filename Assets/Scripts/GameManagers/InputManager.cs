@@ -59,6 +59,7 @@ public sealed class InputManager : MonoBehaviour
     private int _bufferedAttackActionId;
     private double _bufferedAttackPressTime;
     private bool _ignoreAttackInputUntilRelease;
+    private bool _ultimateRecastPending;
     private bool _onboardingPromptActive;
     private bool _onboardingPromptRequiresRelease;
     private bool _onboardingPromptInputPending;
@@ -157,11 +158,7 @@ public sealed class InputManager : MonoBehaviour
             player.AddLookInput(look);
 
         ResolveBufferedInputs(player);
-        if (_ultimateInput.WasPressedThisFrame())
-        {
-            RequestSkill(true);
-            return;
-        }
+        if (UpdateUltimateInput()) return;
 
         // 새 우클릭은 자유 상태에서 가드와 패링 창을 열고 공격 중에는 거부된다.
         // 계속 누르는 우클릭은 가드가 끝나 자유 상태가 되면 다시 가드와 패링 창을 연다.
@@ -342,6 +339,34 @@ public sealed class InputManager : MonoBehaviour
         PublishInput(inputId, PlayerInputKind.Attack, status,
             accepted ? PlayerInputRejectReason.None : _combat.LastRejectReason,
             started ? player.CurrentActionId : 0, pressTime);
+    }
+
+    /// <summary>
+    /// 이번 프레임의 Q/Y 누름을 거합 요청으로 전달하고 요청했으면 true를 반환한다.
+    /// 재사용 대기 중 누름은 _ultimateRecastPending에 보관해 대기가 끝날 때까지 누르고 있으면 요청하고, 먼저 떼면 ActionBusy 거부로 기록한다.
+    /// </summary>
+    private bool UpdateUltimateInput()
+    {
+        bool pressed = _ultimateInput.WasPressedThisFrame();
+        if (pressed && _empower.IsUltimateRecastCoolingDown) _ultimateRecastPending = true;
+        if (!_ultimateRecastPending)
+        {
+            if (!pressed) return false;
+            RequestSkill(true);
+            return true;
+        }
+
+        if (!_ultimateInput.IsPressed())
+        {
+            _ultimateRecastPending = false;
+            PublishInput(++_nextInputId, PlayerInputKind.Ultimate, PlayerInputStatus.Rejected,
+                PlayerInputRejectReason.ActionBusy, 0, _ultimatePressTime);
+            return false;
+        }
+        if (_empower.IsUltimateRecastCoolingDown) return false;
+        _ultimateRecastPending = false;
+        RequestSkill(true);
+        return true;
     }
 
     /// <summary>ultimate 요청을 한 번 수행하고 pressTime을 기록한다. requireHeld이면 실제 거합 차징 전에 Q/Y 유지도 확인한다.</summary>
@@ -556,6 +581,7 @@ public sealed class InputManager : MonoBehaviour
         _dodgeStaminaHint = null;
         // 매니저는 다음 씬에서도 재사용되므로 이전 플레이어의 예약 입력 추적을 남기지 않는다.
         _bufferedAttackInputId = 0;
+        _ultimateRecastPending = false;
         EndOnboardingActionPrompt();
         if (_actions != null) _actions.Player.Disable();
         SetCursor(false);
