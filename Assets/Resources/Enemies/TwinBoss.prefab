@@ -1030,6 +1030,8 @@ MonoBehaviour:
   _pounceBarkLeadTime: 0.9
   _pounceOvershoot: 3
   _pounceLift: 0.5
+  _pounceHomingTurnRate: 50
+  _pounceHomingStopDistance: 3
   _parryRecoilDistance: 15
   _parryRecoilDuration: 0.15
   _chargeSound: 0
