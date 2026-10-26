@@ -141,10 +141,12 @@ public sealed class InputManager : MonoBehaviour
             if (_attack.WasPressedThisFrame() || _guard.WasPressedThisFrame()) SetCursor(true);
             return;
         }
-        // 강화 공격 연출 중에는 이동·시점·가드·회피·공격 입력을 받지 않는다.
+        // 강화 공격 연출 중에는 이동·가드·회피·공격 입력을 받지 않는다.
+        // 시점은 거합 홀드 차징 중에만 받고, 암전·일섬 시전 중에는 받지 않는다.
         if (_empower.IsStriking || _empower.IsAutomaticCharging || _empower.IsSwordWaveCasting)
         {
             player.SetMovementInput(Vector2.zero);
+            if (_empower.IsAutomaticCharging) ApplyWorldScaledLookInput(player);
             return;
         }
         player.SetMovementInput(_move.ReadValue<Vector2>());
@@ -184,6 +186,21 @@ public sealed class InputManager : MonoBehaviour
 
         if (_attack.WasPressedThisFrame() && !ignoreAttackPress)
             RequestAttack(player);
+    }
+
+    /// <summary>
+    /// 거합 홀드 차징 중 시점 입력을 세계 시간 배율(Time.timeScale)에 비례해 줄여 player에 전달한다.
+    /// 마우스 이동량은 배율을 곱하고, 패드는 플레이어 시계 대신 세계 deltaTime으로 회전량을 계산한다.
+    /// 커서 잠금 직후 _lookIgnoredUntil 이전 입력은 버린다.
+    /// </summary>
+    private void ApplyWorldScaledLookInput(PlayerController player)
+    {
+        if (Time.unscaledTime < _lookIgnoredUntil) return;
+        Vector2 look = _look.ReadValue<Vector2>();
+        if (_look.activeControl != null && _look.activeControl.device is Gamepad)
+            _motor.AddGamepadLookInput(look, _gamepadLookDegreesPerSecond, Time.deltaTime);
+        else
+            player.AddLookInput(look * Time.timeScale);
     }
 
     /// <summary>온보딩 행동 안내 중 조준을 적용하고 새 공격 또는 거합 입력을 한 건만 보관한다.</summary>
