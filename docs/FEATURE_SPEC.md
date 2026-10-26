@@ -50,7 +50,7 @@
 | 비 내리는 2막과 날씨 | [비 내리는 스테이지 2](features/비_스테이지2.md), [RainyStage 비 연출](features/RainyStage_비_연출.md) |
 | 1막 사운드 중심 보스 | [사운드 중심 보스전](features/사운드_중심_보스전.md) |
 | 2막 쌍둥이 보스 | [비 내리는 쌍둥이 보스전](features/비_쌍둥이_보스전.md), [쌍둥이 보스](features/쌍둥이_보스.md) |
-| 적 추적·공격·피격 | [적 추적](features/적_추적.md), [적 공격 패턴](features/적_공격_패턴.md), [근접 공격 차례 제한](features/근접_공격_차례_제한.md), [적 전투 및 체력](features/적_전투_체력.md), [적 피격 캡슐](features/적_피격_캡슐.md), [DefenseBeast 일반 적](features/DefenseBeast.md) |
+| 적 추적·공격·피격 | DefenseBeast의 공격 취소 시 NavMeshAgent 정지 상태를 유효할 때 복원한다. [적 추적](features/적_추적.md), [적 공격 패턴](features/적_공격_패턴.md), [근접 공격 차례 제한](features/근접_공격_차례_제한.md), [적 전투 및 체력](features/적_전투_체력.md), [적 피격 캡슐](features/적_피격_캡슐.md), [DefenseBeast 일반 적](features/DefenseBeast.md) |
 | 인지·윤곽선·효과 | [감각 표현](features/감각_표현.md), [화면 공간 윤곽선](features/화면_공간_윤곽선.md), [위협 표시 판정](features/위협_표시_판정.md), [이펙트 시스템](features/이펙트_시스템.md) |
 
 ### HUD·기록·공용 시스템

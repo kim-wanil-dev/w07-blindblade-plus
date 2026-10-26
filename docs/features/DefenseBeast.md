@@ -1,5 +1,12 @@
 # DefenseBeast 일반 적 구현 명세
 
+## 현재 공격 취소 시 NavMeshAgent 복원
+
+- `EnemyHealth.TryTakeDamage`가 치명타 뒤 적 오브젝트를 비활성화하면 `EnemyController.OnDisable`이 진행 중인 물기 돌진을 취소한다. `DefenseBeastLeapAttack.OnAttackEnded`는 이동 설정을 복원하되, `NavMeshAgent.isStopped`는 에이전트가 활성 상태이고 NavMesh 위에 있을 때만 복원한다.
+- 비활성 상태에서 취소됐다면 이전 정지 상태를 보류하고 `OnEnable` 또는 `Update`에서 NavMesh 복귀를 확인해 적용한다. 다음 공격 전에 복원 상태도 확인한다. 이 경로는 적 재활성화 후 이동 상태를 유지하기 위한 것이다.
+- 관련 코드: `Assets/Scripts/Enemies/Attack/DefenseBeastLeapAttack.cs` / `OnAttackEnded`, `RestoreStoppedWhenReady`, `OnEnable`, `Update`, `PerformAttack`; `Assets/Scripts/Enemies/EnemyController.cs` / `OnDisable`; `Assets/Scripts/Enemies/EnemyHealth.cs` / `TryTakeDamage`.
+- 구현 상태: 코드 경로 확인을 마쳤다. .NET 빌드는 `project.assets.json`이 없어 컴파일 전에 중단됐으며 Unity Play에서 치명타 중 도약 취소와 재활성화 후 이동은 미확인이다.
+
 - 작성일: 2026-10-17
 - 상태: **2026-10-18 관절 기반 애니메이션·원 그리기·물기 돌진·월드 공간 연기·몸체 숨김·눈 줄기·발 디딤 소리 연결. C# 빌드 확인, 실제 전투 Play 확인 대기**
 - 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이며, 교전 시작 순서와 배회·물러나기 거리는 "2026-10-22 배회 후 공격 복귀·교전 거리 축소" 절, 돌진 직전 눈 섬광은 "2026-10-19 돌진 확정 눈 섬광" 절, 덮치기 궤적과 전조 시간은 "2026-10-19 로그 곡선 덮치기·전조 연장" 절이 우선한다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
