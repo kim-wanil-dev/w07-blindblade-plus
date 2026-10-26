@@ -4,6 +4,16 @@
 
 ### 전투 HUD
 
+#### 1·2스테이지 공격 전조 방향 인디케이터 (2026-10-26, 최신 규칙)
+
+- `BambooStage1`과 `RainyTwinBoss`의 `DefenseDirector/CombatThreatPresentationProvider`는 `적 방향 표시 모드=AttackTelegraph`를 저장한다. 이 모드에서 기존 화면 밖 발걸음 방향 UI는 그리지 않고, `DefenseMelee`의 근접 공격 시도에는 가는 카타나 쌍검, `DefenseBeast`의 물기 돌진 시도에는 이빨을 표시한다. 실제 적 발소리와 월드 발자국 효과는 유지한다. 다른 씬은 기본 `Footstep` 모드다.
+- 공급자는 `EnemyAttackBehaviour.TelegraphStarted`의 `AttackId`와 `EnemyHealth`의 대상 ID·생성 세대를 묶는다. 현재 적 위치로 방향과 화면 진입을 매 프레임 갱신하고, 취소·공격 종료·사망·재사용·세션 종료 시 마커를 반환한다. 기존 `CombatFootstepHud`의 24개 슬롯과 방향 원호를 재사용한다. 화면 안 적은 기존 몸체 경고를 보며 방향 UI는 숨긴다.
+- 실제 전조 0.8초 중 처음 0.6초는 흰색에서 노란색으로 변하고, 남은 0.2초는 붉은색·`!` 배지·1회 크기 펄스로 강조한다. 공격 확정 때 0.1초 이내의 붉은 확인 펄스 후 표시를 정리한다. 지속 점멸은 쓰지 않는다.
+- Inspector: 씬 `DefenseDirector > CombatThreatPresentationProvider`의 기존 `위협 표시 정책`에서 가시성 임계값·거리·투명도를 조절한다. `공격 전조 표시 정책`에서 시작/준비/임박 색과 강조 크기를 조절한다. 공용 `Assets/Scenes/Defense/UI/CombatFootstepMarker.prefab`의 `공격 전조 이미지`에서 쌍검·이빨 Sprite와 위험 배지 Image를 바꾼다. PNG 원본은 `Assets/Scenes/Defense/UI/Indicators/`에 있다.
+- 크기 조정: 공용 `BambooDefenseHud.prefab > FootstepMarkers > CombatFootstepHud > 공격 전조 크기`의 `먼 거리 크기`와 `가까운 거리 크기`를 조절한다. 기본값은 44/160이며 기존 발걸음 크기 24/36과 분리돼 있다. PNG 내부 여백을 제외한 쌍검의 실제 그림 폭은 약 26~93으로, 수리검 방향 아이콘의 약 26~96과 비슷하다. 거리에 따른 변화는 수리검과 같이 근접도의 제곱을 사용한다. `!` 배지와 방향 원호도 실제 그림 크기를 기준으로 배치한다.
+- 관련 코드: `Assets/Scripts/Combat/Contracts/ThreatPresentationContracts.cs` / `AttackTelegraphPresentationSnapshot`; `Assets/Scripts/Defense/CombatThreatPresentationProvider.cs` / `HandleAttackStarted`, `PublishAttackTelegraphs`; `Assets/Scripts/UI/CombatHud/CombatFootstepHud.cs` / `HandleAttackTelegraph`; `Assets/Scripts/UI/CombatHud/CombatFootstepMarker.cs` / `ShowAttack`.
+- 검증: Unity가 저장한 Roslyn 응답 파일로 전체 `Assembly-CSharp` 컴파일 성공, 새 오류 0건. 기존 파일 경고 16건이 출력됐다. Unity 배치 실행은 LicensingClient/WMI 오류로 프로젝트 로드 전에 종료되어 실제 1·2스테이지 Play 화면·청취는 미확인이다. 테스트 코드는 추가하지 않았다.
+
 #### Beast 발소리 인디케이터 화면 판정 보정 (2026-10-25)
 
 - 원인: 실제 Beast 발걸음과 HUD 연결은 정상이었지만, 기존 공급자는 적 아래 모든 Renderer의 Bounds를 화면 진입 판단에 포함했다. `WolfEyeGlint` 파티클의 약 5m 범위가 카메라에 걸리면서 뒤에 있는 Beast도 `IsInCamera=true`가 되고 방향 UI가 숨겨졌다. 연기·궤적도 같은 오판을 일으킬 수 있었다.

@@ -56688,6 +56688,7 @@ MonoBehaviour:
   _footstepCandidateSource: {fileID: 0}
   _showShurikenIndicators: 1
   _showEnemyIndicators: 1
+  _enemyIndicatorMode: 1
   _visibilityThreshold: 0
   _nearDistance: 4
   _farDistance: 30

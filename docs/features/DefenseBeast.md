@@ -4,6 +4,13 @@
 - 상태: **2026-10-18 관절 기반 애니메이션·원 그리기·물기 돌진·월드 공간 연기·몸체 숨김·눈 줄기·발 디딤 소리 연결. C# 빌드 확인, 실제 전투 Play 확인 대기**
 - 최신 전투 규칙은 아래 "2026-10-18 관절 애니메이션·원 그리기·물기 돌진" 절이며, 교전 시작 순서와 배회·물러나기 거리는 "2026-10-22 배회 후 공격 복귀·교전 거리 축소" 절, 돌진 직전 눈 섬광은 "2026-10-19 돌진 확정 눈 섬광" 절, 덮치기 궤적과 전조 시간은 "2026-10-19 로그 곡선 덮치기·전조 연장" 절이 우선한다. 눈 줄기와 발소리 연결은 아래 최신 보완 절을 따른다. 그 아래 도약(포물선·10m 추월·반대편 6m 이동) 기록은 이전 동작이며 현재 코드와 다르다.
 
+## 2026-10-26 작은 늑대 공격 전조 0.8초와 방향 표시 (최신 규칙)
+
+- `DefenseBeast.prefab`의 첫 박동 대기를 0.4→0.3초로 줄이고 박동 뒤 돌진 대기 0.5초는 유지했다. 실제 웅크림·붉은 경고의 `TelegraphDuration`은 0.8초다. 아래 2026-10-19 절의 0.9초는 변경 전 기록이다.
+- `DefenseBeastWarning(52)` 음원도 0.8초로 줄이고 마지막 0.1초를 페이드했다. 전조 시작부터 공격 실행까지의 소리 길이를 일치시켰다. FMOD Desktop SFX 뱅크와 Unity `StreamingAssets` 복사본을 갱신했다. 실제 Play 청취는 미확인이다.
+- 정식 1·2스테이지에서 화면 밖 늑대가 물기 돌진을 시도하는 동안 발걸음 아이콘 자리에는 이빨 방향 아이콘이 표시된다. 마지막 0.2초는 붉게 강조하고 돌진음 `DefenseBeastLeap(48)`은 실행 순간 유지한다. [전투 HUD](전투_HUD.md)의 최신 절을 따른다.
+- 전체 C# Roslyn 컴파일 오류 0건. Unity 배치 실행의 LicensingClient/WMI 오류 때문에 실제 Play에서 경고음 길이·돌진 타이밍·아이콘은 미확인이다.
+
 ## 2026-10-24 돌진 경로 검사 재사용·눈 섬광 텍스처 공유 (최신 규칙)
 
 - `DefenseBeastLeapAttack.HasClearLunge`는 같은 대상의 NavMesh·직선 장애물 검사 결과를 같은 프레임 또는 `Lunge Check Interval`(기본 0.1초, 게임 시간) 동안 재사용한다. `DefenseBeastProwl.IsReadyToAttack`이 Ready 단계에서 매 프레임 부르던 `NavMesh.SamplePosition`·`CapsuleCastNonAlloc`이 줄었다. 0이면 같은 프레임 안에서만 재사용한다.
@@ -241,7 +248,7 @@ DefenseBeastLeapAttack은 EnemyAttackBehaviour를 상속하고 공격 로그 종
 - 전투 판정 계약: 근접 전방 방어와 도약 결과 처리
 - 감각 표현: 도약 박동·확정 리플과 Wolf 시각 상태
 - 쌍둥이 보스: 기존 Beast 공격 및 보스 동작은 범위 밖이며 변경하지 않음
-## 2026-10-26 작은 늑대 공격 전조음 (최신 규칙)
+## 2026-10-26 작은 늑대 공격 전조음 (최초 제작 기록, 위 0.8초 규칙 우선)
 
 - 붉은 전조 시작에 `DefenseBeastWarning(52)`을 재생한다. `BossMonsterDog/Idle`의 1.655초 GrowlBreathAndRoar 음원만 1.2배속으로 사용하고 0.9초에서 끝낸다. 마지막 0.14초는 페이드한다. 보스의 기존 Idle 이벤트와 4.25초 선택지는 유지한다.
 - 첫 박동 `EnemyHeartbeat(26)`은 공격 0.5초 전, 돌진 `DefenseBeastLeap(48)`은 공격 실행 시점이다. 전조 총 0.9초와 붉은 표시 타이밍은 그대로다. 설정은 `DefenseBeast.prefab`의 `DefenseBeastLeapAttack._telegraphStartSound`에 저장한다.
