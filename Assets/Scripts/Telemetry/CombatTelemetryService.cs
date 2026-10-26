@@ -654,7 +654,9 @@ public sealed class CombatTelemetryService : MonoBehaviour
 			return;
 		}
 		JObject previousPayload = ((JToken)_latestAttemptRecord).Value<JObject>((object)"payload");
-		if (!(((JToken)_latestAttemptRecord).Value<string>((object)"eventType") == "session_ended") || !(((previousPayload != null) ? ((JToken)previousPayload).Value<string>((object)"reason") : null) == "application_quit"))
+		string lastReason = (previousPayload != null) ? ((JToken)previousPayload).Value<string>((object)"reason") : null;
+		if (((JToken)_latestAttemptRecord).Value<string>((object)"eventType") != "session_ended"
+			|| (lastReason != "application_quit" && lastReason != "retry"))
 		{
 			long sequence = ((JToken)_latestAttemptRecord).Value<long?>((object)"eventSequence").GetValueOrDefault() + 1;
 			string now = TelemetryJson.FormatKoreanTime(TelemetryJson.CurrentKoreanTime());

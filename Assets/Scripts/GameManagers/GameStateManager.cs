@@ -121,10 +121,17 @@ public sealed class GameStateManager : MonoBehaviour
         ChangeState(GameplayState.ActComplete);
     }
 
-    /// <summary>게임오버 상태의 현재 씬을 재시작하며 시간과 커서를 복구한다.</summary>
+    /// <summary>게임오버 또는 설정 일시정지 상태에서 현재 씬을 재시작하고 플레이어·효과음·커서를 복구한다.</summary>
     public void Restart()
     {
-        if (State != GameplayState.GameOver) return;
+        bool wasPaused = State == GameplayState.Paused;
+        if (!wasPaused && State != GameplayState.GameOver) return;
+        if (wasPaused)
+        {
+            if (_player != null)
+                _player.SetPaused(false);
+            Managers.Sound.SetEffectsPaused(false);
+        }
         ChangeState(GameplayState.Restarting);
         RestoreTimeAndCursor();
 #if UNITY_EDITOR

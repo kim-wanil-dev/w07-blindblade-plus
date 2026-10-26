@@ -128,7 +128,7 @@ Sessions는 도전별 최신 누적값이므로 같은 `stage_attempt_id`의 행
 | `build_version`, `config_version` | 빌드·설정 버전 |
 | `started_kst` | 구간 시작 한국시간 |
 | `last_event_sequence` | 요약에 반영된 마지막 이벤트 순번 |
-| `status` | 상태: `started`, `in_progress`, `cleared`, `death`, `final_clear`, `application_quit`, `scene_unloaded`, `unclean_exit` 등. 강제 종료 상태는 다음 실행에서 `unclean_exit`로 복구될 수 있음 |
+| `status` | 상태: `started`, `in_progress`, `cleared`, `death`, `final_clear`, `retry`, `application_quit`, `scene_unloaded`, `unclean_exit` 등. `retry`는 재도전으로 닫힌 도전이며 앱 이탈이 아님. 강제 종료 상태는 다음 실행에서 `unclean_exit`로 복구될 수 있음 |
 | `realtime_seconds` | 구간의 실제 경과 시간 |
 | `gameplay_seconds` | 구간의 게임 시간 경과 |
 | `active_play_seconds` | 구간의 활성 플레이 시간 |

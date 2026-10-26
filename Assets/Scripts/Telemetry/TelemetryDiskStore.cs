@@ -209,7 +209,7 @@ namespace BlindBlade.Telemetry
 			}
 			JToken obj = val2["payload"];
 			string text2 = (string)((obj != null) ? obj[(object)"reason"] : null);
-			if ((string)val2["eventType"] == "session_ended" && (text2 == "application_quit" || text2 == "unclean_exit"))
+		if ((string)val2["eventType"] == "session_ended" && (text2 == "application_quit" || text2 == "unclean_exit" || text2 == "retry"))
 			{
 				File.Delete(path);
 				_processActiveSessionId = null;
@@ -272,7 +272,7 @@ namespace BlindBlade.Telemetry
 			}
 			JToken obj = record["payload"];
 			string text4 = (string)((obj != null) ? obj[(object)"reason"] : null);
-			if ((text4 == "application_quit" || text4 == "unclean_exit") && _processActiveSessionId == sessionId)
+			if ((text4 == "application_quit" || text4 == "unclean_exit" || text4 == "retry") && _processActiveSessionId == sessionId)
 			{
 				if (File.Exists(text2))
 				{

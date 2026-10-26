@@ -592,7 +592,7 @@ function updateSessions(book,records) {
     'last_exit_sequence','last_completion_sequence','status','status_sequence','deaths']);
   const statusPrecedence=status=>{
     if (['death','final_clear','cleared'].includes(String(status||''))) return 3;
-    if (['scene_unloaded','application_quit','unclean_exit'].includes(String(status||''))) return 2;
+    if (['scene_unloaded','application_quit','unclean_exit','retry'].includes(String(status||''))) return 2;
     if (['in_progress','started'].includes(String(status||''))) return 1;
     return 0;
   };
